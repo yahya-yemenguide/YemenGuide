@@ -20,14 +20,10 @@
         };
 }
 
-<section class="afo" data-overview-root>
-    <header class="afo-section-head">
+<section class="afo afo--compact" data-overview-root>
+    <header class="afo-section-head afo-section-head--compact">
         <div>
-            <span class="afo-section-head__eyebrow">ملخص اليوم</span>
-            <h2 class="afo-section-head__title">الصورة المالية في لمحة</h2>
-            <p class="afo-section-head__text">
-                أهم الأرقام التي تحتاجها الإدارة بدون ازدحام أو تفاصيل زائدة.
-            </p>
+            <h2 class="afo-section-head__title">نظرة عامة</h2>
         </div>
 
         <div class="afo-section-head__stamp">
@@ -99,80 +95,38 @@
         </div>
     </form>
 
-    <div class="afo-kpi-grid">
-        <article class="afo-kpi-card afo-kpi-card--revenue">
-            <div class="afo-kpi-card__top">
-                <span class="afo-kpi-card__icon"><i class="bi bi-stars"></i></span>
-                <span class="afo-kpi-card__tag">إيراد فعلي</span>
+    <div class="afo-kpi-grid afo-kpi-grid--compact">
+        <article class="afo-kpi-card afo-kpi-card--revenue afo-kpi-card--compact">
+            <span class="afo-kpi-card__icon"><i class="bi bi-stars"></i></span>
+            <div class="afo-kpi-card__compact-body">
+                <small>عمولات المنصة المخصومة</small>
+                <strong class="afo-kpi-card__value">@Money(summary.TotalCommissionCharged)</strong>
             </div>
-            <div class="afo-kpi-card__value">@Money(summary.TotalCommissionCharged)</div>
-            <h3>عمولات المنصة المخصومة</h3>
-            <p>العمولات التي تم تحصيلها فعليًا بعد التسوية.</p>
         </article>
 
-        <article class="afo-kpi-card afo-kpi-card--available">
-            <div class="afo-kpi-card__top">
-                <span class="afo-kpi-card__icon"><i class="bi bi-wallet2"></i></span>
-                <span class="afo-kpi-card__tag">جاهز للاستخدام</span>
+        <article class="afo-kpi-card afo-kpi-card--available afo-kpi-card--compact">
+            <span class="afo-kpi-card__icon"><i class="bi bi-wallet2"></i></span>
+            <div class="afo-kpi-card__compact-body">
+                <small>رصيد الضمان المتاح</small>
+                <strong class="afo-kpi-card__value">@Money(summary.TotalAvailableGuaranteeBalance)</strong>
             </div>
-            <div class="afo-kpi-card__value">@Money(summary.TotalAvailableGuaranteeBalance)</div>
-            <h3>رصيد الضمان المتاح</h3>
-            <p>إجمالي الرصيد المتاح في حسابات ضمان المنشآت.</p>
         </article>
 
-        <article class="afo-kpi-card afo-kpi-card--held">
-            <div class="afo-kpi-card__top">
-                <span class="afo-kpi-card__icon"><i class="bi bi-lock"></i></span>
-                <span class="afo-kpi-card__tag">قيد التسوية</span>
+        <article class="afo-kpi-card afo-kpi-card--held afo-kpi-card--compact">
+            <span class="afo-kpi-card__icon"><i class="bi bi-lock"></i></span>
+            <div class="afo-kpi-card__compact-body">
+                <small>الرصيد المحجوز</small>
+                <strong class="afo-kpi-card__value">@Money(summary.TotalHeldGuaranteeBalance)</strong>
             </div>
-            <div class="afo-kpi-card__value">@Money(summary.TotalHeldGuaranteeBalance)</div>
-            <h3>الرصيد المحجوز</h3>
-            <p>مبالغ ضمان محجوزة حاليًا مقابل عمولات حجوزات نشطة.</p>
         </article>
 
-        <article class="afo-kpi-card afo-kpi-card--debt">
-            <div class="afo-kpi-card__top">
-                <span class="afo-kpi-card__icon"><i class="bi bi-exclamation-diamond"></i></span>
-                <span class="afo-kpi-card__tag">يحتاج متابعة</span>
+        <article class="afo-kpi-card afo-kpi-card--debt afo-kpi-card--compact">
+            <span class="afo-kpi-card__icon"><i class="bi bi-exclamation-diamond"></i></span>
+            <div class="afo-kpi-card__compact-body">
+                <small>إجمالي الدين الحالي</small>
+                <strong class="afo-kpi-card__value">@Money(summary.TotalCurrentDebt)</strong>
             </div>
-            <div class="afo-kpi-card__value">@Money(summary.TotalCurrentDebt)</div>
-            <h3>إجمالي الدين الحالي</h3>
-            <p>الدين القائم على حسابات ضمان المنشآت في اللحظة الحالية.</p>
         </article>
-    </div>
-
-    <div class="afo-status-strip">
-        <button type="button"
-                class="afo-status-pill afo-status-pill--cyan"
-                data-overview-open-tab="topups"
-                data-overview-query="Status=Pending">
-            <span>طلبات شحن معلقة</span>
-            <strong>@summary.PendingTopUpsCount</strong>
-        </button>
-
-        <button type="button"
-                class="afo-status-pill afo-status-pill--gold"
-                data-overview-open-tab="commission-guarantee"
-                data-overview-query="IsLowBalance=true">
-            <span>رصيد منخفض</span>
-            <strong>@summary.LowBalanceAccountsCount</strong>
-        </button>
-
-        <button type="button"
-                class="afo-status-pill afo-status-pill--rose"
-                data-overview-open-tab="commission-guarantee"
-                data-overview-query="HasDebt=true">
-            <span>عليها دين</span>
-            <strong>@summary.InDebtAccountsCount</strong>
-        </button>
-
-        <button type="button"
-                class="afo-status-pill afo-status-pill--slate"
-                data-overview-open-tab="commission-guarantee"
-                data-overview-query="IsBookingSuspended=true">
-            <span>موقوفة</span>
-            <strong>@summary.SuspendedAccountsCount</strong>
-        </button>
     </div>
 
     <div class="afo-content-grid">

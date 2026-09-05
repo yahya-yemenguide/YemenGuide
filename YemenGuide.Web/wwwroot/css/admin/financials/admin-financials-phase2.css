@@ -1,0 +1,354 @@
+/* ========================================================================== 
+   YemenGuide — Admin Financials Phase 2
+   Unified Tajawal + RTL/LTR + Dark mode + mobile cleanup.
+   This file is intentionally loaded last and does not change finance logic.
+   ========================================================================== */
+
+.af-shell,
+body > .af-finance-portaled,
+body > .afm-modal,
+body > .acg-modal,
+body > .atr-modal,
+body > .aft-modal,
+#adminFinanceGlobalToastStack {
+    font-family: var(--yg-font-family, "Tajawal", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif) !important;
+}
+
+.af-shell .bi,
+body > .af-finance-portaled .bi,
+body > .afm-modal .bi,
+body > .acg-modal .bi,
+body > .atr-modal .bi,
+body > .aft-modal .bi,
+#adminFinanceGlobalToastStack .bi {
+    font-family: "bootstrap-icons" !important;
+}
+
+html[dir="rtl"] .af-shell,
+.af-shell[dir="rtl"] { direction: rtl; text-align: right; }
+html[dir="ltr"] .af-shell,
+.af-shell[dir="ltr"] { direction: ltr; text-align: left; }
+
+html[dir="ltr"] .af-shell .bi-arrow-left,
+html[dir="ltr"] .af-shell .bi-arrow-left-short,
+html[dir="ltr"] .af-shell .bi-chevron-left {
+    transform: scaleX(-1);
+}
+
+/* compact shell */
+.af-shell .af-hero--compact {
+    min-height: 0 !important;
+    padding: 14px 16px !important;
+}
+.af-shell .af-hero__title { font-size: clamp(1.22rem, 1.7vw, 1.6rem) !important; }
+.af-shell .af-hero__meta { gap: 7px !important; }
+.af-shell .af-meta-pill { min-height: 34px !important; padding: 6px 10px !important; }
+.af-shell .af-tabs { gap: 6px !important; padding: 6px !important; }
+.af-shell .af-tab { min-height: 46px !important; padding: 7px 12px !important; }
+.af-shell .af-tab__icon { width: 30px !important; height: 30px !important; }
+
+/* forms, tables and modal direction */
+.af-shell input,
+.af-shell select,
+.af-shell textarea,
+body > .af-finance-portaled input,
+body > .af-finance-portaled select,
+body > .af-finance-portaled textarea {
+    font-family: inherit !important;
+    direction: inherit;
+}
+html[dir="ltr"] .af-shell input[type="tel"],
+html[dir="ltr"] .af-shell input[type="email"],
+html[dir="ltr"] .af-shell input[type="number"] { text-align: left; }
+
+/* Dark palette */
+body.dark-mode .af-shell {
+    --af-bg: #0b1320;
+    --af-surface: #111c2c;
+    --af-surface-2: #172438;
+    --af-surface-3: #1d2b41;
+    --af-border: rgba(148, 163, 184, .20);
+    --af-text: #eef4fb;
+    --af-muted: #a9b8ca;
+    --af-soft: #8294aa;
+    color: var(--af-text) !important;
+}
+
+body.dark-mode .af-shell,
+body.dark-mode .af-shell .af-workspace,
+body.dark-mode .af-shell .af-tab-panel,
+body.dark-mode .af-shell .afo,
+body.dark-mode .af-shell .acg,
+body.dark-mode .af-shell .atr,
+body.dark-mode .af-shell .aft,
+body.dark-mode .af-shell .afr {
+    background: transparent !important;
+    color: var(--af-text) !important;
+}
+
+body.dark-mode .af-shell .af-hero,
+body.dark-mode .af-shell .af-tabs,
+body.dark-mode .af-shell .afo-filterbar,
+body.dark-mode .af-shell .afo-panel,
+body.dark-mode .af-shell .afo-kpi-card,
+body.dark-mode .af-shell .afo-table-wrap,
+body.dark-mode .af-shell .acg-toolbar,
+body.dark-mode .af-shell .acg-table-card,
+body.dark-mode .af-shell .acg-summary-mini,
+body.dark-mode .af-shell .acg-balance-card,
+body.dark-mode .af-shell .atr-filterbar,
+body.dark-mode .af-shell .atr-table-card,
+body.dark-mode .af-shell .atr-kpi,
+body.dark-mode .af-shell .atr-pending-callout,
+body.dark-mode .af-shell .aft-filterbar,
+body.dark-mode .af-shell .aft-ledger-card,
+body.dark-mode .af-shell .aft-kpi,
+body.dark-mode .af-shell .afr-report-header-card,
+body.dark-mode .af-shell .afr-filter-card,
+body.dark-mode .af-shell .afr-data-card,
+body.dark-mode .af-shell .afr-metric,
+body.dark-mode .af-shell .afr-document-card {
+    background: var(--af-surface) !important;
+    color: var(--af-text) !important;
+    border-color: var(--af-border) !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .18) !important;
+}
+
+body.dark-mode .af-shell table,
+body.dark-mode .af-shell thead,
+body.dark-mode .af-shell tbody,
+body.dark-mode .af-shell tr,
+body.dark-mode .af-shell th,
+body.dark-mode .af-shell td {
+    border-color: var(--af-border) !important;
+}
+body.dark-mode .af-shell th {
+    background: var(--af-surface-2) !important;
+    color: #dce7f4 !important;
+}
+body.dark-mode .af-shell td {
+    background: var(--af-surface) !important;
+    color: var(--af-text) !important;
+}
+body.dark-mode .af-shell tbody tr:hover td { background: var(--af-surface-2) !important; }
+
+body.dark-mode .af-shell input,
+body.dark-mode .af-shell select,
+body.dark-mode .af-shell textarea,
+body.dark-mode .af-shell .afo-search,
+body.dark-mode .af-shell .acg-search,
+body.dark-mode .af-shell .atr-search,
+body.dark-mode .af-shell .aft-search,
+body.dark-mode .af-shell .afr-search-field {
+    background: var(--af-surface-2) !important;
+    color: var(--af-text) !important;
+    border-color: var(--af-border) !important;
+    box-shadow: none !important;
+}
+body.dark-mode .af-shell input::placeholder,
+body.dark-mode .af-shell textarea::placeholder { color: #778ba3 !important; }
+body.dark-mode .af-shell select option { background: #172438; color: #eef4fb; }
+
+body.dark-mode .af-shell .af-tab {
+    color: var(--af-muted) !important;
+    background: transparent !important;
+    border-color: transparent !important;
+}
+body.dark-mode .af-shell .af-tab:hover { background: rgba(0, 166, 218, .10) !important; color: #dff7ff !important; }
+body.dark-mode .af-shell .af-tab.is-active {
+    color: #ffffff !important;
+    background: linear-gradient(135deg, rgba(0,166,218,.94), rgba(0,137,183,.94)) !important;
+    border-color: rgba(74, 207, 255, .28) !important;
+}
+body.dark-mode .af-shell .af-tab.is-active .af-tab__icon { color: #fff !important; background: rgba(255,255,255,.14) !important; }
+
+body.dark-mode .af-shell small,
+body.dark-mode .af-shell .afo-muted,
+body.dark-mode .af-shell .acg-muted,
+body.dark-mode .af-shell .atr-muted,
+body.dark-mode .af-shell .afm-muted,
+body.dark-mode .af-shell .af-hero__subtitle { color: var(--af-muted) !important; }
+
+/* Drawer and finance modals can be portaled outside root */
+body.dark-mode .af-management-drawer,
+body.dark-mode .af-management-drawer__host,
+body.dark-mode .afm,
+body.dark-mode .afm-header,
+body.dark-mode .afm-body,
+body.dark-mode .afm-section,
+body.dark-mode .afm-tab-panel,
+body.dark-mode .afm-settings-form,
+body.dark-mode .afm-wallet-card,
+body.dark-mode .afm-category-card,
+body.dark-mode .afm-trial-policy,
+body.dark-mode .acg-modal__dialog,
+body.dark-mode .atr-modal__dialog,
+body.dark-mode .aft-modal__dialog,
+body.dark-mode .afm-modal__dialog,
+body.dark-mode .acg-modal__body,
+body.dark-mode .atr-modal__body,
+body.dark-mode .aft-modal__body,
+body.dark-mode .afm-modal__body,
+body.dark-mode .acg-modal__header,
+body.dark-mode .atr-modal__header,
+body.dark-mode .aft-modal__header,
+body.dark-mode .afm-modal__header,
+body.dark-mode .acg-modal__footer,
+body.dark-mode .atr-modal__footer,
+body.dark-mode .aft-modal__footer,
+body.dark-mode .afm-modal__footer {
+    background: #111c2c !important;
+    color: #eef4fb !important;
+    border-color: rgba(148, 163, 184, .20) !important;
+}
+
+body.dark-mode .afm-tabs { background: #0d1725 !important; border-color: rgba(148,163,184,.18) !important; }
+body.dark-mode .afm-tab { color: #a9b8ca !important; }
+body.dark-mode .afm-tab:hover { background: rgba(0,166,218,.10) !important; color: #dff7ff !important; }
+body.dark-mode .afm-tab.is-active { background: rgba(0,166,218,.18) !important; color: #6dd8ff !important; border-color: rgba(0,166,218,.28) !important; }
+
+body.dark-mode .afm input,
+body.dark-mode .afm select,
+body.dark-mode .afm textarea,
+body.dark-mode .acg-modal input,
+body.dark-mode .acg-modal select,
+body.dark-mode .acg-modal textarea,
+body.dark-mode .atr-modal input,
+body.dark-mode .atr-modal select,
+body.dark-mode .atr-modal textarea,
+body.dark-mode .aft-modal input,
+body.dark-mode .aft-modal select,
+body.dark-mode .aft-modal textarea {
+    background: #172438 !important;
+    color: #eef4fb !important;
+    border-color: rgba(148,163,184,.20) !important;
+}
+body.dark-mode .afm input:-webkit-autofill,
+body.dark-mode .afm textarea:-webkit-autofill,
+body.dark-mode .afm select:-webkit-autofill {
+    -webkit-text-fill-color: #eef4fb !important;
+    -webkit-box-shadow: 0 0 0 1000px #172438 inset !important;
+}
+
+body.dark-mode .afm-wallet-summary > div,
+body.dark-mode .afm-wallet-card__usage,
+body.dark-mode .afm-trial-field,
+body.dark-mode .afm-trial-flow-step,
+body.dark-mode .afm-toggle-card,
+body.dark-mode .acg-detail-section,
+body.dark-mode .atr-review-card,
+body.dark-mode .atr-allocation-card,
+body.dark-mode .atr-proof-card,
+body.dark-mode .atr-history-card,
+body.dark-mode .aft-detail-section,
+body.dark-mode .aft-info-grid > div,
+body.dark-mode .aft-snapshot-grid > div {
+    background: #172438 !important;
+    color: #eef4fb !important;
+    border-color: rgba(148,163,184,.18) !important;
+}
+
+body.dark-mode .afm-close,
+body.dark-mode .afm-modal__close,
+body.dark-mode .acg-modal__close,
+body.dark-mode .atr-modal__close,
+body.dark-mode .aft-modal__close {
+    background: #172438 !important;
+    color: #d9e7f6 !important;
+    border-color: rgba(148,163,184,.20) !important;
+}
+
+/* keep messages above every drawer/modal */
+#adminFinanceToastStack,
+#adminFinanceGlobalToastStack,
+.af-toast-stack--global {
+    position: fixed !important;
+    z-index: 2147483000 !important;
+}
+body.dark-mode .af-toast {
+    background: #172438 !important;
+    color: #eef4fb !important;
+    border-color: rgba(148,163,184,.20) !important;
+    box-shadow: 0 18px 48px rgba(0,0,0,.42) !important;
+}
+body.dark-mode .af-toast p { color: #b8c6d7 !important; }
+
+/* mobile */
+@media (max-width: 768px) {
+    .af-shell { padding-inline: 8px !important; }
+    .af-shell .af-hero--compact { padding: 11px !important; border-radius: 16px !important; }
+    .af-shell .af-hero__headline-row { align-items: stretch !important; gap: 10px !important; }
+    .af-shell .af-hero__compact-title { min-width: 0; }
+    .af-shell .af-hero__meta { display: grid !important; grid-template-columns: 1fr !important; width: 100%; }
+    .af-shell .af-hero__actions { display: grid !important; grid-template-columns: 1fr 1fr; width: 100%; }
+    .af-shell .af-btn { min-height: 42px !important; padding: 8px 10px !important; }
+    .af-shell .af-tabs { overflow-x: auto !important; flex-wrap: nowrap !important; scroll-snap-type: x proximity; }
+    .af-shell .af-tab { flex: 0 0 auto !important; min-width: max-content !important; scroll-snap-align: center; }
+    .af-shell .af-tab-panel { padding: 8px 0 !important; }
+
+    .afo-kpi-grid,
+    .atr-kpi-row,
+    .aft-kpi-row,
+    .afr-metrics,
+    .afm-wallet-summary { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+
+    .afo-filterbar,
+    .acg-toolbar,
+    .atr-filterbar,
+    .aft-filterbar,
+    .afr-filter-grid,
+    .afm-settings-grid,
+    .afm-trial-policy__fields { grid-template-columns: 1fr !important; }
+
+    .afo-table-wrap,
+    .acg-table-wrap,
+    .atr-table-wrap,
+    .aft-table-wrap,
+    .afr-table-wrap { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
+
+    .af-management-drawer { width: min(100vw, 100%) !important; max-width: 100vw !important; }
+    .afm-header { padding: 12px !important; }
+    .afm-tabs { overflow-x: auto !important; flex-wrap: nowrap !important; }
+    .afm-tab { min-width: max-content !important; flex: 0 0 auto !important; }
+    .afm-body { padding: 10px !important; }
+    .afm-wallet-list,
+    .afm-category-grid { grid-template-columns: 1fr !important; }
+
+    body > .af-finance-portaled .acg-modal__dialog,
+    body > .af-finance-portaled .atr-modal__dialog,
+    body > .af-finance-portaled .aft-modal__dialog,
+    body > .af-finance-portaled .afm-modal__dialog,
+    body > .acg-modal .acg-modal__dialog,
+    body > .atr-modal .atr-modal__dialog,
+    body > .aft-modal .aft-modal__dialog,
+    body > .afm-modal .afm-modal__dialog {
+        width: calc(100vw - 16px) !important;
+        max-width: calc(100vw - 16px) !important;
+        max-height: calc(100dvh - 16px) !important;
+        margin: 8px !important;
+        border-radius: 18px !important;
+    }
+}
+
+@media (max-width: 420px) {
+    .afo-kpi-grid,
+    .atr-kpi-row,
+    .aft-kpi-row,
+    .afr-metrics,
+    .afm-wallet-summary { grid-template-columns: 1fr 1fr !important; gap: 7px !important; }
+    .af-shell .af-hero__actions { grid-template-columns: 1fr !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .af-shell *,
+    .af-shell *::before,
+    .af-shell *::after,
+    body > .af-finance-portaled *,
+    body > .af-finance-portaled *::before,
+    body > .af-finance-portaled *::after {
+        animation-duration: .001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .001ms !important;
+        scroll-behavior: auto !important;
+    }
+}

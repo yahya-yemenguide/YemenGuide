@@ -1,4 +1,5 @@
 ﻿@using YemenGuide.Core.DTOs.Admin
+@using System.Globalization
 @model AdminFinancialManagePageDto
 
 @{
@@ -15,7 +16,11 @@
         access.CanManageSettings ||
         access.CanManagePlatformWallets;
 
-    ViewData["Title"] = "الإدارة المالية";
+    var isArabic = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    var uiDir = isArabic ? "rtl" : "ltr";
+    var uiLang = isArabic ? "ar" : "en";
+
+    ViewData["Title"] = isArabic ? "الإدارة المالية" : "Financial Management";
 }
 
 <link rel="stylesheet" href="~/css/admin/financials/admin-financials-shell.css" asp-append-version="true" />
@@ -25,28 +30,36 @@
 <link rel="stylesheet" href="~/css/admin/financials/admin-financial-transactions.css" asp-append-version="true" />
 <link rel="stylesheet" href="~/css/admin/financials/admin-financial-reports.css" asp-append-version="true" />
 <link rel="stylesheet" href="~/css/admin/financials/admin-financial-management.css" asp-append-version="true" />
+<link rel="stylesheet" href="~/css/admin/financials/admin-financials-phase1.css" asp-append-version="true" />
+<link rel="stylesheet" href="~/css/admin/financials/admin-financials-phase2.css" asp-append-version="true" />
 
 <main class="af-shell"
       id="adminFinancialsRoot"
-      dir="rtl"
+      dir="@uiDir"
+      data-ui-lang="@uiLang"
       data-selected-tab="@selectedTab"
       data-shell-url="@Url.Action("Shell", "AdminFinancials", new { area = "Admin" })"
       data-management-url="@Url.Action("Index", "AdminFinancialManagement", new { area = "Admin" })">
 
-    <section class="af-hero" aria-labelledby="adminFinancialsTitle">
+    <section class="af-hero af-hero--compact" aria-labelledby="adminFinancialsTitle">
         <div class="af-hero__content">
-            <div class="af-hero__eyebrow">
-                <span class="af-hero__eyebrow-mark" aria-hidden="true"></span>
-                مركز الإدارة المالية
-            </div>
-
             <div class="af-hero__headline-row">
-                <div>
+                <div class="af-hero__compact-title">
                     <h1 class="af-hero__title" id="adminFinancialsTitle">الإدارة المالية</h1>
-                    <p class="af-hero__subtitle">
-                        متابعة عمولات المنصة، أرصدة الضمان، طلبات الشحن والحركات المالية
-                        من مكان واحد واضح وآمن.
-                    </p>
+
+                    <div class="af-hero__meta">
+                        <span class="af-meta-pill">
+                            <i class="bi bi-cash-coin" aria-hidden="true"></i>
+                            <span>العملة:</span>
+                            <strong>@shell.Currency</strong>
+                        </span>
+
+                        <span class="af-meta-pill">
+                            <i class="bi bi-clock" aria-hidden="true"></i>
+                            <span>آخر تحديث:</span>
+                            <strong>@shell.GeneratedAt.ToString("yyyy/MM/dd - HH:mm")</strong>
+                        </span>
+                    </div>
                 </div>
 
                 <div class="af-hero__actions">
@@ -60,100 +73,42 @@
                     @if (canOpenManagement)
                     {
                         <button type="button"
-                            class="af-btn af-btn--primary"
-                            data-finance-management-open>
+                                class="af-btn af-btn--primary"
+                                data-finance-management-open>
                             <i class="bi bi-sliders2" aria-hidden="true"></i>
                             <span>إدارة المالية</span>
                         </button>
                     }
                 </div>
             </div>
-
-            <div class="af-hero__meta">
-                <span class="af-meta-pill">
-                    <i class="bi bi-cash-coin" aria-hidden="true"></i>
-                    العملة:
-                    <strong>@shell.Currency</strong>
-                </span>
-
-                <span class="af-meta-pill">
-                    <i class="bi bi-clock" aria-hidden="true"></i>
-                    آخر تحديث:
-                    <strong>@shell.GeneratedAt.ToString("yyyy/MM/dd - HH:mm")</strong>
-                </span>
-            </div>
-        </div>
-
-        <div class="af-attention-grid" aria-label="تنبيهات مالية سريعة">
-            @if (access.CanReviewTopUps)
-            {
-                <button type="button"
-                    class="af-attention-card af-attention-card--cyan"
-                    data-finance-tab="@AdminFinancialTabs.TopUps"
-                    data-finance-tab-url="@Url.Action("Index", "AdminTopUpReview", new { area = "Admin", Status = AdminCommissionTopUpStatuses.Pending })">
-                    <span class="af-attention-card__icon"><i class="bi bi-receipt-cutoff"></i></span>
-                    <span class="af-attention-card__body">
-                        <strong data-shell-counter="pending-topups">@shell.PendingTopUpsCount</strong>
-                        <small>طلبات شحن معلقة</small>
-                    </span>
-                    <i class="bi bi-arrow-left-short af-attention-card__arrow"></i>
-                </button>
-            }
-
-            <button type="button"
-                    class="af-attention-card af-attention-card--gold"
-                    data-finance-tab="@AdminFinancialTabs.CommissionGuarantee"
-                    data-finance-tab-url="@Url.Action("Index", "AdminCommissionGuarantee", new { area = "Admin", IsLowBalance = true })">
-                <span class="af-attention-card__icon"><i class="bi bi-battery-half"></i></span>
-                <span class="af-attention-card__body">
-                    <strong data-shell-counter="low-balance">@shell.LowBalanceAccountsCount</strong>
-                    <small>أرصدة منخفضة</small>
-                </span>
-                <i class="bi bi-arrow-left-short af-attention-card__arrow"></i>
-            </button>
-
-            <button type="button"
-                    class="af-attention-card af-attention-card--rose"
-                    data-finance-tab="@AdminFinancialTabs.CommissionGuarantee"
-                    data-finance-tab-url="@Url.Action("Index", "AdminCommissionGuarantee", new { area = "Admin", HasDebt = true })">
-                <span class="af-attention-card__icon"><i class="bi bi-exclamation-circle"></i></span>
-                <span class="af-attention-card__body">
-                    <strong data-shell-counter="in-debt">@shell.InDebtAccountsCount</strong>
-                    <small>حسابات عليها دين</small>
-                </span>
-                <i class="bi bi-arrow-left-short af-attention-card__arrow"></i>
-            </button>
-
-            <button type="button"
-                    class="af-attention-card af-attention-card--slate"
-                    data-finance-tab="@AdminFinancialTabs.CommissionGuarantee"
-                    data-finance-tab-url="@Url.Action("Index", "AdminCommissionGuarantee", new { area = "Admin", IsBookingSuspended = true })">
-                <span class="af-attention-card__icon"><i class="bi bi-pause-circle"></i></span>
-                <span class="af-attention-card__body">
-                    <strong data-shell-counter="suspended">@shell.SuspendedAccountsCount</strong>
-                    <small>حسابات موقوفة</small>
-                </span>
-                <i class="bi bi-arrow-left-short af-attention-card__arrow"></i>
-            </button>
         </div>
     </section>
 
     <section class="af-workspace">
-        <nav class="af-tabs" role="tablist" aria-label="تبويبات الإدارة المالية">
+        <nav class="af-tabs"
+             role="tablist"
+             aria-label="تبويبات الإدارة المالية"
+             data-finance-keyboard-tabs>
             @if (access.CanView)
             {
                 <button type="button"
-                    class="af-tab @(IsActive(AdminFinancialTabs.Overview) ? "is-active" : null)"
-                    data-finance-tab="@AdminFinancialTabs.Overview"
-                    data-finance-tab-url="@Url.Action("Index", "AdminFinancialOverview", new { area = "Admin" })">
+                        role="tab"
+                        aria-selected="@(IsActive(AdminFinancialTabs.Overview) ? "true" : "false")"
+                        tabindex="@(IsActive(AdminFinancialTabs.Overview) ? "0" : "-1")"
+                        class="af-tab @(IsActive(AdminFinancialTabs.Overview) ? "is-active" : null)"
+                        data-finance-tab="@AdminFinancialTabs.Overview"
+                        data-finance-tab-url="@Url.Action("Index", "AdminFinancialOverview", new { area = "Admin" })">
                     <span class="af-tab__icon"><i class="bi bi-grid-1x2"></i></span>
                     <span>نظرة عامة</span>
                 </button>
 
                 <button type="button"
-                    class="af-tab @(IsActive(AdminFinancialTabs.CommissionGuarantee) ? "is-active" : null)"
-                    data-finance-tab="@AdminFinancialTabs.CommissionGuarantee"
-                    data-finance-tab-url="@Url.Action("Index", "AdminCommissionGuarantee", new { area = "Admin" })">
+                        role="tab"
+                        aria-selected="@(IsActive(AdminFinancialTabs.CommissionGuarantee) ? "true" : "false")"
+                        tabindex="@(IsActive(AdminFinancialTabs.CommissionGuarantee) ? "0" : "-1")"
+                        class="af-tab @(IsActive(AdminFinancialTabs.CommissionGuarantee) ? "is-active" : null)"
+                        data-finance-tab="@AdminFinancialTabs.CommissionGuarantee"
+                        data-finance-tab-url="@Url.Action("Index", "AdminCommissionGuarantee", new { area = "Admin" })">
                     <span class="af-tab__icon"><i class="bi bi-shield-check"></i></span>
                     <span>العمولات والضمان</span>
                 </button>
@@ -162,14 +117,17 @@
             @if (access.CanReviewTopUps)
             {
                 <button type="button"
-                    class="af-tab @(IsActive(AdminFinancialTabs.TopUps) ? "is-active" : null)"
-                    data-finance-tab="@AdminFinancialTabs.TopUps"
-                    data-finance-tab-url="@Url.Action("Index", "AdminTopUpReview", new { area = "Admin" })">
+                        role="tab"
+                        aria-selected="@(IsActive(AdminFinancialTabs.TopUps) ? "true" : "false")"
+                        tabindex="@(IsActive(AdminFinancialTabs.TopUps) ? "0" : "-1")"
+                        class="af-tab @(IsActive(AdminFinancialTabs.TopUps) ? "is-active" : null)"
+                        data-finance-tab="@AdminFinancialTabs.TopUps"
+                        data-finance-tab-url="@Url.Action("Index", "AdminTopUpReview", new { area = "Admin" })">
                     <span class="af-tab__icon"><i class="bi bi-wallet2"></i></span>
                     <span>طلبات الشحن</span>
                     @if (shell.PendingTopUpsCount > 0)
                     {
-                        <span class="af-tab__count">@shell.PendingTopUpsCount</span>
+                        <span class="af-tab__count" data-shell-counter="pending-topups-tab">@shell.PendingTopUpsCount</span>
                     }
                 </button>
             }
@@ -177,9 +135,12 @@
             @if (access.CanView)
             {
                 <button type="button"
-                    class="af-tab @(IsActive(AdminFinancialTabs.Transactions) ? "is-active" : null)"
-                    data-finance-tab="@AdminFinancialTabs.Transactions"
-                    data-finance-tab-url="@Url.Action("Index", "AdminFinancialTransactions", new { area = "Admin" })">
+                        role="tab"
+                        aria-selected="@(IsActive(AdminFinancialTabs.Transactions) ? "true" : "false")"
+                        tabindex="@(IsActive(AdminFinancialTabs.Transactions) ? "0" : "-1")"
+                        class="af-tab @(IsActive(AdminFinancialTabs.Transactions) ? "is-active" : null)"
+                        data-finance-tab="@AdminFinancialTabs.Transactions"
+                        data-finance-tab-url="@Url.Action("Index", "AdminFinancialTransactions", new { area = "Admin" })">
                     <span class="af-tab__icon"><i class="bi bi-arrow-left-right"></i></span>
                     <span>كشف الحركات</span>
                 </button>
@@ -188,9 +149,12 @@
             @if (access.CanViewReports)
             {
                 <button type="button"
-                    class="af-tab @(IsActive(AdminFinancialTabs.Reports) ? "is-active" : null)"
-                    data-finance-tab="@AdminFinancialTabs.Reports"
-                    data-finance-tab-url="@Url.Action("Index", "AdminFinancialReports", new { area = "Admin" })">
+                        role="tab"
+                        aria-selected="@(IsActive(AdminFinancialTabs.Reports) ? "true" : "false")"
+                        tabindex="@(IsActive(AdminFinancialTabs.Reports) ? "0" : "-1")"
+                        class="af-tab @(IsActive(AdminFinancialTabs.Reports) ? "is-active" : null)"
+                        data-finance-tab="@AdminFinancialTabs.Reports"
+                        data-finance-tab-url="@Url.Action("Index", "AdminFinancialReports", new { area = "Admin" })">
                     <span class="af-tab__icon"><i class="bi bi-file-earmark-bar-graph"></i></span>
                     <span>التقارير والمستندات</span>
                 </button>
@@ -228,3 +192,5 @@
 <script src="~/js/admin/financials/admin-financial-transactions.js" asp-append-version="true"></script>
 <script src="~/js/admin/financials/admin-financial-reports.js" asp-append-version="true"></script>
 <script src="~/js/admin/financials/admin-financial-management.js" asp-append-version="true"></script>
+<script src="~/js/admin/financials/admin-financials-phase1.js" asp-append-version="true"></script>
+<script src="~/js/admin/financials/admin-financials-phase2.js" asp-append-version="true"></script>

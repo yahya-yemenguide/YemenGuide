@@ -149,7 +149,7 @@ namespace YemenGuide.Web.Services.Finance
             CancellationToken cancellationToken = default);
 
         /* ================================================================
-           التبويب الخامس: التقارير والمستندات وExcel
+           التبويب الخامس: التقارير والمستندات
            ================================================================ */
 
         Task<AdminFinancialReportPageDto> GetFinancialReportAsync(
@@ -159,11 +159,6 @@ namespace YemenGuide.Web.Services.Finance
             CancellationToken cancellationToken = default);
 
         Task<AdminFinancialReportExportDto> BuildFinancialReportExportAsync(
-            AdminFinancialReportFilterDto filter,
-            string? generatedByName = null,
-            CancellationToken cancellationToken = default);
-
-        Task<AdminFinancialExcelFileDto> BuildFinancialExcelAsync(
             AdminFinancialReportFilterDto filter,
             string? generatedByName = null,
             CancellationToken cancellationToken = default);

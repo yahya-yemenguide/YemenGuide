@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Globalization;
 using System.Linq;
 using System.Threading;
@@ -9,6 +11,7 @@ using Microsoft.Extensions.Logging;
 using YemenGuide.Core.DTOs.Admin;
 using YemenGuide.Core.Entities;
 using YemenGuide.Data;
+using YemenGuide.Web.Services.ExchangeRates;
 
 namespace YemenGuide.Web.Services.Finance
 {
@@ -34,18 +37,18 @@ namespace YemenGuide.Web.Services.Finance
 
         private readonly AppDbContext _context;
         private readonly ICommissionFinanceService _commissionFinanceService;
-        private readonly AdminFinancialExcelBuilder _excelBuilder;
+        private readonly CurrencyDisplayService _currencyDisplayService;
         private readonly ILogger<AdminFinancialService> _logger;
 
         public AdminFinancialService(
             AppDbContext context,
             ICommissionFinanceService commissionFinanceService,
-            AdminFinancialExcelBuilder excelBuilder,
+            CurrencyDisplayService currencyDisplayService,
             ILogger<AdminFinancialService> logger)
         {
             _context = context;
             _commissionFinanceService = commissionFinanceService;
-            _excelBuilder = excelBuilder;
+            _currencyDisplayService = currencyDisplayService;
             _logger = logger;
         }
 
@@ -207,6 +210,231 @@ namespace YemenGuide.Web.Services.Finance
                 string.IsNullOrWhiteSpace(settings?.DefaultCurrency)
                     ? "ريال يمني"
                     : settings.DefaultCurrency.Trim();
+
+
+        // ====================================================================
+        // Display currency (admin profile preference) — presentation only.
+        // Stored financial values stay in YER; this layer converts DTO output.
+        // ====================================================================
+        private async Task<string> GetDisplayCurrencyAsync(
+            CancellationToken cancellationToken)
+        {
+            return await _currencyDisplayService.GetPreferredCurrencyAsync(
+                cancellationToken);
+        }
+
+        private static bool IsDisplayMoneyProperty(PropertyInfo property)
+        {
+            var name = property.Name;
+
+            if (name.Contains("Percentage", StringComparison.OrdinalIgnoreCase) ||
+                name.Contains("Rate", StringComparison.OrdinalIgnoreCase) ||
+                name.Contains("Count", StringComparison.OrdinalIgnoreCase) ||
+                name.Contains("Days", StringComparison.OrdinalIgnoreCase) ||
+                name.EndsWith("Id", StringComparison.OrdinalIgnoreCase) ||
+                name.Contains("Page", StringComparison.OrdinalIgnoreCase) ||
+                name.Contains("Quantity", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            return name.Contains("Amount", StringComparison.OrdinalIgnoreCase) ||
+                   name.Contains("Balance", StringComparison.OrdinalIgnoreCase) ||
+                   name.Contains("Debt", StringComparison.OrdinalIgnoreCase) ||
+                   name.Contains("Commission", StringComparison.OrdinalIgnoreCase) ||
+                   name.Contains("Price", StringComparison.OrdinalIgnoreCase) ||
+                   name.Contains("TopUp", StringComparison.OrdinalIgnoreCase) ||
+                   name.Contains("Guarantee", StringComparison.OrdinalIgnoreCase) ||
+                   name.Contains("Revenue", StringComparison.OrdinalIgnoreCase) ||
+                   name.Contains("Threshold", StringComparison.OrdinalIgnoreCase) ||
+                   name.Contains("BookingValue", StringComparison.OrdinalIgnoreCase) ||
+                   name.Equals("Value", StringComparison.OrdinalIgnoreCase) ||
+                   name.Equals("TotalValue", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool SkipCurrencyObject(Type type)
+        {
+            var name = type.Name;
+            return name.Contains("Filter", StringComparison.OrdinalIgnoreCase) ||
+                   name.Contains("Request", StringComparison.OrdinalIgnoreCase) ||
+                   name.Contains("Update", StringComparison.OrdinalIgnoreCase) ||
+                   name.Contains("Settings", StringComparison.OrdinalIgnoreCase) ||
+                   name.Contains("SelectOption", StringComparison.OrdinalIgnoreCase) ||
+                   name.Contains("Pagination", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static void CollectPlaceIds(
+            object? value,
+            HashSet<int> placeIds,
+            HashSet<object> visited)
+        {
+            if (value == null || value is string) return;
+
+            var type = value.GetType();
+            if (type.IsPrimitive || type.IsEnum || type == typeof(decimal) ||
+                type == typeof(DateTime) || type == typeof(DateTimeOffset) ||
+                type == typeof(Guid)) return;
+
+            if (!type.IsValueType && !visited.Add(value)) return;
+
+            if (value is IEnumerable enumerable)
+            {
+                foreach (var item in enumerable)
+                    CollectPlaceIds(item, placeIds, visited);
+                return;
+            }
+
+            var placeIdProperty = type.GetProperty("PlaceId");
+            if (placeIdProperty?.CanRead == true)
+            {
+                var raw = placeIdProperty.GetValue(value);
+                var placeId = raw is int id ? id : 0;
+                if (placeId > 0) placeIds.Add(placeId);
+            }
+
+            foreach (var property in type.GetProperties(BindingFlags.Instance | BindingFlags.Public))
+            {
+                if (!property.CanRead || property.GetIndexParameters().Length > 0) continue;
+                var propertyType = property.PropertyType;
+                if (propertyType == typeof(string) || propertyType.IsPrimitive ||
+                    propertyType.IsEnum || propertyType == typeof(decimal) ||
+                    propertyType == typeof(decimal?) || propertyType == typeof(DateTime) ||
+                    propertyType == typeof(DateTime?) || propertyType == typeof(Guid) ||
+                    propertyType == typeof(Guid?)) continue;
+
+                CollectPlaceIds(property.GetValue(value), placeIds, visited);
+            }
+        }
+
+        private static decimal ConvertDisplayMoney(
+            decimal amountInYer,
+            string currency,
+            string? exchangeRateRegion,
+            SystemSetting? settings)
+        {
+            var normalized = CurrencyDisplayService.NormalizeCurrency(currency);
+            if (string.IsNullOrWhiteSpace(normalized) ||
+                normalized == CurrencyDisplayService.YemeniRial)
+                return Math.Round(amountInYer, 0, MidpointRounding.AwayFromZero);
+
+            var useAden = string.Equals(
+                exchangeRateRegion,
+                ExchangeRateRegionResolver.AdenMarket,
+                StringComparison.OrdinalIgnoreCase);
+
+            decimal usdRate = useAden
+                ? settings?.AdenUsdRate ?? 1900m
+                : settings?.SanaaUsdRate ?? 537m;
+            decimal sarRate = useAden
+                ? settings?.AdenSarRate ?? 500m
+                : settings?.SanaaSarRate ?? 140m;
+
+            if (usdRate <= 0m) usdRate = useAden ? 1900m : 537m;
+            if (sarRate <= 0m) sarRate = useAden ? 500m : 140m;
+
+            if (normalized == CurrencyDisplayService.UsDollar)
+                return Math.Round(amountInYer / usdRate, 2, MidpointRounding.AwayFromZero);
+            if (normalized == CurrencyDisplayService.SaudiRiyal)
+                return Math.Round(amountInYer / sarRate, 2, MidpointRounding.AwayFromZero);
+
+            return Math.Round(amountInYer, 0, MidpointRounding.AwayFromZero);
+        }
+
+        private async Task ApplyDisplayCurrencyAsync(
+            object? model,
+            CancellationToken cancellationToken)
+        {
+            if (model == null) return;
+
+            var currency = await GetDisplayCurrencyAsync(cancellationToken);
+            var settings = await GetSettingsAsync(false, cancellationToken);
+
+            var placeIds = new HashSet<int>();
+            CollectPlaceIds(model, placeIds, new HashSet<object>(ReferenceEqualityComparer.Instance));
+
+            var placeRegions = placeIds.Count == 0
+                ? new Dictionary<int, string?>()
+                : await _context.Places
+                    .AsNoTracking()
+                    .Where(place => placeIds.Contains(place.PlaceId))
+                    .Select(place => new { place.PlaceId, Region = place.City.ExchangeRateRegion })
+                    .ToDictionaryAsync(item => item.PlaceId, item => item.Region, cancellationToken);
+
+            ApplyDisplayCurrencyRecursive(
+                model,
+                currency,
+                ExchangeRateRegionResolver.SanaaMarket,
+                placeRegions,
+                settings,
+                new HashSet<object>(ReferenceEqualityComparer.Instance));
+        }
+
+        private static void ApplyDisplayCurrencyRecursive(
+            object? value,
+            string currency,
+            string inheritedRegion,
+            IReadOnlyDictionary<int, string?> placeRegions,
+            SystemSetting? settings,
+            HashSet<object> visited)
+        {
+            if (value == null || value is string) return;
+
+            var type = value.GetType();
+            if (type.IsPrimitive || type.IsEnum || type == typeof(decimal) ||
+                type == typeof(DateTime) || type == typeof(DateTimeOffset) ||
+                type == typeof(Guid)) return;
+
+            if (!type.IsValueType && !visited.Add(value)) return;
+
+            if (value is IEnumerable enumerable)
+            {
+                foreach (var item in enumerable)
+                    ApplyDisplayCurrencyRecursive(item, currency, inheritedRegion, placeRegions, settings, visited);
+                return;
+            }
+
+            if (SkipCurrencyObject(type)) return;
+
+            var region = inheritedRegion;
+            var placeIdProperty = type.GetProperty("PlaceId");
+            if (placeIdProperty?.CanRead == true && placeIdProperty.GetValue(value) is int placeId && placeId > 0 &&
+                placeRegions.TryGetValue(placeId, out var resolvedRegion) && !string.IsNullOrWhiteSpace(resolvedRegion))
+                region = resolvedRegion!;
+
+            var currencyProperty = type.GetProperty("Currency");
+            if (currencyProperty?.CanWrite == true && currencyProperty.PropertyType == typeof(string))
+                currencyProperty.SetValue(value, currency);
+
+            foreach (var property in type.GetProperties(BindingFlags.Instance | BindingFlags.Public))
+            {
+                if (!property.CanRead || property.GetIndexParameters().Length > 0) continue;
+
+                if (property.CanWrite && IsDisplayMoneyProperty(property))
+                {
+                    if (property.PropertyType == typeof(decimal))
+                    {
+                        var current = (decimal)(property.GetValue(value) ?? 0m);
+                        property.SetValue(value, ConvertDisplayMoney(current, currency, region, settings));
+                        continue;
+                    }
+                    if (property.PropertyType == typeof(decimal?))
+                    {
+                        var current = (decimal?)property.GetValue(value);
+                        if (current.HasValue)
+                            property.SetValue(value, (decimal?)ConvertDisplayMoney(current.Value, currency, region, settings));
+                        continue;
+                    }
+                }
+
+                var propertyType = property.PropertyType;
+                if (propertyType == typeof(string) || propertyType.IsPrimitive ||
+                    propertyType.IsEnum || propertyType == typeof(decimal) || propertyType == typeof(decimal?) ||
+                    propertyType == typeof(DateTime) || propertyType == typeof(DateTime?) ||
+                    propertyType == typeof(Guid) || propertyType == typeof(Guid?)) continue;
+
+                ApplyDisplayCurrencyRecursive(property.GetValue(value), currency, region, placeRegions, settings, visited);
+            }
+        }
 
         private static decimal EffectiveDebtLimit(
             PlaceCommissionAccount account,
@@ -812,7 +1040,7 @@ namespace YemenGuide.Web.Services.Finance
 
             var model = new AdminFinancialShellDto
             {
-                Currency = GetCurrency(settings),
+                Currency = await GetDisplayCurrencyAsync(cancellationToken),
                 SelectedTab = normalizedTab,
                 GeneratedAt = DateTime.Now,
                 PendingTopUpsCount = pendingTopUpsCount,
@@ -914,7 +1142,8 @@ namespace YemenGuide.Web.Services.Finance
 
             if (placeIds.Count == 0)
             {
-                return model;
+                await ApplyDisplayCurrencyAsync(model, cancellationToken);
+            return model;
             }
 
             var accountsQuery = _context.PlaceCommissionAccounts
@@ -1407,6 +1636,7 @@ namespace YemenGuide.Web.Services.Finance
                 });
             }
 
+            await ApplyDisplayCurrencyAsync(model, cancellationToken);
             return model;
         }
 
@@ -1829,7 +2059,7 @@ namespace YemenGuide.Web.Services.Finance
                 })
                 .ToList();
 
-            return new AdminCommissionTopUpPageDto
+            var result = new AdminCommissionTopUpPageDto
             {
                 Currency = GetCurrency(settings),
                 MinimumTopUpAmount = settings?.MinimumCommissionTopUp ?? 0m,
@@ -1885,6 +2115,9 @@ namespace YemenGuide.Web.Services.Finance
                     }
                 }
             };
+
+            await ApplyDisplayCurrencyAsync(result, cancellationToken);
+            return result;
         }
 
         public async Task<AdminCommissionTopUpDetailsDto?> GetTopUpDetailsAsync(
@@ -1949,7 +2182,7 @@ namespace YemenGuide.Web.Services.Finance
 
             var account = item.Place?.PlaceCommissionAccount;
 
-            return new AdminCommissionTopUpDetailsDto
+            var result = new AdminCommissionTopUpDetailsDto
             {
                 CommissionTransactionId = item.CommissionTransactionId,
                 PlaceId = item.PlaceId,
@@ -2044,6 +2277,9 @@ namespace YemenGuide.Web.Services.Finance
                         })
                     .ToList()
             };
+
+            await ApplyDisplayCurrencyAsync(result, cancellationToken);
+            return result;
         }
 
         private static string OwnerNameFromDictionary(
@@ -2337,7 +2573,7 @@ namespace YemenGuide.Web.Services.Finance
                 })
                 .ToList();
 
-            return new AdminCommissionAccountPageDto
+            var result = new AdminCommissionAccountPageDto
             {
                 Currency = GetCurrency(settings),
                 GlobalMinimumTopUpAmount =
@@ -2376,6 +2612,9 @@ namespace YemenGuide.Web.Services.Finance
                     AccountStatusLabel,
                     filter.AccountStatus)
             };
+
+            await ApplyDisplayCurrencyAsync(result, cancellationToken);
+            return result;
         }
 
         public async Task<AdminCommissionAccountDetailsDto?> GetCommissionAccountDetailsAsync(
@@ -2428,7 +2667,7 @@ namespace YemenGuide.Web.Services.Finance
                 ? CalculateAccountStatus(account, settings)
                 : account.AccountStatus.Trim();
 
-            return new AdminCommissionAccountDetailsDto
+            var result = new AdminCommissionAccountDetailsDto
             {
                 PlaceCommissionAccountId =
                     account.PlaceCommissionAccountId,
@@ -2544,6 +2783,9 @@ namespace YemenGuide.Web.Services.Finance
                         })
                     .ToList()
             };
+
+            await ApplyDisplayCurrencyAsync(result, cancellationToken);
+            return result;
         }
 
         public async Task<FinanceOperationResult> UpdateCommissionAccountPolicyAsync(
@@ -3124,7 +3366,7 @@ namespace YemenGuide.Web.Services.Finance
                 })
                 .ToList();
 
-            return new AdminBookingCommissionPageDto
+            var result = new AdminBookingCommissionPageDto
             {
                 Currency = GetCurrency(settings),
                 Filter = filter,
@@ -3188,6 +3430,9 @@ namespace YemenGuide.Web.Services.Finance
                     }
                 }
             };
+
+            await ApplyDisplayCurrencyAsync(result, cancellationToken);
+            return result;
         }
 
         public async Task<AdminBookingCommissionDetailsDto?> GetBookingCommissionDetailsAsync(
@@ -3366,6 +3611,7 @@ namespace YemenGuide.Web.Services.Finance
                     AdminBookingCommissionStatuses.Released)
             });
 
+            await ApplyDisplayCurrencyAsync(result, cancellationToken);
             return result;
         }
 
@@ -3679,7 +3925,7 @@ namespace YemenGuide.Web.Services.Finance
                 transactions.Select(transaction => transaction.Place.OwnerId),
                 cancellationToken);
 
-            return new AdminFinancialTransactionPageDto
+            var result = new AdminFinancialTransactionPageDto
             {
                 Currency = GetCurrency(settings),
                 Filter = filter,
@@ -3741,6 +3987,9 @@ namespace YemenGuide.Web.Services.Finance
                     }
                 }
             };
+
+            await ApplyDisplayCurrencyAsync(result, cancellationToken);
+            return result;
         }
 
         public async Task<AdminFinancialTransactionDetailsDto?> GetTransactionDetailsAsync(
@@ -3800,7 +4049,7 @@ namespace YemenGuide.Web.Services.Finance
                 commissionStatus = bookingInfo?.CommissionStatus?.Trim();
             }
 
-            return new AdminFinancialTransactionDetailsDto
+            var result = new AdminFinancialTransactionDetailsDto
             {
                 CommissionTransactionId = row.CommissionTransactionId,
                 PlaceId = row.PlaceId,
@@ -3842,6 +4091,9 @@ namespace YemenGuide.Web.Services.Finance
                 PlatformBeneficiaryName =
                     transaction.PlatformWallet?.BeneficiaryName?.Trim()
             };
+
+            await ApplyDisplayCurrencyAsync(result, cancellationToken);
+            return result;
         }
 
         /* ====================================================================
@@ -3864,9 +4116,7 @@ namespace YemenGuide.Web.Services.Finance
 
             return new AdminFinancialManagementPageDto
             {
-                Currency = string.IsNullOrWhiteSpace(settingsPage.Settings.DefaultCurrency)
-                    ? "ريال يمني"
-                    : settingsPage.Settings.DefaultCurrency.Trim(),
+                Currency = await GetDisplayCurrencyAsync(cancellationToken),
                 LoadedAt = DateTime.Now,
                 Settings = settingsPage,
                 PlatformWallets = platformWallets
@@ -3976,7 +4226,7 @@ namespace YemenGuide.Web.Services.Finance
                         AdminCommissionTopUpStatuses.Completed)
                 .SumAsync(transaction => (decimal?)transaction.Amount, cancellationToken) ?? 0m;
 
-            return new AdminPlatformWalletPageDto
+            var result = new AdminPlatformWalletPageDto
             {
                 Filter = filter,
                 Summary = new AdminPlatformWalletSummaryDto
@@ -4033,6 +4283,9 @@ namespace YemenGuide.Web.Services.Finance
                     })
                     .ToListAsync(cancellationToken)
             };
+
+            await ApplyDisplayCurrencyAsync(result, cancellationToken);
+            return result;
         }
 
         private sealed class PlatformWalletUsageProjection
@@ -5778,7 +6031,7 @@ namespace YemenGuide.Web.Services.Finance
                     "دليلك اليمني",
                     settings?.SiteName),
                 PlatformLogoPath = settings?.LogoPath?.Trim(),
-                Currency = GetCurrency(settings),
+                Currency = await GetDisplayCurrencyAsync(cancellationToken),
                 ReportType = filter.ReportType,
                 Title = ReportTitle(filter.ReportType),
                 Subtitle = ReportSubtitle(filter.ReportType),
@@ -7015,26 +7268,7 @@ namespace YemenGuide.Web.Services.Finance
             return export;
         }
 
-        public async Task<AdminFinancialExcelFileDto> BuildFinancialExcelAsync(
-            AdminFinancialReportFilterDto filter,
-            string? generatedByName = null,
-            CancellationToken cancellationToken = default)
-        {
-            var report = await BuildFinancialReportExportAsync(
-                filter,
-                generatedByName,
-                cancellationToken);
 
-            return new AdminFinancialExcelFileDto
-            {
-                Content = _excelBuilder.Build(report),
-                FileName = report.SuggestedFileName.EndsWith(
-                    ".xlsx",
-                    StringComparison.OrdinalIgnoreCase)
-                        ? report.SuggestedFileName
-                        : report.SuggestedFileName + ".xlsx"
-            };
-        }
 
         private static string BuildReportFileName(
             string reportType,
@@ -7115,7 +7349,7 @@ namespace YemenGuide.Web.Services.Finance
             document.PlatformLogoPath = settings?.LogoPath?.Trim();
             document.ContactEmail = settings?.ContactEmail?.Trim();
             document.SupportPhone = settings?.SupportPhone?.Trim();
-            document.Currency = GetCurrency(settings);
+            document.Currency = await GetDisplayCurrencyAsync(cancellationToken);
             document.GeneratedAt = DateTime.Now;
             document.GeneratedByName = generatedByName;
             document.FooterText =

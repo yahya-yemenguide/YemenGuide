@@ -1,14 +1,20 @@
 ﻿@using YemenGuide.Core.DTOs.Admin
+@using System.Globalization
+@using YemenGuide.Web.Services.ExchangeRates
 @model AdminFinancialDocumentPrintDto
 
 @{
     Layout = null;
     var document = Model?.Document ?? new AdminFinancialDocumentDetailsDto();
     var autoPrint = Model?.AutoPrint ?? false;
+    var isArabic = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    var uiLang = isArabic ? "ar" : "en";
+    var uiDir = isArabic ? "rtl" : "ltr";
+    string Money(decimal value) => $"{CurrencyDisplayService.FormatNumber(value, document.Currency)} {document.Currency}";
 }
 
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="@uiLang" dir="@uiDir">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -110,7 +116,7 @@
                         <div class="afp-amount-row @(amount.IsTotal ? "is-total" : null)"
                              data-tone="@amount.Tone">
                             <span>@amount.Label</span>
-                            <strong>@amount.Amount.ToString("N0") @document.Currency</strong>
+                            <strong>@Money(amount.Amount)</strong>
                         </div>
                     }
                 </div>
@@ -167,5 +173,6 @@
             });
         </script>
     }
+    <script src="~/js/admin/financials/admin-financials-phase2.js" asp-append-version="true"></script>
 </body>
 </html>

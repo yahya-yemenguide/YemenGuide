@@ -87,57 +87,6 @@ namespace YemenGuide.Web.Areas.Admin.Controllers.Financials
             }
         }
 
-        [HttpGet("Excel")]
-        public async Task<IActionResult> Excel(
-            [FromQuery] AdminFinancialReportFilterDto? filter,
-            CancellationToken cancellationToken = default)
-        {
-            filter ??= new AdminFinancialReportFilterDto();
-
-            if (!IsValidReportType(filter.ReportType))
-            {
-                return BadRequest(
-                    "نوع التقرير المالي غير صحيح.");
-            }
-
-            try
-            {
-                DisableResponseCaching();
-
-                var file =
-                    await _adminFinancialService.BuildFinancialExcelAsync(
-                        filter,
-                        User.Identity?.Name,
-                        cancellationToken);
-
-                if (file.Content == null || file.Content.Length == 0)
-                {
-                    return NotFound(
-                        "لا توجد بيانات قابلة للتصدير.");
-                }
-
-                return File(
-                    file.Content,
-                    file.ContentType,
-                    file.FileName);
-            }
-            catch (OperationCanceledException)
-                when (cancellationToken.IsCancellationRequested)
-            {
-                return new EmptyResult();
-            }
-            catch (Exception exception)
-            {
-                _logger.LogError(
-                    exception,
-                    "فشل تصدير التقرير المالي إلى Excel.");
-
-                return StatusCode(
-                    500,
-                    "تعذر إنشاء ملف Excel حاليًا.");
-            }
-        }
-
         [HttpGet("Print")]
         public async Task<IActionResult> Print(
             [FromQuery] AdminFinancialReportFilterDto? filter,

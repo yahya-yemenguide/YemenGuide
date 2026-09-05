@@ -1,0 +1,629 @@
+/* =========================================================
+   YemenGuide Admin Finance — Phase 1 cleanup
+   UI-only overrides: less clutter, tabbed management drawer,
+   compact spacing, Tajawal, toast stacking, mobile polish.
+   ========================================================= */
+
+:root {
+    --af-font: var(--yg-font-family, "Tajawal", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+}
+
+.af-shell,
+.af-shell button,
+.af-shell input,
+.af-shell select,
+.af-shell textarea,
+.afm,
+.afm button,
+.afm input,
+.afm select,
+.afm textarea {
+    font-family: var(--af-font) !important;
+}
+
+.af-shell .bi::before,
+.afm .bi::before,
+.af-toast .bi::before {
+    font-family: "bootstrap-icons" !important;
+}
+
+/* =========================
+   Compact finance header
+   ========================= */
+.af-hero.af-hero--compact {
+    display: block;
+    margin: 0 0 12px;
+}
+
+.af-hero--compact .af-hero__content {
+    padding: 16px 18px;
+    border-radius: 18px;
+}
+
+.af-hero--compact .af-hero__content::before,
+.af-hero--compact .af-hero__content::after {
+    display: none;
+}
+
+.af-hero--compact .af-hero__headline-row {
+    align-items: center;
+    gap: 16px;
+}
+
+.af-hero__compact-title {
+    min-width: 0;
+}
+
+.af-hero--compact .af-hero__title {
+    font-size: clamp(22px, 2.3vw, 29px);
+    line-height: 1.2;
+    letter-spacing: 0;
+}
+
+.af-hero--compact .af-hero__meta {
+    margin-top: 8px;
+    gap: 7px;
+}
+
+.af-hero--compact .af-meta-pill {
+    min-height: 31px;
+    padding: 5px 9px;
+    font-size: 11px;
+}
+
+.af-hero--compact .af-btn {
+    min-height: 39px;
+    padding: 8px 12px;
+    border-radius: 11px;
+    font-size: 12px;
+}
+
+/* =========================
+   Main workspace / tabs
+   ========================= */
+.af-workspace {
+    border-radius: 19px;
+}
+
+.af-tabs {
+    gap: 5px;
+    padding: 8px;
+}
+
+.af-tab {
+    min-height: 44px;
+    padding: 8px 13px;
+    border-radius: 12px;
+    font-size: 12px;
+}
+
+.af-tab__icon {
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    font-size: 13px;
+}
+
+.af-tab.is-active {
+    animation: afPhase1TabIn .16s ease both;
+}
+
+.af-tab:focus-visible {
+    outline: 3px solid rgba(0, 166, 218, .18);
+    outline-offset: 1px;
+}
+
+.af-tab-panel {
+    padding: 18px;
+}
+
+@keyframes afPhase1TabIn {
+    from { transform: translateY(1px); opacity: .82; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+/* =========================
+   Compact overview
+   ========================= */
+.afo--compact .afo-section-head--compact {
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+}
+
+.afo--compact .afo-section-head__title {
+    font-size: 20px;
+}
+
+.afo--compact .afo-filterbar {
+    margin-bottom: 12px;
+}
+
+.afo-kpi-grid.afo-kpi-grid--compact {
+    gap: 9px;
+    margin-bottom: 14px;
+}
+
+.afo-kpi-card.afo-kpi-card--compact {
+    min-height: 82px;
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 13px 14px;
+}
+
+.afo-kpi-card--compact .afo-kpi-card__icon {
+    flex: 0 0 auto;
+    margin: 0;
+}
+
+.afo-kpi-card__compact-body {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.afo-kpi-card__compact-body > small {
+    color: var(--af-muted);
+    font-size: 10px;
+    font-weight: 800;
+}
+
+.afo-kpi-card--compact .afo-kpi-card__value {
+    margin: 0;
+    color: var(--af-navy);
+    font-size: clamp(15px, 1.45vw, 19px);
+    line-height: 1.2;
+    font-weight: 900;
+    white-space: nowrap;
+}
+
+.afo--compact .afo-content-grid {
+    gap: 12px;
+}
+
+/* =========================
+   Management drawer frame
+   ========================= */
+.af-management-drawer {
+    width: min(760px, calc(100vw - 24px)) !important;
+    max-width: min(760px, calc(100vw - 24px)) !important;
+    border-radius: 20px !important;
+    overflow: hidden !important;
+}
+
+.af-management-drawer__host {
+    height: 100%;
+    min-height: 0;
+}
+
+.afm.afm--tabs {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.afm-header.afm-header--compact {
+    min-height: 62px;
+    padding: 11px 14px;
+}
+
+.afm-header--compact .afm-header__identity {
+    gap: 9px;
+}
+
+.afm-header--compact .afm-header__mark {
+    width: 38px;
+    height: 38px;
+    flex-basis: 38px;
+    border-radius: 11px;
+    font-size: 16px;
+}
+
+.afm-header--compact h2 {
+    margin: 0;
+    font-size: 17px;
+}
+
+.afm-header--compact .afm-close {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+}
+
+/* =========================
+   Management internal tabs
+   ========================= */
+.afm-tabs {
+    flex: 0 0 auto;
+    display: flex;
+    gap: 6px;
+    padding: 8px 10px;
+    overflow-x: auto;
+    border-bottom: 1px solid var(--af-line);
+    background: #fbfdfe;
+    scrollbar-width: thin;
+}
+
+.afm-tabs::-webkit-scrollbar {
+    height: 4px;
+}
+
+.afm-tabs::-webkit-scrollbar-thumb {
+    border-radius: 99px;
+    background: #d6e1e8;
+}
+
+.afm-tab {
+    min-width: max-content;
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 7px 11px;
+    border: 1px solid transparent;
+    border-radius: 11px;
+    background: transparent;
+    color: var(--af-muted);
+    cursor: pointer;
+    font-size: 10.5px;
+    font-weight: 850;
+    transition: background-color .16s ease, color .16s ease, border-color .16s ease, box-shadow .16s ease;
+}
+
+.afm-tab i {
+    color: inherit;
+    font-size: 13px;
+}
+
+.afm-tab:hover {
+    color: var(--af-cyan-strong);
+    background: var(--af-cyan-soft);
+}
+
+.afm-tab.is-active {
+    color: var(--af-navy);
+    border-color: #d9e7ef;
+    background: #fff;
+    box-shadow: 0 4px 13px rgba(13, 49, 76, .06);
+}
+
+.afm-tab.is-active i {
+    color: var(--af-cyan-strong);
+}
+
+.afm-tab:focus-visible {
+    outline: 3px solid rgba(0, 166, 218, .16);
+    outline-offset: 1px;
+}
+
+.afm-body.afm-body--tabbed {
+    padding: 12px;
+}
+
+.afm-tab-panel {
+    min-height: 0;
+    animation: afmPanelIn .15s ease both;
+}
+
+.afm-tab-panel[hidden] {
+    display: none !important;
+}
+
+@keyframes afmPanelIn {
+    from { opacity: .72; transform: translateY(2px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.afm-settings-form.afm-settings-form--tabbed {
+    padding: 0;
+}
+
+.afm-panel-title,
+.afm-wallets-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+    padding: 1px 2px 9px;
+    border-bottom: 1px solid var(--af-line);
+}
+
+.afm-panel-title h3,
+.afm-wallets-head h3 {
+    margin: 0;
+    color: var(--af-navy);
+    font-size: 13px;
+    font-weight: 900;
+}
+
+.afm-panel-title p,
+.afm-wallets-head p {
+    margin: 2px 0 0;
+    color: var(--af-muted);
+    font-size: 9px;
+    font-weight: 600;
+}
+
+.afm-settings-form--tabbed .afm-settings-grid {
+    gap: 9px;
+}
+
+.afm-settings-form--tabbed .afm-toggle-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 7px;
+    margin-top: 10px;
+}
+
+.afm-settings-form--tabbed .afm-toggle-card {
+    min-height: 68px;
+    padding: 9px 10px;
+}
+
+.afm-settings-form--tabbed .afm-trial-policy {
+    margin-top: 0;
+}
+
+.afm-category-commissions.afm-category-commissions--tab {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
+}
+
+.afm-empty--inside-tab {
+    min-height: 180px;
+}
+
+.afm-settings-footer {
+    position: sticky;
+    bottom: -12px;
+    z-index: 4;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 10px;
+    margin: 13px -12px -12px;
+    padding: 10px 12px 12px;
+    border-top: 1px solid var(--af-line);
+    background: rgba(255, 255, 255, .98);
+}
+
+.afm-settings-footer .afm-field--reason {
+    margin: 0;
+}
+
+.afm-settings-footer .afm-field--reason textarea {
+    min-height: 58px;
+    max-height: 82px;
+}
+
+.afm-settings-footer .afm-form-actions {
+    margin: 0;
+    padding: 0;
+}
+
+.afm-settings-footer .afm-btn {
+    min-width: 132px;
+}
+
+.afm-wallet-summary.afm-wallet-summary--compact {
+    gap: 7px;
+    margin-bottom: 10px;
+}
+
+.afm-wallet-summary--compact > div {
+    min-height: 58px;
+    padding: 9px 10px;
+}
+
+/* =========================
+   Reports compact header
+   ========================= */
+.afr-section-head.afr-section-head--compact {
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+}
+
+.afr-section-head--compact .afr-section-head__title {
+    font-size: 20px;
+}
+
+.afr-section-head--compact .afr-section-head__text {
+    margin-top: 4px;
+    font-size: 11px;
+}
+
+/* =========================
+   Toast must sit above drawer/modals
+   ========================= */
+#adminFinanceToastStack.af-toast-stack {
+    position: fixed !important;
+    z-index: 2000000030 !important;
+    pointer-events: none;
+}
+
+#adminFinanceToastStack .af-toast {
+    pointer-events: auto;
+}
+
+/* =========================
+   Responsive
+   ========================= */
+@media (max-width: 991.98px) {
+    .af-hero--compact .af-hero__headline-row {
+        align-items: flex-start;
+    }
+
+    .afo-kpi-grid.afo-kpi-grid--compact {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .afm-settings-form--tabbed .afm-toggle-list {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 767.98px) {
+    .af-hero--compact .af-hero__content {
+        padding: 13px 14px;
+    }
+
+    .af-hero--compact .af-hero__headline-row {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .af-hero--compact .af-hero__actions {
+        width: 100%;
+    }
+
+    .af-hero--compact .af-hero__actions .af-btn {
+        flex: 1 1 0;
+    }
+
+    .af-hero--compact .af-hero__meta {
+        gap: 5px;
+    }
+
+    .af-hero--compact .af-meta-pill {
+        max-width: 100%;
+    }
+
+    .af-tab-panel {
+        padding: 12px;
+    }
+
+    .afo-kpi-grid.afo-kpi-grid--compact {
+        grid-template-columns: 1fr;
+        gap: 7px;
+    }
+
+    .afo-kpi-card.afo-kpi-card--compact {
+        min-height: 70px;
+        padding: 10px 11px;
+    }
+
+    .af-management-drawer {
+        width: 100vw !important;
+        max-width: 100vw !important;
+        left: 0 !important;
+        top: 0 !important;
+        bottom: 0 !important;
+        border-radius: 0 !important;
+    }
+
+    .afm-header.afm-header--compact {
+        min-height: 56px;
+        padding: 9px 10px;
+    }
+
+    .afm-tabs {
+        padding: 7px 8px;
+    }
+
+    .afm-tab {
+        min-height: 38px;
+        padding: 7px 9px;
+        font-size: 10px;
+    }
+
+    .afm-body.afm-body--tabbed {
+        padding: 9px;
+    }
+
+    .afm-settings-form--tabbed .afm-settings-grid,
+    .afm-category-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .afm-settings-footer {
+        bottom: -9px;
+        grid-template-columns: 1fr;
+        margin: 11px -9px -9px;
+        padding: 9px;
+    }
+
+    .afm-settings-footer .afm-btn {
+        width: 100%;
+    }
+
+    .afm-wallets-head {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .afm-wallets-head .afm-btn {
+        width: 100%;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .af-tab.is-active,
+    .afm-tab-panel {
+        animation: none !important;
+    }
+
+    .af-tab,
+    .afm-tab {
+        transition: none !important;
+    }
+}
+
+/* =========================
+   Remove duplicated secondary KPI blocks
+   The actual tables/filters/actions remain untouched.
+   ========================= */
+.acg-summary-mini,
+.acg-balance-row,
+.atr-pending-callout,
+.atr-kpi-row,
+.aft-kpi-row {
+    display: none !important;
+}
+
+.acg-section-head,
+.atr-section-head,
+.aft-section-head {
+    margin-bottom: 12px !important;
+    padding-bottom: 10px !important;
+}
+
+.acg-section-head__eyebrow,
+.atr-section-head__eyebrow,
+.aft-section-head__eyebrow,
+.acg-section-head__text,
+.atr-section-head__text,
+.aft-section-head__text {
+    display: none !important;
+}
+
+.acg-section-head__title,
+.atr-section-head__title,
+.aft-section-head__title {
+    font-size: 20px !important;
+}
+
+.afm-tab-panel.afm-section {
+    margin: 0;
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.afm [hidden] {
+    display: none !important;
+}
+
+#adminFinanceGlobalToastStack.af-toast-stack--global {
+    position: fixed !important;
+    z-index: 2000000030 !important;
+    pointer-events: none;
+}
+
+#adminFinanceGlobalToastStack .af-toast {
+    pointer-events: auto;
+}
