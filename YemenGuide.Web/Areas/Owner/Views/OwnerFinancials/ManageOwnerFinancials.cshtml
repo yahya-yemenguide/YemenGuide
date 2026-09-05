@@ -1,0 +1,465 @@
+@using System
+@using System.Collections.Generic
+@using System.Linq
+@using YemenGuide.Core.DTOs.Owner
+
+@model OwnerFinancialPageDto
+
+@{
+    ViewData["Title"] = "الإدارة المالية";
+
+    var pageModel = Model ?? new OwnerFinancialPageDto();
+
+    var requestedTab =
+        Convert.ToString(ViewData["CanonicalFinancialTab"])
+            ?.Trim()
+            .ToLowerInvariant()
+        ?? Convert.ToString(ViewData["ActiveFinancialTab"])
+            ?.Trim()
+            .ToLowerInvariant()
+        ?? "overview";
+
+    var allowedTabs = new HashSet<string>(
+        StringComparer.OrdinalIgnoreCase)
+    {
+        "overview",
+        "bookings",
+        "balance",
+        "refunds",
+        "wallets",
+        "reports"
+    };
+
+    var activeTab =
+        allowedTabs.Contains(requestedTab)
+            ? requestedTab
+            : "overview";
+
+    var currency =
+        string.IsNullOrWhiteSpace(pageModel.Currency)
+            ? "ريال يمني"
+            : pageModel.Currency.Trim();
+
+    var selectedPlaceName =
+        string.IsNullOrWhiteSpace(pageModel.SelectedPlaceName)
+            ? "المنشأة الحالية"
+            : pageModel.SelectedPlaceName.Trim();
+
+    /*
+     * Badge تبويب الرصيد يعرض "إجراء ينتظر المالك" فقط.
+     * لا نستخدم عدد الحسابات منخفضة/الموقوفة كرقم على التبويب؛
+     * هذه الحالات تُعرض داخل تبويب الرصيد نفسه.
+     */
+    var balanceAlerts =
+        Math.Max(
+            0,
+            pageModel.PendingTopUpsCount);
+
+    var tabs = new[]
+    {
+        new
+        {
+            Key = "overview",
+            Title = "نظرة عامة",
+            Description = "الملخص المالي",
+            Icon = "bi-stars",
+            Endpoint = Url.Content("~/Owner/Financials/Overview"),
+            BadgeCount = (int?)null
+        },
+        new
+        {
+            Key = "bookings",
+            Title = "حسابات الحجوزات",
+            Description = "حساب كل حجز",
+            Icon = "bi-receipt-cutoff",
+            Endpoint = Url.Content("~/Owner/Financials/BookingAccounts"),
+            BadgeCount = (int?)null
+        },
+        new
+        {
+            Key = "balance",
+            Title = "الرصيد والعمولات",
+            Description = "الرصيد والحركات",
+            Icon = "bi-shield-check",
+            Endpoint = Url.Content("~/Owner/Financials/Balance"),
+            BadgeCount = balanceAlerts > 0 ? balanceAlerts : (int?)null
+        },
+        new
+        {
+            Key = "refunds",
+            Title = "الاستردادات",
+            Description = "الإلغاءات والإرجاع",
+            Icon = "bi-arrow-counterclockwise",
+            Endpoint = Url.Content("~/Owner/Financials/Refunds"),
+            BadgeCount = pageModel.PendingRefundsCount > 0
+                ? pageModel.PendingRefundsCount
+                : (int?)null
+        },
+        new
+        {
+            Key = "wallets",
+            Title = "حسابات الاستقبال",
+            Description = "محافظ العملاء",
+            Icon = "bi-wallet2",
+            Endpoint = Url.Content("~/Owner/Financials/ReceivingWallets"),
+            BadgeCount = (int?)null
+        },
+        new
+        {
+            Key = "reports",
+            Title = "التقارير والفواتير",
+            Description = "الطباعة والتصدير",
+            Icon = "bi-file-earmark-bar-graph",
+            Endpoint = Url.Content("~/Owner/Financials/InvoicesReports"),
+            BadgeCount = (int?)null
+        }
+    };
+
+    var activeTabInfo =
+        tabs.First(tab =>
+            string.Equals(
+                tab.Key,
+                activeTab,
+                StringComparison.OrdinalIgnoreCase));
+}
+
+<link rel="stylesheet"
+      href="~/css/owner/financials/owner-financials-shell.css"
+      asp-append-version="true" />
+
+<link rel="stylesheet"
+      href="~/css/owner/financials/owner-financial-overview.css"
+      data-owner-financial-style="overview"
+      asp-append-version="true" />
+
+<link rel="stylesheet"
+      href="~/css/owner/financials/owner-financial-booking-accounts.css"
+      data-owner-financial-style="bookings"
+      asp-append-version="true" />
+
+<link rel="stylesheet"
+      href="~/css/owner/financials/owner-financial-balance.css"
+      data-owner-financial-style="balance"
+      asp-append-version="true" />
+
+<link rel="stylesheet"
+      href="~/css/owner/financials/owner-financial-refunds.css"
+      data-owner-financial-style="refunds"
+      asp-append-version="true" />
+
+<link rel="stylesheet"
+      href="~/css/owner/financials/owner-financial-receiving-wallets.css"
+      data-owner-financial-style="wallets"
+      asp-append-version="true" />
+
+<link rel="stylesheet"
+      href="~/css/owner/financials/owner-financial-invoices-reports.css"
+      data-owner-financial-style="reports"
+      asp-append-version="true" />
+
+<section class="owner-financials-shell"
+         id="ownerFinancialsShell"
+         dir="rtl"
+         data-default-tab="@activeTab"
+         data-selected-place-id="@(pageModel.SelectedPlaceId?.ToString() ?? string.Empty)"
+         data-selected-place-name="@selectedPlaceName"
+         data-currency="@currency"
+         data-pending-topups="@pageModel.PendingTopUpsCount"
+         data-pending-refunds="@pageModel.PendingRefundsCount"
+         data-low-balance-count="@pageModel.LowBalanceAccountsCount"
+         data-suspended-count="@pageModel.SuspendedAccountsCount"
+         data-manage-url="@Url.Content("~/Owner/Financials/Manage")">
+
+    <form id="ownerFinancialAntiForgeryForm"
+          class="owner-financial-hidden-form"
+          aria-hidden="true">
+        @Html.AntiForgeryToken()
+    </form>
+
+    <div class="owner-financials-ambient"
+         aria-hidden="true">
+        <span class="is-cyan"></span>
+        <span class="is-gold"></span>
+        <span class="is-mint"></span>
+    </div>
+
+    <header class="owner-financials-commandbar"
+            aria-labelledby="ownerFinancialPageTitle">
+
+        <div class="owner-financials-commandbar__main">
+
+            <span class="owner-financials-commandbar__icon"
+                  aria-hidden="true">
+                <i class="bi bi-cash-coin"></i>
+                <b></b>
+            </span>
+
+            <div class="owner-financials-commandbar__copy">
+                <span class="owner-financials-commandbar__eyebrow">
+                    <i class="bi bi-stars"></i>
+                    المركز المالي
+                </span>
+
+                <div class="owner-financials-commandbar__title-row">
+                    <h1 id="ownerFinancialPageTitle">
+                        الإدارة المالية
+                    </h1>
+
+                    <span class="owner-financials-commandbar__live">
+                        <i></i>
+                        مباشر
+                    </span>
+                </div>
+
+                <p>
+                    أموال الحجوزات، التحصيل، العمولات والاستردادات
+                    بواجهة مالية واحدة واضحة وسريعة.
+                </p>
+
+                <div class="owner-financials-commandbar__meta">
+                    <span>
+                        <i class="bi bi-building-check"></i>
+                        <small>المنشأة</small>
+                        <strong>@selectedPlaceName</strong>
+                    </span>
+
+                    <span>
+                        <i class="bi bi-currency-exchange"></i>
+                        <small>العملة</small>
+                        <strong>@currency</strong>
+                    </span>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="owner-financials-commandbar__actions">
+
+            @if (pageModel.PendingRefundsCount > 0)
+            {
+                <button type="button"
+                    class="owner-financials-quick-action is-refund"
+                    data-financial-nav="refunds">
+                    <span>
+                        <i class="bi bi-arrow-counterclockwise"></i>
+                    </span>
+                    <div>
+                        <small>استردادات معلقة</small>
+                        <strong>@pageModel.PendingRefundsCount</strong>
+                    </div>
+                    <i class="bi bi-arrow-left"></i>
+                </button>
+            }
+
+            @if (balanceAlerts > 0)
+            {
+                <button type="button"
+                    class="owner-financials-quick-action is-balance"
+                    data-financial-nav="balance">
+                    <span>
+                        <i class="bi bi-shield-exclamation"></i>
+                    </span>
+                    <div>
+                        <small>تنبيهات مالية</small>
+                        <strong>@balanceAlerts</strong>
+                    </div>
+                    <i class="bi bi-arrow-left"></i>
+                </button>
+            }
+
+            <button type="button"
+                    class="owner-financials-refresh"
+                    id="ownerFinancialRefreshButton"
+                    aria-label="تحديث القسم المالي الحالي">
+                <i class="bi bi-arrow-clockwise"></i>
+                <span>تحديث</span>
+            </button>
+
+        </div>
+
+    </header>
+
+    <div class="owner-financials-scope-note">
+        <i class="bi bi-info-circle"></i>
+        <span>
+            يتم اعتماد المنشأة المختارة من الهيدر الرئيسي تلقائيًا.
+        </span>
+    </div>
+
+    <section class="owner-financials-tabbar"
+             aria-labelledby="ownerFinancialTabsTitle">
+
+        <h2 id="ownerFinancialTabsTitle"
+            class="owner-financial-visually-hidden">
+            أقسام الإدارة المالية
+        </h2>
+
+        <nav class="owner-financial-tabs"
+             id="ownerFinancialTabs"
+             role="tablist"
+             aria-label="تبويبات الإدارة المالية"
+             aria-orientation="horizontal">
+
+            @foreach (var tab in tabs)
+            {
+                var isActive =
+                string.Equals(
+                tab.Key,
+                activeTab,
+                StringComparison.OrdinalIgnoreCase);
+
+                <button type="button"
+                    class="owner-financial-tab @(isActive ? "is-active" : string.Empty)"
+                    id="ownerFinancialTab-@tab.Key"
+                    role="tab"
+                    aria-selected="@(isActive ? "true" : "false")"
+                    aria-controls="ownerFinancialTabContent"
+                    tabindex="@(isActive ? "0" : "-1")"
+                    data-financial-tab="@tab.Key"
+                    data-endpoint="@tab.Endpoint"
+                    data-title="@tab.Title"
+                    data-description="@tab.Description"
+                    data-icon="@tab.Icon">
+
+                    <span class="owner-financial-tab__icon"
+                      aria-hidden="true">
+                        <i class="bi @tab.Icon"></i>
+                    </span>
+
+                    <span class="owner-financial-tab__copy">
+                        <strong>@tab.Title</strong>
+                        <small>@tab.Description</small>
+                    </span>
+
+                    @if (tab.BadgeCount.HasValue)
+                    {
+                        <span class="owner-financial-tab__badge">
+                            @tab.BadgeCount.Value
+                        </span>
+                    }
+
+                    <span class="owner-financial-tab__active-dot"
+                      aria-hidden="true"></span>
+                </button>
+            }
+
+        </nav>
+
+    </section>
+
+    <section class="owner-financial-content-card"
+             aria-labelledby="ownerFinancialActiveTabTitle">
+
+        <header class="owner-financial-content-header">
+
+            <div class="owner-financial-content-header__main">
+
+                <span class="owner-financial-content-header__icon"
+                      aria-hidden="true">
+                    <i class="bi @activeTabInfo.Icon"
+                       id="ownerFinancialActiveTabIcon"></i>
+                </span>
+
+                <div>
+                    <span class="owner-financial-content-header__kicker">
+                        القسم الحالي
+                    </span>
+
+                    <h2 id="ownerFinancialActiveTabTitle">
+                        @activeTabInfo.Title
+                    </h2>
+
+                    <p id="ownerFinancialActiveTabDescription">
+                        @activeTabInfo.Description
+                    </p>
+                </div>
+
+            </div>
+
+            <div class="owner-financial-content-header__status">
+                <span class="owner-financial-live-dot"
+                      aria-hidden="true"></span>
+                <div>
+                    <small>آخر تحديث</small>
+                    <strong id="ownerFinancialLastUpdatedAt">الآن</strong>
+                </div>
+            </div>
+
+        </header>
+
+        <main class="owner-financial-tab-content"
+              id="ownerFinancialTabContent"
+              role="tabpanel"
+              aria-labelledby="ownerFinancialTab-@activeTab"
+              aria-live="polite"
+              aria-busy="true"
+              tabindex="0">
+
+            <div class="owner-financial-loading-state"
+                 role="status"
+                 aria-label="جاري تحميل القسم المالي">
+
+                <div class="owner-financial-loading-state__visual"
+                     aria-hidden="true">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+
+                <div class="owner-financial-loading-state__copy">
+                    <strong>
+                        جاري تجهيز @activeTabInfo.Title
+                    </strong>
+                    <span>
+                        يتم جلب البيانات المالية للمنشأة الحالية.
+                    </span>
+                </div>
+
+                <div class="owner-financial-loading-state__skeleton"
+                     aria-hidden="true">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+
+            </div>
+
+        </main>
+
+    </section>
+
+    <div class="owner-financial-toast-host"
+         id="ownerFinancialToastHost"
+         aria-live="polite"
+         aria-atomic="true">
+    </div>
+
+</section>
+
+<script src="~/js/owner/financials/owner-financial-overview.js"
+        data-owner-financial-script="overview"
+        asp-append-version="true"></script>
+
+<script src="~/js/owner/financials/owner-financial-booking-accounts.js"
+        data-owner-financial-script="bookings"
+        asp-append-version="true"></script>
+
+<script src="~/js/owner/financials/owner-financial-balance.js"
+        data-owner-financial-script="balance"
+        asp-append-version="true"></script>
+
+<script src="~/js/owner/financials/owner-financial-refunds.js"
+        data-owner-financial-script="refunds"
+        asp-append-version="true"></script>
+
+<script src="~/js/owner/financials/owner-financial-receiving-wallets.js"
+        data-owner-financial-script="wallets"
+        asp-append-version="true"></script>
+
+<script src="~/js/owner/financials/owner-financial-invoices-reports.js"
+        data-owner-financial-script="reports"
+        asp-append-version="true"></script>
+
+<script src="~/js/owner/financials/owner-financials-shell.js"
+        asp-append-version="true"></script>

@@ -1,0 +1,133 @@
+@{
+    Layout = null;
+    ViewData["Title"] = "تأكيد البريد الإلكتروني";
+    string email = ViewBag.Email?.ToString() ?? string.Empty;
+    string type = ViewBag.Type?.ToString() ?? string.Empty;
+    string siteName = ViewBag.SiteName?.ToString() ?? "YemenGuide";
+    string logoPath = ViewBag.LogoPath?.ToString() ?? "/images/logo1.png";
+    string faviconPath = ViewBag.FaviconPath?.ToString() ?? logoPath;
+    int otpExpiresInSeconds = ViewBag.OtpExpiresInSeconds is int seconds ? Math.Max(0, seconds) : 0;
+    int otpResendCooldownSeconds = ViewBag.OtpResendCooldownSeconds is int cooldown ? Math.Max(0, cooldown) : 0;
+    string otpExpiryText = $"{otpExpiresInSeconds / 60:00}:{otpExpiresInSeconds % 60:00}";
+    string otpResendText = $"{otpResendCooldownSeconds / 60:00}:{otpResendCooldownSeconds % 60:00}";
+
+    string MaskEmail(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || !value.Contains('@')) return value;
+        var parts = value.Split('@', 2);
+        var local = parts[0];
+        var visible = local.Length <= 2 ? local[..1] : local[..Math.Min(2, local.Length)];
+        return $"{visible}{new string('•', Math.Max(3, Math.Min(6, local.Length - visible.Length)))}@{parts[1]}";
+    }
+}
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#f5fbfe" />
+    <title>@ViewData["Title"] - @siteName</title>
+    <link rel="icon" href="@faviconPath" />
+
+    <link rel="stylesheet" href="~/lib/bootstrap-icons/bootstrap-icons.min.css" asp-append-version="true" />
+    <link rel="preload" href="~/lib/fonts/Tajawal/Tajawal-Regular.ttf" as="font" type="font/ttf" crossorigin />
+    <link rel="preload" href="~/lib/fonts/Tajawal/Tajawal-Bold.ttf" as="font" type="font/ttf" crossorigin />
+    <link rel="preload" href="~/lib/fonts/Tajawal/Tajawal-ExtraBold.ttf" as="font" type="font/ttf" crossorigin />
+    <link rel="stylesheet" href="~/css/shared/verify-otp.css" asp-append-version="true" />
+</head>
+<body class="otp-page">
+    <main class="otp-stage">
+        <div class="otp-ambient" aria-hidden="true">
+            <span class="otp-orb otp-orb--cyan"></span>
+            <span class="otp-orb otp-orb--coral"></span>
+            <span class="otp-pattern"></span>
+        </div>
+
+        <section class="verify-card" aria-labelledby="verifyTitle">
+            <header class="otp-brand">
+                <span class="otp-brand-mark">
+                    <img src="@logoPath" alt="@siteName" onerror="this.onerror=null;this.src='/images/logo1.png';" />
+                </span>
+                <div>
+                    <strong>@siteName</strong>
+                    <small>تأكيد آمن للحساب</small>
+                </div>
+            </header>
+
+            <div class="otp-shield" aria-hidden="true">
+                <span class="otp-shield-ring"></span>
+                <span class="otp-shield-core"><i class="bi bi-shield-lock-fill"></i></span>
+                <span class="otp-shield-check"><i class="bi bi-check-lg"></i></span>
+            </div>
+
+            <div class="otp-heading">
+                <span class="otp-kicker">تحقق من بريدك</span>
+                <h1 id="verifyTitle">أدخل رمز التحقق</h1>
+                <p>
+                    أرسلنا رمزاً من 6 أرقام إلى
+                    <strong class="otp-email">@MaskEmail(email)</strong>
+                </p>
+            </div>
+
+            <form id="verifyForm" method="post" novalidate
+                  data-resend-cooldown="@otpResendCooldownSeconds"
+                  data-expiry-seconds="@otpExpiresInSeconds">
+                @Html.AntiForgeryToken()
+                <input type="hidden" id="email" name="email" value="@email" />
+                <input type="hidden" id="type" name="type" value="@type" />
+                <input type="hidden" id="code" name="code" value="" />
+
+                <div class="otp-cells" id="otpCells" dir="ltr" aria-label="رمز التحقق المكون من ستة أرقام">
+                    @for (int i = 0; i < 6; i++)
+                    {
+                        <input class="otp-cell"
+                           type="text"
+                           inputmode="numeric"
+                           pattern="[0-9]*"
+                           maxlength="1"
+                           autocomplete="@(i == 0 ? "one-time-code" : "off")"
+                           aria-label="الرقم @(i + 1) من رمز التحقق" />
+                    }
+                </div>
+
+                <div class="otp-status-row">
+                    <span class="otp-validity" id="otpValidity">
+                        <i class="bi bi-clock-history"></i>
+                        ينتهي الرمز خلال <strong id="otpExpiryTimer">@otpExpiryText</strong>
+                    </span>
+                    <span class="otp-secure"><i class="bi bi-lock-fill"></i> اتصال آمن</span>
+                </div>
+
+                <div id="errorMessage" class="otp-message otp-message--error" role="alert" aria-live="polite" hidden></div>
+
+                <button type="submit" class="otp-primary-btn" id="submitBtn">
+                    <span>تأكيد الحساب والمتابعة</span>
+                    <i class="bi bi-arrow-left-short"></i>
+                </button>
+
+                <div class="otp-resend">
+                    <span>لم يصلك الرمز؟</span>
+                    <button type="button" id="resendOtpBtn" @(otpResendCooldownSeconds > 0 ? "disabled" : null)>
+                        @if (otpResendCooldownSeconds > 0)
+                        {
+                            <text>إعادة الإرسال بعد <strong id="resendOtpTimer">@otpResendText</strong></text>
+                        }
+                        else
+                        {
+                            <text>إعادة إرسال الرمز</text>
+                        }
+                    </button>
+                </div>
+            </form>
+
+            <div class="otp-footer-links">
+                <a href="/Account/Login"><i class="bi bi-arrow-right"></i> العودة لتسجيل الدخول</a>
+                <a href="/"><i class="bi bi-house-door"></i> الرئيسية</a>
+            </div>
+        </section>
+    </main>
+
+    <script src="~/js/shared/verify-otp.js" asp-append-version="true"></script>
+</body>
+</html>

@@ -1,0 +1,105 @@
+@using YemenGuide.Core.Constants
+@using YemenGuide.Core.DTOs.Owner
+@model OwnerCreateReportPageDto
+@{
+    ViewData["Title"] = "بلاغ جديد ضد عميل";
+    Layout = "~/Areas/Owner/Views/Shared/_OwnerLayout.cshtml";
+    var form = Model.Form ?? new OwnerCreateReportRequestDto();
+    var selectedType = string.Equals(form.ReferenceType, OwnerReportValues.ReferenceReview, StringComparison.OrdinalIgnoreCase)
+        ? OwnerReportValues.ReferenceReview : OwnerReportValues.ReferenceBooking;
+}
+
+@section Styles {
+    <link rel="stylesheet" href="@(Url.Content("~/css/owner/owner-reports.css"))?v=20260828-0105" />
+}
+
+<div class="or-page" data-owner-reports-page="create" dir="rtl">
+    <div class="or-shell or-shell--create">
+        <div class="or-back-row"><a asp-action="OwnerReports" asp-route-scope="mine"><i class="bi bi-arrow-right"></i> العودة إلى بلاغاتي</a></div>
+
+        <header class="or-create-hero">
+            <div><span class="or-eyebrow"><i class="bi bi-flag-fill"></i> بلاغ جديد</span><h1>أبلغ الإدارة عن مخالفة عميل</h1><p>اختر حجزًا أو تقييمًا حقيقيًا من منشآتك؛ النظام يحدد العميل تلقائيًا ولا يمكنك إدخال حساب عشوائي.</p></div>
+            <div class="or-create-trust"><span><i class="bi bi-shield-check"></i><b>يصل للإدارة فقط</b></span><span><i class="bi bi-person-lock"></i><b>العميل لا يرى القضية</b></span></div>
+        </header>
+
+        <div class="or-progress" data-progress>
+            <span class="is-active" data-step-dot="1"><b>1</b><small>المرجع</small></span><i></i>
+            <span data-step-dot="2"><b>2</b><small>المشكلة</small></span><i></i>
+            <span data-step-dot="3"><b>3</b><small>الدليل</small></span><i></i>
+            <span data-step-dot="4"><b>4</b><small>الإرسال</small></span>
+        </div>
+
+        @if (!ViewData.ModelState.IsValid)
+        {
+            <div class="or-form-alert"><i class="bi bi-exclamation-triangle-fill"></i><div><strong>راجع البيانات</strong>@Html.ValidationSummary(false)</div></div>
+        }
+
+        <form asp-action="CreateOwnerReport" method="post" enctype="multipart/form-data" class="or-create-form" data-owner-report-form="create">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="ReferenceType" value="@selectedType" data-reference-type />
+            <input type="hidden" name="ReferenceId" value="@form.ReferenceId" data-reference-id />
+
+            <section class="or-form-panel" data-create-step="1">
+                <header class="or-form-panel__head"><span>01</span><div><small>أولًا</small><h2>البلاغ مرتبط بماذا؟</h2><p>اختر حجزًا أو تقييمًا من منشآتك ثم حدد العنصر نفسه.</p></div></header>
+                <div class="or-reference-type-tabs">
+                    <button type="button" class="@(selectedType == OwnerReportValues.ReferenceBooking ? "is-active" : "")" data-ref-kind="Booking"><i class="bi bi-calendar2-check-fill"></i><span><strong>حجز</strong><small>مشكلة مرتبطة بضيف أو حجز</small></span></button>
+                    <button type="button" class="@(selectedType == OwnerReportValues.ReferenceReview ? "is-active" : "")" data-ref-kind="Review"><i class="bi bi-star-fill"></i><span><strong>تقييم</strong><small>تقييم مخالف أو مسيء</small></span></button>
+                </div>
+
+                <div class="or-reference-picker">
+                    <label class="or-reference-search"><i class="bi bi-search"></i><input type="search" placeholder="ابحث برقم الحجز أو اسم العميل..." data-reference-search autocomplete="off" /></label>
+                    <div class="or-reference-results" data-reference-results data-booking-url="@Url.Action("SearchBookings", "Reports", new { area = "Owner" })" data-review-url="@Url.Action("SearchReviews", "Reports", new { area = "Owner" })">
+                        <div data-static-list="Booking" class="@(selectedType == OwnerReportValues.ReferenceBooking ? "" : "d-none")">
+                            @foreach (var item in Model.RecentBookings)
+                            {
+                                <button type="button" class="or-reference-option @(form.ReferenceId == item.ReferenceId && selectedType == OwnerReportValues.ReferenceBooking ? "is-selected" : "")" data-reference-option data-id="@item.ReferenceId" data-kind="Booking">
+                                    <span class="or-reference-option__icon"><i class="bi bi-calendar2-check-fill"></i></span><div><strong>@item.Title</strong><small>@item.PlaceName</small><span><i class="bi bi-person-fill"></i>@item.CustomerName</span></div><em>@item.Date?.ToString("yyyy/MM/dd")</em><i class="bi bi-check-circle-fill or-selected-check"></i>
+                                </button>
+                            }
+                        </div>
+                        <div data-static-list="Review" class="@(selectedType == OwnerReportValues.ReferenceReview ? "" : "d-none")">
+                            @foreach (var item in Model.RecentReviews)
+                            {
+                                <button type="button" class="or-reference-option @(form.ReferenceId == item.ReferenceId && selectedType == OwnerReportValues.ReferenceReview ? "is-selected" : "")" data-reference-option data-id="@item.ReferenceId" data-kind="Review">
+                                    <span class="or-reference-option__icon is-review"><i class="bi bi-star-fill"></i></span><div><strong>@item.Title</strong><small>@item.PlaceName</small><span><i class="bi bi-person-fill"></i>@item.CustomerName</span></div><em>@item.Date?.ToString("yyyy/MM/dd")</em><i class="bi bi-check-circle-fill or-selected-check"></i>
+                                </button>
+                            }
+                        </div>
+                    </div>
+                    <button type="button" class="or-load-more" data-load-more hidden><i class="bi bi-arrow-down-circle"></i> عرض المزيد</button>
+                </div>
+            </section>
+
+            <section class="or-form-panel" data-create-step="2">
+                <header class="or-form-panel__head"><span>02</span><div><small>ثانيًا</small><h2>وضح المشكلة</h2><p>اختر النوع والتصنيف واكتب وصفًا يساعد الإدارة على التحقق.</p></div></header>
+                <div class="or-type-grid">
+                    @foreach (var type in Model.ReportTypes)
+                    {
+                        <label class="or-choice-card"><input type="radio" name="ReportType" value="@type.Value" checked="@(form.ReportType == type.Value)" /><span><i class="bi @(type.Icon ?? "bi-flag")"></i><strong>@type.Label</strong><small>@type.Description</small></span></label>
+                    }
+                </div>
+                <div class="or-other-field" data-other-type hidden><label>وصف النوع الآخر</label><input type="text" name="OtherTypeDescription" value="@form.OtherTypeDescription" maxlength="50" /></div>
+
+                <div class="or-field"><label>تصنيف المشكلة</label><select name="Category"><option value="">اختر التصنيف</option>@foreach (var category in Model.Categories){<option value="@category.Value" selected="@(form.Category == category.Value)">@category.Label</option>}</select></div>
+                <div class="or-other-field" data-other-category hidden><label>وصف التصنيف الآخر</label><input type="text" name="OtherCategoryDescription" value="@form.OtherCategoryDescription" maxlength="50" /></div>
+                <div class="or-field"><label>عنوان البلاغ <b>*</b></label><input type="text" name="Title" value="@form.Title" minlength="5" maxlength="200" required placeholder="مثال: إساءة متكررة أثناء الحجز" /></div>
+                <div class="or-field"><label>تفاصيل المشكلة <b>*</b></label><textarea name="ReportReason" minlength="15" maxlength="4000" required data-details-text placeholder="اشرح ماذا حدث ومتى، وما الذي تريد من الإدارة التحقق منه...">@form.ReportReason</textarea><small><span data-details-count>0</span> / 4000</small></div>
+            </section>
+
+            <section class="or-form-panel" data-create-step="3">
+                <header class="or-form-panel__head"><span>03</span><div><small>اختياري لكنه مفيد</small><h2>أرفق دليلًا</h2><p>صورة أو PDF يدعم البلاغ، بحد أقصى 5MB.</p></div></header>
+                <div class="or-upload or-upload--large" data-upload-zone><input type="file" name="evidenceFile" id="createEvidence" accept=".jpg,.jpeg,.png,.webp,.pdf" data-evidence-input /><label for="createEvidence"><i class="bi bi-cloud-arrow-up-fill"></i><div><strong>اسحب الملف هنا أو اضغط للاختيار</strong><small>JPG, PNG, WEBP, PDF — حتى 5MB</small></div></label><div class="or-upload-preview" data-upload-preview hidden></div></div>
+            </section>
+
+            <section class="or-submit-panel" data-create-step="4">
+                <div><i class="bi bi-shield-lock-fill"></i><div><strong>قبل الإرسال</strong><p>البلاغ سيذهب إلى الإدارة. العميل لن يرى القضية ولن يطلب منه الرد داخلها. الإدارة هي التي تتحقق وتقرر.</p></div></div>
+                <button type="submit" class="or-primary-btn or-primary-btn--large"><i class="bi bi-send-fill"></i><span>إرسال البلاغ للإدارة</span></button>
+            </section>
+        </form>
+    </div>
+    <div class="or-toast-host" data-toast-host></div>
+</div>
+
+@section Scripts {
+    <script src="@(Url.Content("~/js/owner/owner-reports.js"))?v=20260828-0105"></script>
+}

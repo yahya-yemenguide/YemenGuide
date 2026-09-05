@@ -1,0 +1,257 @@
+﻿@model IEnumerable<YemenGuide.Core.Entities.Place>
+
+@using System.Linq
+
+@{
+    var activePlace = Model?.FirstOrDefault();
+    int activeSystemId = activePlace?.Category?.BookingSystemId ?? 0;
+    bool hasActivePlace = activePlace != null;
+    bool hasPolicies = ViewBag.ActivePlaceHasPolicies is bool value && value;
+
+    string placeName = activePlace?.PlaceNameAndDesc ?? "لم يتم تحديد منشأة";
+    string categoryName = activePlace?.Category?.CategoryName ?? "غير محدد";
+}
+
+<div id="detailsManagerRoot"
+     class="details-manager-wrapper animate-fade-in"
+     dir="rtl"
+     data-place-id="@(activePlace?.PlaceId ?? 0)"
+     data-system-id="@activeSystemId"
+     data-has-policies="@(hasPolicies ? "true" : "false")"
+     data-place-name="@placeName"
+     data-category-name="@categoryName">
+
+    <section class="details-hero details-hero--luxury">
+        <div class="details-hero__copy">
+            <span class="details-hero__eyebrow">
+                <i class="bi bi-stars"></i>
+                إدارة المحتوى التشغيلي
+            </span>
+
+            <h3>
+                <span class="details-hero__icon">
+                    <i class="bi bi-box-seam"></i>
+                </span>
+                الخدمات والباقات
+            </h3>
+
+            <p>
+                أدر وحدات المنشأة وباقاتها وخدماتها ومرافقها من مساحة واحدة مرتبطة
+                بالمنشأة المحددة في الهيدر.
+            </p>
+        </div>
+
+    </section>
+
+    @if (!hasActivePlace)
+    {
+        <section id="noPlaceSelectedMsg" class="details-empty-state">
+            <span class="details-empty-state__icon">
+                <i class="bi bi-buildings"></i>
+            </span>
+            <h4>لا توجد منشأة متاحة للإدارة</h4>
+            <p>أضف منشأة أولًا، أو حدّد منشأة صالحة من قائمة المنشآت في الهيدر.</p>
+            <button type="button"
+                class="details-primary-button"
+                onclick="window.activatePlaceTab?.('add-place-tab', true)">
+                <i class="bi bi-plus-circle"></i>
+                إضافة منشأة جديدة
+            </button>
+        </section>
+    }
+    else
+    {
+        <div id="noPlaceSelectedMsg" class="d-none"></div>
+
+        <section id="detailsLoadingState" class="details-loading-state">
+            <span class="details-loading-state__spinner"></span>
+            <div>
+                <strong>جاري تجهيز بيانات المنشأة</strong>
+                <small>نحمّل الغرف والباقات والخدمات والمرافق...</small>
+            </div>
+        </section>
+
+        <div id="placeDetailsContainer" class="details-content" style="display:none;">
+            <div class="details-summary-grid details-summary-grid--luxury">
+                <article class="details-summary-card details-summary-card--rooms">
+                    <span><i class="bi bi-door-open"></i></span>
+                    <div>
+                        <small>الوحدات والغرف</small>
+                        <strong id="roomsCountBadge">0</strong>
+                    </div>
+                </article>
+
+                <article class="details-summary-card details-summary-card--packages">
+                    <span><i class="bi bi-tags"></i></span>
+                    <div>
+                        <small>الباقات السعرية</small>
+                        <strong id="packagesCountBadge">0</strong>
+                    </div>
+                </article>
+
+                <article class="details-summary-card details-summary-card--services">
+                    <span><i class="bi bi-stars"></i></span>
+                    <div>
+                        <small>الخدمات الإضافية</small>
+                        <strong id="servicesCountBadge">0</strong>
+                    </div>
+                </article>
+
+                <article class="details-summary-card details-summary-card--amenities">
+                    <span><i class="bi bi-gem"></i></span>
+                    <div>
+                        <small>المرافق ووسائل الراحة</small>
+                        <strong id="amenitiesCountBadge">0</strong>
+                    </div>
+                </article>
+            </div>
+
+            <section class="details-content-guide" aria-label="إرشادات إدارة محتوى المنشأة">
+                <div class="details-content-guide__copy">
+                    <span><i class="bi bi-magic"></i></span>
+                    <div>
+                        <strong>جهّز تجربة الحجز من مكان واحد</strong>
+                        <small>حدّث الباقات والخدمات والمرافق، وستظهر التغييرات مرتبطة بالمنشأة المحددة.</small>
+                    </div>
+                </div>
+                <div class="details-content-guide__steps">
+                    <span><b>1</b> الباقات</span>
+                    <i class="bi bi-chevron-left"></i>
+                    <span><b>2</b> الخدمات</span>
+                    <i class="bi bi-chevron-left"></i>
+                    <span><b>3</b> المرافق</span>
+                </div>
+            </section>
+
+            <div class="details-sections-grid">
+                <section class="details-section-card details-section-card--wide"
+                     id="roomsSection"
+                     style="display:none;">
+                    <header class="details-section-header">
+                        <div class="details-section-title">
+                            <span class="details-section-title__icon">
+                                <i class="bi bi-door-open-fill"></i>
+                            </span>
+                            <div>
+                                <h4>أنواع الغرف والأجنحة</h4>
+                                <p>عدّل بيانات الأنواع والأسعار هنا، ثم استخدم «إدارة الطوابق والغرف» لتوزيع الوحدات الفعلية داخل الفندق.</p>
+                            </div>
+                        </div>
+
+                        <div class="details-section-actions">
+                            <label class="details-filter" for="roomTypeFilter">
+                                <i class="bi bi-funnel"></i>
+                                <select id="roomTypeFilter" onchange="filterRooms()">
+                                    <option value="all">عرض كل الأنواع</option>
+                                    <option value="غرفة مفردة">غرف مفردة</option>
+                                    <option value="غرفة مزدوجة">غرف مزدوجة</option>
+                                    <option value="غرفة توأم">غرف توأم</option>
+                                    <option value="غرفة ثلاثية">غرف ثلاثية</option>
+                                    <option value="استوديو">استوديو</option>
+                                    <option value="جناح عائلي">أجنحة عائلية</option>
+                                    <option value="جناح ملكي">أجنحة ملكية</option>
+                                    <option value="جناح تنفيذي">أجنحة تنفيذية</option>
+                                </select>
+                            </label>
+
+                            <button type="button"
+                                class="details-add-button details-add-button--soft details-floor-plan-open"
+                                onclick="window.openManageHotelFloorsModal?.()">
+                                <i class="bi bi-building"></i>
+                                إدارة الطوابق والغرف
+                            </button>
+
+                            <button type="button"
+                                class="details-add-button"
+                                onclick="openAddModal('room')">
+                                <i class="bi bi-plus-lg"></i>
+                                إضافة نوع
+                            </button>
+                        </div>
+                    </header>
+
+                    <div class="row g-3 details-items-grid" id="roomsList"></div>
+                </section>
+
+                <section class="details-section-card details-section-card--wide details-section-card--packages-luxury"
+                     id="packagesSection"
+                     style="display:none;">
+                    <header class="details-section-header">
+                        <div class="details-section-title">
+                            <span class="details-section-title__icon details-section-title__icon--green">
+                                <i class="bi bi-tags-fill"></i>
+                            </span>
+                            <div>
+                                <small class="details-section-title__kicker">خيارات الحجز والأسعار</small>
+                                <h4>باقات الأسعار والحجز</h4>
+                                <p>أنشئ أي عدد من الباقات بأوقات وأسعار وسعات مخصصة، وأوقفها مؤقتًا عند الحاجة.</p>
+                            </div>
+                        </div>
+
+                        <button type="button"
+                            class="details-add-button details-add-button--green"
+                            onclick="openAddModal('package')">
+                            <i class="bi bi-plus-lg"></i>
+                            إضافة باقة
+                        </button>
+                    </header>
+
+                    <div class="row g-3 details-items-grid" id="packagesList"></div>
+                </section>
+
+                <section class="details-section-card details-section-card--services-luxury">
+                    <header class="details-section-header">
+                        <div class="details-section-title">
+                            <span class="details-section-title__icon details-section-title__icon--coral">
+                                <i class="bi bi-stars"></i>
+                            </span>
+                            <div>
+                                <small class="details-section-title__kicker details-section-title__kicker--coral">إضافات اختيارية للحجز</small>
+                                <h4>الخدمات الإضافية</h4>
+                                <p>خدمات مدفوعة أو اختيارية يمكن للعميل إضافتها إلى الحجز.</p>
+                            </div>
+                        </div>
+
+                        <button type="button"
+                            class="details-add-button details-add-button--coral"
+                            onclick="openAddModal('service')">
+                            <i class="bi bi-plus-lg"></i>
+                            إضافة خدمة
+                        </button>
+                    </header>
+
+                    <ul class="details-list-reset" id="servicesList"></ul>
+                </section>
+
+                <section class="details-section-card details-section-card--amenities-luxury">
+                    <header class="details-section-header">
+                        <div class="details-section-title">
+                            <span class="details-section-title__icon details-section-title__icon--violet">
+                                <i class="bi bi-gem"></i>
+                            </span>
+                            <div>
+                                <small class="details-section-title__kicker details-section-title__kicker--violet">مزايا المنشأة</small>
+                                <h4>وسائل الراحة والمرافق</h4>
+                                <p>اعرض المرافق المتوفرة داخل المنشأة بأيقونات واضحة وجذابة.</p>
+                            </div>
+                        </div>
+
+                        <button type="button"
+                            class="details-add-button details-add-button--violet"
+                            onclick="openAddModal('amenity')">
+                            <i class="bi bi-plus-lg"></i>
+                            إضافة مرفق
+                        </button>
+                    </header>
+
+                    <ul class="details-list-reset details-amenities-list" id="amenitiesList"></ul>
+                </section>
+            </div>
+
+            <section class="details-policy-section"
+                 id="mandatoryPolicySection">
+                <div id="policyAlertMsg"></div>
+            </section>
+        </div>
+    }
+</div>

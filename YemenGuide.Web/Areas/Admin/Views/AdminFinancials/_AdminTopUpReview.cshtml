@@ -1,0 +1,470 @@
+﻿@using YemenGuide.Core.DTOs.Admin
+@model AdminCommissionTopUpPageDto
+
+@{
+    var filter = Model?.Filter ?? new AdminCommissionTopUpFilterDto();
+    var summary = Model?.Summary ?? new AdminCommissionTopUpSummaryDto();
+    var currency = string.IsNullOrWhiteSpace(Model?.Currency)
+        ? "ريال يمني"
+        : Model.Currency;
+
+    string Money(decimal value) => $"{value:N0} {currency}";
+
+    string TopUpTone(string? status) =>
+        (status ?? string.Empty).Trim() switch
+        {
+            AdminCommissionTopUpStatuses.Completed => "success",
+            AdminCommissionTopUpStatuses.Pending => "warning",
+            AdminCommissionTopUpStatuses.Rejected => "danger",
+            AdminCommissionTopUpStatuses.Failed => "danger",
+            AdminCommissionTopUpStatuses.Cancelled => "muted",
+            AdminCommissionTopUpStatuses.Reversed => "muted",
+            _ => "neutral"
+        };
+}
+
+<section class="atr"
+         data-topup-root
+         data-details-url="@Url.Action("Details", "AdminTopUpReview", new { area = "Admin" })"
+         data-proof-url="@Url.Action("Proof", "AdminTopUpReview", new { area = "Admin" })">
+
+    <header class="atr-section-head">
+        <div>
+            <span class="atr-section-head__eyebrow">مراجعة التحويلات</span>
+            <h2 class="atr-section-head__title">طلبات شحن رصيد الضمان</h2>
+            <p class="atr-section-head__text">
+                راجع بيانات التحويل والسند قبل الاعتماد، ثم دع المحرك المالي
+                يوزع المبلغ على الدين والرصيد المتاح تلقائيًا.
+            </p>
+        </div>
+
+        <div class="atr-pending-callout">
+            <span class="atr-pending-callout__icon"><i class="bi bi-hourglass-split"></i></span>
+            <div>
+                <small>تنتظر المراجعة</small>
+                <strong>@summary.PendingCount طلب</strong>
+            </div>
+            <b>@Money(summary.PendingAmount)</b>
+        </div>
+    </header>
+
+    <div class="atr-kpi-row">
+        <article class="atr-kpi atr-kpi--pending">
+            <span>قيد المراجعة</span>
+            <strong>@summary.PendingCount</strong>
+            <small>@Money(summary.PendingAmount)</small>
+        </article>
+
+        <article class="atr-kpi atr-kpi--approved">
+            <span>تم اعتمادها</span>
+            <strong>@summary.CompletedCount</strong>
+            <small>@Money(summary.CompletedAmount)</small>
+        </article>
+
+        <article class="atr-kpi atr-kpi--rejected">
+            <span>مرفوضة</span>
+            <strong>@summary.RejectedCount</strong>
+            <small>@Money(summary.RejectedAmount)</small>
+        </article>
+
+        <article class="atr-kpi atr-kpi--credit">
+            <span>أضيف للرصيد</span>
+            <strong>@Money(summary.AddedToAvailableBalanceAmount)</strong>
+            <small>بعد سداد الدين إن وجد</small>
+        </article>
+    </div>
+
+    <div class="atr-status-nav" role="group" aria-label="فلترة حالة الطلب">
+        <button type="button"
+                class="atr-status-tab @(filter.Status == AdminCommissionTopUpStatuses.Pending || string.IsNullOrWhiteSpace(filter.Status) ? "is-active" : null)"
+                data-topup-status="@AdminCommissionTopUpStatuses.Pending">
+            <span>قيد المراجعة</span>
+            <b>@summary.PendingCount</b>
+        </button>
+
+        <button type="button"
+                class="atr-status-tab @(filter.Status == AdminCommissionTopUpStatuses.Completed ? "is-active" : null)"
+                data-topup-status="@AdminCommissionTopUpStatuses.Completed">
+            <span>معتمدة</span>
+            <b>@summary.CompletedCount</b>
+        </button>
+
+        <button type="button"
+                class="atr-status-tab @(filter.Status == AdminCommissionTopUpStatuses.Rejected ? "is-active" : null)"
+                data-topup-status="@AdminCommissionTopUpStatuses.Rejected">
+            <span>مرفوضة</span>
+            <b>@summary.RejectedCount</b>
+        </button>
+
+        <button type="button"
+                class="atr-status-tab"
+                data-topup-status="">
+            <span>الكل</span>
+            <b>@summary.TotalCount</b>
+        </button>
+    </div>
+
+    <form class="atr-filterbar"
+          method="get"
+          action="@Url.Action("Index", "AdminTopUpReview", new { area = "Admin" })"
+          data-topup-filter-form>
+
+        <input type="hidden"
+               name="Status"
+               value="@filter.Status"
+               data-topup-status-input />
+
+        <div class="atr-search">
+            <i class="bi bi-search"></i>
+            <input type="search"
+                   name="Search"
+                   value="@filter.Search"
+                   placeholder="اسم المنشأة، المالك أو رقم الطلب..." />
+        </div>
+
+        <select name="OwnerId" aria-label="المالك">
+            <option value="">كل الملاك</option>
+            @foreach (var owner in Model.Owners)
+            {
+                <option value="@owner.OwnerId"
+                        selected="@(filter.OwnerId == owner.OwnerId ? "selected" : null)">
+                    @owner.OwnerName
+                </option>
+            }
+        </select>
+
+        <select name="PlaceId" aria-label="المنشأة">
+            <option value="">كل المنشآت</option>
+            @foreach (var place in Model.Places)
+            {
+                <option value="@place.PlaceId"
+                        selected="@(filter.PlaceId == place.PlaceId ? "selected" : null)">
+                    @place.PlaceName
+                </option>
+            }
+        </select>
+
+        <input type="text"
+               name="ReferenceNumber"
+               value="@filter.ReferenceNumber"
+               placeholder="رقم الحوالة" />
+
+        <input type="date"
+               name="FromDate"
+               value="@(filter.FromDate?.ToString("yyyy-MM-dd"))"
+               aria-label="من تاريخ" />
+
+        <input type="date"
+               name="ToDate"
+               value="@(filter.ToDate?.ToString("yyyy-MM-dd"))"
+               aria-label="إلى تاريخ" />
+
+        <button type="submit" class="atr-btn atr-btn--primary">
+            <i class="bi bi-funnel"></i>
+            تطبيق
+        </button>
+    </form>
+
+    <section class="atr-table-card">
+        <div class="atr-table-card__head">
+            <div>
+                <h3>طلبات الشحن</h3>
+                <p>@Model.Result.Pagination.TotalCount طلب مطابق للفلاتر الحالية</p>
+            </div>
+
+            @if (summary.DuplicateReferenceCount > 0)
+            {
+                <span class="atr-warning-chip">
+                    <i class="bi bi-copy"></i>
+                    @summary.DuplicateReferenceCount مراجع تحويل مكررة
+                </span>
+            }
+        </div>
+
+        @if (Model.Result.Items.Count == 0)
+        {
+            <div class="atr-empty">
+                <span class="atr-empty__icon"><i class="bi bi-receipt"></i></span>
+                <h4>لا توجد طلبات هنا</h4>
+                <p>ستظهر الطلبات المطابقة للحالة والفلاتر الحالية.</p>
+            </div>
+        }
+        else
+        {
+            <div class="atr-table-wrap">
+                <table class="atr-table">
+                    <thead>
+                        <tr>
+                            <th>المنشأة</th>
+                            <th>المبلغ</th>
+                            <th>الحوالة</th>
+                            <th>تاريخ التحويل</th>
+                            <th>الحالة</th>
+                            <th>السند</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model.Result.Items)
+                        {
+                            <tr class="@(item.Status == AdminCommissionTopUpStatuses.Pending ? "is-pending" : null)"
+                                data-topup-id="@item.CommissionTransactionId">
+                                <td>
+                                    <div class="atr-place">
+                                        <div class="atr-place__media">
+                                            @if (!string.IsNullOrWhiteSpace(item.PlaceImageUrl))
+                                            {
+                                                <img src="@item.PlaceImageUrl" alt="" loading="lazy" />
+                                            }
+                                            else
+                                            {
+                                                <span><i class="bi bi-building"></i></span>
+                                            }
+                                        </div>
+                                        <div>
+                                            <strong>@item.PlaceName</strong>
+                                            <small>@item.OwnerName</small>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td><span class="atr-amount">@Money(item.Amount)</span></td>
+                                <td>
+                                    <div class="atr-reference">
+                                        <strong>@(string.IsNullOrWhiteSpace(item.ReferenceNumber) ? "—" : item.ReferenceNumber)</strong>
+                                        @if (item.DuplicateReferenceCount > 1)
+                                        {
+                                            <small class="atr-reference__duplicate">
+                                                مكرر × @item.DuplicateReferenceCount
+                                            </small>
+                                        }
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="atr-date">
+                                        @(item.TransferDate?.ToString("yyyy/MM/dd") ?? "—")
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="atr-status atr-status--@TopUpTone(item.Status)">
+                                        <span class="atr-status__dot"></span>
+                                        @item.StatusLabel
+                                    </span>
+                                </td>
+                                <td>
+                                    @if (!string.IsNullOrWhiteSpace(item.ReceiptImage))
+                                    {
+                                        <button type="button"
+                                                class="atr-proof-btn"
+                                                data-topup-proof
+                                                data-topup-id="@item.CommissionTransactionId">
+                                            <i class="bi bi-image"></i>
+                                            عرض السند
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <span class="atr-muted">بدون سند</span>
+                                    }
+                                </td>
+                                <td>
+                                    <button type="button"
+                                            class="atr-review-btn"
+                                            data-topup-review
+                                            data-topup-id="@item.CommissionTransactionId">
+                                        @(item.Status == AdminCommissionTopUpStatuses.Pending ? "مراجعة" : "التفاصيل")
+                                        <i class="bi bi-arrow-left"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="atr-pagination"
+                 data-topup-pagination
+                 data-page="@Model.Result.Pagination.PageNumber"
+                 data-total-pages="@Model.Result.Pagination.TotalPages">
+                <button type="button"
+                        data-topup-page="@(Model.Result.Pagination.PageNumber - 1)"
+                        disabled="@(!Model.Result.Pagination.HasPreviousPage ? "disabled" : null)">
+                    <i class="bi bi-chevron-right"></i>
+                </button>
+
+                <span>
+                    صفحة
+                    <strong>@Model.Result.Pagination.PageNumber</strong>
+                    من
+                    <strong>@Model.Result.Pagination.TotalPages</strong>
+                </span>
+
+                <button type="button"
+                        data-topup-page="@(Model.Result.Pagination.PageNumber + 1)"
+                        disabled="@(!Model.Result.Pagination.HasNextPage ? "disabled" : null)">
+                    <i class="bi bi-chevron-left"></i>
+                </button>
+            </div>
+        }
+    </section>
+
+    <div class="atr-modal" data-topup-modal aria-hidden="true">
+        <div class="atr-modal__backdrop" data-topup-close></div>
+
+        <div class="atr-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="topupReviewTitle">
+            <header class="atr-modal__header">
+                <div>
+                    <span class="atr-modal__eyebrow">مراجعة تحويل مالي</span>
+                    <h3 id="topupReviewTitle">طلب شحن <span data-topup-number></span></h3>
+                    <p>تأكد من المبلغ والمرجع والسند قبل اتخاذ القرار.</p>
+                </div>
+
+                <button type="button" class="atr-modal__close" data-topup-close>
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </header>
+
+            <div class="atr-modal__body">
+                <div class="atr-modal-loading" data-topup-loading>
+                    <span class="atr-spinner"></span>
+                    <strong>جارٍ جلب بيانات الطلب...</strong>
+                </div>
+
+                <div class="atr-review-layout" data-topup-content hidden>
+                    <div class="atr-review-layout__main">
+                        <section class="atr-review-card">
+                            <div class="atr-review-card__title">
+                                <span class="atr-review-card__icon"><i class="bi bi-building"></i></span>
+                                <div>
+                                    <small>المنشأة</small>
+                                    <strong data-topup-place></strong>
+                                </div>
+                            </div>
+
+                            <div class="atr-review-grid">
+                                <div><small>المالك</small><strong data-topup-owner></strong></div>
+                                <div><small>المبلغ</small><strong data-topup-amount></strong></div>
+                                <div><small>رقم الحوالة</small><strong data-topup-reference></strong></div>
+                                <div><small>تاريخ التحويل</small><strong data-topup-transfer-date></strong></div>
+                                <div><small>حساب المنصة</small><strong data-topup-wallet></strong></div>
+                                <div><small>المستفيد</small><strong data-topup-beneficiary></strong></div>
+                            </div>
+                        </section>
+
+                        <section class="atr-allocation-card">
+                            <div class="atr-allocation-card__head">
+                                <div>
+                                    <small>أثر الاعتماد</small>
+                                    <h4>توزيع مبلغ الشحن</h4>
+                                </div>
+                                <i class="bi bi-arrow-repeat"></i>
+                            </div>
+
+                            <div class="atr-allocation-grid">
+                                <div><small>الدين قبل</small><strong data-topup-debt-before></strong></div>
+                                <div class="atr-allocation-grid__accent"><small>سداد الدين</small><strong data-topup-debt-payment></strong></div>
+                                <div class="atr-allocation-grid__accent"><small>يضاف للمتاح</small><strong data-topup-credit></strong></div>
+                                <div><small>الرصيد بعد</small><strong data-topup-available-after></strong></div>
+                            </div>
+                        </section>
+
+                        <section class="atr-history-card">
+                            <div class="atr-history-card__head"><h4>حركات مرتبطة</h4></div>
+                            <div data-topup-related-transactions></div>
+                        </section>
+                    </div>
+
+                    <aside class="atr-proof-card">
+                        <div class="atr-proof-card__head">
+                            <div>
+                                <small>إثبات التحويل</small>
+                                <h4>سند الحوالة</h4>
+                            </div>
+                            <button type="button"
+                                    class="atr-proof-card__open"
+                                    data-topup-proof-open-new>
+                                <i class="bi bi-box-arrow-up-left"></i>
+                            </button>
+                        </div>
+
+                        <div class="atr-proof-card__canvas">
+                            <img src="" alt="سند تحويل طلب الشحن" data-topup-proof-image />
+                            <div class="atr-proof-card__empty" data-topup-proof-empty hidden>
+                                <i class="bi bi-image"></i>
+                                <strong>لا يوجد سند مرفق</strong>
+                            </div>
+                        </div>
+                    </aside>
+                </div>
+            </div>
+
+            <footer class="atr-modal__footer">
+                <button type="button" class="atr-btn atr-btn--ghost" data-topup-close>إغلاق</button>
+
+                <div class="atr-modal__decision" data-topup-decision-area>
+                    <button type="button"
+                            class="atr-btn atr-btn--danger-soft"
+                            data-topup-open-reject>
+                        <i class="bi bi-x-circle"></i>
+                        رفض
+                    </button>
+
+                    <form method="post"
+                          action="@Url.Action("Approve", "AdminTopUpReview", new { area = "Admin" })"
+                          data-topup-approve-form>
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="CommissionTransactionId" data-topup-approve-id />
+                        <button type="submit" class="atr-btn atr-btn--primary">
+                            <i class="bi bi-check2-circle"></i>
+                            اعتماد الشحن
+                        </button>
+                    </form>
+                </div>
+            </footer>
+        </div>
+    </div>
+
+    <div class="atr-modal atr-modal--compact" data-topup-reject-modal aria-hidden="true">
+        <div class="atr-modal__backdrop" data-topup-reject-close></div>
+
+        <div class="atr-modal__dialog" role="dialog" aria-modal="true">
+            <form method="post"
+                  action="@Url.Action("Reject", "AdminTopUpReview", new { area = "Admin" })"
+                  data-topup-reject-form>
+                @Html.AntiForgeryToken()
+
+                <header class="atr-modal__header">
+                    <div>
+                        <span class="atr-modal__eyebrow">قرار يحتاج توثيق</span>
+                        <h3>رفض طلب الشحن</h3>
+                        <p>لن يتم تغيير أي رصيد، وسيُحفظ سبب الرفض مع الطلب.</p>
+                    </div>
+                    <button type="button" class="atr-modal__close" data-topup-reject-close>
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                </header>
+
+                <div class="atr-reject-body">
+                    <input type="hidden" name="CommissionTransactionId" data-topup-reject-id />
+
+                    <label for="topupRejectionReason">سبب الرفض</label>
+                    <textarea id="topupRejectionReason"
+                              name="RejectionReason"
+                              rows="5"
+                              maxlength="500"
+                              required
+                              placeholder="مثال: رقم الحوالة غير مطابق للسند المرفق..."></textarea>
+
+                    <div class="atr-reject-note">
+                        <i class="bi bi-info-circle"></i>
+                        <span>اكتب سببًا واضحًا يمكن الرجوع إليه لاحقًا في سجل الطلب.</span>
+                    </div>
+                </div>
+
+                <footer class="atr-modal__footer">
+                    <button type="button" class="atr-btn atr-btn--ghost" data-topup-reject-close>تراجع</button>
+                    <button type="submit" class="atr-btn atr-btn--danger">تأكيد الرفض</button>
+                </footer>
+            </form>
+        </div>
+    </div>
+</section>

@@ -1,0 +1,1090 @@
+.owner-financial-overview {
+    --ov-cyan: #00A6DA;
+    --ov-cyan-soft: #E9F9FE;
+    --ov-orange: #F59E0B;
+    --ov-orange-soft: #FFF7E8;
+    --ov-green: #16A875;
+    --ov-green-soft: #ECFBF5;
+    --ov-coral: #FF6464;
+    --ov-coral-soft: #FFF0F0;
+    --ov-ink: #24475D;
+    --ov-muted: #8298A7;
+    --ov-line: rgba(23,83,113,.085);
+    display: grid;
+    gap: 12px;
+    color: var(--ov-ink);
+}
+
+    .owner-financial-overview button,
+    .owner-financial-overview input {
+        font: inherit
+    }
+
+.owner-financial-overview__toolbar {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0,1fr) auto;
+    align-items: center;
+    gap: 14px;
+    padding: 13px 14px;
+    border: 1px solid rgba(255,255,255,.95);
+    border-radius: 20px;
+    background: radial-gradient(circle at 98% 0%,rgba(0,166,218,.055),transparent 35%), linear-gradient(145deg,#FFFFFF,#FBFEFF);
+    box-shadow: 0 9px 24px rgba(29,92,122,.06),inset 0 1px 0 #fff;
+}
+
+.owner-financial-overview__toolbar-copy {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.owner-financial-overview__toolbar-icon {
+    flex: 0 0 auto;
+    width: 42px;
+    height: 42px;
+    display: grid;
+    place-items: center;
+    border-radius: 14px;
+    color: #0798C8;
+    background: linear-gradient(145deg,#E8F9FE,#F7FDFF);
+    box-shadow: inset 0 0 0 1px rgba(0,166,218,.08),0 7px 17px rgba(0,166,218,.07);
+    font-size: 17px;
+}
+
+.owner-financial-overview__eyebrow {
+    display: block;
+    color: #0798C8;
+    font-size: 7.7px;
+    font-weight: 950;
+}
+
+.owner-financial-overview__toolbar h2 {
+    margin: 2px 0 0;
+    color: #294C62;
+    font-size: 14px;
+    font-weight: 950;
+}
+
+.owner-financial-overview__toolbar p {
+    margin: 2px 0 0;
+    color: #91A2AD;
+    font-size: 8.3px;
+    font-weight: 700;
+}
+
+.owner-financial-overview__period-control {
+    position: relative
+}
+
+.owner-financial-overview__period-options {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid var(--ov-line);
+    border-radius: 13px;
+    background: #F7FBFD;
+}
+
+    .owner-financial-overview__period-options button {
+        min-height: 31px;
+        padding: 0 10px;
+        border: 0;
+        border-radius: 9px;
+        color: #6E8798;
+        background: transparent;
+        cursor: pointer;
+        font-size: 8px;
+        font-weight: 900;
+        transition: .2s ease;
+    }
+
+        .owner-financial-overview__period-options button:hover {
+            color: #078DBB;
+            background: #EEF9FD
+        }
+
+        .owner-financial-overview__period-options button.is-active {
+            color: #fff;
+            background: linear-gradient(135deg,var(--ov-cyan),#008DC0);
+            box-shadow: 0 6px 13px rgba(0,166,218,.16);
+        }
+
+.owner-financial-overview__custom-period {
+    position: absolute;
+    z-index: 10;
+    top: calc(100% + 7px);
+    left: 0;
+    width: 300px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 7px;
+    padding: 9px;
+    border: 1px solid var(--ov-line);
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 16px 34px rgba(25,86,118,.14);
+}
+
+    .owner-financial-overview__custom-period[hidden] {
+        display: none !important
+    }
+
+    .owner-financial-overview__custom-period label {
+        display: grid;
+        gap: 4px
+    }
+
+        .owner-financial-overview__custom-period label span {
+            color: #8499A8;
+            font-size: 7px;
+            font-weight: 850
+        }
+
+    .owner-financial-overview__custom-period input {
+        min-height: 34px;
+        border: 1px solid var(--ov-line);
+        border-radius: 9px;
+        padding: 0 7px;
+        color: #466479;
+        outline: none;
+        font-size: 8px;
+    }
+
+    .owner-financial-overview__custom-period button {
+        grid-column: 1/-1;
+        min-height: 34px;
+        border: 0;
+        border-radius: 9px;
+        color: #fff;
+        background: var(--ov-cyan);
+        font-size: 8px;
+        font-weight: 950;
+        cursor: pointer;
+    }
+
+.owner-financial-overview__period-meta {
+    grid-column: 1/-1;
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: -4px;
+}
+
+    .owner-financial-overview__period-meta span {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        color: #92A3AE;
+        font-size: 7.4px;
+        font-weight: 800;
+    }
+
+    .owner-financial-overview__period-meta i {
+        color: #64B9D6
+    }
+
+.owner-financial-overview__kpis {
+    display: grid;
+    grid-template-columns: repeat(4,minmax(0,1fr));
+    gap: 10px;
+}
+
+.owner-financial-overview__kpi {
+    position: relative;
+    min-width: 0;
+    min-height: 126px;
+    padding: 13px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,.98);
+    border-radius: 19px;
+    background: linear-gradient(145deg,#FFFFFF,#FBFDFE);
+    box-shadow: 0 9px 24px rgba(29,92,122,.065),inset 0 1px 0 #fff;
+    transform-style: preserve-3d;
+    transition: transform .24s ease,box-shadow .24s ease,border-color .24s ease;
+}
+
+    .owner-financial-overview__kpi:hover {
+        border-color: rgba(0,166,218,.11);
+        box-shadow: 0 14px 30px rgba(29,92,122,.095),inset 0 1px 0 #fff;
+    }
+
+.owner-financial-overview__kpi-head {
+    display: flex;
+    align-items: center;
+    gap: 8px
+}
+
+.owner-financial-overview__kpi-icon {
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    border-radius: 11px;
+    font-size: 14px;
+}
+
+.owner-financial-overview__kpi-label {
+    color: #738A9A;
+    font-size: 8px;
+    font-weight: 900
+}
+
+.owner-financial-overview__kpi-value {
+    display: block;
+    margin-top: 12px;
+    color: #294C62;
+    font-size: clamp(15px,1.45vw,21px);
+    line-height: 1.1;
+    font-weight: 950;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.owner-financial-overview__kpi-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 7px;
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px dashed rgba(23,83,113,.08);
+    color: #8B9EAB;
+    font-size: 7px;
+    font-weight: 800;
+}
+
+    .owner-financial-overview__kpi-footer span,
+    .owner-financial-overview__kpi-footer em {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .owner-financial-overview__kpi-footer em {
+        font-style: normal
+    }
+
+.owner-financial-overview__kpi-accent {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    height: 3px;
+    opacity: .78;
+}
+
+.owner-financial-overview__kpi.is-booking .owner-financial-overview__kpi-icon {
+    color: #078DBB;
+    background: var(--ov-cyan-soft)
+}
+
+.owner-financial-overview__kpi.is-booking .owner-financial-overview__kpi-accent {
+    background: linear-gradient(90deg,#00A6DA,#7ADCF2)
+}
+
+.owner-financial-overview__kpi.is-collected .owner-financial-overview__kpi-icon {
+    color: #108761;
+    background: var(--ov-green-soft)
+}
+
+.owner-financial-overview__kpi.is-collected .owner-financial-overview__kpi-accent {
+    background: linear-gradient(90deg,#16A875,#7EDDBC)
+}
+
+.owner-financial-overview__kpi.is-remaining .owner-financial-overview__kpi-icon {
+    color: #B97807;
+    background: var(--ov-orange-soft)
+}
+
+.owner-financial-overview__kpi.is-remaining .owner-financial-overview__kpi-accent {
+    background: linear-gradient(90deg,#F59E0B,#FFD17B)
+}
+
+.owner-financial-overview__kpi.is-net .owner-financial-overview__kpi-icon {
+    color: #8C62C4;
+    background: #F6F0FF
+}
+
+.owner-financial-overview__kpi.is-net .owner-financial-overview__kpi-accent {
+    background: linear-gradient(90deg,#A66CE0,#D1AAFF)
+}
+
+.owner-financial-overview__primary-grid {
+    display: grid;
+    grid-template-columns: minmax(0,1.55fr) minmax(280px,.75fr);
+    gap: 10px;
+}
+
+.owner-financial-overview__secondary-grid {
+    display: grid;
+    grid-template-columns: minmax(0,.86fr) minmax(0,1.14fr);
+    gap: 10px;
+}
+
+.owner-financial-overview__panel {
+    min-width: 0;
+    padding: 14px;
+    border: 1px solid rgba(255,255,255,.98);
+    border-radius: 20px;
+    background: linear-gradient(145deg,#FFFFFF,#FCFEFF);
+    box-shadow: 0 9px 24px rgba(29,92,122,.065),inset 0 1px 0 #fff;
+}
+
+.owner-financial-overview__panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 11px;
+}
+
+    .owner-financial-overview__panel-head > div {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+    }
+
+    .owner-financial-overview__panel-head small {
+        display: block;
+        color: #98A7B1;
+        font-size: 7px;
+        font-weight: 850
+    }
+
+    .owner-financial-overview__panel-head h3 {
+        margin: 1px 0 0;
+        color: #315268;
+        font-size: 10.5px;
+        font-weight: 950
+    }
+
+.owner-financial-overview__panel-icon {
+    flex: 0 0 auto;
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    border-radius: 11px;
+    font-size: 14px;
+}
+
+    .owner-financial-overview__panel-icon.is-cyan {
+        color: #078DBB;
+        background: var(--ov-cyan-soft)
+    }
+
+    .owner-financial-overview__panel-icon.is-orange {
+        color: #B97807;
+        background: var(--ov-orange-soft)
+    }
+
+    .owner-financial-overview__panel-icon.is-coral {
+        color: #D94F4F;
+        background: var(--ov-coral-soft)
+    }
+
+    .owner-financial-overview__panel-icon.is-mint {
+        color: #108761;
+        background: var(--ov-green-soft)
+    }
+
+.owner-financial-overview__percentage {
+    display: grid;
+    place-items: center;
+    min-width: 48px;
+    height: 28px;
+    padding: 0 8px;
+    border-radius: 999px;
+    color: #078DBB;
+    background: var(--ov-cyan-soft);
+    font-size: 8px;
+    font-weight: 950;
+}
+
+.owner-financial-overview__flow-rail {
+    position: relative;
+    height: 8px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: #EDF4F7;
+    box-shadow: inset 0 1px 2px rgba(30,76,100,.05);
+}
+
+    .owner-financial-overview__flow-rail > span {
+        display: block;
+        width: var(--overview-collection,0%);
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg,#00A6DA,#48C7E8,#16A875);
+        box-shadow: 0 0 15px rgba(0,166,218,.13);
+        transition: width .8s cubic-bezier(.22,.78,.24,1);
+    }
+
+.owner-financial-overview__collection-grid {
+    display: grid;
+    grid-template-columns: repeat(3,minmax(0,1fr));
+    gap: 7px;
+    margin-top: 11px;
+}
+
+    .owner-financial-overview__collection-grid article {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+        padding: 9px;
+        border: 1px solid rgba(23,83,113,.065);
+        border-radius: 14px;
+        background: #FAFDFE;
+    }
+
+.owner-financial-overview__collection-icon {
+    flex: 0 0 auto;
+    width: 32px;
+    height: 32px;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    font-size: 13px;
+}
+
+.owner-financial-overview__collection-grid article.is-online .owner-financial-overview__collection-icon {
+    color: #078DBB;
+    background: var(--ov-cyan-soft)
+}
+
+.owner-financial-overview__collection-grid article.is-property .owner-financial-overview__collection-icon {
+    color: #108761;
+    background: var(--ov-green-soft)
+}
+
+.owner-financial-overview__collection-grid article.is-remaining .owner-financial-overview__collection-icon {
+    color: #B97807;
+    background: var(--ov-orange-soft)
+}
+
+.owner-financial-overview__collection-grid small {
+    display: block;
+    color: #92A3AE;
+    font-size: 6.8px;
+    font-weight: 850
+}
+
+.owner-financial-overview__collection-grid strong {
+    display: block;
+    margin-top: 2px;
+    color: #315268;
+    font-size: 9.5px;
+    font-weight: 950;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis
+}
+
+.owner-financial-overview__collection-grid em {
+    display: block;
+    margin-top: 1px;
+    color: #A1AFB8;
+    font-size: 6.5px;
+    font-style: normal;
+    font-weight: 700
+}
+
+.owner-financial-overview__collection-footer {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 8px;
+    margin-top: 9px;
+    padding: 9px;
+    border-radius: 13px;
+    background: #F7FBFD;
+}
+
+    .owner-financial-overview__collection-footer > div {
+        min-width: 0
+    }
+
+    .owner-financial-overview__collection-footer small {
+        display: block;
+        color: #98A7B1;
+        font-size: 6.8px;
+        font-weight: 800
+    }
+
+    .owner-financial-overview__collection-footer strong {
+        display: block;
+        margin-top: 2px;
+        color: #456478;
+        font-size: 9px;
+        font-weight: 950;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis
+    }
+
+    .owner-financial-overview__collection-footer > span {
+        color: #B4C0C7
+    }
+
+    .owner-financial-overview__collection-footer .is-highlight {
+        padding: 6px 8px;
+        border-radius: 10px;
+        background: #ECFAF5
+    }
+
+        .owner-financial-overview__collection-footer .is-highlight strong {
+            color: #108761
+        }
+
+.owner-financial-overview__commission {
+    position: relative;
+    overflow: hidden;
+    background: radial-gradient(circle at 100% 0%,rgba(245,158,11,.07),transparent 38%), linear-gradient(145deg,#FFFFFF,#FFFDFC);
+}
+
+.owner-financial-overview__account-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 7px;
+    border-radius: 999px;
+    font-size: 6.8px;
+    font-weight: 900;
+}
+
+    .owner-financial-overview__account-status i {
+        font-size: 5px
+    }
+
+    .owner-financial-overview__account-status.is-success {
+        color: #108761;
+        background: var(--ov-green-soft)
+    }
+
+    .owner-financial-overview__account-status.is-warning,
+    .owner-financial-overview__account-status.is-soft-warning {
+        color: #B97807;
+        background: var(--ov-orange-soft)
+    }
+
+    .owner-financial-overview__account-status.is-danger {
+        color: #D94F4F;
+        background: var(--ov-coral-soft)
+    }
+
+.owner-financial-overview__commission-balance {
+    padding: 12px;
+    border: 1px solid rgba(245,158,11,.09);
+    border-radius: 15px;
+    background: linear-gradient(145deg,#FFFDF8,#FFFFFF);
+}
+
+    .owner-financial-overview__commission-balance > span {
+        display: block;
+        color: #9A9F9F;
+        font-size: 7px;
+        font-weight: 850
+    }
+
+    .owner-financial-overview__commission-balance strong {
+        display: block;
+        margin-top: 3px;
+        color: #456478;
+        font-size: 17px;
+        font-weight: 950
+    }
+
+    .owner-financial-overview__commission-balance small {
+        display: block;
+        margin-top: 3px;
+        color: #A0ADB4;
+        font-size: 6.7px;
+        font-weight: 700
+    }
+
+.owner-financial-overview__commission-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 7px;
+    margin-top: 7px;
+}
+
+    .owner-financial-overview__commission-stats > div {
+        display: grid;
+        grid-template-columns: 28px 1fr;
+        align-items: center;
+        column-gap: 7px;
+        padding: 8px;
+        border: 1px solid rgba(23,83,113,.065);
+        border-radius: 13px;
+        background: #FAFDFE;
+    }
+
+        .owner-financial-overview__commission-stats > div > span {
+            grid-row: 1/3;
+            width: 28px;
+            height: 28px;
+            display: grid;
+            place-items: center;
+            border-radius: 9px;
+            font-size: 11px
+        }
+
+    .owner-financial-overview__commission-stats .is-held {
+        color: #078DBB;
+        background: var(--ov-cyan-soft)
+    }
+
+    .owner-financial-overview__commission-stats .is-debt {
+        color: #D94F4F;
+        background: var(--ov-coral-soft)
+    }
+
+    .owner-financial-overview__commission-stats small {
+        color: #98A7B1;
+        font-size: 6.5px;
+        font-weight: 800
+    }
+
+    .owner-financial-overview__commission-stats strong {
+        color: #48677B;
+        font-size: 8.7px;
+        font-weight: 950;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis
+    }
+
+    .owner-financial-overview__commission-stats .has-debt strong {
+        color: #D94F4F
+    }
+
+.owner-financial-overview__link-button {
+    width: 100%;
+    min-height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin-top: 7px;
+    border: 1px solid rgba(0,166,218,.11);
+    border-radius: 11px;
+    color: #078DBB;
+    background: #F1FBFE;
+    cursor: pointer;
+    font-size: 7.7px;
+    font-weight: 950;
+    transition: .2s ease;
+}
+
+    .owner-financial-overview__link-button:hover {
+        transform: translateY(-1px);
+        background: #E8F9FE
+    }
+
+.owner-financial-overview__attention-count {
+    min-width: 24px;
+    height: 24px;
+    display: grid;
+    place-items: center;
+    padding: 0 6px;
+    border-radius: 999px;
+    color: #D94F4F;
+    background: var(--ov-coral-soft);
+    font-size: 7px;
+    font-weight: 950;
+}
+
+.owner-financial-overview__all-good {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-height: 92px;
+    padding: 12px;
+    border: 1px solid rgba(22,168,117,.10);
+    border-radius: 15px;
+    background: linear-gradient(145deg,#F1FCF7,#FBFFFD);
+}
+
+    .owner-financial-overview__all-good > span {
+        width: 38px;
+        height: 38px;
+        display: grid;
+        place-items: center;
+        border-radius: 13px;
+        color: #108761;
+        background: #DCF6EB;
+        font-size: 17px;
+    }
+
+    .owner-financial-overview__all-good strong {
+        display: block;
+        color: #2B6552;
+        font-size: 9px;
+        font-weight: 950
+    }
+
+    .owner-financial-overview__all-good p {
+        margin: 2px 0 0;
+        color: #7F9B90;
+        font-size: 7px;
+        font-weight: 700
+    }
+
+.owner-financial-overview__attention-list,
+.owner-financial-overview__recent-list {
+    display: grid;
+    gap: 6px
+}
+
+.owner-financial-overview__attention-item {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 31px minmax(0,1fr) auto;
+    align-items: center;
+    gap: 7px;
+    padding: 7px;
+    border: 1px solid rgba(23,83,113,.06);
+    border-radius: 12px;
+    color: #48677B;
+    background: #FAFDFE;
+    text-align: right;
+    cursor: pointer;
+    transition: .2s ease;
+}
+
+    .owner-financial-overview__attention-item:hover {
+        transform: translateX(-2px);
+        background: #fff;
+        box-shadow: 0 6px 14px rgba(29,92,122,.06)
+    }
+
+.owner-financial-overview__attention-icon {
+    width: 31px;
+    height: 31px;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    font-size: 12px;
+}
+
+.owner-financial-overview__attention-item.is-refund .owner-financial-overview__attention-icon {
+    color: #B97807;
+    background: var(--ov-orange-soft)
+}
+
+.owner-financial-overview__attention-item.is-topup .owner-financial-overview__attention-icon {
+    color: #078DBB;
+    background: var(--ov-cyan-soft)
+}
+
+.owner-financial-overview__attention-item.is-low .owner-financial-overview__attention-icon {
+    color: #B97807;
+    background: var(--ov-orange-soft)
+}
+
+.owner-financial-overview__attention-item.is-debt .owner-financial-overview__attention-icon,
+.owner-financial-overview__attention-item.is-danger .owner-financial-overview__attention-icon {
+    color: #D94F4F;
+    background: var(--ov-coral-soft)
+}
+
+.owner-financial-overview__attention-item strong {
+    display: block;
+    color: #456478;
+    font-size: 7.8px;
+    font-weight: 950
+}
+
+.owner-financial-overview__attention-item small {
+    display: block;
+    margin-top: 1px;
+    color: #99A8B1;
+    font-size: 6.5px;
+    font-weight: 700
+}
+
+.owner-financial-overview__attention-item > i {
+    color: #B2BFC6;
+    font-size: 8px
+}
+
+.owner-financial-overview__text-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border: 0;
+    background: transparent;
+    color: #078DBB;
+    cursor: pointer;
+    font-size: 7px;
+    font-weight: 950;
+}
+
+.owner-financial-overview__empty-list {
+    min-height: 92px;
+    display: grid;
+    place-items: center;
+    align-content: center;
+    gap: 3px;
+    text-align: center;
+}
+
+    .owner-financial-overview__empty-list > span {
+        width: 38px;
+        height: 38px;
+        display: grid;
+        place-items: center;
+        border-radius: 13px;
+        color: #078DBB;
+        background: var(--ov-cyan-soft);
+        font-size: 16px;
+    }
+
+    .owner-financial-overview__empty-list strong {
+        color: #527083;
+        font-size: 8.5px;
+        font-weight: 950
+    }
+
+    .owner-financial-overview__empty-list small {
+        color: #9CAAB3;
+        font-size: 6.8px;
+        font-weight: 700
+    }
+
+.owner-financial-overview__recent-item {
+    display: grid;
+    grid-template-columns: 31px minmax(0,1fr) auto;
+    grid-template-rows: auto auto;
+    align-items: center;
+    column-gap: 7px;
+    padding: 7px;
+    border: 1px solid rgba(23,83,113,.055);
+    border-radius: 12px;
+    background: #FAFDFE;
+}
+
+.owner-financial-overview__recent-icon {
+    grid-row: 1/3;
+    width: 31px;
+    height: 31px;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    color: #6F8797;
+    background: #EEF5F8;
+    font-size: 11px;
+}
+
+.owner-financial-overview__recent-copy {
+    min-width: 0
+}
+
+    .owner-financial-overview__recent-copy strong {
+        display: block;
+        color: #48677B;
+        font-size: 7.6px;
+        font-weight: 950;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .owner-financial-overview__recent-copy span {
+        display: block;
+        margin-top: 1px;
+        color: #99A8B1;
+        font-size: 6.4px;
+        font-weight: 700;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+.owner-financial-overview__recent-value {
+    min-width: 0;
+    text-align: left;
+}
+
+    .owner-financial-overview__recent-value strong {
+        display: block;
+        color: #48677B;
+        font-size: 7.8px;
+        font-weight: 950;
+        white-space: nowrap;
+    }
+
+    .owner-financial-overview__recent-value small {
+        display: block;
+        margin-top: 1px;
+        color: #A2AFB7;
+        font-size: 5.9px;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+
+.owner-financial-overview__recent-status {
+    grid-column: 3;
+    justify-self: end;
+    color: #9AA9B2;
+    font-size: 5.9px;
+    font-weight: 850;
+}
+
+.owner-financial-overview__recent-item.is-positive .owner-financial-overview__recent-icon {
+    color: #108761;
+    background: var(--ov-green-soft)
+}
+
+.owner-financial-overview__recent-item.is-positive .owner-financial-overview__recent-value strong {
+    color: #108761
+}
+
+.owner-financial-overview__recent-item.is-negative .owner-financial-overview__recent-icon {
+    color: #D94F4F;
+    background: var(--ov-coral-soft)
+}
+
+.owner-financial-overview__recent-item.is-negative .owner-financial-overview__recent-value strong {
+    color: #D94F4F
+}
+
+@media(max-width:1080px) {
+    .owner-financial-overview__kpis {
+        grid-template-columns: repeat(2,minmax(0,1fr))
+    }
+
+    .owner-financial-overview__primary-grid,
+    .owner-financial-overview__secondary-grid {
+        grid-template-columns: 1fr
+    }
+}
+
+@media(max-width:760px) {
+    .owner-financial-overview__toolbar {
+        grid-template-columns: 1fr;
+        padding: 11px
+    }
+
+    .owner-financial-overview__period-control {
+        width: 100%
+    }
+
+    .owner-financial-overview__period-options {
+        display: grid;
+        grid-template-columns: repeat(4,1fr)
+    }
+
+        .owner-financial-overview__period-options button {
+            padding: 0 5px
+        }
+
+    .owner-financial-overview__custom-period {
+        right: 0;
+        left: auto;
+        width: 100%
+    }
+
+    .owner-financial-overview__period-meta {
+        justify-content: flex-start;
+        margin-top: 0
+    }
+
+    .owner-financial-overview__collection-grid {
+        grid-template-columns: 1fr
+    }
+}
+
+@media(max-width:480px) {
+    .owner-financial-overview {
+        gap: 8px
+    }
+
+    .owner-financial-overview__toolbar {
+        border-radius: 16px
+    }
+
+    .owner-financial-overview__toolbar-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 12px;
+        font-size: 14px
+    }
+
+    .owner-financial-overview__toolbar h2 {
+        font-size: 11px
+    }
+
+    .owner-financial-overview__toolbar p {
+        font-size: 7.3px
+    }
+
+    .owner-financial-overview__period-options {
+        grid-template-columns: repeat(2,1fr)
+    }
+
+    .owner-financial-overview__kpis {
+        grid-template-columns: 1fr 1fr;
+        gap: 7px
+    }
+
+    .owner-financial-overview__kpi {
+        min-height: 116px;
+        padding: 10px;
+        border-radius: 15px
+    }
+
+    .owner-financial-overview__kpi-icon {
+        width: 30px;
+        height: 30px;
+        border-radius: 10px;
+        font-size: 12px
+    }
+
+    .owner-financial-overview__kpi-label {
+        font-size: 7px
+    }
+
+    .owner-financial-overview__kpi-value {
+        font-size: 13px;
+        margin-top: 10px
+    }
+
+    .owner-financial-overview__kpi-footer {
+        display: grid;
+        gap: 2px;
+        margin-top: 8px;
+        padding-top: 6px;
+        font-size: 5.9px
+    }
+
+    .owner-financial-overview__panel {
+        padding: 10px;
+        border-radius: 16px
+    }
+
+    .owner-financial-overview__panel-head {
+        margin-bottom: 8px
+    }
+
+    .owner-financial-overview__commission-stats {
+        grid-template-columns: 1fr
+    }
+
+    .owner-financial-overview__collection-footer {
+        grid-template-columns: 1fr
+    }
+
+        .owner-financial-overview__collection-footer > span {
+            display: none
+        }
+}

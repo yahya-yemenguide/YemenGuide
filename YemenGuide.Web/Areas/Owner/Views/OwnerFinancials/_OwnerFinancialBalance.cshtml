@@ -1,0 +1,1606 @@
+@using System
+@using System.Collections.Generic
+@using System.Globalization
+@using System.Linq
+@using YemenGuide.Core.DTOs.Owner
+@using YemenGuide.Web.Services.Finance
+
+@model OwnerCommissionBalanceBackendDto
+
+@{
+    var pageModel = Model ?? new OwnerCommissionBalanceBackendDto();
+    var accountModel = pageModel.Account ?? new CommissionGuaranteeTabDto();
+    var topUpModel = pageModel.TopUp ?? new TopUpBalanceTabDto();
+    var transactionModel = pageModel.Transactions ?? new TransactionsTabDto();
+
+    var account = accountModel.Accounts?.FirstOrDefault();
+    var bookingAccess = pageModel.BookingAccess ?? new BookingFinancialAccessResult();
+
+    var showBookingAccessCard = bookingAccess.IsBookingCategory;
+    var hasTrialWindow =
+        bookingAccess.FreeTrialStartedAt.HasValue &&
+        bookingAccess.FreeTrialEndsAt.HasValue;
+
+    var now = DateTime.Now;
+    var isTrialExpired =
+        hasTrialWindow &&
+        !bookingAccess.IsFreeTrialActive &&
+        bookingAccess.FreeTrialEndsAt.Value <= now;
+
+    var requiredGuarantee =
+        Math.Max(0m, bookingAccess.RequiredGuaranteeBalance);
+
+    var currentGuaranteeBalance =
+        account != null
+            ? Math.Max(0m, account.AvailableBalance)
+            : Math.Max(0m, bookingAccess.AvailableBalance);
+
+    var missingGuarantee =
+        Math.Max(0m, requiredGuarantee - currentGuaranteeBalance);
+
+    var guaranteeProgress =
+        requiredGuarantee <= 0m
+            ? 100m
+            : Math.Min(
+                100m,
+                Math.Round(
+                    currentGuaranteeBalance / requiredGuarantee * 100m,
+                    1));
+
+    var trialRemainingProgress = 0m;
+    if (bookingAccess.IsFreeTrialActive &&
+        bookingAccess.FreeTrialStartedAt.HasValue &&
+        bookingAccess.FreeTrialEndsAt.HasValue)
+    {
+        var totalTrial =
+            bookingAccess.FreeTrialEndsAt.Value -
+            bookingAccess.FreeTrialStartedAt.Value;
+
+        var remainingTrial =
+            bookingAccess.FreeTrialEndsAt.Value - now;
+
+        if (totalTrial.TotalSeconds > 0)
+        {
+            trialRemainingProgress = Math.Min(
+                100m,
+                Math.Max(
+                    0m,
+                    Math.Round(
+                        (decimal)(remainingTrial.TotalSeconds / totalTrial.TotalSeconds) * 100m,
+                        1)));
+        }
+    }
+
+    var trialCardTone =
+        bookingAccess.IsFreeTrialActive
+            ? "is-trial"
+            : bookingAccess.CanAcceptNewBookings
+                ? "is-ready"
+                : "is-blocked";
+
+    var showTopUpAction =
+        account != null &&
+        (missingGuarantee > 0m ||
+         account.IsLowBalance ||
+         account.IsInDebt ||
+         account.IsSuspended);
+
+    var wallets =
+        topUpModel.PlatformWallets ??
+        new List<PlatformWalletOptionDto>();
+
+    var recentTopUps =
+        (topUpModel.RecentTopUps ??
+         new List<CommissionTransactionItemDto>())
+            .OrderByDescending(item => item.EffectiveDate)
+            .Take(4)
+            .ToList();
+
+    var transactions =
+        transactionModel.Transactions ??
+        new List<CommissionTransactionItemDto>();
+
+    var filter =
+        transactionModel.Filter ??
+        new CommissionTransactionFilterDto();
+
+    var summary =
+        transactionModel.Summary ??
+        new CommissionTransactionsSummaryDto();
+
+    var culture = CultureInfo.GetCultureInfo("en-US");
+
+    var currency =
+        !string.IsNullOrWhiteSpace(transactionModel.Currency)
+            ? transactionModel.Currency.Trim()
+            : !string.IsNullOrWhiteSpace(accountModel.Currency)
+                ? accountModel.Currency.Trim()
+                : "ريال يمني";
+
+    var hasFilters = transactionModel.HasActiveFilters;
+
+    var totalWalletBalance =
+        account == null
+            ? 0m
+            : Math.Max(0m, account.AvailableBalance) +
+              Math.Max(0m, account.HeldBalance);
+
+    var heldRatio =
+        totalWalletBalance <= 0m
+            ? 0m
+            : Math.Round(
+                Math.Min(
+                    100m,
+                    Math.Max(0m, account!.HeldBalance) /
+                    totalWalletBalance * 100m),
+                1);
+
+    var availableRatio =
+        totalWalletBalance <= 0m
+            ? 0m
+            : Math.Round(
+                Math.Min(
+                    100m,
+                    Math.Max(0m, account!.AvailableBalance) /
+                    totalWalletBalance * 100m),
+                1);
+
+    string Money(decimal value)
+    {
+        var absolute = Math.Abs(value);
+        var format =
+            decimal.Truncate(absolute) == absolute
+                ? "N0"
+                : "N2";
+
+        return $"{absolute.ToString(format, culture)} {currency}";
+    }
+
+    string SignedMoney(decimal value)
+    {
+        if (value > 0m)
+        {
+            return $"+ {Money(value)}";
+        }
+
+        if (value < 0m)
+        {
+            return $"− {Money(value)}";
+        }
+
+        return Money(0m);
+    }
+
+    string DateText(DateTime? value) =>
+        value.HasValue
+            ? value.Value.ToString("dd/MM/yyyy", culture)
+            : "—";
+
+    string DateTimeText(DateTime? value) =>
+        value.HasValue
+            ? value.Value.ToString("dd/MM/yyyy - hh:mm tt", culture)
+            : "—";
+
+    string AccountStatusLabel(string? value) =>
+        (value ?? string.Empty).Trim().ToLowerInvariant() switch
+        {
+            "active" => "نشط",
+            "lowbalance" => "رصيد منخفض",
+            "indebt" => "مديون",
+            "suspended" => "موقوف",
+            "needstopup" => "يحتاج شحن",
+            _ => "قيد المتابعة"
+        };
+
+    string AccountStatusClass(string? value) =>
+        (value ?? string.Empty).Trim().ToLowerInvariant() switch
+        {
+            "active" => "is-success",
+            "lowbalance" => "is-warning",
+            "indebt" => "is-danger",
+            "suspended" => "is-danger",
+            "needstopup" => "is-warning",
+            _ => "is-neutral"
+        };
+
+    string TransactionTone(CommissionTransactionItemDto item)
+    {
+        var direction =
+            (item.Direction ?? string.Empty)
+                .Trim()
+                .ToLowerInvariant();
+
+        return direction switch
+        {
+            "credit" or "debtdecrease" => "is-positive",
+            "debit" or "debtincrease" => "is-negative",
+            _ => "is-neutral"
+        };
+    }
+
+    string TransactionIcon(CommissionTransactionItemDto item)
+    {
+        var type =
+            (item.TransactionType ?? string.Empty)
+                .Trim()
+                .ToLowerInvariant();
+
+        return type switch
+        {
+            "topup" => "bi-wallet2",
+            "commissionhold" => "bi-lock",
+            "commissioncharge" => "bi-percent",
+            "commissionrelease" => "bi-unlock",
+            "debt" => "bi-exclamation-diamond",
+            "debtpayment" => "bi-check2-circle",
+            "adjustment" => "bi-sliders2",
+            _ => "bi-arrow-left-right"
+        };
+    }
+
+    string TransactionAmount(CommissionTransactionItemDto item)
+    {
+        var tone = TransactionTone(item);
+
+        return tone switch
+        {
+            "is-positive" => $"+ {Money(item.Amount)}",
+            "is-negative" => $"− {Money(item.Amount)}",
+            _ => Money(item.Amount)
+        };
+    }
+
+    string StatusClass(string? value) =>
+        (value ?? string.Empty).Trim().ToLowerInvariant() switch
+        {
+            "completed" => "is-completed",
+            "approved" => "is-completed",
+            "pending" => "is-pending",
+            "processing" => "is-pending",
+            "rejected" => "is-rejected",
+            "failed" => "is-rejected",
+            "cancelled" => "is-rejected",
+            "reversed" => "is-neutral",
+            _ => "is-neutral"
+        };
+
+    string WalletInitial(string? name)
+    {
+        var text = (name ?? string.Empty).Trim();
+
+        return string.IsNullOrWhiteSpace(text)
+            ? "W"
+            : text.Substring(0, 1).ToUpperInvariant();
+    }
+}
+
+<link rel="stylesheet"
+      href="~/css/owner/financials/owner-financial-balance.css"
+      asp-append-version="true" />
+
+<section class="owner-balance-center"
+         dir="rtl"
+         data-owner-financial-partial="balance"
+         data-balance-ui-version="wallet-center-v1-20260824"
+         data-load-url="@Url.Content("~/Owner/Financials/Balance")"
+         data-topup-url="@Url.Content("~/Owner/Financials/Balance/TopUp/Submit")"
+         data-cancel-topup-base-url="@Url.Content("~/Owner/Financials/Balance/TopUp/Cancel")">
+
+    @if (account != null)
+    {
+        <section class="owner-balance-center__wallet"
+             aria-labelledby="ownerBalanceTitle">
+
+            <div class="owner-balance-center__wallet-glow"
+             aria-hidden="true"></div>
+
+            <div class="owner-balance-center__wallet-main">
+
+                <header class="owner-balance-center__wallet-header">
+
+                    <div class="owner-balance-center__wallet-brand">
+                        <span class="owner-balance-center__wallet-icon">
+                            <i class="bi bi-wallet2"></i>
+                            <b></b>
+                        </span>
+
+                        <div>
+                            <span class="owner-balance-center__eyebrow">
+                                <i class="bi bi-stars"></i>
+                                حساب ضمان العمولات
+                            </span>
+
+                            <h2 id="ownerBalanceTitle">
+                                الرصيد والعمولات
+                            </h2>
+
+                            <p>@account.PlaceName</p>
+                        </div>
+                    </div>
+
+                    <span class="owner-balance-center__account-status @AccountStatusClass(account.AccountStatus)">
+                        <i class="bi bi-circle-fill"></i>
+                        @AccountStatusLabel(account.AccountStatus)
+                    </span>
+
+                </header>
+
+                <div class="owner-balance-center__hero-balance">
+                    <span>الرصيد المتاح</span>
+                    <strong>@Money(account.AvailableBalance)</strong>
+                    <small>
+                        الرصيد الجاهز لتغطية عمولات الحجوزات الجديدة
+                    </small>
+                </div>
+
+                <div class="owner-balance-center__wallet-rail"
+                 aria-label="توزيع رصيد حساب العمولة">
+                    <span class="is-available"
+                      style="--wallet-part:@availableRatio.ToString("0.#", CultureInfo.InvariantCulture)%"></span>
+                    <span class="is-held"
+                      style="--wallet-part:@heldRatio.ToString("0.#", CultureInfo.InvariantCulture)%"></span>
+                </div>
+
+                <div class="owner-balance-center__wallet-stats">
+
+                    <article class="is-held">
+                        <span><i class="bi bi-lock"></i></span>
+                        <div>
+                            <small>المحجوز</small>
+                            <strong>@Money(account.HeldBalance)</strong>
+                            <em>مرتبط بحجوزات قائمة</em>
+                        </div>
+                    </article>
+
+                    <article class="is-debt @(account.DebtAmount > 0m ? "has-debt" : string.Empty)">
+                        <span><i class="bi bi-exclamation-diamond"></i></span>
+                        <div>
+                            <small>الدين</small>
+                            <strong>@Money(account.DebtAmount)</strong>
+                            <em>
+                                @(account.DebtAmount > 0m
+                                    ? $"متاح للدين: {Money(account.RemainingDebtCapacity)}"
+                                    : "لا يوجد دين")
+                            </em>
+                        </div>
+                    </article>
+
+                    <article class="is-capacity">
+                        <span><i class="bi bi-shield-check"></i></span>
+                        <div>
+                            <small>السعة المتاحة</small>
+                            <strong>@Money(account.UsableCapacity)</strong>
+                            <em>رصيد + سعة دين مسموحة</em>
+                        </div>
+                    </article>
+
+                </div>
+
+            </div>
+
+            <aside class="owner-balance-center__wallet-actions">
+
+                <div class="owner-balance-center__wallet-actions-copy">
+                    <span><i class="bi bi-lightning-charge"></i></span>
+
+                    <div>
+                        <small>الإجراء الأساسي</small>
+                        <strong>حافظ على رصيدك جاهزًا</strong>
+                        <p>
+                            يتم اعتماد الشحن بعد مراجعة الإدارة لسند التحويل.
+                        </p>
+                    </div>
+                </div>
+
+                <button type="button"
+                    class="owner-balance-center__topup-button"
+                    data-balance-open-topup>
+                    <span><i class="bi bi-plus-lg"></i></span>
+                    <div>
+                        <small>إضافة رصيد</small>
+                        <strong>شحن حساب العمولة</strong>
+                    </div>
+                    <i class="bi bi-arrow-left"></i>
+                </button>
+
+                <div class="owner-balance-center__wallet-meta">
+                    <span>
+                        <i class="bi bi-arrow-repeat"></i>
+                        آخر شحن
+                        <strong>@DateText(account.LastTopUpAt)</strong>
+                    </span>
+
+                    <span>
+                        <i class="bi bi-battery-half"></i>
+                        حد التنبيه
+                        <strong>@Money(account.LowBalanceThreshold)</strong>
+                    </span>
+                </div>
+
+            </aside>
+
+        </section>
+
+        @if (showBookingAccessCard)
+        {
+            <section class="owner-balance-center__trial-card @trialCardTone"
+             aria-label="حالة التجربة المجانية وضمان التفعيل">
+
+                <span class="owner-balance-center__trial-orbit is-one" aria-hidden="true"></span>
+                <span class="owner-balance-center__trial-orbit is-two" aria-hidden="true"></span>
+
+                <div class="owner-balance-center__trial-main">
+
+                    <header class="owner-balance-center__trial-header">
+                        <div class="owner-balance-center__trial-heading">
+                            <span class="owner-balance-center__trial-icon">
+                                <i class="bi @(bookingAccess.IsFreeTrialActive ? "bi-gift-fill" : bookingAccess.CanAcceptNewBookings ? "bi-shield-check" : "bi-shield-exclamation")"></i>
+                            </span>
+
+                            <div>
+                                <small class="owner-balance-center__trial-kicker">
+                                    @(bookingAccess.IsFreeTrialActive
+                                        ? "الفترة التجريبية"
+                                        : isTrialExpired
+                                        ? "ما بعد الفترة التجريبية"
+                                        : "جاهزية استقبال الحجوزات")
+                                </small>
+
+                                <h3>
+                                    @(bookingAccess.IsFreeTrialActive
+                                        ? "تجربتك المجانية فعّالة"
+                                        : bookingAccess.CanAcceptNewBookings
+                                        ? "حسابك جاهز لاستقبال الحجوزات"
+                                        : isTrialExpired
+                                        ? "انتهت التجربة ويحتاج الضمان إلى استكمال"
+                                        : "الحساب يحتاج إجراءً قبل استقبال حجوزات جديدة")
+                                </h3>
+
+                                <p>
+                                    @(bookingAccess.IsFreeTrialActive
+                                        ? "يمكنك استقبال الحجوزات الآن دون اشتراط رصيد ضمان، والحجوزات المنشأة خلال التجربة لا تُحمّل عمولة منصة."
+                                        : bookingAccess.Message)
+                                </p>
+                            </div>
+                        </div>
+
+                        <span class="owner-balance-center__trial-badge">
+                            <i class="bi @(bookingAccess.IsFreeTrialActive ? "bi-hourglass-split" : bookingAccess.CanAcceptNewBookings ? "bi-check-circle-fill" : "bi-exclamation-circle-fill")"></i>
+                            @(bookingAccess.IsFreeTrialActive
+                                ? $"متبقي {bookingAccess.RemainingTrialDays} يوم"
+                                : bookingAccess.CanAcceptNewBookings
+                                ? "الحجوزات مفعّلة"
+                                : "يحتاج متابعة")
+                        </span>
+                    </header>
+
+                    @if (bookingAccess.IsFreeTrialActive)
+                    {
+                        <div class="owner-balance-center__trial-progress">
+                            <div class="owner-balance-center__trial-progress-head">
+                                <span>المدة المتبقية من التجربة</span>
+                                <strong>@DateText(bookingAccess.FreeTrialEndsAt)</strong>
+                            </div>
+
+                            <div class="owner-balance-center__trial-progress-track"
+                     aria-label="نسبة الوقت المتبقي من التجربة">
+                                <span style="--trial-progress:@trialRemainingProgress.ToString("0.#", CultureInfo.InvariantCulture)%"></span>
+                            </div>
+                        </div>
+                    }
+
+                    <div class="owner-balance-center__trial-metrics">
+                        <article>
+                            <span class="is-required"><i class="bi bi-shield-lock"></i></span>
+                            <div>
+                                <small>الضمان المطلوب</small>
+                                <strong>@Money(requiredGuarantee)</strong>
+                                <em>الحد المطلوب لاستمرار استقبال الحجوزات بعد التجربة</em>
+                            </div>
+                        </article>
+
+                        <article>
+                            <span class="is-current"><i class="bi bi-wallet2"></i></span>
+                            <div>
+                                <small>الرصيد المتاح حاليًا</small>
+                                <strong>@Money(currentGuaranteeBalance)</strong>
+                                <em>@guaranteeProgress.ToString("0.#", culture)% من ضمان التفعيل</em>
+                            </div>
+                        </article>
+
+                        <article class="@(missingGuarantee > 0m ? "has-gap" : "is-complete")">
+                            <span class="is-gap"><i class="bi @(missingGuarantee > 0m ? "bi-arrow-up-circle" : "bi-patch-check")"></i></span>
+                            <div>
+                                <small>@(missingGuarantee > 0m ? "المتبقي للتفعيل" : "حالة الضمان")</small>
+                                <strong>@(missingGuarantee > 0m ? Money(missingGuarantee) : "مكتمل")</strong>
+                                <em>@(missingGuarantee > 0m ? "يمكنك تجهيز الرصيد من الآن" : "الرصيد يحقق الحد المطلوب")</em>
+                            </div>
+                        </article>
+                    </div>
+
+                    <div class="owner-balance-center__trial-guarantee-progress">
+                        <span style="--guarantee-progress:@guaranteeProgress.ToString("0.#", CultureInfo.InvariantCulture)%"></span>
+                    </div>
+
+                    <footer class="owner-balance-center__trial-footer">
+                        <span class="owner-balance-center__trial-system-note">
+                            <i class="bi bi-info-circle"></i>
+                            @bookingAccess.Message
+                        </span>
+
+                        @if (showTopUpAction)
+                        {
+                            <button type="button"
+                        class="owner-balance-center__trial-action"
+                        data-balance-open-topup>
+                                <i class="bi bi-plus-circle"></i>
+                                <span>
+                                    <small>@(bookingAccess.IsFreeTrialActive ? "جهّز حسابك مبكرًا" : "استكمل الجاهزية")</small>
+                                    <strong>@(bookingAccess.IsFreeTrialActive ? "تجهيز ضمان العمولة" : "شحن الرصيد الآن")</strong>
+                                </span>
+                                <i class="bi bi-arrow-left"></i>
+                            </button>
+                        }
+                    </footer>
+
+                </div>
+            </section>
+        }
+
+        @if (account.IsSuspended)
+        {
+            <div class="owner-balance-center__notice is-danger">
+                <span><i class="bi bi-shield-x"></i></span>
+                <div>
+                    <strong>حساب العمولة موقوف</strong>
+                    <p>عالج الرصيد أو الدين لإعادة الحساب إلى وضعه الطبيعي.</p>
+                </div>
+                <button type="button" data-balance-open-topup>
+                    شحن الآن
+                    <i class="bi bi-arrow-left"></i>
+                </button>
+            </div>
+        }
+        else if (account.IsDebtOverdue)
+        {
+            <div class="owner-balance-center__notice is-danger">
+                <span><i class="bi bi-calendar-x"></i></span>
+                <div>
+                    <strong>الدين تجاوز تاريخ الاستحقاق</strong>
+                    <p>
+                        الدين الحالي @Money(account.DebtAmount)
+                        والاستحقاق @DateText(account.DebtDueAt).
+                    </p>
+                </div>
+                <button type="button" data-balance-open-topup>
+                    معالجة الدين
+                    <i class="bi bi-arrow-left"></i>
+                </button>
+            </div>
+        }
+        else if (account.IsInDebt)
+        {
+            <div class="owner-balance-center__notice is-warning">
+                <span><i class="bi bi-exclamation-triangle"></i></span>
+                <div>
+                    <strong>يوجد مبلغ مستحق على الحساب</strong>
+                    <p>الدين الحالي @Money(account.DebtAmount).</p>
+                </div>
+                <button type="button" data-balance-open-topup>
+                    شحن الرصيد
+                    <i class="bi bi-arrow-left"></i>
+                </button>
+            </div>
+        }
+        else if (account.IsLowBalance)
+        {
+            <div class="owner-balance-center__notice is-soft">
+                <span><i class="bi bi-battery-half"></i></span>
+                <div>
+                    <strong>الرصيد قريب من الحد المنخفض</strong>
+                    <p>
+                        يفضل الشحن قبل تأثر قدرة الحساب على تغطية العمولات.
+                    </p>
+                </div>
+                <button type="button" data-balance-open-topup>
+                    شحن الآن
+                    <i class="bi bi-arrow-left"></i>
+                </button>
+            </div>
+        }
+
+        <div class="owner-balance-center__middle-grid">
+
+            <section class="owner-balance-center__commission-flow">
+
+                <header class="owner-balance-center__section-header">
+                    <div>
+                        <span class="is-cyan"><i class="bi bi-diagram-3"></i></span>
+                        <div>
+                            <small>كيف تتحرك العمولة؟</small>
+                            <h3>دورة العمولة</h3>
+                        </div>
+                    </div>
+
+                    <span class="owner-balance-center__section-hint">
+                        للفترة المفلترة
+                    </span>
+                </header>
+
+                <div class="owner-balance-center__flow-track">
+
+                    <article class="is-calculated">
+                        <span><i class="bi bi-lock"></i></span>
+                        <div>
+                            <small>محجوزة</small>
+                            <strong>@Money(summary.CommissionHeldAmount)</strong>
+                        </div>
+                    </article>
+
+                    <i class="bi bi-chevron-left"></i>
+
+                    <article class="is-charged">
+                        <span><i class="bi bi-percent"></i></span>
+                        <div>
+                            <small>مخصومة</small>
+                            <strong>@Money(summary.CommissionChargedAmount)</strong>
+                        </div>
+                    </article>
+
+                    <div class="owner-balance-center__flow-split"
+                     aria-hidden="true">
+                        <span></span>
+                        <b></b>
+                    </div>
+
+                    <article class="is-released">
+                        <span><i class="bi bi-unlock"></i></span>
+                        <div>
+                            <small>محررة</small>
+                            <strong>@Money(summary.CommissionReleasedAmount)</strong>
+                        </div>
+                    </article>
+
+                </div>
+
+                <div class="owner-balance-center__flow-footer">
+                    <span>
+                        <i class="bi bi-arrow-down-left"></i>
+                        حركات مدينة
+                        <strong>@Money(summary.DebitMovementsAmount)</strong>
+                    </span>
+
+                    <span>
+                        <i class="bi bi-arrow-up-right"></i>
+                        حركات دائنة
+                        <strong>@Money(summary.CreditMovementsAmount)</strong>
+                    </span>
+                </div>
+
+            </section>
+
+            <section class="owner-balance-center__topups">
+
+                <header class="owner-balance-center__section-header">
+                    <div>
+                        <span class="is-orange"><i class="bi bi-wallet2"></i></span>
+                        <div>
+                            <small>الشحن</small>
+                            <h3>طلبات الشحن الأخيرة</h3>
+                        </div>
+                    </div>
+
+                    <button type="button" data-balance-open-topup>
+                        <i class="bi bi-plus"></i>
+                        طلب جديد
+                    </button>
+                </header>
+
+                @if (recentTopUps.Count > 0)
+                {
+                    <div class="owner-balance-center__topup-list">
+                        @foreach (var item in recentTopUps)
+                        {
+                            <article class="owner-balance-center__topup-item">
+                                <span class="owner-balance-center__topup-icon">
+                                    <i class="bi bi-arrow-down-circle"></i>
+                                </span>
+
+                                <div class="owner-balance-center__topup-copy">
+                                    <strong>@Money(item.Amount)</strong>
+                                    <span>
+                                        @(item.HasReference
+                                            ? item.ReferenceNumber
+                                            : "بدون مرجع")
+                                    </span>
+                                </div>
+
+                                <div class="owner-balance-center__topup-meta">
+                                    <span class="owner-balance-center__movement-status @StatusClass(item.Status)">
+                                        @item.StatusLabel
+                                    </span>
+                                    <small>@DateText(item.EffectiveDate)</small>
+                                </div>
+
+                                @if (item.IsPending)
+                                {
+                                    <button type="button"
+                            class="owner-balance-center__topup-cancel"
+                            data-balance-cancel-topup="@item.CommissionTransactionId">
+                                        <i class="bi bi-x-lg"></i>
+                                    </button>
+                                }
+                            </article>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="owner-balance-center__mini-empty">
+                        <span><i class="bi bi-wallet2"></i></span>
+                        <strong>لا توجد طلبات شحن حديثة</strong>
+                        <small>عند إرسال أول طلب سيظهر هنا.</small>
+                    </div>
+                }
+
+                <footer class="owner-balance-center__topup-summary">
+                    <span>
+                        قيد المراجعة
+                        <strong>@Money(summary.PendingTopUpsAmount)</strong>
+                    </span>
+
+                    <span>
+                        مكتمل
+                        <strong>@Money(summary.CompletedTopUpsAmount)</strong>
+                    </span>
+                </footer>
+
+            </section>
+
+        </div>
+    }
+    else
+    {
+        <div class="owner-balance-center__empty-account">
+            <span><i class="bi bi-building-exclamation"></i></span>
+            <h2>لا يوجد حساب عمولة للمنشأة الحالية</h2>
+            <p>سيظهر حساب الرصيد والعمولات هنا بعد تهيئته ماليًا.</p>
+        </div>
+    }
+
+    <section class="owner-balance-center__ledger">
+
+        <header class="owner-balance-center__ledger-header">
+
+            <div>
+                <span class="owner-balance-center__ledger-icon">
+                    <i class="bi bi-arrow-left-right"></i>
+                </span>
+
+                <div>
+                    <small>كل ريال دخل أو خرج</small>
+                    <h3>كشف الحركات</h3>
+                    <p>شحن، حجز عمولة، خصم، تحرير، دين وتسويات.</p>
+                </div>
+            </div>
+
+            <div class="owner-balance-center__ledger-tools">
+
+                @if (hasFilters)
+                {
+                    <span class="owner-balance-center__filter-active">
+                        <i class="bi bi-funnel-fill"></i>
+                        فلاتر مفعلة
+                    </span>
+                }
+
+                <button type="button"
+                        class="owner-balance-center__filter-button @(hasFilters ? "has-value" : string.Empty)"
+                        data-balance-toggle-filter
+                        aria-expanded="@(hasFilters ? "true" : "false")">
+                    <i class="bi bi-sliders2"></i>
+                    تصفية
+                </button>
+
+            </div>
+
+        </header>
+
+        <form class="owner-balance-center__filters"
+              data-balance-filter-form
+              hidden="@(!hasFilters)">
+
+            <label class="is-search">
+                <span>بحث</span>
+                <div>
+                    <i class="bi bi-search"></i>
+                    <input type="search"
+                           name="Search"
+                           value="@filter.Search"
+                           maxlength="100"
+                           placeholder="مرجع أو رقم حجز..." />
+                </div>
+            </label>
+
+            <label>
+                <span>نوع الحركة</span>
+                <select name="TransactionType">
+                    <option value="">كل الحركات</option>
+                    @foreach (var option in transactionModel.TransactionTypeOptions)
+                    {
+                        <option value="@option.Value"
+                            selected="@(string.Equals(option.Value, filter.TransactionType, StringComparison.OrdinalIgnoreCase) ? "selected" : null)">
+                            @option.Label
+                        </option>
+                    }
+                </select>
+            </label>
+
+            <label>
+                <span>الحالة</span>
+                <select name="Status">
+                    <option value="">كل الحالات</option>
+                    @foreach (var option in transactionModel.StatusOptions)
+                    {
+                        <option value="@option.Value"
+                            selected="@(string.Equals(option.Value, filter.Status, StringComparison.OrdinalIgnoreCase) ? "selected" : null)">
+                            @option.Label
+                        </option>
+                    }
+                </select>
+            </label>
+
+            <label>
+                <span>من</span>
+                <input type="date"
+                       name="FromDate"
+                       value="@(filter.FromDate?.ToString("yyyy-MM-dd", culture))" />
+            </label>
+
+            <label>
+                <span>إلى</span>
+                <input type="date"
+                       name="ToDate"
+                       value="@(filter.ToDate?.ToString("yyyy-MM-dd", culture))" />
+            </label>
+
+            <label>
+                <span>عدد النتائج</span>
+                <select name="PageSize">
+                    <option value="10"
+                            selected="@(transactionModel.PageSize == 10 ? "selected" : null)">10</option>
+                    <option value="25"
+                            selected="@(transactionModel.PageSize == 25 ? "selected" : null)">25</option>
+                    <option value="50"
+                            selected="@(transactionModel.PageSize == 50 ? "selected" : null)">50</option>
+                </select>
+            </label>
+
+            <input type="hidden"
+                   name="PageNumber"
+                   value="@transactionModel.PageNumber"
+                   data-balance-page-input />
+
+            <div class="owner-balance-center__filter-actions">
+                <button type="button"
+                        class="is-light"
+                        data-balance-clear-filter>
+                    <i class="bi bi-eraser"></i>
+                    مسح
+                </button>
+
+                <button type="submit">
+                    <i class="bi bi-arrow-repeat"></i>
+                    تطبيق
+                </button>
+            </div>
+
+        </form>
+
+        <div class="owner-balance-center__ledger-summary">
+
+            <article>
+                <span class="is-all"><i class="bi bi-list-check"></i></span>
+                <div>
+                    <small>إجمالي الحركات</small>
+                    <strong>@summary.RecordsCount.ToString("N0", culture)</strong>
+                </div>
+            </article>
+
+            <article>
+                <span class="is-pending"><i class="bi bi-hourglass-split"></i></span>
+                <div>
+                    <small>قيد الانتظار</small>
+                    <strong>@summary.PendingCount.ToString("N0", culture)</strong>
+                </div>
+            </article>
+
+            <article>
+                <span class="is-debt"><i class="bi bi-exclamation-diamond"></i></span>
+                <div>
+                    <small>دين منشأ</small>
+                    <strong>@Money(summary.DebtCreatedAmount)</strong>
+                </div>
+            </article>
+
+            <article>
+                <span class="is-paid"><i class="bi bi-check2-circle"></i></span>
+                <div>
+                    <small>دين مسدد</small>
+                    <strong>@Money(summary.DebtPaidAmount)</strong>
+                </div>
+            </article>
+
+        </div>
+
+        @if (transactions.Count > 0)
+        {
+            <div class="owner-balance-center__movement-list">
+
+                @foreach (var item in transactions)
+                {
+                    var tone = TransactionTone(item);
+                    var icon = TransactionIcon(item);
+
+                    <article class="owner-balance-center__movement-card @tone"
+                     data-balance-movement-card>
+
+                        <div class="owner-balance-center__movement-main">
+
+                            <span class="owner-balance-center__movement-icon">
+                                <i class="bi @icon"></i>
+                            </span>
+
+                            <div class="owner-balance-center__movement-copy">
+                                <div>
+                                    <strong>@item.TransactionTypeLabel</strong>
+
+                                    <span class="owner-balance-center__movement-status @StatusClass(item.Status)">
+                                        @item.StatusLabel
+                                    </span>
+                                </div>
+
+                                <p>
+                                    @if (item.HasBooking)
+                                    {
+                                        <span>
+                                            <i class="bi bi-receipt"></i>
+                                            حجز #@item.BookingId
+                                        </span>
+                                    }
+
+                                    @if (item.HasReference)
+                                    {
+                                        <span>
+                                            <i class="bi bi-hash"></i>
+                                            @item.ReferenceNumber
+                                        </span>
+                                    }
+
+                                    @if (!item.HasBooking && !item.HasReference)
+                                    {
+                                        <span>
+                                            <i class="bi bi-building"></i>
+                                            @item.PlaceName
+                                        </span>
+                                    }
+                                </p>
+
+                                <small>
+                                    <i class="bi bi-clock"></i>
+                                    @DateTimeText(item.EffectiveDate)
+                                </small>
+                            </div>
+
+                        </div>
+
+                        <div class="owner-balance-center__movement-amount">
+                            <small>المبلغ</small>
+                            <strong>@TransactionAmount(item)</strong>
+                        </div>
+
+                        <div class="owner-balance-center__movement-effect">
+
+                            @if (item.AvailableBalanceChange != 0m)
+                            {
+                                <span class="@(item.AvailableBalanceChange > 0m ? "is-up" : "is-down")">
+                                    <small>المتاح</small>
+                                    <strong>@SignedMoney(item.AvailableBalanceChange)</strong>
+                                </span>
+                            }
+
+                            @if (item.HeldBalanceChange != 0m)
+                            {
+                                <span class="@(item.HeldBalanceChange > 0m ? "is-held-up" : "is-held-down")">
+                                    <small>المحجوز</small>
+                                    <strong>@SignedMoney(item.HeldBalanceChange)</strong>
+                                </span>
+                            }
+
+                            @if (item.DebtChange != 0m)
+                            {
+                                <span class="@(item.DebtChange > 0m ? "is-debt-up" : "is-debt-down")">
+                                    <small>الدين</small>
+                                    <strong>@SignedMoney(item.DebtChange)</strong>
+                                </span>
+                            }
+
+                            @if (!item.HasBalanceEffect)
+                            {
+                                <span class="is-waiting">
+                                    <small>الأثر</small>
+                                    <strong>بانتظار المعالجة</strong>
+                                </span>
+                            }
+
+                        </div>
+
+                        <div class="owner-balance-center__movement-actions">
+
+                            <button type="button"
+                            data-balance-movement-details="@item.CommissionTransactionId">
+                                التفاصيل
+                                <i class="bi bi-arrow-left"></i>
+                            </button>
+
+                            @if (item.IsPending &&
+                           string.Equals(
+                           item.TransactionType,
+                           "TopUp",
+                           StringComparison.OrdinalIgnoreCase))
+                            {
+                                <button type="button"
+                            class="is-cancel"
+                            data-balance-cancel-topup="@item.CommissionTransactionId">
+                                    إلغاء الطلب
+                                </button>
+                            }
+
+                        </div>
+
+                    </article>
+
+                    <template data-balance-movement-template="@item.CommissionTransactionId">
+
+                        <div class="owner-balance-center__movement-details">
+
+                            <section class="owner-balance-center__detail-hero @tone">
+
+                                <span class="owner-balance-center__detail-icon">
+                                    <i class="bi @icon"></i>
+                                </span>
+
+                                <div>
+                                    <small>الحركة المالية</small>
+                                    <h3>@item.TransactionTypeLabel</h3>
+                                    <p>@DateTimeText(item.EffectiveDate)</p>
+                                </div>
+
+                                <div class="owner-balance-center__detail-amount">
+                                    <small>المبلغ</small>
+                                    <strong>@TransactionAmount(item)</strong>
+                                </div>
+
+                            </section>
+
+                            <div class="owner-balance-center__detail-grid">
+
+                                <section>
+                                    <header>
+                                        <span><i class="bi bi-info-circle"></i></span>
+                                        <div>
+                                            <small>التعريف</small>
+                                            <h4>بيانات الحركة</h4>
+                                        </div>
+                                    </header>
+
+                                    <dl>
+                                        <div>
+                                            <dt>الحالة</dt>
+                                            <dd>
+                                                <span class="owner-balance-center__movement-status @StatusClass(item.Status)">
+                                                    @item.StatusLabel
+                                                </span>
+                                            </dd>
+                                        </div>
+
+                                        <div>
+                                            <dt>المرجع</dt>
+                                            <dd dir="ltr">
+                                                @(item.HasReference ? item.ReferenceNumber : "—")
+                                            </dd>
+                                        </div>
+
+                                        <div>
+                                            <dt>الحجز</dt>
+                                            <dd>
+                                                @(item.HasBooking ? $"#{item.BookingId}" : "—")
+                                            </dd>
+                                        </div>
+
+                                        <div>
+                                            <dt>محفظة المنصة</dt>
+                                            <dd>
+                                                @(string.IsNullOrWhiteSpace(item.PlatformWalletName)
+                                                    ? "—"
+                                                    : item.PlatformWalletName)
+                                            </dd>
+                                        </div>
+                                    </dl>
+                                </section>
+
+                                <section>
+                                    <header>
+                                        <span><i class="bi bi-wallet2"></i></span>
+                                        <div>
+                                            <small>قبل وبعد</small>
+                                            <h4>أثر الحركة على الرصيد</h4>
+                                        </div>
+                                    </header>
+
+                                    <div class="owner-balance-center__before-after">
+
+                                        <article>
+                                            <small>المتاح</small>
+                                            <span>
+                                                <b>@Money(item.AvailableBalanceBefore)</b>
+                                                <i class="bi bi-arrow-left"></i>
+                                                <strong>@Money(item.AvailableBalanceAfter)</strong>
+                                            </span>
+                                        </article>
+
+                                        <article>
+                                            <small>المحجوز</small>
+                                            <span>
+                                                <b>@Money(item.HeldBalanceBefore)</b>
+                                                <i class="bi bi-arrow-left"></i>
+                                                <strong>@Money(item.HeldBalanceAfter)</strong>
+                                            </span>
+                                        </article>
+
+                                        <article>
+                                            <small>الدين</small>
+                                            <span>
+                                                <b>@Money(item.DebtBefore)</b>
+                                                <i class="bi bi-arrow-left"></i>
+                                                <strong>@Money(item.DebtAfter)</strong>
+                                            </span>
+                                        </article>
+
+                                    </div>
+                                </section>
+
+                            </div>
+
+                            @if (item.HasNotes ||
+                           item.HasReviewer ||
+                           item.HasRejectionReason ||
+                           item.HasReceipt)
+                            {
+                                <section class="owner-balance-center__detail-extra">
+
+                                    @if (item.HasReviewer)
+                                    {
+                                        <span>
+                                            <i class="bi bi-person-check"></i>
+                                            <small>المراجع</small>
+                                            <strong>
+                                                @(string.IsNullOrWhiteSpace(item.ReviewedByName)
+                                                    ? $"مستخدم #{item.ReviewedByUserId}"
+                                                    : item.ReviewedByName)
+                                            </strong>
+                                        </span>
+                                    }
+
+                                    @if (item.HasNotes)
+                                    {
+                                        <span>
+                                            <i class="bi bi-chat-left-text"></i>
+                                            <small>ملاحظة</small>
+                                            <strong>@item.Notes</strong>
+                                        </span>
+                                    }
+
+                                    @if (item.HasRejectionReason)
+                                    {
+                                        <span class="is-danger">
+                                            <i class="bi bi-x-circle"></i>
+                                            <small>سبب الرفض</small>
+                                            <strong>@item.RejectionReason</strong>
+                                        </span>
+                                    }
+
+                                    @if (item.HasReceipt)
+                                    {
+                                        <a href="@item.ReceiptImage"
+                           target="_blank"
+                           rel="noopener">
+                                            <i class="bi bi-image"></i>
+                                            فتح سند التحويل
+                                        </a>
+                                    }
+
+                                </section>
+                            }
+
+                        </div>
+
+                    </template>
+                }
+
+            </div>
+
+            <footer class="owner-balance-center__pager">
+
+                <span>
+                    عرض
+                    <strong>@transactionModel.FirstItemNumber–@transactionModel.LastItemNumber</strong>
+                    من
+                    <strong>@transactionModel.TotalCount</strong>
+                </span>
+
+                <div>
+                    <button type="button"
+                        data-balance-page="@(transactionModel.PageNumber - 1)"
+                        disabled="@(transactionModel.PageNumber <= 1 ? "disabled" : null)">
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+
+                    <span>
+                        صفحة
+                        <strong>@transactionModel.PageNumber</strong>
+                        من
+                        <strong>@Math.Max(1, transactionModel.TotalPages)</strong>
+                    </span>
+
+                    <button type="button"
+                        data-balance-page="@(transactionModel.PageNumber + 1)"
+                        disabled="@(transactionModel.PageNumber >= transactionModel.TotalPages ? "disabled" : null)">
+                        <i class="bi bi-chevron-left"></i>
+                    </button>
+                </div>
+
+            </footer>
+        }
+        else
+        {
+            <div class="owner-balance-center__ledger-empty">
+                <span><i class="bi bi-arrow-left-right"></i></span>
+                <strong>لا توجد حركات مالية</strong>
+                <p>ستظهر عمليات الشحن والعمولات والتسويات هنا.</p>
+
+                @if (hasFilters)
+                {
+                    <button type="button" data-balance-clear-filter>
+                        مسح الفلاتر
+                    </button>
+                }
+            </div>
+        }
+
+    </section>
+
+    <dialog class="owner-balance-center__topup-dialog"
+            data-balance-topup-dialog>
+
+        <form class="owner-balance-center__topup-shell"
+              method="post"
+              enctype="multipart/form-data"
+              data-balance-topup-form>
+
+            @Html.AntiForgeryToken()
+
+            <header class="owner-balance-center__dialog-header">
+
+                <div>
+                    <span class="owner-balance-center__dialog-icon">
+                        <i class="bi bi-wallet2"></i>
+                    </span>
+
+                    <div>
+                        <span class="owner-balance-center__dialog-kicker">
+                            <i class="bi bi-stars"></i>
+                            شحن آمن
+                        </span>
+
+                        <h2>شحن حساب العمولة</h2>
+
+                        <p>
+                            اختر حساب المنصة وأدخل بيانات الحوالة كما تظهر في السند.
+                        </p>
+                    </div>
+                </div>
+
+                <button type="button"
+                        data-balance-close-topup
+                        aria-label="إغلاق">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+
+            </header>
+
+            <div class="owner-balance-center__dialog-body"
+                 data-balance-dialog-scroll>
+
+                @if (account != null)
+                {
+                    <section class="owner-balance-center__topup-current">
+                        <span><i class="bi bi-shield-check"></i></span>
+
+                        <div>
+                            <small>الرصيد الحالي</small>
+                            <strong>@Money(account.AvailableBalance)</strong>
+                        </div>
+
+                        <div>
+                            <small>المنشأة</small>
+                            <strong>@account.PlaceName</strong>
+                        </div>
+                    </section>
+                }
+
+                <input type="hidden"
+                       name="PlaceId"
+                       value="@(account?.PlaceId ?? topUpModel.SelectedPlaceId ?? 0)" />
+
+                <section class="owner-balance-center__topup-stage">
+
+                    <header>
+                        <span>1</span>
+                        <div>
+                            <small>الخطوة الأولى</small>
+                            <h3>اختر حساب المنصة</h3>
+                        </div>
+                    </header>
+
+                    @if (wallets.Count > 0)
+                    {
+                        <div class="owner-balance-center__wallet-options">
+
+                            @foreach (var wallet in wallets)
+                            {
+                                <label class="owner-balance-center__wallet-option">
+                                    <input type="radio"
+                                   name="PlatformWalletId"
+                                   value="@wallet.PlatformWalletId"
+                                   required />
+
+                                    <span class="owner-balance-center__wallet-option-check">
+                                        <i class="bi bi-check-lg"></i>
+                                    </span>
+
+                                    <span class="owner-balance-center__wallet-option-logo">
+                                        @if (!string.IsNullOrWhiteSpace(wallet.LogoPath))
+                                        {
+                                            <img src="@wallet.LogoPath"
+                                     alt="@wallet.WalletName" />
+                                        }
+                                        else
+                                        {
+                                            <b>@WalletInitial(wallet.WalletName)</b>
+                                        }
+                                    </span>
+
+                                    <span class="owner-balance-center__wallet-option-copy">
+                                        <strong>@wallet.WalletName</strong>
+                                        <small>@wallet.BeneficiaryName</small>
+                                        <span dir="ltr">@wallet.AccountNumber</span>
+                                    </span>
+
+                                    @if (wallet.IsPrimary)
+                                    {
+                                        <em>
+                                            <i class="bi bi-stars"></i>
+                                            الأساسي
+                                        </em>
+                                    }
+
+                                    <button type="button"
+                                    data-balance-copy-account="@wallet.AccountNumber"
+                                    aria-label="نسخ رقم الحساب">
+                                        <i class="bi bi-copy"></i>
+                                    </button>
+                                </label>
+                            }
+
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="owner-balance-center__wallet-empty">
+                            <i class="bi bi-exclamation-circle"></i>
+                            لا توجد حسابات منصة متاحة للشحن حاليًا.
+                        </div>
+                    }
+
+                </section>
+
+                <section class="owner-balance-center__topup-stage">
+
+                    <header>
+                        <span>2</span>
+                        <div>
+                            <small>الخطوة الثانية</small>
+                            <h3>أدخل بيانات الحوالة</h3>
+                        </div>
+                    </header>
+
+                    <div class="owner-balance-center__topup-fields">
+
+                        <label>
+                            <span>مبلغ الشحن</span>
+                            <div class="owner-balance-center__money-input">
+                                <i class="bi bi-cash-stack"></i>
+                                <input type="number"
+                                       name="Amount"
+                                       min="@topUpModel.MinimumTopUpAmount.ToString(CultureInfo.InvariantCulture)"
+                                       step="0.01"
+                                       inputmode="decimal"
+                                       required />
+                                <em>@currency</em>
+                            </div>
+
+                            @if (topUpModel.MinimumTopUpAmount > 0m)
+                            {
+                                <small>
+                                    الحد الأدنى @Money(topUpModel.MinimumTopUpAmount)
+                                </small>
+                            }
+                        </label>
+
+                        <label>
+                            <span>رقم عملية التحويل</span>
+                            <div>
+                                <i class="bi bi-hash"></i>
+                                <input type="text"
+                                       name="ReferenceNumber"
+                                       maxlength="50"
+                                       minlength="4"
+                                       pattern="[A-Za-z0-9/-]{4,50}"
+                                       autocomplete="off"
+                                       placeholder="مثال: TRX-845721"
+                                       required />
+                            </div>
+                            <small>حروف إنجليزية وأرقام و - أو / فقط</small>
+                        </label>
+
+                        <label>
+                            <span>تاريخ ووقت التحويل</span>
+                            <div>
+                                <i class="bi bi-calendar2-check"></i>
+                                <input type="datetime-local"
+                                       name="TransferDate"
+                                       required />
+                            </div>
+                        </label>
+
+                    </div>
+
+                </section>
+
+                <section class="owner-balance-center__topup-stage">
+
+                    <header>
+                        <span>3</span>
+                        <div>
+                            <small>الخطوة الثالثة</small>
+                            <h3>أرفق سند التحويل</h3>
+                        </div>
+                    </header>
+
+                    <label class="owner-balance-center__receipt-drop"
+                           data-balance-receipt-drop>
+                        <input type="file"
+                               name="receiptFile"
+                               accept=".jpg,.jpeg,.png,.webp,.pdf"
+                               required />
+
+                        <span class="owner-balance-center__receipt-icon">
+                            <i class="bi bi-cloud-arrow-up"></i>
+                        </span>
+
+                        <strong data-balance-receipt-title>
+                            اسحب السند هنا أو اضغط للاختيار
+                        </strong>
+
+                        <small data-balance-receipt-subtitle>
+                            JPG, PNG, WEBP أو PDF — حتى 5 MB
+                        </small>
+
+                        <em>اختيار الملف</em>
+                    </label>
+
+                    <label class="owner-balance-center__notes">
+                        <span>
+                            ملاحظة
+                            <em>اختياري</em>
+                        </span>
+
+                        <textarea name="Notes"
+                                  maxlength="2000"
+                                  rows="3"
+                                  placeholder="أي ملاحظة تساعد الإدارة في مراجعة التحويل..."></textarea>
+                    </label>
+
+                </section>
+
+                <div class="owner-balance-center__form-message"
+                     data-balance-topup-message
+                     role="alert"></div>
+
+            </div>
+
+            <footer class="owner-balance-center__dialog-footer">
+
+                <div>
+                    <i class="bi bi-shield-check"></i>
+                    <span>
+                        إرسال الطلب لا يضيف الرصيد مباشرة؛
+                        تتم الإضافة بعد مراجعة الإدارة.
+                    </span>
+                </div>
+
+                <div>
+                    <button type="button"
+                            class="is-light"
+                            data-balance-close-topup>
+                        إلغاء
+                    </button>
+
+                    <button type="submit"
+                            data-balance-submit-topup
+                            @(wallets.Count == 0 ? "disabled" : null)>
+                        <i class="bi bi-send-check"></i>
+                        إرسال طلب الشحن
+                    </button>
+                </div>
+
+            </footer>
+
+        </form>
+
+    </dialog>
+
+    <dialog class="owner-balance-center__movement-dialog"
+            data-balance-movement-dialog>
+
+        <div class="owner-balance-center__movement-dialog-shell">
+
+            <header class="owner-balance-center__dialog-header">
+
+                <div>
+                    <span class="owner-balance-center__dialog-icon is-movement">
+                        <i class="bi bi-arrow-left-right"></i>
+                    </span>
+
+                    <div>
+                        <span class="owner-balance-center__dialog-kicker">
+                            <i class="bi bi-stars"></i>
+                            أثر مالي كامل
+                        </span>
+
+                        <h2>تفاصيل الحركة</h2>
+
+                        <p>
+                            راجع المبلغ والمرجع والأثر على الرصيد قبل وبعد.
+                        </p>
+                    </div>
+                </div>
+
+                <button type="button"
+                        data-balance-close-movement
+                        aria-label="إغلاق">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+
+            </header>
+
+            <div class="owner-balance-center__movement-dialog-body"
+                 data-balance-movement-content>
+            </div>
+
+        </div>
+
+    </dialog>
+
+</section>

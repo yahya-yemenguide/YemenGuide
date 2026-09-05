@@ -1,0 +1,116 @@
+@* OWNER_LAYOUT_V3_20260816_1751 *@
+@using System.Globalization
+@inject YemenGuide.Data.AppDbContext _context
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+
+@{
+    // --- جلب الإعدادات من قاعدة البيانات ---
+    var settings = _context.SystemSettings.FirstOrDefault();
+    string siteName = settings?.SiteName ?? "YemenGuide";
+    string siteDesc = settings?.SiteDescription ?? "لوحة تحكم المالك";
+    string favicon = settings?.FaviconPath ?? "/favicon.ico";
+    var isRtl = CultureInfo.CurrentCulture.TextInfo.IsRightToLeft;
+    var direction = isRtl ? "rtl" : "ltr";
+    var langCode = CultureInfo.CurrentCulture.Name;
+
+    var bootstrapCss = isRtl ? "bootstrap.rtl.min.css" : "bootstrap.min.css";
+
+    var uId = User.Identity?.IsAuthenticated == true
+        ? User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "0"
+        : "0";
+}
+
+<!DOCTYPE html>
+<html lang="@langCode" dir="@direction">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - لوحة المالك | @siteName</title>
+    <meta name="description" content="@siteDesc" />
+    <link rel="icon" type="image/x-icon" href="@favicon" />
+
+    <link rel="stylesheet" href="~/lib/bootstrap/css/@bootstrapCss" />
+    <link rel="stylesheet" href="~/lib/bootstrap-icons/bootstrap-icons.css" />
+
+    <link rel="stylesheet" href="~/css/shared/fonts.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/shared/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/owner/owner-layout.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/owner/owner-dark-theme.css" asp-append-version="true" />
+
+    @if (!isRtl)
+    {
+        <link rel="stylesheet" href="~/css/shared/_Admin_OwnerLayout.ltr.css" asp-append-version="true" />
+    }
+
+    @await RenderSectionAsync("Styles", required: false)
+
+    @* ملفات الهوية المشتركة تُحمّل بعد CSS الخاص بالصفحة حتى تكون هي المرجع النهائي. *@
+    <link rel="stylesheet" href="~/css/shared/theme.css" asp-append-version="true" />
+
+    @* CSS الخاص بالصفحة يأتي بعد الهوية العامة، وقبل ملف التبويبات الموحد. *@
+    @await RenderSectionAsync("PageStyles", required: false)
+
+    @* آخر ملف CSS عمدًا: يوحّد شكل التبويبات حتى لا تعيد كل صفحة تعريفه. *@
+    <link rel="stylesheet" href="~/css/shared/unified-tabs.css" asp-append-version="true" />
+</head>
+<body class="dashboard-body yg-living-luxe-v4">
+
+    <script>
+        (function () {
+            const isDark = document.cookie.includes('darkMode=enabled');
+            localStorage.removeItem('darkMode');
+
+            if (isDark) {
+                document.body.classList.add('dark-mode');
+            }
+        })();
+    </script>
+    <div class="dashboard-wrapper">
+
+        <partial name="~/Areas/Owner/Views/Shared/_HeaderOwner.cshtml" />
+
+        <div class="dashboard-main" style="padding-top: var(--topbar-height) !important;min-height: 100vh;">
+
+            <main class="dashboard-content">
+                <div class="container-fluid">
+                    @RenderBody()
+                </div>
+            </main>
+
+        </div>
+
+    </div>
+
+    <script src="~/lib/jquery/jquery-4.0.0.min.js"></script>
+    <script src="~/lib/bootstrap/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        window.currentUserId = '@uId';
+    </script>
+
+    <!-- جميع وظائف تخطيط المالك واختيار المنشأة أصبحت مستقلة هنا -->
+    <script src="~/js/owner/owner-layout.js" asp-append-version="true"></script>
+    <script src="~/js/shared/unified-tabs.js" asp-append-version="true"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            var langSelect = document.getElementById('languageSelect');
+            if (langSelect) {
+                langSelect.addEventListener('change', function () {
+                    var selectedLang = this.value;
+                    var cookieValue = "c=" + selectedLang + "|uic=" + selectedLang;
+                    var date = new Date();
+                    date.setTime(date.getTime() + (365 * 24 * 60 * 60 * 1000));
+                    document.cookie = ".AspNetCore.Culture=" + encodeURIComponent(cookieValue) + "; expires=" + date.toUTCString() + "; path=/";
+                    window.location.reload();
+                });
+            }
+        });
+    </script>
+
+    @await RenderSectionAsync("Scripts", required: false)
+    <script src="https://maps.googleapis.com/maps/api/js?key=@Configuration["GoogleMaps:ApiKey"]&libraries=places&language=ar&region=YE"></script>
+
+
+</body>
+</html>

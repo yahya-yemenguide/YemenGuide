@@ -1,0 +1,218 @@
+﻿@{
+    Layout = null;
+    ViewData["Title"] = "تسجيل الدخول / إنشاء حساب";
+    string roleParam = Context.Request.Query["role"].ToString();
+    bool isOwner = (roleParam == "owner");
+}
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@ViewData["Title"] - دليلك اليمني</title>
+
+    <link rel="stylesheet" href="~/lib/bootstrap-icons/bootstrap-icons.min.css" asp-append-version="true">
+
+    <link rel="preload" href="~/lib/fonts/Tajawal/Tajawal-Regular.ttf" as="font" type="font/ttf" crossorigin>
+    <link rel="preload" href="~/lib/fonts/Tajawal/Tajawal-Bold.ttf" as="font" type="font/ttf" crossorigin>
+
+    <link rel="stylesheet" href="~/css/shared/login.css" asp-append-version="true">
+
+    <style>
+        .name-grid {
+            display: flex;
+            gap: 12px; /* تقليل المسافة قليلاً لتكون أرقى */
+            margin-bottom: 8px;
+        }
+
+            .name-grid .input-box {
+                margin-bottom: 0 !important;
+                margin-top: 0 !important;
+                flex: 1;
+                width: 100%;
+            }
+
+        @@media (max-width: 500px) {
+            .name-grid {
+                flex-direction: column;
+                gap: 8px;
+            }
+        }
+    </style>
+
+</head>
+<body class="auth-premium-page">
+
+    <div class="auth-ambient" aria-hidden="true">
+        <span class="auth-ambient-orb auth-ambient-orb--cyan"></span>
+        <span class="auth-ambient-orb auth-ambient-orb--coral"></span>
+        <span class="auth-ambient-orb auth-ambient-orb--pearl"></span>
+    </div>
+
+    <div class="container auth-premium-shell @(isOwner ? "active" : "")">
+
+        <div class="form-box login">
+            <form id="ajaxLoginForm">
+                @Html.AntiForgeryToken()
+
+                <h1 style="--d: 0.1s;">تسجيل الدخول</h1>
+
+                <div id="loginErrorMessage" class="alert-danger" style="display: none; background-color: #f8d7da; color: #721c24; border-radius: 8px; padding: 10px; margin-bottom: 12px; font-size: 0.85rem; font-weight: bold; --d: 0.15s;">
+                    <i class="bi bi-exclamation-triangle-fill me-1"></i> <span id="errorText"></span>
+                </div>
+
+                <div class="input-box" style="--d: 0.2s;">
+                    <input type="text" name="emailOrUsername" placeholder="البريد الإلكتروني أو اسم المستخدم" required>
+                    <i class='bi bi-person-badge-fill'></i>
+                </div>
+
+                <div class="input-box password-box" style="--d: 0.3s;">
+                    <input type="password" name="password" placeholder="كلمة المرور" required>
+                    <i class='bi bi-eye-slash-fill toggle-password' style="cursor: pointer; pointer-events: auto;"></i>
+                </div>
+
+                <div class="form-options" style="--d: 0.4s;">
+                    <label class="remember-me">
+                        <input type="checkbox" name="rememberMe">
+                        <span>ذكرني على هذا الجهاز</span>
+                    </label>
+                    <div class="forgot-link">
+                        <a href="/Account/ForgotPassword">هل نسيت كلمة المرور؟</a>
+
+                    </div>
+                </div>
+
+                <button type="submit" class="btn" style="--d: 0.5s;">تسجيل الدخول</button>
+
+                <div class="social-login" style="--d: 0.55s;">
+                    <p>أو الدخول بواسطة</p>
+                    <a href="/Account/GoogleLogin" class="google-btn">
+                        <i class='bi bi-google'></i> جوجل
+                    </a>
+                </div>
+
+                <div class="logreg-link" style="--d: 0.6s;">
+                    <p>ليس لديك حساب؟ <a href="#" id="signUpLink">إنشاء حساب</a></p>
+                </div>
+
+                <div class="return-home" style="--d: 0.7s;">
+                    <a href="/"><i class="bi bi-house-door-fill"></i> العودة للرئيسية</a>
+                </div>
+
+            </form>
+        </div>
+
+        <div class="form-box register">
+            <form id="ajaxRegisterForm">
+                @Html.AntiForgeryToken()
+
+                <h1 style="--d: 0.1s;">إنشاء حساب</h1>
+
+                <div class="name-grid" style="--d: 0.2s;">
+                    <div class="input-box">
+                        <input type="text" name="firstName" placeholder="الاسم الأول" required>
+                        <i class='bi bi-person'></i>
+                    </div>
+                    <div class="input-box">
+                        <input type="text" name="lastName" placeholder="اللقب" required>
+                        <i class='bi bi-people'></i>
+                    </div>
+                </div>
+
+                <div class="input-box" style="--d: 0.3s;">
+                    <input type="email" id="regEmail" name="contactInfo" placeholder="البريد الإلكتروني" required>
+                    <i class='bi bi-envelope-fill'></i>
+                </div>
+                <div id="emailError" class="error-text"></div>
+
+                <div class="input-box" style="--d: 0.4s;">
+                    <input type="text" id="regUsername" name="username" placeholder="اسم المستخدم" required>
+                    <i class='bi bi-person-badge-fill'></i>
+                </div>
+                <div id="usernameError" class="error-text"></div>
+
+                <div class="input-box password-box" style="--d: 0.5s;">
+                    <input type="password" name="password" id="regPassword" placeholder="كلمة المرور" required>
+                    <i class='bi bi-eye-slash-fill toggle-password' style="cursor: pointer; pointer-events: auto;"></i>
+                </div>
+                <div class="role-selection" style="--d: 0.6s;">
+                    <label class="role-option">
+                        <input type="radio" name="role" value="Customer" @(!isOwner ? "checked" : "")>
+                        <span class="role-label">
+                            <i class="bi bi-person"></i>
+                            <span>عميل</span>
+                        </span>
+                    </label>
+                    <label class="role-option">
+                        <input type="radio" name="role" value="Owner" @(isOwner ? "checked" : "")>
+                        <span class="role-label">
+                            <i class="bi bi-building"></i>
+                            <span>مالك منشأة</span>
+                        </span>
+                    </label>
+                </div>
+
+                <button type="submit" class="btn" style="--d: 0.7s;">إنشاء الحساب</button>
+
+                <div class="social-login" style="--d: 0.8s;">
+                    <p>أو سجل بواسطة</p>
+                    <a href="/Account/GoogleLogin" class="google-btn">
+                        <i class='bi bi-google'></i> جوجل
+                    </a>
+                </div>
+
+                <div class="logreg-link" style="--d: 0.9s;">
+                    <p>لديك حساب بالفعل؟ <a href="#" id="signInLink">تسجيل الدخول</a></p>
+                </div>
+
+                <div class="return-home" style="--d: 1s;">
+                    <a href="/"><i class="bi bi-house-door-fill"></i> العودة للرئيسية</a>
+                </div>
+
+            </form>
+        </div>
+
+
+        <div class="toggle-box">
+
+            <div class="toggle-panel toggle-right">
+                <div class="panel-cinematic-art" aria-hidden="true">
+                    <span class="cinematic-ring cinematic-ring--outer"></span>
+                    <span class="cinematic-ring cinematic-ring--inner"></span>
+                    <span class="cinematic-glow"></span>
+                </div>
+                <h1 style="--d: 0.1s;">أهلاً بك معنا!</h1>
+                <p style="--d: 0.2s;">انضم لمجتمع دليلك اليمني وابدأ رحلتك في استكشاف أجمل الأماكن.</p>
+                <div class="journey-signature" aria-hidden="true">
+                    <span class="journey-node"></span>
+                    <span class="journey-track"><span class="journey-runner"></span></span>
+                    <span class="journey-node journey-node--accent"></span>
+                </div>
+            </div>
+
+            <div class="toggle-panel toggle-left">
+                <div class="panel-cinematic-art" aria-hidden="true">
+                    <span class="cinematic-ring cinematic-ring--outer"></span>
+                    <span class="cinematic-ring cinematic-ring--inner"></span>
+                    <span class="cinematic-glow"></span>
+                </div>
+                <h1 style="--d: 0.1s;">مرحباً بعودتك!</h1>
+                <p style="--d: 0.2s;">سجل دخولك الآن واكتشف أرقى الوجهات في العاصمة صنعاء.</p>
+                <div class="journey-signature" aria-hidden="true">
+                    <span class="journey-node"></span>
+                    <span class="journey-track"><span class="journey-runner"></span></span>
+                    <span class="journey-node journey-node--accent"></span>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="~/js/shared/login.js" asp-append-version="true"></script>
+
+</body>
+</html>

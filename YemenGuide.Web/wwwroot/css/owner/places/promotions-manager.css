@@ -1,0 +1,3533 @@
+/* ============================================================================
+ * YemenGuide - العروض والخصومات
+ * إعادة بناء كاملة لتبويب المالك
+ * الهوية: أبيض + سماوي #00A6DA + كورال #FF5A5F
+ * الكحلي لا يستخدم كمساحة داخلية كبيرة؛ يبقى للنصوص الداكنة فقط عند الحاجة.
+ * ========================================================================== */
+
+.yg-promo-manager {
+    --promo-primary: #00A6DA;
+    --promo-primary-dark: #008FBE;
+    --promo-primary-soft: #EAF8FD;
+    --promo-primary-faint: rgba(0, 166, 218, 0.07);
+    --promo-coral: #FF5A5F;
+    --promo-coral-dark: #E94C52;
+    --promo-coral-soft: #FFF0F1;
+    --promo-green: #20A977;
+    --promo-green-soft: #ECF9F4;
+    --promo-amber: #F5A623;
+    --promo-amber-soft: #FFF8E8;
+    --promo-violet: #7A70E8;
+    --promo-violet-soft: #F2F0FF;
+    --promo-text: #263D50;
+    --promo-text-soft: #52677A;
+    --promo-muted: #7D8FA2;
+    --promo-line: #E3EDF4;
+    --promo-surface: #FFFFFF;
+    --promo-page-soft: #F7FBFD;
+    --promo-shadow-sm: 0 8px 24px rgba(28, 79, 106, 0.055);
+    --promo-shadow-md: 0 18px 46px rgba(28, 79, 106, 0.08);
+    width: 100%;
+    min-width: 0;
+    color: var(--promo-text);
+    direction: rtl;
+    font-family: "Tajawal", sans-serif;
+}
+
+    .yg-promo-manager *,
+    .yg-promo-manager *::before,
+    .yg-promo-manager *::after {
+        box-sizing: border-box;
+    }
+
+    .yg-promo-manager button,
+    .yg-promo-manager input,
+    .yg-promo-manager textarea,
+    .yg-promo-manager select {
+        font: inherit;
+    }
+
+    .yg-promo-manager button {
+        cursor: pointer;
+    }
+
+    .yg-promo-manager [hidden] {
+        display: none !important;
+    }
+
+/* ============================================================================
+ * رأس التبويب - بسيط مثل بقية إدارة المنشأة، بدون بطاقة اسم المنشأة أو خلفيتها
+ * ========================================================================== */
+
+.yg-promo-page-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 16px;
+    padding: 20px 22px;
+    background: var(--promo-surface);
+    border: 1px solid var(--promo-line);
+    border-radius: 22px;
+    box-shadow: var(--promo-shadow-sm);
+}
+
+.yg-promo-page-head__copy {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-width: 0;
+}
+
+.yg-promo-page-head__icon {
+    display: grid;
+    place-items: center;
+    flex: 0 0 50px;
+    width: 50px;
+    height: 50px;
+    color: var(--promo-primary);
+    background: var(--promo-primary-soft);
+    border: 1px solid rgba(0, 166, 218, 0.12);
+    border-radius: 15px;
+    font-size: 1.25rem;
+}
+
+.yg-promo-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+    color: var(--promo-primary-dark);
+    font-size: 0.74rem;
+    font-weight: 900;
+}
+
+.yg-promo-page-head h2 {
+    margin: 0 0 4px;
+    color: var(--promo-text);
+    font-size: clamp(1.3rem, 2vw, 1.75rem);
+    font-weight: 950;
+    line-height: 1.35;
+}
+
+.yg-promo-page-head p {
+    max-width: 760px;
+    margin: 0;
+    color: var(--promo-muted);
+    font-size: 0.87rem;
+    font-weight: 650;
+    line-height: 1.75;
+}
+
+.yg-promo-cta,
+.yg-promo-publish {
+    appearance: none;
+    border: 0;
+    color: #fff;
+    background: linear-gradient(135deg, var(--promo-coral), #FF714E);
+    box-shadow: 0 12px 24px rgba(255, 90, 95, 0.24);
+}
+
+.yg-promo-cta {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    gap: 8px;
+    min-height: 46px;
+    padding: 0 18px;
+    border-radius: 14px;
+    font-size: 0.86rem;
+    font-weight: 900;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+
+    .yg-promo-cta:hover,
+    .yg-promo-publish:hover {
+        transform: translateY(-1px);
+        filter: saturate(1.05);
+        box-shadow: 0 15px 28px rgba(255, 90, 95, 0.29);
+    }
+
+    .yg-promo-cta:focus-visible,
+    .yg-promo-publish:focus-visible {
+        outline: 3px solid rgba(255, 90, 95, 0.2);
+        outline-offset: 2px;
+    }
+
+/* ============================================================================
+ * الإحصاءات
+ * ========================================================================== */
+
+.yg-promo-stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+    .yg-promo-stats article {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+        min-height: 82px;
+        padding: 14px 16px;
+        background: var(--promo-surface);
+        border: 1px solid var(--promo-line);
+        border-radius: 18px;
+        box-shadow: 0 7px 22px rgba(28, 79, 106, 0.04);
+    }
+
+.yg-promo-stat-icon {
+    display: grid;
+    place-items: center;
+    flex: 0 0 42px;
+    width: 42px;
+    height: 42px;
+    border-radius: 13px;
+    font-size: 1rem;
+}
+
+    .yg-promo-stat-icon.is-active {
+        color: var(--promo-green);
+        background: var(--promo-green-soft);
+    }
+
+    .yg-promo-stat-icon.is-scheduled {
+        color: var(--promo-primary);
+        background: var(--promo-primary-soft);
+    }
+
+    .yg-promo-stat-icon.is-draft {
+        color: var(--promo-violet);
+        background: var(--promo-violet-soft);
+    }
+
+    .yg-promo-stat-icon.is-archived {
+        color: #7D8A98;
+        background: #F1F4F7;
+    }
+
+.yg-promo-stats article div {
+    min-width: 0;
+}
+
+.yg-promo-stats b {
+    display: block;
+    margin-bottom: 2px;
+    color: var(--promo-text);
+    font-size: 1.25rem;
+    font-weight: 950;
+}
+
+.yg-promo-stats small {
+    display: block;
+    color: var(--promo-muted);
+    font-size: 0.76rem;
+    font-weight: 750;
+}
+
+/* ============================================================================
+ * التبويبات الفرعية - نفس روح تبويبات إدارة المنشأة الموحدة
+ * ========================================================================== */
+
+.yg-promo-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 320px);
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 18px;
+}
+
+.yg-promo-tabs {
+    display: flex;
+    align-items: stretch;
+    gap: 0.5rem;
+    min-width: 0;
+    padding: 0.5rem;
+    background: var(--promo-surface);
+    border: 1px solid var(--promo-line);
+    border-radius: 18px;
+    box-shadow: var(--promo-shadow-sm);
+}
+
+    .yg-promo-tabs button {
+        appearance: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: 1 1 0;
+        min-width: 0;
+        min-height: 52px;
+        gap: 7px;
+        padding: 0.55rem 0.7rem;
+        color: var(--promo-text-soft);
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: 13px;
+        font-size: 0.82rem;
+        font-weight: 850;
+        transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+        .yg-promo-tabs button:hover {
+            color: var(--promo-primary-dark);
+            background: var(--promo-primary-faint);
+            border-color: rgba(0, 166, 218, 0.1);
+            transform: translateY(-1px);
+        }
+
+        .yg-promo-tabs button.is-active {
+            color: #fff;
+            background: linear-gradient(135deg, #08A9DA, #0097C8);
+            border-color: transparent;
+            box-shadow: 0 10px 24px rgba(0, 166, 218, 0.22);
+        }
+
+.yg-promo-tab-icon {
+    display: grid;
+    place-items: center;
+    flex: 0 0 31px;
+    width: 31px;
+    height: 31px;
+    color: var(--promo-primary);
+    background: var(--promo-primary-soft);
+    border-radius: 9px;
+    transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.yg-promo-tabs button.is-active .yg-promo-tab-icon {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.17);
+}
+
+.yg-promo-tab-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.yg-promo-tabs b {
+    display: inline-grid;
+    place-items: center;
+    min-width: 24px;
+    height: 24px;
+    padding: 0 6px;
+    color: var(--promo-primary-dark);
+    background: var(--promo-primary-soft);
+    border-radius: 999px;
+    font-size: 0.72rem;
+}
+
+.yg-promo-tabs button.is-active b {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.18);
+}
+
+.yg-promo-search {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-height: 56px;
+    padding: 0 14px;
+    background: var(--promo-surface);
+    border: 1px solid var(--promo-line);
+    border-radius: 16px;
+    box-shadow: var(--promo-shadow-sm);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+    .yg-promo-search:focus-within {
+        border-color: rgba(0, 166, 218, 0.42);
+        box-shadow: 0 0 0 4px rgba(0, 166, 218, 0.08);
+    }
+
+    .yg-promo-search i {
+        color: var(--promo-primary);
+        font-size: 1rem;
+    }
+
+    .yg-promo-search input {
+        width: 100%;
+        min-width: 0;
+        color: var(--promo-text);
+        background: transparent;
+        border: 0;
+        outline: 0;
+        font-size: 0.83rem;
+        font-weight: 700;
+    }
+
+        .yg-promo-search input::placeholder {
+            color: #9AABBA;
+        }
+
+/* ============================================================================
+ * بطاقات العروض
+ * ========================================================================== */
+
+.yg-promo-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+}
+
+@media (max-width: 1200px) {
+    .yg-promo-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 700px) {
+    .yg-promo-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.yg-promo-card {
+    min-width: 0;
+    overflow: hidden;
+    background: var(--promo-surface);
+    border: 1px solid var(--promo-line);
+    border-radius: 22px;
+    box-shadow: var(--promo-shadow-sm);
+    transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+}
+
+    .yg-promo-card:hover {
+        transform: translateY(-2px);
+        border-color: rgba(0, 166, 218, 0.18);
+        box-shadow: var(--promo-shadow-md);
+    }
+
+.yg-promo-card__media {
+    position: relative;
+    height: 172px;
+    overflow: hidden;
+    background: linear-gradient(135deg, #F1FAFD, #F8FCFE);
+}
+
+    .yg-promo-card__media > img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+
+    .yg-promo-card__media::after {
+        content: "";
+        position: absolute;
+        inset: auto 0 0;
+        height: 56px;
+        pointer-events: none;
+        background: linear-gradient(to top, rgba(20, 48, 68, 0.16), transparent);
+    }
+
+.yg-promo-card__placeholder {
+    display: grid;
+    place-items: center;
+    align-content: center;
+    gap: 6px;
+    width: 100%;
+    height: 100%;
+    color: var(--promo-primary);
+    background: radial-gradient(circle at 20% 20%, rgba(0, 166, 218, 0.14), transparent 30%), linear-gradient(135deg, #F7FCFE, #ECF8FC);
+}
+
+    .yg-promo-card__placeholder i {
+        font-size: 2.1rem;
+    }
+
+    .yg-promo-card__placeholder span {
+        color: var(--promo-primary-dark);
+        font-size: 0.76rem;
+        font-weight: 850;
+    }
+
+.yg-promo-status {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    min-height: 30px;
+    padding: 0 10px;
+    border: 1px solid rgba(255, 255, 255, 0.7);
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 900;
+    backdrop-filter: blur(12px);
+}
+
+    .yg-promo-status.is-active {
+        color: #137B59;
+        background: rgba(236, 249, 244, 0.94);
+    }
+
+    .yg-promo-status.is-scheduled {
+        color: #087EA5;
+        background: rgba(234, 248, 253, 0.95);
+    }
+
+    .yg-promo-status.is-draft {
+        color: #6559C8;
+        background: rgba(242, 240, 255, 0.95);
+    }
+
+    .yg-promo-status.is-paused,
+    .yg-promo-status.is-expired,
+    .yg-promo-status.is-cancelled {
+        color: #6F7B87;
+        background: rgba(245, 247, 249, 0.95);
+    }
+
+.yg-promo-discount {
+    position: absolute;
+    left: 12px;
+    bottom: 12px;
+    z-index: 2;
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    min-height: 42px;
+    padding: 7px 12px;
+    color: #fff;
+    background: linear-gradient(135deg, var(--promo-coral), #FF744D);
+    border-radius: 13px;
+    box-shadow: 0 9px 22px rgba(255, 90, 95, 0.25);
+}
+
+    .yg-promo-discount strong {
+        font-size: 1.15rem;
+        font-weight: 950;
+    }
+
+    .yg-promo-discount small {
+        font-size: 0.69rem;
+        font-weight: 850;
+    }
+
+.yg-promo-card__body {
+    padding: 17px;
+}
+
+.yg-promo-card__heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 13px;
+}
+
+    .yg-promo-card__heading > div {
+        min-width: 0;
+    }
+
+    .yg-promo-card__heading h3 {
+        margin: 0 0 4px;
+        color: var(--promo-text);
+        font-size: 1rem;
+        font-weight: 950;
+        line-height: 1.45;
+        overflow-wrap: anywhere;
+    }
+
+    .yg-promo-card__heading p {
+        margin: 0;
+        color: var(--promo-muted);
+        font-size: 0.76rem;
+        font-weight: 650;
+        line-height: 1.65;
+    }
+
+.yg-promo-target-icon {
+    display: grid;
+    place-items: center;
+    flex: 0 0 36px;
+    width: 36px;
+    height: 36px;
+    color: var(--promo-primary);
+    background: var(--promo-primary-soft);
+    border-radius: 11px;
+}
+
+.yg-promo-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin-bottom: 13px;
+}
+
+    .yg-promo-meta > span {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-height: 30px;
+        padding: 5px 9px;
+        color: var(--promo-text-soft);
+        background: var(--promo-page-soft);
+        border: 1px solid #EDF3F7;
+        border-radius: 10px;
+        font-size: 0.68rem;
+        font-weight: 760;
+    }
+
+    .yg-promo-meta i {
+        color: var(--promo-primary);
+    }
+
+.yg-promo-code {
+    direction: ltr;
+    letter-spacing: 0.04em;
+}
+
+.yg-promo-usage {
+    margin: 11px 0 14px;
+    padding: 10px 11px;
+    background: #FAFCFD;
+    border: 1px solid #EDF3F6;
+    border-radius: 12px;
+}
+
+    .yg-promo-usage > div {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 7px;
+        color: var(--promo-muted);
+        font-size: 0.69rem;
+        font-weight: 750;
+    }
+
+    .yg-promo-usage b {
+        color: var(--promo-text);
+    }
+
+.yg-promo-usage__bar {
+    display: block;
+    width: 100%;
+    height: 6px;
+    overflow: hidden;
+    background: #EAF0F4;
+    border-radius: 999px;
+}
+
+    .yg-promo-usage__bar i {
+        display: block;
+        height: 100%;
+        background: linear-gradient(90deg, var(--promo-primary), #32C2E7);
+        border-radius: inherit;
+    }
+
+.yg-promo-card__actions {
+    display: flex;
+    gap: 8px;
+    padding-top: 12px;
+    border-top: 1px solid #EEF3F6;
+}
+
+.yg-promo-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1 1 0;
+    gap: 6px;
+    min-height: 38px;
+    padding: 0 10px;
+    color: var(--promo-primary-dark);
+    background: var(--promo-primary-soft);
+    border: 1px solid rgba(0, 166, 218, 0.08);
+    border-radius: 11px;
+    font-size: 0.72rem;
+    font-weight: 850;
+    transition: transform 0.18s ease, background-color 0.18s ease, border-color 0.18s ease;
+}
+
+    .yg-promo-action:hover {
+        transform: translateY(-1px);
+        background: #DFF4FB;
+        border-color: rgba(0, 166, 218, 0.16);
+    }
+
+    .yg-promo-action.is-danger {
+        color: #D94E54;
+        background: var(--promo-coral-soft);
+        border-color: rgba(255, 90, 95, 0.1);
+    }
+
+        .yg-promo-action.is-danger:hover {
+            background: #FFE7E9;
+            border-color: rgba(255, 90, 95, 0.18);
+        }
+
+    .yg-promo-action:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+        transform: none;
+    }
+
+/* ============================================================================
+ * حالات الفراغ
+ * ========================================================================== */
+
+.yg-promo-empty,
+.yg-promo-no-place {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 320px;
+    padding: 34px 20px;
+    text-align: center;
+    background: var(--promo-surface);
+    border: 1px dashed #CFE3ED;
+    border-radius: 22px;
+}
+
+.yg-promo-empty__icon,
+.yg-promo-no-place__icon {
+    display: grid;
+    place-items: center;
+    width: 62px;
+    height: 62px;
+    margin-bottom: 12px;
+    color: var(--promo-primary);
+    background: var(--promo-primary-soft);
+    border-radius: 19px;
+    font-size: 1.45rem;
+}
+
+.yg-promo-no-place__eyebrow {
+    margin-bottom: 5px;
+    color: var(--promo-primary-dark);
+    font-size: 0.75rem;
+    font-weight: 900;
+}
+
+.yg-promo-empty h3,
+.yg-promo-no-place h3 {
+    margin: 0 0 7px;
+    color: var(--promo-text);
+    font-size: 1.08rem;
+    font-weight: 950;
+}
+
+.yg-promo-empty p,
+.yg-promo-no-place p {
+    max-width: 590px;
+    margin: 0;
+    color: var(--promo-muted);
+    font-size: 0.81rem;
+    font-weight: 650;
+    line-height: 1.8;
+}
+
+.yg-promo-secondary-cta {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    min-height: 40px;
+    margin-top: 14px;
+    padding: 0 14px;
+    color: var(--promo-primary-dark);
+    background: var(--promo-primary-soft);
+    border: 1px solid rgba(0, 166, 218, 0.12);
+    border-radius: 11px;
+    font-size: 0.75rem;
+    font-weight: 850;
+}
+
+/* ============================================================================
+ * SweetAlert2 - نافذة إنشاء/تعديل العرض
+ * ========================================================================== */
+
+.swal2-popup.yg-promo-swal-popup {
+    width: min(980px, calc(100vw - 24px)) !important;
+    max-width: 980px !important;
+    max-height: calc(100dvh - 24px) !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    background: #fff !important;
+    border: 1px solid rgba(0, 166, 218, 0.12) !important;
+    border-radius: 24px !important;
+    box-shadow: 0 28px 85px rgba(30, 66, 88, 0.22) !important;
+}
+
+    .swal2-popup.yg-promo-swal-popup .swal2-html-container,
+    .swal2-html-container.yg-promo-swal-html {
+        width: 100% !important;
+        max-width: none !important;
+        max-height: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+        color: inherit !important;
+        text-align: initial !important;
+    }
+
+.yg-promo-wizard {
+    --promo-primary: #00A6DA;
+    --promo-primary-dark: #008FBE;
+    --promo-primary-soft: #EAF8FD;
+    --promo-coral: #FF5A5F;
+    --promo-coral-dark: #E94C52;
+    --promo-text: #263D50;
+    --promo-muted: #7D8FA2;
+    --promo-line: #E3EDF4;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-height: calc(100dvh - 24px);
+    min-height: min(690px, calc(100dvh - 24px));
+    color: var(--promo-text, #263D50);
+    background: #fff;
+    direction: rtl;
+    text-align: right;
+    font-family: "Tajawal", sans-serif;
+}
+
+    .yg-promo-wizard *,
+    .yg-promo-wizard *::before,
+    .yg-promo-wizard *::after {
+        box-sizing: border-box;
+    }
+
+.yg-promo-wizard__head {
+    position: relative;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex: 0 0 auto;
+    padding: 17px 20px;
+    background: #fff;
+    border-bottom: 1px solid #EAF1F5;
+}
+
+.yg-promo-wizard__title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+.yg-promo-wizard__title-icon {
+    display: grid;
+    place-items: center;
+    flex: 0 0 44px;
+    width: 44px;
+    height: 44px;
+    color: var(--promo-primary, #00A6DA);
+    background: var(--promo-primary-soft, #EAF8FD);
+    border-radius: 13px;
+    font-size: 1.08rem;
+}
+
+.yg-promo-wizard__title h2 {
+    margin: 0 0 2px;
+    color: #263D50;
+    font-size: clamp(1.05rem, 1.8vw, 1.35rem);
+    font-weight: 950;
+    line-height: 1.35;
+}
+
+.yg-promo-wizard__title p {
+    margin: 0;
+    color: #8191A0;
+    font-size: 0.72rem;
+    font-weight: 650;
+    line-height: 1.6;
+}
+
+.yg-promo-wizard__close {
+    display: grid;
+    place-items: center;
+    flex: 0 0 40px;
+    width: 40px;
+    height: 40px;
+    color: var(--promo-coral, #FF5A5F);
+    background: #FFF8F8;
+    border: 1px solid #FFDADC;
+    border-radius: 12px;
+    font-size: 1rem;
+    transition: background-color 0.18s ease, transform 0.18s ease;
+}
+
+    .yg-promo-wizard__close:hover {
+        background: #FFF0F1;
+        transform: scale(1.03);
+    }
+
+    .yg-promo-wizard__close:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+    }
+
+/* ============================================================================
+ * Stepper
+ * ========================================================================== */
+
+.yg-promo-stepper {
+    display: grid;
+    grid-template-columns: auto minmax(40px, 1fr) auto minmax(40px, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    flex: 0 0 auto;
+    padding: 11px 22px;
+    background: #FCFEFF;
+    border-bottom: 1px solid #EAF1F5;
+}
+
+    .yg-promo-stepper > i {
+        display: block;
+        height: 1px;
+        background: #DDEAF1;
+    }
+
+    .yg-promo-stepper button {
+        appearance: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0;
+        color: #8A9AAA;
+        background: transparent;
+        border: 0;
+        font-size: 0.72rem;
+        font-weight: 850;
+    }
+
+        .yg-promo-stepper button b {
+            display: grid;
+            place-items: center;
+            width: 32px;
+            height: 32px;
+            color: #8A9AAA;
+            background: #F1F5F7;
+            border-radius: 10px;
+            font-size: 0.75rem;
+            font-weight: 950;
+            transition: all 0.2s ease;
+        }
+
+        .yg-promo-stepper button.is-active {
+            color: var(--promo-primary-dark, #008FBE);
+        }
+
+            .yg-promo-stepper button.is-active b {
+                color: #fff;
+                background: var(--promo-primary, #00A6DA);
+                box-shadow: 0 8px 20px rgba(0, 166, 218, 0.2);
+            }
+
+        .yg-promo-stepper button.is-complete {
+            color: #23956D;
+        }
+
+            .yg-promo-stepper button.is-complete b {
+                color: #1B8D65;
+                background: #E7F8F1;
+            }
+
+/* ============================================================================
+ * جسم المعالج
+ * ========================================================================== */
+
+.yg-promo-wizard__body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 18px 22px 22px;
+    background: #F9FCFE;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 166, 218, 0.35) transparent;
+}
+
+    .yg-promo-wizard__body::-webkit-scrollbar {
+        width: 7px;
+    }
+
+    .yg-promo-wizard__body::-webkit-scrollbar-thumb {
+        background: rgba(0, 166, 218, 0.32);
+        border-radius: 999px;
+    }
+
+.yg-promo-form-step {
+    display: none;
+    animation: ygPromoFadeUp 0.25s ease both;
+}
+
+    .yg-promo-form-step.is-active {
+        display: block;
+    }
+
+@keyframes ygPromoFadeUp {
+    from {
+        opacity: 0;
+        transform: translateY(7px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.yg-promo-form-alert {
+    margin-bottom: 13px;
+    padding: 11px 13px;
+    color: #B43E45;
+    background: #FFF3F4;
+    border: 1px solid #FFD4D7;
+    border-radius: 12px;
+    font-size: 0.76rem;
+    font-weight: 800;
+    line-height: 1.7;
+}
+
+.yg-promo-section-title {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    margin-bottom: 14px;
+}
+
+    .yg-promo-section-title > span {
+        display: grid;
+        place-items: center;
+        flex: 0 0 42px;
+        width: 42px;
+        height: 42px;
+        color: var(--promo-primary, #00A6DA);
+        background: var(--promo-primary-soft, #EAF8FD);
+        border: 1px solid rgba(0, 166, 218, 0.1);
+        border-radius: 12px;
+    }
+
+    .yg-promo-section-title > div {
+        min-width: 0;
+    }
+
+    .yg-promo-section-title h3 {
+        margin: 0 0 2px;
+        color: #263D50;
+        font-size: 0.95rem;
+        font-weight: 950;
+    }
+
+    .yg-promo-section-title p {
+        margin: 0;
+        color: #8191A0;
+        font-size: 0.71rem;
+        font-weight: 650;
+        line-height: 1.65;
+    }
+
+    .yg-promo-section-title.compact {
+        margin-top: 2px;
+    }
+
+.yg-promo-fields {
+    display: grid;
+    gap: 12px;
+}
+
+    .yg-promo-fields.two {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .yg-promo-fields.three {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .yg-promo-fields.four {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+.yg-promo-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+    .yg-promo-field.wide {
+        grid-column: 1 / -1;
+    }
+
+    .yg-promo-field > span {
+        color: #536779;
+        font-size: 0.7rem;
+        font-weight: 850;
+    }
+
+    .yg-promo-field em {
+        color: var(--promo-coral, #FF5A5F);
+        font-style: normal;
+    }
+
+    .yg-promo-field input,
+    .yg-promo-field textarea,
+    .yg-promo-field select {
+        width: 100%;
+        min-width: 0;
+        color: #263D50;
+        background: #fff;
+        border: 1px solid #DDE9F0;
+        border-radius: 12px;
+        outline: 0;
+        font-size: 0.79rem;
+        font-weight: 700;
+        transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+    }
+
+    .yg-promo-field input,
+    .yg-promo-field select {
+        min-height: 45px;
+        padding: 0 12px;
+    }
+
+    .yg-promo-field textarea {
+        min-height: 96px;
+        padding: 11px 12px;
+        resize: vertical;
+        line-height: 1.7;
+    }
+
+        .yg-promo-field input:focus,
+        .yg-promo-field textarea:focus,
+        .yg-promo-field select:focus {
+            border-color: rgba(0, 166, 218, 0.62);
+            box-shadow: 0 0 0 4px rgba(0, 166, 218, 0.08);
+        }
+
+        .yg-promo-field input.is-invalid,
+        .yg-promo-field textarea.is-invalid,
+        .yg-promo-field select.is-invalid {
+            border-color: rgba(255, 90, 95, 0.72);
+            box-shadow: 0 0 0 4px rgba(255, 90, 95, 0.08);
+        }
+
+        .yg-promo-field input::placeholder,
+        .yg-promo-field textarea::placeholder {
+            color: #A4B2BF;
+            font-weight: 600;
+        }
+
+.yg-promo-input-suffix {
+    position: relative;
+}
+
+    .yg-promo-input-suffix input {
+        padding-inline-end: 58px;
+    }
+
+    .yg-promo-input-suffix > b {
+        position: absolute;
+        top: 50%;
+        inset-inline-end: 8px;
+        transform: translateY(-50%);
+        display: inline-grid;
+        place-items: center;
+        min-width: 39px;
+        height: 29px;
+        padding: 0 7px;
+        color: var(--promo-primary-dark, #008FBE);
+        background: var(--promo-primary-soft, #EAF8FD);
+        border-radius: 8px;
+        font-size: 0.65rem;
+        font-weight: 900;
+        pointer-events: none;
+    }
+
+/* ============================================================================
+ * الصورة
+ * ========================================================================== */
+
+.yg-promo-image-field {
+    display: grid;
+    grid-template-columns: 170px minmax(0, 1fr);
+    gap: 15px;
+    align-items: center;
+    margin-top: 14px;
+    padding: 13px;
+    background: #fff;
+    border: 1px dashed #CEE2EC;
+    border-radius: 16px;
+}
+
+.yg-promo-image-preview {
+    display: grid;
+    place-items: center;
+    align-content: center;
+    gap: 6px;
+    width: 100%;
+    height: 112px;
+    overflow: hidden;
+    color: var(--promo-primary, #00A6DA);
+    background: #F2FAFD;
+    border: 1px solid #E0F0F6;
+    border-radius: 13px;
+}
+
+    .yg-promo-image-preview img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .yg-promo-image-preview i {
+        font-size: 1.55rem;
+    }
+
+    .yg-promo-image-preview span {
+        color: #7890A0;
+        font-size: 0.7rem;
+        font-weight: 750;
+    }
+
+.yg-promo-image-copy h4 {
+    margin: 0 0 3px;
+    color: #263D50;
+    font-size: 0.83rem;
+    font-weight: 900;
+}
+
+.yg-promo-image-copy p {
+    margin: 0 0 10px;
+    color: #8A99A7;
+    font-size: 0.69rem;
+    font-weight: 650;
+}
+
+.yg-promo-inline-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.yg-promo-upload,
+.yg-promo-text-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 38px;
+    padding: 0 12px;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-weight: 850;
+}
+
+.yg-promo-upload {
+    color: var(--promo-primary-dark, #008FBE);
+    background: var(--promo-primary-soft, #EAF8FD);
+    border: 1px solid rgba(0, 166, 218, 0.12);
+    cursor: pointer;
+}
+
+    .yg-promo-upload input {
+        display: none;
+    }
+
+.yg-promo-text-button {
+    color: #D94E54;
+    background: #FFF3F4;
+    border: 1px solid #FFD8DA;
+}
+
+/* ============================================================================
+ * الهدف ونوع الخصم
+ * ========================================================================== */
+
+.yg-promo-targets,
+.yg-promo-discount-types,
+.yg-promo-apply-mode {
+    display: grid;
+    gap: 10px;
+}
+
+.yg-promo-targets {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.yg-promo-discount-types,
+.yg-promo-apply-mode {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-bottom: 12px;
+}
+
+    .yg-promo-targets label,
+    .yg-promo-discount-types label,
+    .yg-promo-apply-mode label {
+        position: relative;
+        min-width: 0;
+        cursor: pointer;
+    }
+
+    .yg-promo-targets input,
+    .yg-promo-discount-types input,
+    .yg-promo-apply-mode input {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    .yg-promo-targets label > span,
+    .yg-promo-discount-types label > span,
+    .yg-promo-apply-mode label > span {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        min-height: 62px;
+        padding: 10px 12px;
+        color: #536779;
+        background: #fff;
+        border: 1px solid #DDE9F0;
+        border-radius: 13px;
+        transition: border-color 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+    }
+
+.yg-promo-targets label > span {
+    min-height: 92px;
+    flex-direction: column;
+    justify-content: center;
+    text-align: center;
+}
+
+    .yg-promo-targets label > span > i,
+    .yg-promo-discount-types label > span > i,
+    .yg-promo-apply-mode label > span > i {
+        display: grid;
+        place-items: center;
+        flex: 0 0 34px;
+        width: 34px;
+        height: 34px;
+        color: var(--promo-primary, #00A6DA);
+        background: var(--promo-primary-soft, #EAF8FD);
+        border-radius: 10px;
+    }
+
+.yg-promo-targets b,
+.yg-promo-discount-types b,
+.yg-promo-apply-mode b {
+    color: #30495C;
+    font-size: 0.76rem;
+    font-weight: 900;
+}
+
+.yg-promo-targets small,
+.yg-promo-apply-mode small {
+    color: #8B9AA8;
+    font-size: 0.63rem;
+    font-weight: 650;
+    line-height: 1.45;
+}
+
+.yg-promo-targets input:checked + span,
+.yg-promo-discount-types input:checked + span,
+.yg-promo-apply-mode input:checked + span {
+    color: var(--promo-primary-dark, #008FBE);
+    background: #F0FAFE;
+    border-color: rgba(0, 166, 218, 0.62);
+    box-shadow: 0 0 0 3px rgba(0, 166, 218, 0.07);
+}
+
+    .yg-promo-targets input:checked + span b,
+    .yg-promo-discount-types input:checked + span b,
+    .yg-promo-apply-mode input:checked + span b {
+        color: var(--promo-primary-dark, #008FBE);
+    }
+
+.yg-promo-static-target {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 13px 14px;
+    color: #536779;
+    background: #F1FAFE;
+    border: 1px solid rgba(0, 166, 218, 0.22);
+    border-radius: 14px;
+}
+
+    .yg-promo-static-target > span {
+        display: grid;
+        place-items: center;
+        flex: 0 0 40px;
+        width: 40px;
+        height: 40px;
+        color: var(--promo-primary, #00A6DA);
+        background: #fff;
+        border-radius: 11px;
+    }
+
+    .yg-promo-static-target > div {
+        min-width: 0;
+        flex: 1 1 auto;
+    }
+
+    .yg-promo-static-target b {
+        display: block;
+        margin-bottom: 2px;
+        color: #30495C;
+        font-size: 0.77rem;
+        font-weight: 900;
+    }
+
+    .yg-promo-static-target small {
+        display: block;
+        color: #7E91A1;
+        font-size: 0.66rem;
+        font-weight: 650;
+    }
+
+    .yg-promo-static-target > i {
+        color: #22A77A;
+        font-size: 1rem;
+    }
+
+.yg-promo-target-select {
+    margin-top: 11px;
+    padding: 12px;
+    background: #fff;
+    border: 1px solid #E5EEF3;
+    border-radius: 14px;
+}
+
+.yg-promo-divider {
+    height: 1px;
+    margin: 17px 0;
+    background: #E8F0F4;
+}
+
+/* ============================================================================
+ * الأيام والشروط
+ * ========================================================================== */
+
+.yg-promo-days {
+    display: grid;
+    grid-template-columns: minmax(160px, 0.7fr) minmax(0, 2fr);
+    gap: 14px;
+    align-items: center;
+    margin-top: 14px;
+    padding: 14px;
+    background: #fff;
+    border: 1px solid #E2EDF3;
+    border-radius: 15px;
+}
+
+    .yg-promo-days h4 {
+        margin: 0 0 3px;
+        color: #30495C;
+        font-size: 0.79rem;
+        font-weight: 900;
+    }
+
+    .yg-promo-days p {
+        margin: 0;
+        color: #8A9AA8;
+        font-size: 0.65rem;
+        font-weight: 650;
+        line-height: 1.5;
+    }
+
+.yg-promo-day-options {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 6px;
+}
+
+    .yg-promo-day-options label {
+        position: relative;
+        cursor: pointer;
+    }
+
+    .yg-promo-day-options input {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    .yg-promo-day-options span {
+        display: grid;
+        place-items: center;
+        min-height: 36px;
+        padding: 4px;
+        color: #6F8190;
+        background: #F7FAFC;
+        border: 1px solid #E3ECF1;
+        border-radius: 9px;
+        font-size: 0.63rem;
+        font-weight: 800;
+        transition: all 0.17s ease;
+    }
+
+    .yg-promo-day-options input:checked + span {
+        color: #fff;
+        background: var(--promo-primary, #00A6DA);
+        border-color: var(--promo-primary, #00A6DA);
+        box-shadow: 0 7px 16px rgba(0, 166, 218, 0.18);
+    }
+
+.yg-promo-conditions {
+    margin-top: 14px;
+    overflow: hidden;
+    background: #fff;
+    border: 1px solid #E2EDF3;
+    border-radius: 15px;
+}
+
+    .yg-promo-conditions summary {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 13px 14px;
+        cursor: pointer;
+        list-style: none;
+        user-select: none;
+    }
+
+        .yg-promo-conditions summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .yg-promo-conditions summary > span {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+        }
+
+            .yg-promo-conditions summary > span > i {
+                display: grid;
+                place-items: center;
+                flex: 0 0 34px;
+                width: 34px;
+                height: 34px;
+                color: var(--promo-primary, #00A6DA);
+                background: var(--promo-primary-soft, #EAF8FD);
+                border-radius: 10px;
+            }
+
+        .yg-promo-conditions summary b {
+            display: block;
+            color: #30495C;
+            font-size: 0.74rem;
+            font-weight: 900;
+        }
+
+        .yg-promo-conditions summary small {
+            display: block;
+            color: #8A9AA8;
+            font-size: 0.63rem;
+            font-weight: 650;
+        }
+
+        .yg-promo-conditions summary > i {
+            color: #8A9AA8;
+            transition: transform 0.2s ease;
+        }
+
+    .yg-promo-conditions[open] summary > i {
+        transform: rotate(180deg);
+    }
+
+    .yg-promo-conditions > .yg-promo-fields {
+        padding: 0 14px 14px;
+    }
+
+.yg-promo-toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 0 14px 14px;
+    padding: 11px 12px;
+    background: #F9FCFD;
+    border: 1px solid #E8F0F4;
+    border-radius: 12px;
+}
+
+    .yg-promo-toggle-row > span {
+        min-width: 0;
+    }
+
+    .yg-promo-toggle-row b {
+        display: block;
+        margin-bottom: 2px;
+        color: #40596C;
+        font-size: 0.71rem;
+        font-weight: 900;
+    }
+
+    .yg-promo-toggle-row small {
+        display: block;
+        color: #8B9AA7;
+        font-size: 0.62rem;
+        font-weight: 650;
+    }
+
+    .yg-promo-toggle-row input {
+        position: absolute;
+        opacity: 0;
+    }
+
+    .yg-promo-toggle-row > i {
+        position: relative;
+        flex: 0 0 46px;
+        width: 46px;
+        height: 25px;
+        background: #DCE6EB;
+        border-radius: 999px;
+        transition: background-color 0.2s ease;
+    }
+
+        .yg-promo-toggle-row > i::after {
+            content: "";
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            width: 17px;
+            height: 17px;
+            background: #fff;
+            border-radius: 50%;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+            transition: transform 0.2s ease;
+        }
+
+    .yg-promo-toggle-row input:checked + i {
+        background: var(--promo-primary, #00A6DA);
+    }
+
+        .yg-promo-toggle-row input:checked + i::after {
+            transform: translateX(-21px);
+        }
+
+.yg-promo-nonbooking-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-top: 14px;
+    padding: 12px 13px;
+    color: #637889;
+    background: #F2FAFD;
+    border: 1px solid #DCEEF5;
+    border-radius: 13px;
+}
+
+    .yg-promo-nonbooking-note > i {
+        color: var(--promo-primary, #00A6DA);
+        margin-top: 2px;
+    }
+
+    .yg-promo-nonbooking-note b {
+        display: block;
+        margin-bottom: 2px;
+        color: #3C5668;
+        font-size: 0.72rem;
+        font-weight: 900;
+    }
+
+    .yg-promo-nonbooking-note span {
+        display: block;
+        font-size: 0.66rem;
+        font-weight: 650;
+        line-height: 1.65;
+    }
+
+/* ============================================================================
+ * Footer المعالج
+ * ========================================================================== */
+
+.yg-promo-wizard__footer {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    flex: 0 0 auto;
+    min-height: 68px;
+    padding: 11px 18px;
+    background: #fff;
+    border-top: 1px solid #E8F0F4;
+}
+
+.yg-promo-footer-spacer {
+    flex: 1 1 auto;
+}
+
+.yg-promo-secondary,
+.yg-promo-draft,
+.yg-promo-primary,
+.yg-promo-publish {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    min-height: 42px;
+    padding: 0 14px;
+    border-radius: 11px;
+    font-size: 0.73rem;
+    font-weight: 900;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease, border-color 0.18s ease;
+}
+
+.yg-promo-secondary {
+    color: #627687;
+    background: #F6F9FB;
+    border: 1px solid #E0EAF0;
+}
+
+.yg-promo-draft {
+    color: #6D61CB;
+    background: #F4F1FF;
+    border: 1px solid #E5E0FF;
+}
+
+.yg-promo-primary {
+    color: #fff;
+    background: linear-gradient(135deg, var(--promo-primary, #00A6DA), #0796C3);
+    border: 0;
+    box-shadow: 0 9px 20px rgba(0, 166, 218, 0.2);
+}
+
+.yg-promo-publish {
+    border: 0;
+}
+
+.yg-promo-secondary:hover,
+.yg-promo-draft:hover,
+.yg-promo-primary:hover {
+    transform: translateY(-1px);
+}
+
+.yg-promo-secondary:disabled,
+.yg-promo-draft:disabled,
+.yg-promo-primary:disabled,
+.yg-promo-publish:disabled {
+    opacity: 0.58;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.yg-promo-spinner {
+    display: inline-block;
+    width: 15px;
+    height: 15px;
+    border: 2px solid rgba(255, 255, 255, 0.45);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: ygPromoSpin 0.75s linear infinite;
+}
+
+.yg-promo-draft .yg-promo-spinner {
+    border-color: rgba(109, 97, 203, 0.25);
+    border-top-color: #6D61CB;
+}
+
+@keyframes ygPromoSpin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ============================================================================
+ * نوافذ التأكيد والتنبيه SweetAlert2
+ * ========================================================================== */
+
+.swal2-popup.yg-promo-confirm-popup {
+    width: min(430px, calc(100vw - 28px)) !important;
+    padding: 24px 22px 20px !important;
+    border: 1px solid #E4EDF2 !important;
+    border-radius: 22px !important;
+    box-shadow: 0 24px 70px rgba(31, 66, 87, 0.2) !important;
+    font-family: "Tajawal", sans-serif !important;
+}
+
+    .swal2-popup.yg-promo-confirm-popup .swal2-title {
+        color: #2B4457 !important;
+        font-size: 1.08rem !important;
+        font-weight: 950 !important;
+    }
+
+    .swal2-popup.yg-promo-confirm-popup .swal2-html-container {
+        color: #748798 !important;
+        font-size: 0.8rem !important;
+        font-weight: 650 !important;
+        line-height: 1.75 !important;
+    }
+
+.yg-promo-confirm-primary,
+.yg-promo-confirm-danger,
+.yg-promo-confirm-cancel {
+    min-height: 42px !important;
+    padding: 0 17px !important;
+    border-radius: 11px !important;
+    font-family: "Tajawal", sans-serif !important;
+    font-size: 0.75rem !important;
+    font-weight: 900 !important;
+}
+
+.yg-promo-confirm-primary {
+    color: #fff !important;
+    background: var(--promo-primary, #00A6DA) !important;
+    border: 0 !important;
+}
+
+.yg-promo-confirm-danger {
+    color: #fff !important;
+    background: var(--promo-coral, #FF5A5F) !important;
+    border: 0 !important;
+}
+
+.yg-promo-confirm-cancel {
+    color: #667A8B !important;
+    background: #F5F8FA !important;
+    border: 1px solid #E1EAF0 !important;
+}
+
+/* ============================================================================
+ * الوضع الداكن - يبقى أبيض/فاتح في المنطق البصري بدون إغراق بالكحلي
+ * ========================================================================== */
+
+body.dark-mode .yg-promo-manager,
+html[data-theme="dark"] body .yg-promo-manager,
+body[data-theme="dark"] .yg-promo-manager {
+    --promo-text: #E7EFF5;
+    --promo-text-soft: #C4D0DA;
+    --promo-muted: #91A2B1;
+    --promo-line: rgba(255, 255, 255, 0.09);
+    --promo-surface: #132C3D;
+    --promo-page-soft: #173344;
+}
+
+body.dark-mode .yg-promo-page-head,
+body.dark-mode .yg-promo-stats article,
+body.dark-mode .yg-promo-tabs,
+body.dark-mode .yg-promo-search,
+body.dark-mode .yg-promo-card,
+body.dark-mode .yg-promo-empty,
+body.dark-mode .yg-promo-no-place {
+    background: #132C3D;
+}
+
+    body.dark-mode .yg-promo-search input,
+    body.dark-mode .yg-promo-card__heading h3,
+    body.dark-mode .yg-promo-stats b,
+    body.dark-mode .yg-promo-page-head h2 {
+        color: #E8F0F5;
+    }
+
+/* ============================================================================
+ * Responsive
+ * ========================================================================== */
+
+@media (max-width: 1100px) {
+    .yg-promo-toolbar {
+        grid-template-columns: 1fr;
+    }
+
+    .yg-promo-search {
+        min-height: 50px;
+    }
+
+    .yg-promo-day-options {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .yg-promo-fields.four {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 900px) {
+    .yg-promo-stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .yg-promo-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .yg-promo-fields.three {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+        .yg-promo-fields.three > :last-child:nth-child(odd) {
+            grid-column: 1 / -1;
+        }
+
+    .yg-promo-days {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 720px) {
+    .yg-promo-page-head {
+        align-items: stretch;
+        flex-direction: column;
+        padding: 16px;
+        border-radius: 18px;
+    }
+
+    .yg-promo-cta {
+        width: 100%;
+    }
+
+    .yg-promo-tabs {
+        overflow-x: auto;
+        scrollbar-width: none;
+    }
+
+        .yg-promo-tabs::-webkit-scrollbar {
+            display: none;
+        }
+
+        .yg-promo-tabs button {
+            flex: 0 0 auto;
+            min-width: 125px;
+        }
+
+    .swal2-popup.yg-promo-swal-popup {
+        width: calc(100vw - 12px) !important;
+        max-height: calc(100dvh - 12px) !important;
+        border-radius: 18px !important;
+    }
+
+    .yg-promo-wizard {
+        min-height: calc(100dvh - 12px);
+        max-height: calc(100dvh - 12px);
+    }
+
+    .yg-promo-wizard__head {
+        padding: 13px 14px;
+    }
+
+    .yg-promo-wizard__title-icon {
+        flex-basis: 40px;
+        width: 40px;
+        height: 40px;
+    }
+
+    .yg-promo-wizard__title p {
+        display: none;
+    }
+
+    .yg-promo-stepper {
+        gap: 6px;
+        padding: 9px 12px;
+    }
+
+        .yg-promo-stepper button span {
+            display: none;
+        }
+
+        .yg-promo-stepper button b {
+            width: 30px;
+            height: 30px;
+        }
+
+    .yg-promo-wizard__body {
+        padding: 14px;
+    }
+
+    .yg-promo-fields.two,
+    .yg-promo-fields.three,
+    .yg-promo-fields.four {
+        grid-template-columns: 1fr;
+    }
+
+        .yg-promo-fields.three > :last-child:nth-child(odd) {
+            grid-column: auto;
+        }
+
+    .yg-promo-image-field {
+        grid-template-columns: 1fr;
+    }
+
+    .yg-promo-image-preview {
+        height: 150px;
+    }
+
+    .yg-promo-targets {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .yg-promo-discount-types,
+    .yg-promo-apply-mode {
+        grid-template-columns: 1fr;
+    }
+
+    .yg-promo-day-options {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .yg-promo-wizard__footer {
+        flex-wrap: wrap;
+        padding: 9px 12px;
+    }
+
+    .yg-promo-footer-spacer {
+        display: none;
+    }
+
+    .yg-promo-secondary,
+    .yg-promo-draft,
+    .yg-promo-primary,
+    .yg-promo-publish {
+        flex: 1 1 calc(50% - 5px);
+    }
+}
+
+@media (max-width: 520px) {
+    .yg-promo-page-head__copy {
+        align-items: flex-start;
+    }
+
+    .yg-promo-page-head__icon {
+        flex-basis: 44px;
+        width: 44px;
+        height: 44px;
+    }
+
+    .yg-promo-stats {
+        grid-template-columns: 1fr 1fr;
+        gap: 9px;
+    }
+
+        .yg-promo-stats article {
+            min-height: 72px;
+            padding: 11px;
+        }
+
+    .yg-promo-stat-icon {
+        flex-basis: 36px;
+        width: 36px;
+        height: 36px;
+    }
+
+    .yg-promo-card__media {
+        height: 150px;
+    }
+
+    .yg-promo-card__body {
+        padding: 14px;
+    }
+
+    .yg-promo-card__actions {
+        flex-wrap: wrap;
+    }
+
+    .yg-promo-action {
+        flex: 1 1 calc(50% - 4px);
+    }
+
+    .yg-promo-targets {
+        grid-template-columns: 1fr;
+    }
+
+        .yg-promo-targets label > span {
+            min-height: 72px;
+            flex-direction: row;
+            justify-content: flex-start;
+            text-align: right;
+        }
+
+            .yg-promo-targets label > span small {
+                margin-inline-start: auto;
+            }
+
+    .yg-promo-day-options {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .yg-promo-secondary,
+    .yg-promo-draft,
+    .yg-promo-primary,
+    .yg-promo-publish {
+        flex-basis: 100%;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .yg-promo-manager *,
+    .yg-promo-manager *::before,
+    .yg-promo-manager *::after,
+    .yg-promo-wizard *,
+    .yg-promo-wizard *::before,
+    .yg-promo-wizard *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+
+/* ============================================================================
+ * PROMOTIONS FIX V2 - نافذة أخف وحقول أوضح
+ * ========================================================================== */
+.swal2-popup.yg-promo-swal-popup {
+    width: min(900px, calc(100vw - 32px)) !important;
+    max-width: 900px !important;
+    max-height: calc(100dvh - 36px) !important;
+    border-radius: 20px !important;
+    box-shadow: 0 24px 65px rgba(28, 61, 82, .18) !important;
+}
+
+.yg-promo-wizard {
+    min-height: 0 !important;
+    height: min(760px, calc(100dvh - 36px)) !important;
+    max-height: calc(100dvh - 36px) !important;
+}
+
+.yg-promo-wizard__head {
+    padding: 18px 22px !important;
+}
+
+.yg-promo-wizard__title-icon {
+    width: 46px !important;
+    height: 46px !important;
+    flex-basis: 46px !important;
+    border-radius: 14px !important;
+}
+
+.yg-promo-wizard__title h2 {
+    font-size: 1.28rem !important;
+}
+
+.yg-promo-wizard__title p {
+    max-width: 620px;
+    font-size: .78rem !important;
+}
+
+.yg-promo-stepper {
+    padding: 12px 22px !important;
+}
+
+    .yg-promo-stepper button {
+        font-size: .77rem !important;
+    }
+
+        .yg-promo-stepper button b {
+            width: 34px !important;
+            height: 34px !important;
+            border-radius: 11px !important;
+            font-size: .8rem !important;
+        }
+
+.yg-promo-wizard__body {
+    padding: 22px 24px 26px !important;
+    background: #F8FBFD !important;
+}
+
+.yg-promo-form-step.is-active {
+    max-width: 820px;
+    margin-inline: auto;
+}
+
+.yg-promo-form-alert {
+    padding: 12px 14px !important;
+    font-size: .82rem !important;
+    border-radius: 13px !important;
+}
+
+.yg-promo-section-title {
+    gap: 12px !important;
+    margin-bottom: 16px !important;
+}
+
+    .yg-promo-section-title > span {
+        width: 42px !important;
+        height: 42px !important;
+        flex-basis: 42px !important;
+    }
+
+    .yg-promo-section-title h3 {
+        font-size: .98rem !important;
+    }
+
+    .yg-promo-section-title p {
+        font-size: .75rem !important;
+    }
+
+.yg-promo-fields {
+    gap: 15px 16px !important;
+}
+
+.yg-promo-field {
+    gap: 7px !important;
+}
+
+    .yg-promo-field > span {
+        color: #425A6D !important;
+        font-size: .76rem !important;
+        font-weight: 850 !important;
+    }
+
+    .yg-promo-field input,
+    .yg-promo-field textarea,
+    .yg-promo-field select {
+        color: #183247 !important;
+        background: #FFFFFF !important;
+        border: 1px solid #D7E5ED !important;
+        border-radius: 13px !important;
+        font-size: .92rem !important;
+        font-weight: 750 !important;
+        box-shadow: 0 2px 7px rgba(42, 82, 105, .025) !important;
+    }
+
+    .yg-promo-field input,
+    .yg-promo-field select {
+        min-height: 52px !important;
+        padding: 0 14px !important;
+    }
+
+    .yg-promo-field textarea {
+        min-height: 112px !important;
+        padding: 13px 14px !important;
+    }
+
+        .yg-promo-field input:focus,
+        .yg-promo-field textarea:focus,
+        .yg-promo-field select:focus {
+            background: #FFFFFF !important;
+            border-color: #00A6DA !important;
+            box-shadow: 0 0 0 4px rgba(0, 166, 218, .08) !important;
+        }
+
+    /* الأرقام: إخفاء أسهم المتصفح ومنع تداخل وحدة ريال/% مع القيمة */
+    .yg-promo-field input[type="number"] {
+        -moz-appearance: textfield;
+        appearance: textfield;
+        direction: ltr !important;
+        text-align: right !important;
+        font-variant-numeric: tabular-nums;
+        letter-spacing: .01em;
+    }
+
+        .yg-promo-field input[type="number"]::-webkit-outer-spin-button,
+        .yg-promo-field input[type="number"]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+.yg-promo-input-suffix input {
+    padding-left: 72px !important;
+    padding-right: 14px !important;
+}
+
+.yg-promo-input-suffix > b {
+    right: auto !important;
+    left: 10px !important;
+    min-width: 44px !important;
+    height: 32px !important;
+    padding: 0 9px !important;
+    font-size: .72rem !important;
+    border-radius: 9px !important;
+}
+
+.yg-promo-field input[type="date"] {
+    direction: ltr !important;
+    text-align: left !important;
+    font-variant-numeric: tabular-nums;
+}
+
+.yg-promo-targets {
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)) !important;
+    gap: 12px !important;
+}
+
+    .yg-promo-targets label > span {
+        min-height: 100px !important;
+        border-radius: 15px !important;
+    }
+
+.yg-promo-discount-types,
+.yg-promo-apply-mode {
+    gap: 12px !important;
+    margin-bottom: 15px !important;
+}
+
+    .yg-promo-discount-types label > span,
+    .yg-promo-apply-mode label > span {
+        min-height: 68px !important;
+        border-radius: 14px !important;
+    }
+
+.yg-promo-money-grid,
+.yg-promo-conditions-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+
+.yg-promo-target-select {
+    margin-top: 14px !important;
+    padding: 14px !important;
+    border-radius: 15px !important;
+}
+
+.yg-promo-image-field {
+    grid-template-columns: 145px minmax(0, 1fr) !important;
+    margin-top: 16px !important;
+    padding: 14px !important;
+    border-radius: 16px !important;
+}
+
+.yg-promo-image-preview {
+    min-height: 105px !important;
+}
+
+.yg-promo-days,
+.yg-promo-conditions {
+    margin-top: 18px !important;
+    border-radius: 16px !important;
+}
+
+.yg-promo-wizard__footer {
+    min-height: 72px !important;
+    padding: 12px 20px !important;
+}
+
+.yg-promo-secondary,
+.yg-promo-draft,
+.yg-promo-primary,
+.yg-promo-publish {
+    min-height: 45px !important;
+    padding: 0 17px !important;
+    border-radius: 12px !important;
+    font-size: .78rem !important;
+}
+
+@media (max-width: 700px) {
+    .swal2-popup.yg-promo-swal-popup {
+        width: calc(100vw - 14px) !important;
+        max-height: calc(100dvh - 14px) !important;
+        border-radius: 17px !important;
+    }
+
+    .yg-promo-wizard {
+        height: calc(100dvh - 14px) !important;
+        max-height: calc(100dvh - 14px) !important;
+    }
+
+    .yg-promo-wizard__head {
+        padding: 14px 15px !important;
+    }
+
+    .yg-promo-wizard__title p {
+        display: none;
+    }
+
+    .yg-promo-stepper {
+        padding: 10px 14px !important;
+        gap: 6px !important;
+    }
+
+        .yg-promo-stepper button span {
+            display: none !important;
+        }
+
+    .yg-promo-wizard__body {
+        padding: 16px 14px 20px !important;
+    }
+
+    .yg-promo-fields.two,
+    .yg-promo-fields.three,
+    .yg-promo-fields.four,
+    .yg-promo-money-grid,
+    .yg-promo-conditions-grid,
+    .yg-promo-discount-types,
+    .yg-promo-apply-mode {
+        grid-template-columns: 1fr !important;
+    }
+
+    .yg-promo-targets {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+
+    .yg-promo-image-field {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+
+/* ============================================================================
+ * V4 FINAL — ثبات نافذة SweetAlert + Footer دائم + تبويبات وخطوات أفخم
+ * هذه الطبقة متعمدة في نهاية الملف حتى تتغلب على أي قواعد قديمة بأمان.
+ * ========================================================================== */
+
+/* SweetAlert نفسه يأخذ ارتفاعًا حقيقيًا، وليس max-height فقط. */
+.swal2-container:has(.yg-promo-swal-popup) {
+    padding: 14px !important;
+    background: rgba(26, 45, 61, 0.48) !important;
+    backdrop-filter: blur(5px) !important;
+}
+
+.swal2-popup.yg-promo-swal-popup {
+    width: min(980px, calc(100vw - 28px)) !important;
+    max-width: 980px !important;
+    height: min(760px, calc(100dvh - 28px)) !important;
+    max-height: calc(100dvh - 28px) !important;
+    padding: 0 !important;
+    border: 1px solid rgba(0, 166, 218, 0.14) !important;
+    border-radius: 26px !important;
+    overflow: hidden !important;
+    background: #fff !important;
+    box-shadow: 0 30px 85px rgba(21, 52, 73, 0.26) !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+    .swal2-popup.yg-promo-swal-popup .swal2-html-container,
+    .swal2-html-container.yg-promo-swal-html {
+        width: 100% !important;
+        height: 100% !important;
+        min-height: 0 !important;
+        flex: 1 1 auto !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+        text-align: initial !important;
+    }
+
+.yg-promo-wizard {
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    display: grid !important;
+    grid-template-rows: auto auto minmax(0, 1fr) auto !important;
+    overflow: hidden !important;
+    background: #fff !important;
+}
+
+.yg-promo-wizard__body {
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    padding: 20px 22px !important;
+    background: radial-gradient(circle at 100% 0%, rgba(0,166,218,.045), transparent 260px), #F9FCFE !important;
+}
+
+/* Footer دائم في أسفل النافذة — يحل اختفاء زر التالي/النشر. */
+.yg-promo-wizard__footer {
+    position: relative !important;
+    z-index: 20 !important;
+    display: flex !important;
+    align-items: center !important;
+    flex: 0 0 auto !important;
+    min-height: 72px !important;
+    padding: 12px 20px !important;
+    border-top: 1px solid #E2EDF3 !important;
+    background: rgba(255,255,255,.98) !important;
+    box-shadow: 0 -12px 28px rgba(38,77,101,.055) !important;
+}
+
+    .yg-promo-wizard__footer [hidden] {
+        display: none !important;
+    }
+
+.yg-promo-primary,
+.yg-promo-publish,
+.yg-promo-secondary,
+.yg-promo-draft {
+    min-width: 118px !important;
+    min-height: 44px !important;
+    border-radius: 13px !important;
+    font-size: .78rem !important;
+    font-weight: 900 !important;
+}
+
+.yg-promo-primary {
+    color: #fff !important;
+    border: 0 !important;
+    background: linear-gradient(135deg, #00A6DA, #078FC0) !important;
+    box-shadow: 0 10px 22px rgba(0,166,218,.22) !important;
+}
+
+.yg-promo-publish {
+    color: #fff !important;
+    background: linear-gradient(135deg, #FF5A5F, #FF704D) !important;
+    box-shadow: 0 10px 22px rgba(255,90,95,.22) !important;
+}
+
+/* الخطوات: ثلاث بطاقات واضحة بدل خط نحيف باهت. */
+.yg-promo-stepper {
+    min-height: 74px !important;
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+    padding: 11px 18px !important;
+    border-bottom: 1px solid #E5EFF4 !important;
+    background: #fff !important;
+}
+
+    .yg-promo-stepper > i {
+        display: none !important;
+    }
+
+    .yg-promo-stepper button {
+        position: relative !important;
+        width: 100% !important;
+        min-height: 50px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: flex-start !important;
+        gap: 10px !important;
+        padding: 7px 10px !important;
+        border: 1px solid #E2EBF1 !important;
+        border-radius: 15px !important;
+        background: #F9FBFD !important;
+        color: #8191A0 !important;
+        transition: .18s ease !important;
+    }
+
+        .yg-promo-stepper button b {
+            width: 34px !important;
+            height: 34px !important;
+            flex: 0 0 34px !important;
+            display: grid !important;
+            place-items: center !important;
+            border-radius: 11px !important;
+            background: #EEF3F6 !important;
+            color: #738698 !important;
+            font-size: .76rem !important;
+            font-weight: 950 !important;
+        }
+
+        .yg-promo-stepper button span {
+            font-size: .76rem !important;
+            font-weight: 900 !important;
+            white-space: nowrap;
+        }
+
+        .yg-promo-stepper button.is-active {
+            border-color: rgba(0,166,218,.42) !important;
+            background: linear-gradient(135deg, #F1FBFE, #FFFFFF) !important;
+            color: #007FA9 !important;
+            box-shadow: 0 8px 20px rgba(0,166,218,.08) !important;
+        }
+
+            .yg-promo-stepper button.is-active b {
+                background: #00A6DA !important;
+                color: #fff !important;
+                box-shadow: 0 7px 16px rgba(0,166,218,.22) !important;
+            }
+
+        .yg-promo-stepper button.is-complete {
+            border-color: #D7EFE6 !important;
+            background: #F7FCFA !important;
+            color: #228861 !important;
+        }
+
+            .yg-promo-stepper button.is-complete b {
+                background: #E3F7F0 !important;
+                color: #22916A !important;
+            }
+
+/* التبويبات الفرعية — نفس روح التبويبات الموحدة في إدارة المنشأة. */
+.yg-promo-tabs {
+    padding: 6px !important;
+    gap: 6px !important;
+    border: 1px solid #E1ECF2 !important;
+    border-radius: 16px !important;
+    background: #F5F9FB !important;
+    box-shadow: none !important;
+}
+
+    .yg-promo-tabs button {
+        min-height: 43px !important;
+        border: 0 !important;
+        border-radius: 11px !important;
+        background: transparent !important;
+        color: #718394 !important;
+    }
+
+        .yg-promo-tabs button:hover {
+            background: #fff !important;
+            color: #008DBA !important;
+        }
+
+        .yg-promo-tabs button.is-active {
+            color: #fff !important;
+            background: linear-gradient(135deg, #00A6DA, #0797C5) !important;
+            box-shadow: 0 8px 18px rgba(0,166,218,.18) !important;
+        }
+
+            .yg-promo-tabs button.is-active .yg-promo-tab-icon,
+            .yg-promo-tabs button.is-active .yg-promo-tab-label {
+                color: #fff !important;
+            }
+
+            .yg-promo-tabs button.is-active b {
+                color: #fff !important;
+                background: rgba(255,255,255,.20) !important;
+            }
+
+/* حقول أنظف وأوضح. */
+.yg-promo-field input,
+.yg-promo-field select,
+.yg-promo-field textarea {
+    border: 1px solid #D9E6EE !important;
+    border-radius: 14px !important;
+    background: #fff !important;
+    color: #263E51 !important;
+    box-shadow: 0 2px 0 rgba(30,78,105,.015) !important;
+}
+
+.yg-promo-field input,
+.yg-promo-field select {
+    min-height: 48px !important;
+}
+
+    .yg-promo-field input:focus,
+    .yg-promo-field select:focus,
+    .yg-promo-field textarea:focus {
+        border-color: rgba(0,166,218,.72) !important;
+        box-shadow: 0 0 0 4px rgba(0,166,218,.08) !important;
+    }
+
+    .yg-promo-field input[type="number"] {
+        direction: ltr !important;
+        text-align: left !important;
+        padding-inline: 14px !important;
+        font-family: "Segoe UI", Arial, sans-serif !important;
+        font-size: .95rem !important;
+        font-weight: 800 !important;
+        font-variant-numeric: tabular-nums !important;
+        appearance: textfield !important;
+        -moz-appearance: textfield !important;
+    }
+
+        .yg-promo-field input[type="number"]::-webkit-inner-spin-button,
+        .yg-promo-field input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none !important;
+            margin: 0 !important;
+        }
+
+/* فترة الاستفادة المتقدمة — مغلقة افتراضيًا حتى لا تربك المالك. */
+.yg-promo-advanced-date {
+    margin-top: 14px;
+    border: 1px solid #DDEAF1;
+    border-radius: 17px;
+    overflow: hidden;
+    background: #fff;
+}
+
+    .yg-promo-advanced-date > summary {
+        min-height: 64px;
+        display: grid;
+        grid-template-columns: 42px minmax(0,1fr) 24px;
+        align-items: center;
+        gap: 11px;
+        padding: 10px 13px;
+        cursor: pointer;
+        list-style: none;
+    }
+
+        .yg-promo-advanced-date > summary::-webkit-details-marker {
+            display: none;
+        }
+
+.yg-promo-advanced-date__icon {
+    width: 42px;
+    height: 42px;
+    display: grid;
+    place-items: center;
+    border-radius: 13px;
+    background: #EEF9FD;
+    color: #00A6DA;
+    font-size: 1rem;
+}
+
+.yg-promo-advanced-date__copy b {
+    display: block;
+    margin-bottom: 3px;
+    color: #30485B;
+    font-size: .76rem;
+    font-weight: 950;
+}
+
+.yg-promo-advanced-date__copy small {
+    display: block;
+    color: #8494A3;
+    font-size: .66rem;
+    font-weight: 650;
+    line-height: 1.65;
+}
+
+.yg-promo-advanced-date__arrow {
+    color: #7C8D9D;
+    transition: transform .18s ease;
+}
+
+.yg-promo-advanced-date[open] .yg-promo-advanced-date__arrow {
+    transform: rotate(180deg);
+}
+
+.yg-promo-advanced-date__body {
+    padding: 13px;
+    border-top: 1px solid #EDF3F6;
+    background: #FBFDFE;
+}
+
+.yg-promo-advanced-help {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 12px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: #F1FAFD;
+    color: #607789;
+    font-size: .67rem;
+    font-weight: 650;
+    line-height: 1.75;
+}
+
+    .yg-promo-advanced-help i {
+        color: #00A6DA;
+        margin-top: 2px;
+    }
+
+/* خطأ الفورم قصير وواضح، لا Stack Trace. */
+.yg-promo-form-alert {
+    white-space: normal !important;
+    word-break: break-word !important;
+    max-height: 110px !important;
+    overflow-y: auto !important;
+    font-family: "Tajawal", sans-serif !important;
+}
+
+@media (max-width: 768px) {
+    .swal2-container:has(.yg-promo-swal-popup) {
+        padding: 0 !important;
+    }
+
+    .swal2-popup.yg-promo-swal-popup {
+        width: 100vw !important;
+        max-width: 100vw !important;
+        height: 100dvh !important;
+        max-height: 100dvh !important;
+        border-radius: 0 !important;
+        border: 0 !important;
+    }
+
+    .yg-promo-stepper {
+        min-height: 64px !important;
+        padding: 8px 10px !important;
+        gap: 6px !important;
+    }
+
+        .yg-promo-stepper button {
+            min-height: 46px !important;
+            padding: 6px !important;
+            justify-content: center !important;
+        }
+
+            .yg-promo-stepper button span {
+                display: none !important;
+            }
+
+    .yg-promo-wizard__body {
+        padding: 14px 12px !important;
+    }
+
+    .yg-promo-wizard__footer {
+        min-height: 66px !important;
+        padding: 9px 10px !important;
+        gap: 7px !important;
+        flex-wrap: nowrap !important;
+    }
+
+    .yg-promo-primary,
+    .yg-promo-publish,
+    .yg-promo-secondary,
+    .yg-promo-draft {
+        min-width: 0 !important;
+        flex: 1 1 0 !important;
+        padding-inline: 10px !important;
+    }
+}
+
+@media (max-width: 520px) {
+    .yg-promo-tabs {
+        overflow-x: auto !important;
+    }
+
+        .yg-promo-tabs button {
+            flex: 0 0 auto !important;
+            min-width: 112px !important;
+        }
+
+    .yg-promo-advanced-date > summary {
+        grid-template-columns: 38px minmax(0,1fr) 20px;
+    }
+
+    .yg-promo-advanced-date__icon {
+        width: 38px;
+        height: 38px;
+    }
+}
+
+/* ==========================================================================
+   MOBILE BOTTOM SHEET — CLEAN FINAL / PROMOTIONS
+   ========================================================================== */
+
+@keyframes ygMobileSheetEnter {
+    from {
+        transform: translateY(100%);
+        opacity: .98;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+@media (max-width: 768px) {
+
+    .swal2-container:has(.yg-promo-swal-popup) {
+        display: flex !important;
+        align-items: flex-end !important;
+        justify-content: center !important;
+        padding: 0 6px !important;
+        background: rgba(5, 32, 60, .40) !important;
+        backdrop-filter: blur(5px) !important;
+        -webkit-backdrop-filter: blur(5px) !important;
+    }
+
+    .swal2-popup.yg-promo-swal-popup {
+        position: relative !important;
+        inset: auto !important;
+        width: calc(100vw - 12px) !important;
+        max-width: calc(100vw - 12px) !important;
+        height: 82dvh !important;
+        min-height: 0 !important;
+        max-height: 82dvh !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: 1px solid rgba(5,32,60,.08) !important;
+        border-bottom: 0 !important;
+        border-radius: 28px 28px 0 0 !important;
+        overflow: hidden !important;
+        display: flex !important;
+        flex-direction: column !important;
+        animation: ygMobileSheetEnter .30s cubic-bezier(.22,.8,.3,1) both;
+    }
+
+        .swal2-popup.yg-promo-swal-popup::before {
+            content: "";
+            position: absolute;
+            top: 8px;
+            left: 50%;
+            z-index: 100;
+            width: 54px;
+            height: 5px;
+            transform: translateX(-50%);
+            border-radius: 999px;
+            background: #D5E0E6;
+            pointer-events: none;
+        }
+
+        .swal2-popup.yg-promo-swal-popup .swal2-html-container,
+        .swal2-html-container.yg-promo-swal-html {
+            width: 100% !important;
+            height: 100% !important;
+            min-height: 0 !important;
+            max-height: 100% !important;
+            flex: 1 1 auto !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: hidden !important;
+        }
+
+    /* نحافظ على Grid الأصلي لأنه صحيح:
+       head / stepper / body(scroll) / footer */
+    .yg-promo-wizard {
+        width: 100% !important;
+        height: 100% !important;
+        min-height: 0 !important;
+        max-height: 100% !important;
+        display: grid !important;
+        grid-template-rows: auto auto minmax(0, 1fr) auto !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+        background: #fff !important;
+    }
+
+    .yg-promo-wizard__head {
+        padding-top: 21px !important;
+        flex: none !important;
+    }
+
+    .yg-promo-wizard__title p {
+        display: none !important;
+    }
+
+    .yg-promo-stepper {
+        min-height: 58px !important;
+        padding: 7px 10px !important;
+        gap: 6px !important;
+    }
+
+        .yg-promo-stepper button {
+            min-height: 42px !important;
+            padding: 5px !important;
+        }
+
+            .yg-promo-stepper button span {
+                display: none !important;
+            }
+
+    /* فقط هذه المنطقة تتحرك. لا height:0 ولا max-height يدوي. */
+    .yg-promo-wizard__body {
+        min-height: 0 !important;
+        height: auto !important;
+        max-height: none !important;
+        padding: 14px 12px 18px !important;
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+        overscroll-behavior: contain !important;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .yg-promo-wizard__footer {
+        position: relative !important;
+        inset: auto !important;
+        display: flex !important;
+        align-items: center !important;
+        flex-wrap: nowrap !important;
+        width: 100% !important;
+        min-height: 62px !important;
+        max-height: 62px !important;
+        margin: 0 !important;
+        padding: 8px 10px !important;
+        background: #fff !important;
+        border-top: 1px solid #E2EDF3 !important;
+        box-shadow: 0 -9px 24px rgba(38,77,101,.09) !important;
+        z-index: 20 !important;
+    }
+
+    .yg-promo-primary,
+    .yg-promo-publish,
+    .yg-promo-secondary,
+    .yg-promo-draft {
+        min-width: 0 !important;
+        min-height: 44px !important;
+        height: 44px !important;
+        flex: 1 1 0 !important;
+        margin: 0 !important;
+        padding-inline: 8px !important;
+    }
+}
+
+@media (max-width: 768px) and (max-height: 600px) {
+    .swal2-popup.yg-promo-swal-popup {
+        height: calc(100dvh - 14px) !important;
+        max-height: calc(100dvh - 14px) !important;
+    }
+
+    .yg-promo-wizard__head {
+        padding: 17px 12px 10px !important;
+    }
+
+    .yg-promo-wizard__title-icon {
+        width: 38px !important;
+        height: 38px !important;
+        flex-basis: 38px !important;
+    }
+}
+
+/* ========================================================================== 
+   PROMOTION_MOBILE_EXTERNAL_FOOTER_V10
+   الحل النهائي لمودال العرض على الهاتف:
+   JavaScript ينقل .yg-promo-wizard__footer ليصبح ابنًا مباشرًا للـ popup.
+   لذلك لا يمكن للـ htmlContainer أو Body أن يقص الأزرار أو يخفيها.
+   ========================================================================== */
+@media (max-width: 768px) {
+    .swal2-popup.yg-promo-swal-popup.yg-promo-swal-popup--external-footer {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) !important;
+        grid-template-rows: minmax(0, 1fr) 64px !important;
+        height: 82dvh !important;
+        min-height: 0 !important;
+        max-height: 82dvh !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+    }
+
+    .yg-promo-swal-popup--external-footer > .swal2-html-container,
+    .yg-promo-swal-popup--external-footer > .yg-promo-swal-html {
+        grid-row: 1 !important;
+        width: 100% !important;
+        height: 100% !important;
+        min-height: 0 !important;
+        max-height: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+    }
+
+    /* بعد نقل الـ Footer، الفورم يحتوي فقط: Header + Stepper + Body */
+    .yg-promo-swal-popup--external-footer .yg-promo-wizard {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) !important;
+        grid-template-rows: auto auto minmax(0, 1fr) !important;
+        width: 100% !important;
+        height: 100% !important;
+        min-height: 0 !important;
+        max-height: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+    }
+
+    .yg-promo-swal-popup--external-footer .yg-promo-wizard__body {
+        grid-row: 3 !important;
+        min-height: 0 !important;
+        height: auto !important;
+        max-height: none !important;
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+        overscroll-behavior: contain !important;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* Footer مستقل تماماً عن منطقة السكرول. */
+    .yg-promo-swal-popup--external-footer > .yg-promo-wizard__footer {
+        grid-row: 2 !important;
+        position: relative !important;
+        inset: auto !important;
+        z-index: 500 !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 7px !important;
+        flex-wrap: nowrap !important;
+        width: 100% !important;
+        height: 64px !important;
+        min-height: 64px !important;
+        max-height: 64px !important;
+        margin: 0 !important;
+        padding: 8px 10px !important;
+        box-sizing: border-box !important;
+        background: #FFFFFF !important;
+        border-top: 1px solid #E2EDF3 !important;
+        box-shadow: 0 -10px 28px rgba(38, 77, 101, .10) !important;
+        overflow: hidden !important;
+    }
+
+        .yg-promo-swal-popup--external-footer > .yg-promo-wizard__footer [hidden] {
+            display: none !important;
+        }
+
+        .yg-promo-swal-popup--external-footer > .yg-promo-wizard__footer .yg-promo-footer-spacer {
+            flex: 1 1 auto !important;
+            min-width: 0 !important;
+        }
+
+        .yg-promo-swal-popup--external-footer > .yg-promo-wizard__footer button:not([hidden]) {
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            height: 44px !important;
+            min-height: 44px !important;
+            max-height: 44px !important;
+            margin: 0 !important;
+        }
+
+    .yg-promo-swal-popup--external-footer #promotionNextStep,
+    .yg-promo-swal-popup--external-footer #publishPromotion {
+        min-width: 104px !important;
+    }
+
+    .yg-promo-swal-popup--external-footer #promotionPreviousStep,
+    .yg-promo-swal-popup--external-footer #savePromotionDraft {
+        min-width: 96px !important;
+    }
+}
+
+@media (max-width: 768px) and (max-height: 600px) {
+    .swal2-popup.yg-promo-swal-popup.yg-promo-swal-popup--external-footer {
+        height: calc(100dvh - 10px) !important;
+        max-height: calc(100dvh - 10px) !important;
+    }
+}
+
+/* ============================================================================
+ * PROMOTION BUILDER V2 — شرط + مكافأة + صورة المنشأة
+ * إضافات مدمجة مع التصميم الحالي، بدون تغيير هيكل الصفحة الأساسي.
+ * ========================================================================== */
+
+.yg-promo-summary {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    margin-bottom: 13px;
+    padding: 10px 12px;
+    color: var(--promo-primary-dark);
+    background: linear-gradient(135deg, var(--promo-primary-soft), #ffffff);
+    border: 1px solid rgba(0, 166, 218, 0.14);
+    border-radius: 13px;
+    font-size: 0.78rem;
+    font-weight: 800;
+    line-height: 1.7;
+}
+
+    .yg-promo-summary i {
+        flex: 0 0 auto;
+        margin-top: 2px;
+        color: var(--promo-coral);
+    }
+
+.yg-promo-reward-badge {
+    max-width: calc(100% - 24px);
+}
+
+    .yg-promo-reward-badge strong {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+    }
+
+.yg-promo-place-image-note {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 18px;
+    padding: 13px 15px;
+    background: linear-gradient(135deg, #F6FCFE, #FFFFFF);
+    border: 1px solid rgba(0, 166, 218, 0.14);
+    border-radius: 16px;
+}
+
+.yg-promo-place-image-note__icon {
+    display: grid;
+    place-items: center;
+    flex: 0 0 42px;
+    width: 42px;
+    height: 42px;
+    color: var(--promo-primary);
+    background: var(--promo-primary-soft);
+    border-radius: 12px;
+    font-size: 1.05rem;
+}
+
+.yg-promo-place-image-note > div {
+    min-width: 0;
+    flex: 1;
+}
+
+.yg-promo-place-image-note b,
+.yg-promo-place-image-note small {
+    display: block;
+}
+
+.yg-promo-place-image-note b {
+    margin-bottom: 2px;
+    color: var(--promo-text);
+    font-size: 0.84rem;
+    font-weight: 900;
+}
+
+.yg-promo-place-image-note small {
+    color: var(--promo-muted);
+    font-size: 0.75rem;
+    font-weight: 650;
+    line-height: 1.6;
+}
+
+.yg-promo-place-image-note > i {
+    flex: 0 0 auto;
+    color: var(--promo-green);
+    font-size: 1.05rem;
+}
+
+.yg-promo-offer-mode,
+.yg-promo-reward-types {
+    display: grid;
+    gap: 10px;
+}
+
+.yg-promo-offer-mode {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin: 4px 0 16px;
+}
+
+.yg-promo-reward-types {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin-bottom: 16px;
+}
+
+    .yg-promo-offer-mode label,
+    .yg-promo-reward-types label {
+        position: relative;
+        min-width: 0;
+        cursor: pointer;
+    }
+
+    .yg-promo-offer-mode input,
+    .yg-promo-reward-types input {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    .yg-promo-offer-mode label > span,
+    .yg-promo-reward-types label > span {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        min-height: 68px;
+        padding: 12px 13px;
+        color: var(--promo-text-soft);
+        background: #fff;
+        border: 1px solid var(--promo-line);
+        border-radius: 15px;
+        transition: border-color .2s ease, box-shadow .2s ease, background-color .2s ease, transform .2s ease;
+    }
+
+.yg-promo-offer-mode label > span {
+    align-items: flex-start;
+    flex-wrap: wrap;
+}
+
+    .yg-promo-offer-mode label > span i,
+    .yg-promo-reward-types label > span i {
+        display: grid;
+        place-items: center;
+        flex: 0 0 34px;
+        width: 34px;
+        height: 34px;
+        color: var(--promo-primary);
+        background: var(--promo-primary-soft);
+        border-radius: 10px;
+    }
+
+.yg-promo-offer-mode b,
+.yg-promo-reward-types b {
+    color: var(--promo-text);
+    font-size: .82rem;
+    font-weight: 900;
+}
+
+.yg-promo-offer-mode small {
+    flex-basis: calc(100% - 44px);
+    margin-inline-start: 44px;
+    margin-top: -16px;
+    color: var(--promo-muted);
+    font-size: .7rem;
+    font-weight: 650;
+    line-height: 1.55;
+}
+
+.yg-promo-offer-mode input:checked + span,
+.yg-promo-reward-types input:checked + span {
+    color: var(--promo-primary-dark);
+    background: linear-gradient(135deg, var(--promo-primary-soft), #fff);
+    border-color: rgba(0, 166, 218, .42);
+    box-shadow: 0 0 0 3px rgba(0, 166, 218, .07), var(--promo-shadow-sm);
+    transform: translateY(-1px);
+}
+
+    .yg-promo-offer-mode input:checked + span i,
+    .yg-promo-reward-types input:checked + span i {
+        color: #fff;
+        background: linear-gradient(135deg, var(--promo-primary), var(--promo-primary-dark));
+    }
+
+.yg-promo-reward-builder {
+    margin-top: 12px;
+    padding: 16px;
+    background: linear-gradient(180deg, #FBFEFF, #F7FBFD);
+    border: 1px solid var(--promo-line);
+    border-radius: 18px;
+}
+
+.yg-promo-builder-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 13px;
+}
+
+    .yg-promo-builder-label > span {
+        display: grid;
+        place-items: center;
+        flex: 0 0 38px;
+        width: 38px;
+        height: 38px;
+        color: var(--promo-coral);
+        background: var(--promo-coral-soft);
+        border-radius: 11px;
+    }
+
+    .yg-promo-builder-label > div {
+        min-width: 0;
+    }
+
+    .yg-promo-builder-label b,
+    .yg-promo-builder-label small {
+        display: block;
+    }
+
+    .yg-promo-builder-label b {
+        color: var(--promo-text);
+        font-size: .86rem;
+        font-weight: 900;
+    }
+
+    .yg-promo-builder-label small {
+        margin-top: 2px;
+        color: var(--promo-muted);
+        font-size: .72rem;
+        font-weight: 650;
+    }
+
+.yg-promo-reward-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.yg-promo-live-summary {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    margin-top: 16px;
+    padding: 13px 14px;
+    color: var(--promo-text);
+    background: #fff;
+    border: 1px dashed rgba(0, 166, 218, .38);
+    border-radius: 15px;
+}
+
+    .yg-promo-live-summary > span {
+        display: grid;
+        place-items: center;
+        flex: 0 0 40px;
+        width: 40px;
+        height: 40px;
+        color: #fff;
+        background: linear-gradient(135deg, var(--promo-primary), var(--promo-coral));
+        border-radius: 12px;
+    }
+
+    .yg-promo-live-summary > div {
+        min-width: 0;
+    }
+
+    .yg-promo-live-summary small,
+    .yg-promo-live-summary b {
+        display: block;
+    }
+
+    .yg-promo-live-summary small {
+        margin-bottom: 2px;
+        color: var(--promo-muted);
+        font-size: .68rem;
+        font-weight: 750;
+    }
+
+    .yg-promo-live-summary b {
+        color: var(--promo-text);
+        font-size: .8rem;
+        font-weight: 850;
+        line-height: 1.7;
+        overflow-wrap: anywhere;
+    }
+
+@media (max-width: 768px) {
+    .yg-promo-offer-mode,
+    .yg-promo-reward-types,
+    .yg-promo-reward-fields {
+        grid-template-columns: 1fr;
+    }
+
+    .yg-promo-reward-builder {
+        padding: 12px;
+        border-radius: 15px;
+    }
+
+    .yg-promo-offer-mode label > span,
+    .yg-promo-reward-types label > span {
+        min-height: 58px;
+        padding: 10px 11px;
+    }
+
+    .yg-promo-offer-mode small {
+        flex-basis: 100%;
+        margin-inline-start: 44px;
+        margin-top: -14px;
+    }
+
+    .yg-promo-place-image-note {
+        align-items: flex-start;
+        padding: 11px 12px;
+    }
+
+    .yg-promo-live-summary {
+        align-items: flex-start;
+        padding: 11px 12px;
+    }
+
+    .yg-promo-card__media {
+        height: 154px;
+    }
+
+    .yg-promo-summary {
+        font-size: .76rem;
+    }
+}
+
+@media (max-width: 430px) {
+    .yg-promo-place-image-note__icon,
+    .yg-promo-live-summary > span {
+        flex-basis: 36px;
+        width: 36px;
+        height: 36px;
+    }
+
+    .yg-promo-reward-types label > span i,
+    .yg-promo-offer-mode label > span i {
+        flex-basis: 31px;
+        width: 31px;
+        height: 31px;
+    }
+}
+
+
+/* ============================================================================
+ * REPEATABLE REWARD + FREE QUANTITY CONDITION
+ * ========================================================================== */
+.yg-promo-repeat-box {
+    grid-column: 1 / -1;
+    margin-top: 4px;
+    padding: 13px 14px;
+    border: 1px solid #DDECF3;
+    border-radius: 14px;
+    background: #F8FCFE;
+}
+
+.yg-promo-repeat-toggle {
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+    margin: 0;
+    cursor: pointer;
+}
+
+    .yg-promo-repeat-toggle > input {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+    }
+
+.yg-promo-repeat-switch {
+    position: relative;
+    width: 43px;
+    height: 24px;
+    border-radius: 999px;
+    background: #D7E4EA;
+    transition: .18s ease;
+}
+
+    .yg-promo-repeat-switch::after {
+        content: "";
+        position: absolute;
+        top: 3px;
+        right: 3px;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: #fff;
+        box-shadow: 0 2px 6px rgba(22, 60, 82, .18);
+        transition: .18s ease;
+    }
+
+.yg-promo-repeat-toggle > input:checked + .yg-promo-repeat-switch {
+    background: var(--promo-primary, #00A6DA);
+}
+
+    .yg-promo-repeat-toggle > input:checked + .yg-promo-repeat-switch::after {
+        transform: translateX(-19px);
+    }
+
+.yg-promo-repeat-copy b,
+.yg-promo-repeat-copy small {
+    display: block;
+}
+
+.yg-promo-repeat-copy b {
+    color: #2D4659;
+    font-size: .75rem;
+    font-weight: 900;
+}
+
+.yg-promo-repeat-copy small {
+    margin-top: 3px;
+    color: #7E91A1;
+    font-size: .64rem;
+    line-height: 1.6;
+    font-weight: 650;
+}
+
+.yg-promo-free-condition {
+    margin-top: 14px;
+    padding: 14px;
+    border: 1px solid #DCEBF2;
+    border-radius: 15px;
+    background: linear-gradient(180deg, #FBFEFF, #F7FBFD);
+}
+
+.yg-promo-field-hint {
+    display: block;
+    margin-top: 5px;
+    color: #8597A5;
+    font-size: .62rem;
+    font-weight: 650;
+    line-height: 1.5;
+}
+
+.yg-promo-condition-example {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-top: 10px;
+    padding: 10px 11px;
+    color: #526B7D;
+    background: #FFFDF6;
+    border: 1px solid #F1E5B8;
+    border-radius: 11px;
+    font-size: .65rem;
+    line-height: 1.7;
+}
+
+    .yg-promo-condition-example i {
+        color: #D69A14;
+        margin-top: 2px;
+    }
+
+@media (max-width: 600px) {
+    .yg-promo-repeat-toggle {
+        grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .yg-promo-repeat-copy {
+        grid-column: 2;
+    }
+
+    .yg-promo-free-condition {
+        padding: 12px;
+    }
+}

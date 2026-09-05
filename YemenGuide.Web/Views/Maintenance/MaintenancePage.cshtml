@@ -1,0 +1,349 @@
+﻿@model YemenGuide.Web.Maintenance.MaintenanceState
+@using System.Linq
+@{
+    Layout = null;
+
+    string siteName = string.IsNullOrWhiteSpace(Model.SiteName)
+        ? "دليلك اليمني"
+        : Model.SiteName;
+
+    string title = string.IsNullOrWhiteSpace(Model.Title)
+        ? "نعود إليكم قريبًا"
+        : Model.Title;
+
+    string message = string.IsNullOrWhiteSpace(Model.Message)
+        ? "نعمل حاليًا على تحسين المنصة وسنعود إليكم قريبًا."
+        : Model.Message;
+
+    string logoPath = string.IsNullOrWhiteSpace(Model.LogoPath)
+        ? "/images/logo1.png"
+        : Model.LogoPath;
+
+    string faviconPath = string.IsNullOrWhiteSpace(Model.FaviconPath)
+        ? "/favicon.ico"
+        : Model.FaviconPath;
+
+    string endUtcIso = Model.EndAtUtc?.ToString("O") ?? string.Empty;
+
+    string whatsAppDigits = string.IsNullOrWhiteSpace(Model.WhatsAppNumber)
+        ? string.Empty
+        : new string(Model.WhatsAppNumber.Where(char.IsDigit).ToArray());
+
+    bool canShowContact =
+        Model.ShowContact &&
+        (!string.IsNullOrWhiteSpace(Model.ContactEmail) ||
+         !string.IsNullOrWhiteSpace(Model.SupportPhone) ||
+         !string.IsNullOrWhiteSpace(Model.WhatsAppNumber));
+
+    bool showTeamGateway = User.Identity?.IsAuthenticated != true;
+}
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1, viewport-fit=cover" />
+
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="theme-color" content="#061b31" />
+
+    <title>@title | @siteName</title>
+
+    <link rel="icon"
+          type="image/x-icon"
+          href="@faviconPath" />
+
+    <link rel="stylesheet"
+          href="/lib/bootstrap-icons/bootstrap-icons.css" />
+
+    <link rel="stylesheet"
+          href="/css/shared/maintenance.css"
+          asp-append-version="true" />
+</head>
+
+<body class="yg-maintenance"
+      data-maintenance-root
+      data-logo-src="@logoPath"
+      data-end-utc="@endUtcIso">
+
+    <div class="yg-maintenance-bg" aria-hidden="true">
+        <div class="yg-maintenance-bg__base"></div>
+        <div class="yg-maintenance-bg__aurora yg-maintenance-bg__aurora--one"></div>
+        <div class="yg-maintenance-bg__aurora yg-maintenance-bg__aurora--two"></div>
+        <div class="yg-maintenance-bg__aurora yg-maintenance-bg__aurora--three"></div>
+        <div class="yg-maintenance-bg__mesh"></div>
+        <div class="yg-maintenance-bg__beam"></div>
+
+        <img class="yg-maintenance-bg__watermark"
+             src="@logoPath"
+             alt=""
+             aria-hidden="true" />
+    </div>
+
+    <main class="yg-maintenance-shell">
+
+        <header class="yg-maintenance-topbar">
+            <div class="yg-brand">
+                <span class="yg-brand__emblem">
+                    <span class="yg-brand__orbit yg-brand__orbit--outer"></span>
+                    <span class="yg-brand__orbit yg-brand__orbit--inner"></span>
+
+                    <img src="@logoPath"
+                         alt="شعار @siteName"
+                         class="yg-brand__logo"
+                         data-brand-logo />
+                </span>
+
+                <span class="yg-brand__copy">
+                    <strong>@siteName</strong>
+
+                    @if (!string.IsNullOrWhiteSpace(Model.SiteDescription))
+                    {
+                        <small>@Model.SiteDescription</small>
+                    }
+                </span>
+            </div>
+
+            <div class="yg-maintenance-status">
+                <span class="yg-maintenance-status__pulse"></span>
+                <span>تحديثات جارية الآن</span>
+            </div>
+        </header>
+
+        <section class="yg-maintenance-hero">
+
+            <div class="yg-maintenance-copy">
+
+                <div class="yg-maintenance-kicker">
+                    <span class="yg-maintenance-kicker__icon">
+                        <i class="bi bi-stars"></i>
+                    </span>
+
+                    <span>نطوّر التجربة من أجلك</span>
+                </div>
+
+                <h1>@title</h1>
+
+                <p class="yg-maintenance-message">
+                    @message
+                </p>
+
+                <div class="yg-maintenance-trust">
+                    <div class="yg-trust-item">
+                        <span class="yg-trust-item__icon">
+                            <i class="bi bi-shield-check"></i>
+                        </span>
+                        <span>
+                            <strong>بياناتك محفوظة</strong>
+                            <small>أعمال الصيانة لا تؤثر على معلومات حسابك.</small>
+                        </span>
+                    </div>
+
+                    <div class="yg-trust-item">
+                        <span class="yg-trust-item__icon">
+                            <i class="bi bi-lightning-charge"></i>
+                        </span>
+                        <span>
+                            <strong>تحسينات قيد التنفيذ</strong>
+                            <small>نعمل على رفع الاستقرار والأداء وجودة التجربة.</small>
+                        </span>
+                    </div>
+                </div>
+
+                @if (Model.EndAtUtc.HasValue)
+                {
+                    <section class="yg-countdown-card"
+                             aria-label="الوقت المتوقع المتبقي">
+
+                        <div class="yg-countdown-card__head">
+                            <div>
+                                <span>الوقت المتوقع للعودة</span>
+                                <strong>نعود خلال</strong>
+                            </div>
+
+                            <i class="bi bi-hourglass-split"></i>
+                        </div>
+
+                        <div class="yg-countdown"
+                             data-countdown
+                             data-end-utc="@endUtcIso">
+
+                            <div class="yg-countdown__unit">
+                                <strong data-days>00</strong>
+                                <span>يوم</span>
+                            </div>
+
+                            <span class="yg-countdown__separator">:</span>
+
+                            <div class="yg-countdown__unit">
+                                <strong data-hours>00</strong>
+                                <span>ساعة</span>
+                            </div>
+
+                            <span class="yg-countdown__separator">:</span>
+
+                            <div class="yg-countdown__unit">
+                                <strong data-minutes>00</strong>
+                                <span>دقيقة</span>
+                            </div>
+
+                            <span class="yg-countdown__separator">:</span>
+
+                            <div class="yg-countdown__unit">
+                                <strong data-seconds>00</strong>
+                                <span>ثانية</span>
+                            </div>
+                        </div>
+                    </section>
+                }
+                else
+                {
+                    <div class="yg-return-note">
+                        <span class="yg-return-note__icon">
+                            <i class="bi bi-clock-history"></i>
+                        </span>
+
+                        <span>
+                            <small>موعد العودة</small>
+                            <strong>سنعود إليك في أقرب وقت</strong>
+                        </span>
+                    </div>
+                }
+
+                <div class="yg-maintenance-actions">
+                    <button type="button"
+                            class="yg-action yg-action--primary"
+                            data-maintenance-refresh>
+                        <i class="bi bi-arrow-clockwise"></i>
+                        <span>التحقق من عودة الخدمة</span>
+                    </button>
+
+                    @if (canShowContact)
+                    {
+                        <button type="button"
+                                class="yg-action yg-action--glass"
+                                data-contact-toggle
+                                aria-expanded="false"
+                                aria-controls="maintenanceContactPanel">
+                            <i class="bi bi-headset"></i>
+                            <span>تواصل معنا</span>
+                        </button>
+                    }
+                </div>
+
+                @if (canShowContact)
+                {
+                    <div class="yg-contact-panel"
+                         id="maintenanceContactPanel"
+                         data-contact-panel
+                         hidden>
+
+                        @if (!string.IsNullOrWhiteSpace(Model.SupportPhone))
+                        {
+                            <a href="tel:@Model.SupportPhone"
+                               class="yg-contact-link">
+                                <i class="bi bi-telephone-fill"></i>
+                                <span>
+                                    <small>اتصال مباشر</small>
+                                    <strong>@Model.SupportPhone</strong>
+                                </span>
+                            </a>
+                        }
+
+                        @if (!string.IsNullOrWhiteSpace(Model.WhatsAppNumber))
+                        {
+                            <a href="https://wa.me/@whatsAppDigits"
+                               target="_blank"
+                               rel="noopener noreferrer"
+                               class="yg-contact-link">
+                                <i class="bi bi-whatsapp"></i>
+                                <span>
+                                    <small>واتساب</small>
+                                    <strong>@Model.WhatsAppNumber</strong>
+                                </span>
+                            </a>
+                        }
+
+                        @if (!string.IsNullOrWhiteSpace(Model.ContactEmail))
+                        {
+                            <a href="mailto:@Model.ContactEmail"
+                               class="yg-contact-link">
+                                <i class="bi bi-envelope-fill"></i>
+                                <span>
+                                    <small>البريد الإلكتروني</small>
+                                    <strong>@Model.ContactEmail</strong>
+                                </span>
+                            </a>
+                        }
+                    </div>
+                }
+            </div>
+
+            <div class="yg-maintenance-visual"
+                 aria-hidden="true">
+
+                <div class="yg-visual-stage">
+                    <span class="yg-visual-stage__ring yg-visual-stage__ring--one"></span>
+                    <span class="yg-visual-stage__ring yg-visual-stage__ring--two"></span>
+                    <span class="yg-visual-stage__ring yg-visual-stage__ring--three"></span>
+
+                    <span class="yg-visual-stage__spark yg-visual-stage__spark--one"></span>
+                    <span class="yg-visual-stage__spark yg-visual-stage__spark--two"></span>
+                    <span class="yg-visual-stage__spark yg-visual-stage__spark--three"></span>
+                    <span class="yg-visual-stage__spark yg-visual-stage__spark--four"></span>
+
+                    <div class="yg-visual-core">
+                        <span class="yg-visual-core__glow"></span>
+
+                        <img src="@logoPath"
+                             alt=""
+                             class="yg-visual-core__logo" />
+                    </div>
+
+                    <div class="yg-visual-chip yg-visual-chip--top">
+                        <i class="bi bi-stars"></i>
+                        <span>تطوير مستمر</span>
+                    </div>
+
+                    <div class="yg-visual-chip yg-visual-chip--bottom">
+                        <span class="yg-visual-chip__live"></span>
+                        <span>الأنظمة قيد التحديث</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <footer class="yg-maintenance-footer">
+            <div class="yg-maintenance-footer__meta">
+                <span>
+                    <i class="bi bi-lock-fill"></i>
+                    اتصال آمن
+                </span>
+
+                <span class="yg-maintenance-footer__dot"></span>
+
+                <span>@siteName</span>
+            </div>
+
+            @if (showTeamGateway)
+            {
+                <a href="/Account/Login"
+                   class="yg-team-gateway"
+                   aria-label="بوابة الفريق">
+                    <span class="yg-team-gateway__icon">
+                        <i class="bi bi-shield-lock"></i>
+                    </span>
+
+                    <span class="yg-team-gateway__text">
+                        بوابة الفريق
+                    </span>
+                </a>
+            }
+        </footer>
+    </main>
+
+    <script src="/js/shared/maintenance.js"
+            asp-append-version="true"
+            defer></script>
+</body>
+</html>

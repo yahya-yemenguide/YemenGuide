@@ -1,0 +1,803 @@
+﻿@using System
+
+<div id="ygCalendarManager"
+     class="yg-calendar-shell"
+     dir="rtl"
+     data-calendar-version="v6-mobile-first-luxury">
+
+    <section class="yg-calendar-hero" aria-labelledby="ygCalendarTitle">
+        <div class="yg-hero-orb yg-hero-orb--one" aria-hidden="true"></div>
+        <div class="yg-hero-orb yg-hero-orb--two" aria-hidden="true"></div>
+        <div class="yg-hero-grid" aria-hidden="true"></div>
+
+        <div class="yg-hero-copy">
+            <div class="yg-hero-eyebrow">
+                <span class="yg-live-dot"></span>
+                <span>تشغيل ذكي · توفر مباشر · حجز سريع</span>
+            </div>
+
+            <h3 id="ygCalendarTitle" class="yg-hero-title">
+                التقويم والحجوزات
+                <span class="yg-hero-title-glow">المباشرة</span>
+            </h3>
+
+            <p class="yg-hero-description">
+                مساحة تشغيل هادئة وواضحة لمتابعة التوفر والحجوزات، وإضافة الحجز المباشر،
+                مع تطبيق نفس السياسات والمالية بدون ازدحام أو خطوات مربكة.
+            </p>
+
+            <div class="yg-active-place-pill" title="المنشأة المعتمدة من هيدر المالك">
+                <span class="yg-active-place-icon">
+                    <i class="bi bi-buildings-fill"></i>
+                </span>
+                <span class="yg-active-place-content">
+                    <small>المنشأة الحالية من الهيدر</small>
+                    <strong id="ygActivePlaceName">جاري تحميل المنشأة…</strong>
+                </span>
+                <span class="yg-active-place-state" id="ygActivePlaceCategory">—</span>
+            </div>
+        </div>
+
+        <div class="yg-hero-visual" aria-hidden="true">
+            <div class="yg-hero-calendar-cube">
+                <div class="yg-cube-layer yg-cube-layer--back"></div>
+                <div class="yg-cube-layer yg-cube-layer--mid"></div>
+                <div class="yg-cube-layer yg-cube-layer--front">
+                    <span class="yg-cube-month">YEMEN GUIDE</span>
+                    <strong class="yg-cube-day" id="ygHeroTodayDay">--</strong>
+                    <span class="yg-cube-label">اليوم</span>
+                </div>
+                <span class="yg-cube-spark yg-cube-spark--one"></span>
+                <span class="yg-cube-spark yg-cube-spark--two"></span>
+                <span class="yg-cube-spark yg-cube-spark--three"></span>
+            </div>
+        </div>
+    </section>
+
+    <section class="yg-calendar-commandbar" aria-label="أوامر التقويم">
+        <div class="yg-command-group yg-command-group--primary">
+            <button type="button" class="yg-command-btn yg-command-btn--primary" id="btnOpenManualBooking">
+                <span class="yg-command-icon"><i class="bi bi-calendar2-plus-fill"></i></span>
+                <span>
+                    <strong>حجز مباشر جديد</strong>
+                    <small>هاتف · حضور · واتساب</small>
+                </span>
+            </button>
+
+            <button type="button" class="yg-command-btn" id="btnCalendarToday">
+                <span class="yg-command-icon"><i class="bi bi-crosshair2"></i></span>
+                <span>
+                    <strong>اليوم</strong>
+                    <small>العودة للتاريخ الحالي</small>
+                </span>
+            </button>
+        </div>
+
+        <div class="yg-command-group">
+            <button type="button" class="yg-command-btn yg-command-btn--danger-soft" id="btnCloseCalendarRange">
+                <span class="yg-command-icon"><i class="bi bi-calendar2-x-fill"></i></span>
+                <span>
+                    <strong>إغلاق فترة</strong>
+                    <small>منع حجوزات جديدة</small>
+                </span>
+            </button>
+
+            <button type="button" class="yg-command-btn yg-command-btn--success-soft" id="btnReopenCalendarRange">
+                <span class="yg-command-icon"><i class="bi bi-calendar2-check-fill"></i></span>
+                <span>
+                    <strong>إعادة فتح</strong>
+                    <small>إزالة إغلاق استثنائي</small>
+                </span>
+            </button>
+
+            <button type="button" class="yg-icon-btn" id="btnSyncCalendar" title="تحديث التقويم" aria-label="تحديث التقويم">
+                <i class="bi bi-arrow-repeat"></i>
+            </button>
+        </div>
+    </section>
+    <section class="yg-calendar-metrics" id="ygCalendarKpis" aria-label="ملخص تشغيل التقويم">
+        <div class="yg-metric-grid">
+            <article class="yg-metric-card yg-metric-card--bookings">
+                <span class="yg-metric-icon"><i class="bi bi-journal-check"></i></span>
+                <div><small>حجوزات الفترة</small><strong id="ygKpiTotal">0</strong></div>
+            </article>
+
+            <article class="yg-metric-card yg-metric-card--confirmed">
+                <span class="yg-metric-icon"><i class="bi bi-patch-check-fill"></i></span>
+                <div><small>مؤكد</small><strong id="ygKpiConfirmed">0</strong></div>
+            </article>
+
+            <article class="yg-metric-card yg-metric-card--awaiting">
+                <span class="yg-metric-icon"><i class="bi bi-hourglass-split"></i></span>
+                <div><small>انتظار دفع / مراجعة</small><strong id="ygKpiAwaiting">0</strong></div>
+            </article>
+
+            <article class="yg-metric-card yg-metric-card--occupied">
+                <span class="yg-metric-icon"><i class="bi bi-door-closed-fill"></i></span>
+                <div><small>مشغول اليوم</small><strong id="ygKpiOccupied">0</strong></div>
+            </article>
+
+            <article class="yg-metric-card yg-metric-card--available">
+                <span class="yg-metric-icon"><i class="bi bi-door-open-fill"></i></span>
+                <div><small>متاح اليوم</small><strong id="ygKpiAvailable">0</strong></div>
+            </article>
+
+            <article class="yg-metric-card yg-metric-card--occupancy">
+                <span class="yg-metric-icon"><i class="bi bi-speedometer2"></i></span>
+                <div><small>إشغال اليوم</small><strong id="ygKpiOccupancy">0%</strong></div>
+            </article>
+        </div>
+
+        <div class="yg-metric-meta" aria-label="مؤشرات إضافية">
+            <span><i class="bi bi-telephone-inbound-fill"></i> مباشر <b id="ygKpiManual">0</b></span>
+            <span><i class="bi bi-globe2"></i> أونلاين <b id="ygKpiOnline">0</b></span>
+            <span><i class="bi bi-lock-fill"></i> أيام مغلقة <b id="ygKpiClosed">0</b></span>
+        </div>
+    </section>
+
+<section class="yg-policy-strip" id="ygPolicyStrip" aria-label="طبقة السياسات">
+        <div class="yg-policy-strip-title">
+            <span><i class="bi bi-shield-check"></i></span>
+            <div>
+                <strong>السياسات التشغيلية المطبقة تلقائيًا</strong>
+                <small>هذه القواعد تُفحص على الخادم قبل تثبيت أي حجز مباشر.</small>
+            </div>
+        </div>
+        <div class="yg-policy-chips">
+            <span class="yg-policy-chip"><i class="bi bi-clock"></i> دخول <b id="ygPolicyCheckIn">--</b></span>
+            <span class="yg-policy-chip"><i class="bi bi-clock-history"></i> خروج <b id="ygPolicyCheckOut">--</b></span>
+            <span class="yg-policy-chip"><i class="bi bi-alarm"></i> إشعار مسبق <b id="ygPolicyNotice">0 س</b></span>
+            <span class="yg-policy-chip"><i class="bi bi-hourglass"></i> تجهيز <b id="ygPolicyBuffer">0 س</b></span>
+            <span class="yg-policy-chip"><i class="bi bi-calendar-range"></i> أفق الحجز <b id="ygPolicyHorizon">غير محدد</b></span>
+        </div>
+    </section>
+
+    <section class="yg-calendar-main-card">
+        <div class="yg-calendar-card-head">
+            <div class="yg-calendar-heading">
+                <span class="yg-section-kicker">LIVE AVAILABILITY</span>
+                <h4><i class="bi bi-calendar3-week-fill"></i> التقويم والتوفر الحقيقي</h4>
+                <p>عرض هادئ وواضح للتوفر؛ اضغط على اليوم لعرض الحجوزات أو إنشاء حجز مباشر.</p>
+            </div>
+
+            <div class="yg-calendar-legend" aria-label="دليل حالات التقويم">
+                <span class="yg-legend-chip yg-legend-chip--confirmed"><i class="bi bi-patch-check-fill"></i><b>مؤكد</b></span>
+                <span class="yg-legend-chip yg-legend-chip--awaiting"><i class="bi bi-hourglass-split"></i><b>انتظار عربون</b></span>
+                <span class="yg-legend-chip yg-legend-chip--review"><i class="bi bi-receipt-cutoff"></i><b>مراجعة دفع</b></span>
+                <span class="yg-legend-chip yg-legend-chip--pending"><i class="bi bi-calendar2-event"></i><b>طلب جديد</b></span>
+                <span class="yg-legend-chip yg-legend-chip--completed"><i class="bi bi-check2-all"></i><b>مكتمل</b></span>
+                <span class="yg-legend-chip yg-legend-chip--noshow"><i class="bi bi-person-x-fill"></i><b>عدم حضور</b></span>
+                <span class="yg-legend-chip yg-legend-chip--cancelled"><i class="bi bi-x-circle-fill"></i><b>ملغي/مرفوض</b></span>
+                <span class="yg-legend-chip yg-legend-chip--expired"><i class="bi bi-clock-history"></i><b>انتهت المهلة</b></span>
+                <span class="yg-legend-chip yg-legend-chip--online"><i class="bi bi-globe2"></i><b>أونلاين</b></span>
+                <span class="yg-legend-chip yg-legend-chip--manual"><i class="bi bi-telephone-inbound-fill"></i><b>مباشر</b></span>
+                <span class="yg-legend-chip yg-legend-chip--closed"><i class="bi bi-lock-fill"></i><b>مغلق</b></span>
+            </div>
+        </div>
+
+        <div class="yg-calendar-scope-filter" role="group" aria-label="فلترة حالات الحجوزات">
+            <span class="yg-calendar-scope-filter__label"><i class="bi bi-funnel-fill"></i> عرض الحجوزات</span>
+            <button type="button" class="is-active" data-calendar-scope="active" aria-pressed="true">
+                <i class="bi bi-lightning-charge-fill"></i><span>النشطة</span>
+            </button>
+            <button type="button" data-calendar-scope="history" aria-pressed="false">
+                <i class="bi bi-clock-history"></i><span>التاريخية</span>
+            </button>
+            <button type="button" data-calendar-scope="all" aria-pressed="false">
+                <i class="bi bi-layers-fill"></i><span>الكل</span>
+            </button>
+        </div>
+
+        <div class="yg-calendar-toolbar" aria-label="التنقل في التقويم">
+            <div class="yg-calendar-nav">
+                <button type="button" id="ygCalendarPrev" class="yg-cal-icon-btn" aria-label="السابق"><i class="bi bi-chevron-right"></i></button>
+                <button type="button" id="ygCalendarNext" class="yg-cal-icon-btn" aria-label="التالي"><i class="bi bi-chevron-left"></i></button>
+                <button type="button" id="ygCalendarTodayInline" class="yg-cal-today-btn"><i class="bi bi-crosshair2"></i><span>اليوم</span></button>
+            </div>
+
+            <div class="yg-calendar-period" aria-live="polite">
+                <small id="ygCalendarPeriodEyebrow">عرض الشهر</small>
+                <strong id="ygCalendarPeriodTitle">—</strong>
+                <span id="ygCalendarPeriodSubtitle">اضغط على أي يوم لإدارة حجوزاته</span>
+            </div>
+
+            <div class="yg-calendar-view-switch" role="group" aria-label="طريقة عرض التقويم">
+                <button type="button" data-calendar-view="dayGridWeek"><i class="bi bi-view-list"></i><span>أسبوع</span></button>
+                <button type="button" class="is-active" data-calendar-view="dayGridMonth"><i class="bi bi-grid-3x3-gap-fill"></i><span>شهر</span></button>
+                <button type="button" data-calendar-view="multiMonthYear"><i class="bi bi-calendar3"></i><span>سنة</span></button>
+            </div>
+        </div>
+
+        <div class="yg-calendar-mobile-hint"><i class="bi bi-hand-index-thumb"></i><span>المؤشرات داخل اليوم مختصرة؛ اضغط اليوم لعرض التفاصيل كاملة.</span></div>
+
+        <div class="yg-calendar-loading" id="ygCalendarLoading" hidden>
+            <span class="yg-loader-orbit"><i></i><i></i><i></i></span>
+            <strong>نحدّث التوفر من قاعدة البيانات…</strong>
+        </div>
+
+        <!-- Mobile-first calendar: تجربة مستقلة للهاتف بدل تصغير جدول الكمبيوتر. -->
+        <section class="yg-mobile-calendar" id="ygMobileCalendar" aria-label="تقويم الهاتف">
+            <div class="yg-mobile-calendar__top">
+                <button type="button" class="yg-mobile-nav" id="ygMobilePrev" aria-label="الشهر السابق">
+                    <i class="bi bi-chevron-right"></i>
+                </button>
+
+                <button type="button" class="yg-mobile-month-title" id="ygMobileMonthPickerBtn" aria-label="اختيار شهر">
+                    <small id="ygMobileModeLabel">عرض الشهر</small>
+                    <strong id="ygMobileMonthLabel">—</strong>
+                    <i class="bi bi-chevron-down"></i>
+                </button>
+
+                <button type="button" class="yg-mobile-nav" id="ygMobileNext" aria-label="الشهر التالي">
+                    <i class="bi bi-chevron-left"></i>
+                </button>
+            </div>
+
+            <div class="yg-mobile-view-switch" role="group" aria-label="التنقل وطريقة عرض تقويم الهاتف">
+                <button type="button" class="yg-mobile-today-action" id="ygMobileToday" data-mobile-calendar-action="today" aria-label="العودة إلى اليوم الحالي">
+                    <i class="bi bi-crosshair2"></i><span>اليوم</span>
+                </button>
+                <button type="button" data-mobile-calendar-view="week"><i class="bi bi-view-list"></i><span>أسبوع</span></button>
+                <button type="button" class="is-active" data-mobile-calendar-view="month"><i class="bi bi-grid-3x3-gap-fill"></i><span>شهر</span></button>
+                <button type="button" data-mobile-calendar-view="year"><i class="bi bi-calendar3"></i><span>سنة</span></button>
+            </div>
+
+            <div class="yg-mobile-weekdays" aria-hidden="true">
+                <span>سبت</span><span>أحد</span><span>اثن</span><span>ثلا</span><span>أرب</span><span>خمس</span><span>جمع</span>
+            </div>
+
+            <div class="yg-mobile-month-grid" id="ygMobileMonthGrid"></div>
+
+            <div class="yg-mobile-agenda" id="ygMobileAgenda">
+                <div class="yg-mobile-agenda__empty">
+                    <span class="yg-mobile-agenda__icon"><i class="bi bi-hand-index-thumb"></i></span>
+                    <div>
+                        <strong>اختر يومًا</strong>
+                        <small>ستظهر حجوزاته والتوفر هنا بدون مغادرة التقويم.</small>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <div id="premiumCalendar" class="premium-calendar-wrapper" aria-live="polite"></div>
+    </section>
+
+    <!-- ================================================================
+         Day Details Sheet
+         ================================================================ -->
+    <div class="yg-overlay" id="ygDayOverlay" hidden></div>
+    <aside class="yg-sheet yg-day-sheet" id="ygDaySheet" aria-hidden="true" aria-labelledby="ygDaySheetTitle">
+        <div class="yg-sheet-handle" aria-hidden="true"></div>
+        <header class="yg-sheet-header">
+            <div>
+                <span class="yg-sheet-kicker">تفاصيل اليوم</span>
+                <h4 id="ygDaySheetTitle">--</h4>
+                <p id="ygDaySheetSubtitle">جاري تحميل الحالة…</p>
+            </div>
+            <button type="button" class="yg-sheet-close" data-yg-close="day" aria-label="إغلاق">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </header>
+
+        <div class="yg-day-glance" id="ygDayGlance">
+            <div><span>الحجوزات</span><strong id="ygDayBookingsCount">0</strong></div>
+            <div><span>المشغول</span><strong id="ygDayOccupied">0</strong></div>
+            <div><span>المتاح</span><strong id="ygDayAvailable">0</strong></div>
+            <div><span>الإشغال</span><strong id="ygDayOccupancy">0%</strong></div>
+        </div>
+
+        <div class="yg-day-state-banner" id="ygDayStateBanner" hidden></div>
+
+        <div class="yg-day-actions">
+            <button type="button" class="yg-sheet-action yg-sheet-action--primary" id="ygDayCreateManual">
+                <i class="bi bi-plus-circle-fill"></i><span>إضافة حجز مباشر</span>
+            </button>
+            <button type="button" class="yg-sheet-action" id="ygDayClose">
+                <i class="bi bi-lock-fill"></i><span>إغلاق اليوم</span>
+            </button>
+            <button type="button" class="yg-sheet-action" id="ygDayReopen">
+                <i class="bi bi-unlock-fill"></i><span>إعادة فتح</span>
+            </button>
+        </div>
+
+        <div class="yg-day-bookings-head">
+            <div>
+                <strong>حجوزات اليوم</strong>
+                <small>تتغير القائمة حسب فلتر الحالات أعلى التقويم</small>
+            </div>
+            <span class="yg-count-pill" id="ygDayListCount">0</span>
+        </div>
+
+        <div class="yg-day-bookings-list" id="ygDayBookingsList">
+            <div class="yg-empty-state">
+                <i class="bi bi-calendar2-heart"></i>
+                <strong>اختر يومًا من التقويم</strong>
+                <span>ستظهر هنا الحجوزات والتوفر.</span>
+            </div>
+        </div>
+    </aside>
+
+    <!-- ================================================================
+         Manual Booking Studio — V9
+         ================================================================ -->
+    <div class="yg-overlay yg-overlay--deep" id="ygManualOverlay" hidden></div>
+    <section class="yg-manual-studio yg-manual-studio--v8 yg-manual-studio--v9"
+             id="ygManualBookingModal"
+             aria-hidden="true"
+             aria-labelledby="ygManualTitle"
+             role="dialog"
+             aria-modal="true"
+             data-current-step="1">
+
+        <header class="yg-mb9-head">
+            <div class="yg-mb9-title-wrap">
+                <span class="yg-mb9-title-icon"><i class="bi bi-calendar2-plus"></i></span>
+                <div>
+                    <span class="yg-mb9-kicker">حجز مباشر</span>
+                    <h3 id="ygManualTitle">إضافة حجز مباشر</h3>
+                    <p>حجز واحد مرتب خطوة بخطوة، حسب المنشأة المحددة من الهيدر.</p>
+                </div>
+            </div>
+
+            <div class="yg-mb9-facility-pill">
+                <i class="bi bi-buildings"></i>
+                <span>
+                    <small>المنشأة الحالية</small>
+                    <strong id="ygManualFacilityName">المنشأة الحالية</strong>
+                    <em id="ygManualFacilityTemplate">قالب الحجز</em>
+                </span>
+            </div>
+
+            <button type="button" class="yg-mb9-close" data-yg-close="manual" aria-label="إغلاق">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </header>
+
+        <nav class="yg-mb9-stepper" aria-label="خطوات الحجز المباشر">
+            <button type="button" class="is-active" data-yg-step-target="1" aria-current="step">
+                <span class="yg-mb9-step-no">01</span>
+                <span class="yg-mb9-step-icon"><i class="bi bi-person-vcard"></i></span>
+                <span class="yg-mb9-step-text"><strong>العميل</strong><small>بيانات صاحب الحجز</small></span>
+            </button>
+            <button type="button" data-yg-step-target="2">
+                <span class="yg-mb9-step-no">02</span>
+                <span class="yg-mb9-step-icon"><i class="bi bi-calendar2-check"></i></span>
+                <span class="yg-mb9-step-text"><strong>الحجز والتوفر</strong><small>الموعد والوحدة</small></span>
+            </button>
+            <button type="button" data-yg-step-target="3">
+                <span class="yg-mb9-step-no">03</span>
+                <span class="yg-mb9-step-icon"><i class="bi bi-stars"></i></span>
+                <span class="yg-mb9-step-text"><strong>الإضافات والدفع</strong><small>الخدمات والعربون</small></span>
+            </button>
+            <button type="button" data-yg-step-target="4">
+                <span class="yg-mb9-step-no">04</span>
+                <span class="yg-mb9-step-icon"><i class="bi bi-shield-check"></i></span>
+                <span class="yg-mb9-step-text"><strong>المراجعة</strong><small>فحص وتثبيت</small></span>
+            </button>
+        </nav>
+
+        <div class="yg-mobile-step-caption" aria-live="polite">
+            <div>
+                <small id="ygMobileStepCounter">الخطوة 1 من 4</small>
+                <strong id="ygMobileStepTitle">بيانات العميل</strong>
+            </div>
+            <span class="yg-mobile-step-progress"><i id="ygMobileStepProgress"></i></span>
+        </div>
+
+        <div class="yg-v8-form-alert yg-mb9-form-alert" id="ygManualFormAlert" hidden aria-live="polite">
+            <i class="bi bi-exclamation-circle"></i>
+            <span id="ygManualFormAlertText"></span>
+        </div>
+
+        <!-- يحفظ مراجع القالب التي يستخدمها JavaScript بدون إظهار قسم زائد للمستخدم -->
+        <div id="ygManualTemplateBanner" hidden>
+            <span id="ygManualTemplateIcon"></span>
+            <strong id="ygManualTemplateName"></strong>
+            <em id="ygManualTemplateCategory"></em>
+        </div>
+
+        <div class="yg-studio-body yg-v8-studio-body yg-mb9-body">
+            <div class="yg-studio-form-column yg-v8-form-column yg-mb9-form-column">
+
+                <!-- STEP 1 -->
+                <section class="yg-form-section yg-v8-step-panel yg-mb9-step-panel is-active-step" data-yg-step="1">
+                    <div class="yg-mb9-section-head">
+                        <div class="yg-mb9-section-title">
+                            <span><i class="bi bi-person-vcard"></i></span>
+                            <div>
+                                <small>01 · العميل</small>
+                                <h5>من صاحب الحجز؟</h5>
+                                <p>ابحث برقم الهاتف، وإذا لم يكن لديه حساب أكمل بيانات الضيف فقط.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="yg-mb9-search-card">
+                        <div class="yg-v8-field yg-mb9-field" data-yg-field="phoneSearch">
+                            <label for="ygManualPhoneSearch">رقم هاتف العميل</label>
+                            <div class="yg-v8-input-shell yg-v8-input-shell--phone yg-mb9-input-shell">
+                                <i class="bi bi-telephone"></i>
+                                <input type="tel" id="ygManualPhoneSearch" class="yg-phone-input" autocomplete="tel" inputmode="tel" maxlength="18" dir="ltr" placeholder="777 123 456" />
+                                <span class="yg-inline-loader" id="ygCustomerSearchLoader" hidden></span>
+                            </div>
+                            <small class="yg-field-feedback" id="ygPhoneSearchFeedback" aria-live="polite"></small>
+                            <small class="yg-v8-field-error" data-yg-error="phoneSearch"></small>
+                        </div>
+                        <button type="button" class="yg-mb9-search-btn" id="ygSearchCustomerBtn"><i class="bi bi-search"></i><span>بحث</span></button>
+                    </div>
+
+                    <input type="hidden" id="ygManualCustomerId" />
+
+                    <div class="yg-linked-customer yg-v8-linked-customer yg-mb9-linked-customer" id="ygLinkedCustomer" hidden>
+                        <div class="yg-customer-avatar" id="ygLinkedCustomerAvatar"><span>ع</span></div>
+                        <div class="yg-v8-linked-copy">
+                            <small><i class="bi bi-patch-check-fill"></i> حساب مسجل</small>
+                            <strong id="ygLinkedCustomerName">--</strong>
+                            <span id="ygLinkedCustomerPhone">--</span>
+                        </div>
+                        <button type="button" id="ygUnlinkCustomer" title="فك الربط"><i class="bi bi-x-lg"></i></button>
+                    </div>
+
+                    <div class="yg-guest-panel yg-v8-guest-card yg-mb9-card" id="ygGuestPanel">
+                        <div class="yg-mb9-card-head">
+                            <span><i class="bi bi-person-plus"></i></span>
+                            <div><strong>ضيف بدون حساب</strong><small>نحفظ البيانات مع الحجز فقط، ولا ننشئ حسابًا من غير موافقته.</small></div>
+                        </div>
+
+                        <div class="yg-mb9-grid yg-mb9-grid--3">
+                            <div class="yg-v8-field yg-mb9-field" data-yg-field="guestName">
+                                <label for="ygGuestName">اسم الضيف <b>*</b></label>
+                                <div class="yg-v8-input-shell yg-mb9-input-shell"><i class="bi bi-person"></i><input type="text" id="ygGuestName" maxlength="150" autocomplete="name" placeholder="الاسم الكامل" /></div>
+                                <small class="yg-v8-field-error" data-yg-error="guestName"></small>
+                            </div>
+                            <div class="yg-v8-field yg-mb9-field" data-yg-field="guestPhone">
+                                <label for="ygGuestPhone">هاتف الضيف <b>*</b></label>
+                                <div class="yg-v8-input-shell yg-v8-input-shell--phone yg-mb9-input-shell"><i class="bi bi-phone"></i><input type="tel" id="ygGuestPhone" class="yg-phone-input" maxlength="18" autocomplete="tel" inputmode="tel" dir="ltr" placeholder="777 123 456" /></div>
+                                <small class="yg-field-feedback" id="ygGuestPhoneFeedback" aria-live="polite"></small>
+                                <small class="yg-v8-field-error" data-yg-error="guestPhone"></small>
+                            </div>
+                            <div class="yg-v8-field yg-mb9-field" data-yg-field="guestEmail">
+                                <label for="ygGuestEmail">البريد الإلكتروني <small>اختياري</small></label>
+                                <div class="yg-v8-input-shell yg-mb9-input-shell"><i class="bi bi-envelope"></i><input type="email" id="ygGuestEmail" maxlength="150" autocomplete="email" dir="ltr" placeholder="name@example.com" /></div>
+                                <small class="yg-v8-field-error" data-yg-error="guestEmail"></small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="yg-v8-field yg-mb9-field" data-yg-field="manualChannel">
+                        <label>كيف وصل الحجز؟ <b>*</b></label>
+                        <div class="yg-channel-selector yg-v8-channel-selector yg-mb9-choice-grid" role="radiogroup" aria-label="مصدر الحجز المباشر">
+                            <label><input type="radio" name="ygManualChannel" value="Phone" checked /><span><i class="bi bi-telephone"></i><b>اتصال</b><small>حجز هاتفي</small></span></label>
+                            <label><input type="radio" name="ygManualChannel" value="WhatsApp" /><span><i class="bi bi-whatsapp"></i><b>واتساب</b><small>رسالة واتساب</small></span></label>
+                            <label><input type="radio" name="ygManualChannel" value="WalkIn" /><span><i class="bi bi-person-walking"></i><b>حضور</b><small>داخل المنشأة</small></span></label>
+                            <label><input type="radio" name="ygManualChannel" value="Other" /><span><i class="bi bi-three-dots"></i><b>أخرى</b><small>حددها بنفسك</small></span></label>
+                        </div>
+                        <small class="yg-v8-field-error" data-yg-error="manualChannel"></small>
+                    </div>
+
+                    <div class="yg-v8-field yg-v8-reveal-field yg-mb9-reveal" id="ygManualChannelOtherField" data-yg-field="manualChannelOther" hidden>
+                        <label for="ygManualChannelOther">ما هي قناة الحجز الأخرى؟ <b>*</b></label>
+                        <div class="yg-v8-input-shell yg-mb9-input-shell"><i class="bi bi-pencil-square"></i><input type="text" id="ygManualChannelOther" maxlength="100" placeholder="اكتب القناة بوضوح" /></div>
+                        <small class="yg-v8-field-error" data-yg-error="manualChannelOther"></small>
+                    </div>
+                </section>
+
+                <!-- STEP 2 -->
+                <section class="yg-form-section yg-v8-step-panel yg-mb9-step-panel" data-yg-step="2">
+                    <div class="yg-mb9-section-head">
+                        <div class="yg-mb9-section-title">
+                            <span><i class="bi bi-calendar2-check"></i></span>
+                            <div>
+                                <small>02 · الحجز والتوفر</small>
+                                <h5 id="ygBookingTemplateTitle">الحجز والتوفر</h5>
+                                <p id="ygBookingTemplateDescription">سيظهر فقط ما يخص المنشأة المحددة من الهيدر.</p>
+                            </div>
+                        </div>
+                        <div class="yg-mb9-availability-chip"><i class="bi bi-broadcast-pin"></i><span>توفر لحظي</span></div>
+                    </div>
+
+                    <div class="yg-mb9-date-card">
+                        <div class="yg-mb9-grid yg-mb9-grid--2">
+                            <div class="yg-v8-field yg-mb9-field" data-yg-field="startDate">
+                                <label for="ygManualStartDate"><span id="ygStartDateLabel">تاريخ الدخول</span> <b>*</b></label>
+                                <div class="yg-v8-input-shell yg-mb9-input-shell"><i class="bi bi-calendar-event"></i><input type="date" id="ygManualStartDate" autocomplete="off" /></div>
+                                <small class="yg-v8-field-error" data-yg-error="startDate"></small>
+                            </div>
+                            <div class="yg-v8-field yg-mb9-field" id="ygEndDateField" data-yg-field="endDate">
+                                <label for="ygManualEndDate"><span id="ygEndDateLabel">تاريخ الخروج</span> <b>*</b></label>
+                                <div class="yg-v8-input-shell yg-mb9-input-shell"><i class="bi bi-calendar2-check"></i><input type="date" id="ygManualEndDate" autocomplete="off" /></div>
+                                <small class="yg-v8-field-error" data-yg-error="endDate"></small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- يظهر فقط للقالب الهجين الحقيقي -->
+                    <div class="yg-resource-tabs yg-v8-resource-tabs yg-mb9-resource-tabs" id="ygResourceTabs" hidden>
+                        <button type="button" class="is-active" data-resource-kind="room"><i class="bi bi-door-open"></i><span><b>إقامة / غرف</b><small>وحدات فعلية</small></span></button>
+                        <button type="button" data-resource-kind="package"><i class="bi bi-stars"></i><span><b>باقة / فترة</b><small>حجز زمني</small></span></button>
+                    </div>
+
+                    <div class="yg-resource-panel yg-v8-resource-panel yg-mb9-resource-panel" id="ygRoomResourcePanel">
+                        <div class="yg-mb9-card yg-mb9-room-type-card" id="ygRoomTypeSelectorBlock">
+                            <div class="yg-mb9-card-head">
+                                <span><i class="bi bi-door-open"></i></span>
+                                <div><strong>نوع الوحدة</strong><small>اختر النوع أولًا، وبعدها تظهر الأدوار والوحدات التابعة له فقط.</small></div>
+                            </div>
+                            <div class="yg-mb9-grid yg-mb9-grid--room-head">
+                                <div class="yg-v8-field yg-mb9-field" data-yg-field="roomId">
+                                    <label>نوع الغرفة / الجناح <b>*</b></label>
+                                    <div class="yg-v8-smart-select yg-mb9-smart-select" data-yg-smart-select="room">
+                                        <select id="ygManualRoomId" class="yg-v8-select-source" tabindex="-1" aria-hidden="true"><option value="">اختر نوع الغرفة</option></select>
+                                        <button type="button" class="yg-v8-select-trigger yg-mb9-select-trigger" id="ygRoomSelectTrigger"><span><i class="bi bi-door-open"></i><b id="ygRoomSelectText">اختر نوع الغرفة</b></span><i class="bi bi-chevron-down"></i></button>
+                                        <div class="yg-v8-select-menu yg-mb9-select-menu" id="ygRoomSelectMenu" hidden></div>
+                                    </div>
+                                    <small class="yg-v8-field-error" data-yg-error="roomId"></small>
+                                </div>
+
+                                <div class="yg-v8-field yg-mb9-field" data-yg-field="quantity">
+                                    <label>عدد الوحدات <b>*</b></label>
+                                    <div class="yg-v8-counter yg-mb9-counter">
+                                        <button type="button" data-counter-target="ygManualQuantity" data-counter-delta="-1"><i class="bi bi-dash-lg"></i></button>
+                                        <input type="number" id="ygManualQuantity" min="1" max="100" step="1" inputmode="numeric" value="1" />
+                                        <button type="button" data-counter-target="ygManualQuantity" data-counter-delta="1"><i class="bi bi-plus-lg"></i></button>
+                                    </div>
+                                    <small class="yg-v8-field-error" data-yg-error="quantity"></small>
+                                </div>
+                            </div>
+                            <div class="yg-availability-inline yg-v8-availability yg-mb9-availability" id="ygRoomAvailabilityHint">اختر التاريخ ونوع الغرفة لتحميل التوفر.</div>
+                        </div>
+
+                        <div class="yg-unit-picker yg-v8-unit-picker yg-mb9-unit-picker" id="ygRoomUnitPicker" hidden>
+                            <div class="yg-mb9-unit-picker-head">
+                                <div>
+                                    <span class="yg-mb9-unit-picker-icon"><i class="bi bi-buildings"></i></span>
+                                    <div><strong>الوحدات الفعلية</strong><small>اختر الدور، ثم حدد العدد المطلوب من الوحدات المتاحة.</small></div>
+                                </div>
+                                <div class="yg-mb9-unit-counter-wrap"><small>المختار</small><span class="yg-unit-picker__counter" id="ygRoomUnitCounter">0 / 0</span></div>
+                            </div>
+
+                            <div class="yg-mb9-unit-legend">
+                                <span class="is-available"><i></i> متاحة</span>
+                                <span class="is-occupied"><i></i> مشغولة</span>
+                                <span class="is-held"><i></i> انتظار دفع</span>
+                                <span class="is-review"><i></i> مراجعة دفع</span>
+                                <span class="is-closed"><i></i> مغلقة</span>
+                            </div>
+
+                            <div class="yg-mb9-unit-workspace">
+                                <aside class="yg-mb9-floor-rail">
+                                    <div class="yg-mb9-floor-rail-title"><i class="bi bi-layers"></i><span>الأدوار</span></div>
+                                    <div class="yg-v8-floor-tabs yg-mb9-floor-tabs" id="ygRoomFloorTabs"></div>
+                                </aside>
+                                <div class="yg-mb9-unit-viewport">
+                                    <div class="yg-mb9-unit-viewport-head">
+                                        <div><strong>الغرف والوحدات</strong><small>المتاح قابل للاختيار، والبقية للعرض فقط.</small></div>
+                                        <span><i class="bi bi-mouse2"></i> اختر بالضغط</span>
+                                    </div>
+                                    <div class="yg-unit-choices yg-v8-unit-choices yg-mb9-unit-choices" id="ygRoomUnitChoices"></div>
+                                </div>
+                            </div>
+                            <small class="yg-v8-field-error yg-mb9-unit-error" data-yg-error="roomUnits"></small>
+                        </div>
+                    </div>
+
+                    <div class="yg-resource-panel yg-v8-resource-panel yg-mb9-resource-panel" id="ygPackageResourcePanel" hidden>
+                        <div class="yg-mb9-card">
+                            <div class="yg-mb9-card-head">
+                                <span><i class="bi bi-stars"></i></span>
+                                <div><strong>الباقة / الفترة</strong><small>يظهر هنا فقط ما يخص هذه المنشأة وهذا اليوم.</small></div>
+                            </div>
+                            <div class="yg-v8-field yg-mb9-field" data-yg-field="packageId">
+                                <select id="ygManualPackageId" class="yg-v8-select-source" tabindex="-1" aria-hidden="true"><option value="">اختر الباقة</option></select>
+                                <div class="yg-v8-package-grid yg-mb9-package-grid" id="ygPackageCards"></div>
+                                <small class="yg-v8-field-error" data-yg-error="packageId"></small>
+                            </div>
+                            <div class="yg-availability-inline yg-v8-availability yg-mb9-availability" id="ygPackageAvailabilityHint">اختر التاريخ لتحميل الباقات والفترات.</div>
+                        </div>
+
+                        <div class="yg-v8-field yg-mb9-field yg-mb9-card" id="ygVenueSeatingField" data-yg-field="seating" hidden>
+                            <label>ترتيب / إعداد الجلسة</label>
+                            <div class="yg-v8-smart-select yg-mb9-smart-select" data-yg-smart-select="seating">
+                                <select id="ygManualSeating" class="yg-v8-select-source" tabindex="-1" aria-hidden="true">
+                                    <option value="">بدون تحديد</option>
+                                    <option value="مسرحي">مسرحي</option>
+                                    <option value="صفوف">صفوف</option>
+                                    <option value="U-Shape">U-Shape</option>
+                                    <option value="طاولات دائرية">طاولات دائرية</option>
+                                    <option value="ولائم">ولائم</option>
+                                    <option value="Other">أخرى</option>
+                                </select>
+                                <button type="button" class="yg-v8-select-trigger yg-mb9-select-trigger" id="ygSeatingSelectTrigger"><span><i class="bi bi-grid-3x3-gap"></i><b id="ygSeatingSelectText">بدون تحديد</b></span><i class="bi bi-chevron-down"></i></button>
+                                <div class="yg-v8-select-menu yg-mb9-select-menu" id="ygSeatingSelectMenu" hidden></div>
+                            </div>
+                            <small class="yg-v8-field-error" data-yg-error="seating"></small>
+                        </div>
+                        <div class="yg-v8-field yg-v8-reveal-field yg-mb9-reveal" id="ygSeatingOtherField" data-yg-field="seatingOther" hidden>
+                            <label for="ygManualSeatingOther">اكتب إعداد الجلسة الآخر <b>*</b></label>
+                            <div class="yg-v8-input-shell yg-mb9-input-shell"><i class="bi bi-pencil-square"></i><input type="text" id="ygManualSeatingOther" maxlength="100" placeholder="اكتب الإعداد المطلوب" /></div>
+                            <small class="yg-v8-field-error" data-yg-error="seatingOther"></small>
+                        </div>
+                    </div>
+
+                    <div class="yg-mb9-card yg-mb9-guests-card">
+                        <div class="yg-mb9-card-head"><span><i class="bi bi-people"></i></span><div><strong>عدد الأشخاص</strong><small>يتم التحقق من سعة الغرفة أو الباقة قبل الحفظ.</small></div></div>
+                        <div class="yg-mb9-grid yg-mb9-grid--2">
+                            <div class="yg-v8-field yg-mb9-field" data-yg-field="adults">
+                                <label>البالغون</label>
+                                <div class="yg-v8-counter yg-mb9-counter"><button type="button" data-counter-target="ygManualAdults" data-counter-delta="-1"><i class="bi bi-dash-lg"></i></button><input type="number" id="ygManualAdults" min="0" max="1000" step="1" inputmode="numeric" value="1" /><button type="button" data-counter-target="ygManualAdults" data-counter-delta="1"><i class="bi bi-plus-lg"></i></button></div>
+                            </div>
+                            <div class="yg-v8-field yg-mb9-field" data-yg-field="children">
+                                <label>الأطفال</label>
+                                <div class="yg-v8-counter yg-mb9-counter"><button type="button" data-counter-target="ygManualChildren" data-counter-delta="-1"><i class="bi bi-dash-lg"></i></button><input type="number" id="ygManualChildren" min="0" max="1000" step="1" inputmode="numeric" value="0" /><button type="button" data-counter-target="ygManualChildren" data-counter-delta="1"><i class="bi bi-plus-lg"></i></button></div>
+                            </div>
+                        </div>
+                        <small class="yg-v8-field-error" data-yg-error="guests"></small>
+                    </div>
+
+                    <div class="yg-options-status yg-v8-options-status yg-mb9-options-status" id="ygOptionsStatus" hidden></div>
+                </section>
+
+                <!-- STEP 3 -->
+                <section class="yg-form-section yg-v8-step-panel yg-mb9-step-panel" data-yg-step="3">
+                    <div class="yg-mb9-section-head">
+                        <div class="yg-mb9-section-title">
+                            <span><i class="bi bi-stars"></i></span>
+                            <div><small>03 · الإضافات والدفع</small><h5>أكمل ما يحتاجه الحجز فقط</h5><p>الخدمات، ملاحظات التشغيل، ثم حالة العربون الحالية.</p></div>
+                        </div>
+                    </div>
+
+                    <div class="yg-mb9-card yg-mb9-services-card">
+                        <div class="yg-mb9-card-head"><span><i class="bi bi-stars"></i></span><div><strong>الخدمات الإضافية</strong><small>تظهر الخدمات المفعلة لهذه المنشأة فقط.</small></div></div>
+                        <div class="yg-services-grid yg-v8-services-grid yg-mb9-services-grid" id="ygManualServices"><div class="yg-services-empty">لا توجد خدمات محملة بعد.</div></div>
+                    </div>
+
+                    <div class="yg-mb9-step3-grid">
+                        <div class="yg-mb9-card yg-mb9-details-card">
+                            <div class="yg-mb9-card-head"><span><i class="bi bi-card-text"></i></span><div><strong>تفاصيل إضافية</strong><small>اختيارية ولا تزحم الحجز إذا لم تحتجها.</small></div></div>
+                            <div class="yg-v8-field yg-mb9-field" data-yg-field="promoCode">
+                                <label for="ygManualPromoCode">كود عرض <small>اختياري للعميل المسجل</small></label>
+                                <div class="yg-v8-input-shell yg-mb9-input-shell"><i class="bi bi-ticket-perforated"></i><input type="text" id="ygManualPromoCode" maxlength="50" placeholder="مثال: SUMMER20" /></div>
+                                <small class="yg-v8-field-error" data-yg-error="promoCode"></small>
+                            </div>
+                            <div class="yg-v8-field yg-mb9-field" data-yg-field="notes">
+                                <label for="ygManualNotes">ملاحظات داخلية للمالك <small>لا تظهر للعميل</small></label>
+                                <textarea id="ygManualNotes" maxlength="1000" rows="4" placeholder="اكتب أي ملاحظة تشغيلية مهمة فقط..."></textarea>
+                                <small class="yg-v8-field-error" data-yg-error="notes"></small>
+                            </div>
+                        </div>
+
+                        <div class="yg-v8-payment-panel yg-mb9-card yg-mb9-payment-card">
+                            <div class="yg-mb9-card-head"><span><i class="bi bi-wallet2"></i></span><div><strong>العربون والدفع</strong><small>لا نسجل دفعة إلا إذا استلم المالك مبلغًا فعليًا.</small></div></div>
+                            <div class="yg-payment-mode-cards yg-v8-payment-mode-cards yg-mb9-payment-mode-cards">
+                                <label><input type="radio" name="ygPaymentMode" value="Unpaid" checked /><span><i class="bi bi-hourglass-split"></i><b>لم يُستلم عربون</b><small>سيطبق النظام مهلة الدفع.</small></span></label>
+                                <label><input type="radio" name="ygPaymentMode" value="Collected" /><span><i class="bi bi-cash-coin"></i><b>تم استلام مبلغ</b><small>سجل البيانات الفعلية.</small></span></label>
+                            </div>
+
+                            <div class="yg-collected-payment-fields yg-v8-collected-fields yg-mb9-collected-fields" id="ygCollectedPaymentFields" hidden>
+                                <div class="yg-mb9-grid yg-mb9-grid--2">
+                                    <div class="yg-v8-field yg-mb9-field" data-yg-field="paidAmount">
+                                        <label for="ygManualPaidAmount">المبلغ المستلم <b>*</b></label>
+                                        <div class="yg-v8-input-shell yg-mb9-input-shell"><i class="bi bi-cash-stack"></i><input type="number" id="ygManualPaidAmount" min="0" step="0.01" inputmode="decimal" value="0" /></div>
+                                        <small class="yg-v8-field-error" data-yg-error="paidAmount"></small>
+                                    </div>
+                                    <div class="yg-v8-field yg-mb9-field" data-yg-field="paymentMethod">
+                                        <label>طريقة الدفع <b>*</b></label>
+                                        <div class="yg-v8-smart-select yg-mb9-smart-select" data-yg-smart-select="payment">
+                                            <select id="ygManualPaymentMethod" class="yg-v8-select-source" tabindex="-1" aria-hidden="true">
+                                                <option value="Cash">نقدًا</option>
+                                                <option value="Wallet">محفظة إلكترونية</option>
+                                                <option value="BankTransfer">حوالة / تحويل</option>
+                                                <option value="Other">أخرى</option>
+                                            </select>
+                                            <button type="button" class="yg-v8-select-trigger yg-mb9-select-trigger" id="ygPaymentSelectTrigger"><span><i class="bi bi-credit-card"></i><b id="ygPaymentSelectText">نقدًا</b></span><i class="bi bi-chevron-down"></i></button>
+                                            <div class="yg-v8-select-menu yg-mb9-select-menu" id="ygPaymentSelectMenu" hidden></div>
+                                        </div>
+                                        <small class="yg-v8-field-error" data-yg-error="paymentMethod"></small>
+                                    </div>
+                                </div>
+                                <div class="yg-v8-field yg-v8-reveal-field yg-mb9-reveal" id="ygPaymentMethodOtherField" data-yg-field="paymentMethodOther" hidden>
+                                    <label for="ygManualPaymentMethodOther">ما هي طريقة الدفع الأخرى؟ <b>*</b></label>
+                                    <div class="yg-v8-input-shell yg-mb9-input-shell"><i class="bi bi-pencil-square"></i><input type="text" id="ygManualPaymentMethodOther" maxlength="30" placeholder="اكتب الطريقة المستخدمة" /></div>
+                                    <small class="yg-v8-field-error" data-yg-error="paymentMethodOther"></small>
+                                </div>
+                                <div class="yg-v8-field yg-mb9-field" data-yg-field="paymentReference">
+                                    <label for="ygManualPaymentReference">الرقم المرجعي <small>إن وجد</small></label>
+                                    <div class="yg-v8-input-shell yg-mb9-input-shell"><i class="bi bi-hash"></i><input type="text" id="ygManualPaymentReference" maxlength="100" autocomplete="off" dir="ltr" placeholder="رقم حوالة / عملية" /></div>
+                                    <small class="yg-v8-field-error" data-yg-error="paymentReference"></small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- STEP 4 -->
+            <aside class="yg-quote-column yg-v8-review-column yg-mb9-review-column" data-yg-step="4">
+                <div class="yg-quote-card yg-v8-review-card yg-mb9-review-card" id="ygQuoteCard">
+                    <div class="yg-mb9-section-head">
+                        <div class="yg-mb9-section-title"><span><i class="bi bi-receipt"></i></span><div><small>04 · المراجعة</small><h5>راجع الحجز قبل التثبيت</h5><p>السعر والتوفر والسياسات تعاد مراجعتها من الخادم.</p></div></div>
+                    </div>
+                    <div class="yg-quote-placeholder yg-mb9-quote-placeholder" id="ygQuotePlaceholder">
+                        <i class="bi bi-shield-check"></i><strong>جاهزون للمراجعة</strong><span>نفحص السعر والتوفر قبل التثبيت النهائي.</span>
+                    </div>
+                    <div class="yg-quote-content yg-v8-quote-content yg-mb9-quote-content" id="ygQuoteContent" hidden>
+                        <div class="yg-v8-review-hero yg-mb9-review-hero"><span><i class="bi bi-person-check"></i></span><div><small>العميل</small><strong id="ygQuoteCustomer">--</strong></div></div>
+                        <div class="yg-v8-money-grid yg-mb9-money-grid">
+                            <div><span>سعر الحجز</span><strong id="ygQuoteBase">0</strong></div>
+                            <div><span>الخدمات</span><strong id="ygQuoteServices">0</strong></div>
+                            <div><span>رسوم التنظيف</span><strong id="ygQuoteCleaning">0</strong></div>
+                            <div><span>الضريبة <small id="ygQuoteTaxPercent">0%</small></span><strong id="ygQuoteTax">0</strong></div>
+                            <div class="is-discount" id="ygQuoteDiscountRow" hidden><span>الخصم</span><strong id="ygQuoteDiscount">-0</strong></div>
+                        </div>
+                        <div class="yg-quote-total yg-v8-quote-total yg-mb9-quote-total"><span>الإجمالي النهائي</span><strong id="ygQuoteTotal">0</strong></div>
+                        <div class="yg-quote-split yg-v8-quote-split yg-mb9-quote-split"><div><small>العربون المطلوب</small><strong id="ygQuoteDeposit">0</strong></div><div><small>المتبقي</small><strong id="ygQuoteRemaining">0</strong></div></div>
+                        <div class="yg-quote-state" id="ygQuoteState">--</div>
+                        <div class="yg-quote-units" id="ygQuoteUnits" hidden></div>
+                        <div class="yg-quote-promo" id="ygQuotePromo" hidden></div>
+                    </div>
+                    <button type="button" class="yg-preview-btn yg-v8-preview-btn yg-mb9-preview-btn" id="ygPreviewManualBooking"><i class="bi bi-arrow-repeat"></i><span>إعادة فحص السعر والتوفر</span></button>
+                </div>
+            </aside>
+        </div>
+
+        <footer class="yg-studio-footer yg-v8-footer yg-mb9-footer">
+            <div class="yg-mb9-footer-note"><i class="bi bi-shield-lock"></i><span><strong>الحجز محمي من التعارض</strong><small>يعاد فحص التوفر لحظة التثبيت.</small></span></div>
+            <div class="yg-studio-footer-actions yg-v8-footer-actions yg-mb9-footer-actions">
+                <button type="button" class="yg-secondary-btn yg-v8-cancel-btn yg-mb9-cancel-btn" data-yg-close="manual"><i class="bi bi-x-lg"></i><span>إلغاء</span></button>
+                <button type="button" class="yg-step-nav-btn yg-step-nav-btn--back yg-v8-back-btn yg-mb9-back-btn" id="ygManualStepBack" disabled aria-disabled="true"><i class="bi bi-arrow-right"></i><span>السابق</span></button>
+                <div class="yg-mb9-primary-slot">
+                    <button type="button" class="yg-step-nav-btn yg-step-nav-btn--next yg-v8-next-btn yg-mb9-next-btn" id="ygManualStepNext"><span>التالي</span><i class="bi bi-arrow-left"></i></button>
+                    <button type="button" class="yg-create-booking-btn yg-v8-create-btn yg-mb9-create-btn" id="ygCreateManualBooking" hidden><span>تأكيد الحجز</span><i class="bi bi-check2-circle"></i></button>
+                </div>
+            </div>
+        </footer>
+    </section>
+
+
+    <!-- ================================================================
+         Range Action Dialog
+         ================================================================ -->
+    <div class="yg-overlay yg-overlay--deep" id="ygRangeOverlay" hidden></div>
+    <section class="yg-range-dialog" id="ygRangeModal" aria-hidden="true" aria-labelledby="ygRangeTitle" role="dialog" aria-modal="true">
+        <header>
+            <span class="yg-range-icon" id="ygRangeIcon"><i class="bi bi-calendar2-x-fill"></i></span>
+            <div><small id="ygRangeKicker">إدارة التوفر</small><h4 id="ygRangeTitle">إغلاق فترة</h4><p id="ygRangeDescription">لن تتغير الحجوزات الموجودة مسبقًا.</p></div>
+            <button type="button" class="yg-sheet-close" data-yg-close="range"><i class="bi bi-x-lg"></i></button>
+        </header>
+        <div class="yg-range-body">
+            <div class="yg-form-grid yg-form-grid--2">
+                <label class="yg-field"><span>من تاريخ</span><input type="date" id="ygRangeStart" /></label>
+                <label class="yg-field"><span>إلى تاريخ</span><input type="date" id="ygRangeEnd" /></label>
+            </div>
+            <label class="yg-field" id="ygRangeReasonField"><span>سبب الإغلاق</span><textarea id="ygRangeReason" maxlength="255" rows="3" placeholder="مثال: صيانة دورية"></textarea></label>
+            <div class="yg-range-notice" id="ygRangeNotice"><i class="bi bi-info-circle-fill"></i><span>الإغلاق يمنع الحجوزات الجديدة فقط ولا يلغي حجوزات سابقة.</span></div>
+        </div>
+        <footer>
+            <button type="button" class="yg-secondary-btn" data-yg-close="range">تراجع</button>
+            <button type="button" class="yg-range-submit" id="ygRangeSubmit"><i class="bi bi-check2-circle"></i><span>تأكيد</span></button>
+        </footer>
+    </section>
+
+    <div class="yg-overlay yg-overlay--deep" id="ygMonthPickerOverlay" hidden></div>
+    <section class="yg-month-picker" id="ygMonthPickerModal" aria-hidden="true" aria-labelledby="ygMonthPickerTitle" role="dialog" aria-modal="true">
+        <header class="yg-month-picker__head">
+            <div>
+                <small>انتقال سريع</small>
+                <h4 id="ygMonthPickerTitle">اختر الشهر</h4>
+            </div>
+            <button type="button" class="yg-sheet-close" data-yg-close="month-picker" aria-label="إغلاق">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </header>
+
+        <div class="yg-month-picker__year">
+            <button type="button" id="ygMonthPickerPrevYear" aria-label="السنة السابقة"><i class="bi bi-chevron-right"></i></button>
+            <strong id="ygMonthPickerYear">2026</strong>
+            <button type="button" id="ygMonthPickerNextYear" aria-label="السنة التالية"><i class="bi bi-chevron-left"></i></button>
+        </div>
+
+        <div class="yg-month-picker__grid" id="ygMonthPickerMonths"></div>
+    </section>
+
+    <div class="yg-toast-stack" id="ygCalendarToasts" aria-live="polite" aria-atomic="true"></div>
+</div>

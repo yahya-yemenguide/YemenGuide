@@ -1,0 +1,1957 @@
+﻿/* ==========================================================================
+ * دليلك اليمني
+ * صفحة العمليات المالية
+ * File: wwwroot/css/admin/finance-styles.css
+ *
+ * الوظائف:
+ * - تصميم متجاوب للكمبيوتر والتابلت والهواتف.
+ * - تبويبات أفقية قابلة للسحب على الهاتف.
+ * - تحويل الجداول إلى بطاقات مالية على الهاتف.
+ * - بطاقات تقارير مالية فخمة.
+ * - SweetAlert بشكل Bottom Sheet على الهاتف.
+ * - دعم RTL وLTR.
+ * - دعم الوضع الليلي.
+ * ========================================================================== */
+
+
+/* ==========================================================================
+ * 1. المتغيرات العامة
+ * ========================================================================== */
+
+:root {
+    --finance-font: 'Cairo', 'Tajawal', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --finance-navy: #05203c;
+    --finance-navy-light: #123f68;
+    --finance-primary: #00a6da;
+    --finance-primary-dark: #0284c7;
+    --finance-primary-soft: rgba(0, 166, 218, 0.09);
+    --finance-success: #198754;
+    --finance-success-dark: #146c43;
+    --finance-success-soft: rgba(25, 135, 84, 0.09);
+    --finance-warning: #f59e0b;
+    --finance-warning-dark: #d97706;
+    --finance-warning-soft: rgba(245, 158, 11, 0.1);
+    --finance-danger: #dc3545;
+    --finance-danger-dark: #b02a37;
+    --finance-danger-soft: rgba(220, 53, 69, 0.09);
+    --finance-purple: #7c3aed;
+    --finance-purple-soft: rgba(124, 58, 237, 0.09);
+    --finance-text: #0f172a;
+    --finance-text-soft: #334155;
+    --finance-muted: #64748b;
+    --finance-muted-light: #94a3b8;
+    --finance-page-bg: #f6f9fc;
+    --finance-card: rgba(255, 255, 255, 0.88);
+    --finance-card-solid: #ffffff;
+    --finance-input: #f8fafc;
+    --finance-border: rgba(15, 23, 42, 0.075);
+    --finance-border-light: rgba(15, 23, 42, 0.045);
+    --finance-radius-xl: 28px;
+    --finance-radius-lg: 22px;
+    --finance-radius-md: 16px;
+    --finance-radius-sm: 12px;
+    --finance-shadow-soft: 0 10px 35px rgba(5, 32, 60, 0.05);
+    --finance-shadow-card: 0 18px 48px rgba(5, 32, 60, 0.075);
+    --finance-shadow-hover: 0 22px 50px rgba(0, 166, 218, 0.13);
+    --finance-transition: 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+
+/* ==========================================================================
+ * 2. الوضع الليلي
+ * ========================================================================== */
+
+body.dark-mode {
+    --finance-text: #f8fafc;
+    --finance-text-soft: #d8e0eb;
+    --finance-muted: #94a3b8;
+    --finance-muted-light: #748095;
+    --finance-page-bg: #10121b;
+    --finance-card: rgba(27, 29, 42, 0.92);
+    --finance-card-solid: #222433;
+    --finance-input: #161925;
+    --finance-border: rgba(255, 255, 255, 0.075);
+    --finance-border-light: rgba(255, 255, 255, 0.045);
+    --finance-shadow-soft: 0 12px 38px rgba(0, 0, 0, 0.25);
+    --finance-shadow-card: 0 20px 52px rgba(0, 0, 0, 0.32);
+}
+
+
+/* ==========================================================================
+ * 3. عزل صفحة المالية
+ * ========================================================================== */
+
+.finance-page {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    direction: rtl;
+    text-align: right;
+    padding-bottom: 70px;
+    font-family: var(--finance-font);
+    overflow-x: hidden;
+}
+
+    .finance-page *,
+    .finance-page *::before,
+    .finance-page *::after {
+        box-sizing: border-box;
+    }
+
+    .finance-page .row,
+    .finance-page [class*="col-"],
+    .finance-page-header,
+    .finance-heading-wrapper,
+    .finance-heading-content,
+    .finance-tabs-scroll,
+    .finance-tabs-track,
+    .finance-content-card,
+    .finance-tab-pane,
+    .finance-section-header,
+    .finance-section-heading,
+    .finance-table-wrapper,
+    .finance-responsive-table,
+    .finance-entity-info,
+    .finance-report-card,
+    .finance-report-content {
+        min-width: 0;
+    }
+
+    .finance-page .text-muted {
+        color: var(--finance-muted) !important;
+    }
+
+    .finance-page .text-primary {
+        color: var(--finance-primary-dark) !important;
+    }
+
+    .finance-page .text-success {
+        color: var(--finance-success-dark) !important;
+    }
+
+    .finance-page .text-warning {
+        color: var(--finance-warning-dark) !important;
+    }
+
+
+/* ==========================================================================
+ * 4. مسار الصفحة
+ * ========================================================================== */
+
+.finance-breadcrumb {
+    width: 100%;
+}
+
+    .finance-breadcrumb > span {
+        display: inline-flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 2px;
+        line-height: 1.6;
+    }
+
+.finance-breadcrumb-arrow {
+    color: var(--finance-muted-light);
+    font-size: 0.7rem;
+}
+
+
+/* ==========================================================================
+ * 5. رأس الصفحة
+ * ========================================================================== */
+
+.finance-page-header {
+    width: 100%;
+    position: relative;
+}
+
+.finance-heading-wrapper {
+    width: 100%;
+}
+
+.finance-page-icon {
+    width: 64px;
+    height: 64px;
+    min-width: 64px;
+    flex: 0 0 64px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(0, 166, 218, 0.14);
+    border-radius: 20px;
+    background: linear-gradient( 145deg, rgba(0, 166, 218, 0.13), rgba(0, 166, 218, 0.035) );
+    color: var(--finance-primary);
+    font-size: 1.7rem;
+    box-shadow: 0 10px 26px rgba(0, 166, 218, 0.09), inset 0 1px 0 rgba(255, 255, 255, 0.85);
+    transition: transform var(--finance-transition), box-shadow var(--finance-transition);
+}
+
+    .finance-page-icon:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 16px 32px rgba(0, 166, 218, 0.14);
+    }
+
+.finance-page-title {
+    margin: 0;
+    color: var(--finance-navy);
+    font-size: 1.75rem;
+    font-weight: 900 !important;
+    line-height: 1.4;
+    letter-spacing: -0.35px;
+    overflow-wrap: anywhere;
+}
+
+.finance-page-description {
+    max-width: 850px;
+    color: var(--finance-muted) !important;
+    font-size: 0.84rem;
+    line-height: 1.75;
+    overflow-wrap: anywhere;
+}
+
+body.dark-mode .finance-page-title {
+    color: #f8fafc;
+}
+
+
+/* ==========================================================================
+ * 6. تبويبات الصفحة
+ * ========================================================================== */
+
+.finance-tabs-scroll {
+    width: 100%;
+    max-width: 100%;
+}
+
+.finance-page .custom-tabs-container,
+.finance-tabs-track {
+    width: 100%;
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0;
+    padding: 0 !important;
+    border: none;
+    border-bottom: 2px solid var(--finance-border);
+    background: transparent;
+    box-shadow: none;
+    direction: rtl;
+}
+
+    .finance-page .custom-tabs-container .tab-btn {
+        min-height: 49px;
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        margin-bottom: -2px;
+        padding: 11px 24px;
+        border: 1px solid rgba(255, 255, 255, 0.36);
+        border-bottom: 3px solid transparent;
+        border-radius: 14px 14px 0 0;
+        background: rgba(255, 255, 255, 0.55);
+        -webkit-backdrop-filter: blur(12px);
+        backdrop-filter: blur(12px);
+        color: #6b7280;
+        font-family: inherit;
+        font-size: 0.88rem;
+        font-weight: 700;
+        line-height: 1.4;
+        white-space: nowrap;
+        cursor: pointer;
+        outline: none;
+        box-shadow: none;
+        transition: color var(--finance-transition), background-color var(--finance-transition), border-color var(--finance-transition), transform var(--finance-transition), box-shadow var(--finance-transition);
+    }
+
+        .finance-page .custom-tabs-container .tab-btn:hover {
+            border-color: rgba(0, 166, 218, 0.18);
+            background: rgba(255, 255, 255, 0.92);
+            color: var(--finance-primary);
+            transform: translateY(-2px);
+        }
+
+        .finance-page .custom-tabs-container .tab-btn.active {
+            border-color: var(--finance-border) var(--finance-border) var(--finance-primary) var(--finance-border);
+            border-bottom-color: var(--finance-primary);
+            background: var(--finance-card-solid);
+            color: var(--finance-primary) !important;
+            font-weight: 900;
+            box-shadow: 0 -6px 18px rgba(5, 32, 60, 0.035);
+            transform: none;
+        }
+
+        .finance-page .custom-tabs-container .tab-btn:focus-visible {
+            box-shadow: 0 0 0 4px rgba(0, 166, 218, 0.13);
+        }
+
+        .finance-page .custom-tabs-container .tab-btn i {
+            flex: 0 0 auto;
+            font-size: 1rem;
+        }
+
+.finance-tab-label {
+    min-width: 0;
+}
+
+
+/* الوضع الليلي للتبويبات */
+
+body.dark-mode
+.finance-page
+.custom-tabs-container
+.tab-btn {
+    border-color: rgba(255, 255, 255, 0.05);
+    background: rgba(30, 41, 59, 0.45);
+    color: #94a3b8;
+}
+
+    body.dark-mode
+    .finance-page
+    .custom-tabs-container
+    .tab-btn:hover {
+        background: rgba(42, 47, 66, 0.92);
+        color: #38bdf8;
+    }
+
+    body.dark-mode
+    .finance-page
+    .custom-tabs-container
+    .tab-btn.active {
+        border-color: var(--finance-border) var(--finance-border) #38bdf8 var(--finance-border);
+        background: var(--finance-card-solid);
+        color: #38bdf8 !important;
+    }
+
+
+/* ==========================================================================
+ * 7. بطاقة المحتوى
+ * ========================================================================== */
+
+.finance-content-card,
+.finance-page .glass-card {
+    width: 100%;
+    max-width: 100%;
+    position: relative;
+    padding: 22px !important;
+    border: 1px solid rgba(255, 255, 255, 0.58);
+    border-radius: var(--finance-radius-lg);
+    background: var(--finance-card);
+    -webkit-backdrop-filter: blur(18px);
+    backdrop-filter: blur(18px);
+    box-shadow: var(--finance-shadow-card);
+    overflow: hidden;
+}
+
+    .finance-content-card::before {
+        content: "";
+        position: absolute;
+        top: -90px;
+        inset-inline-end: -75px;
+        width: 220px;
+        height: 220px;
+        border-radius: 50%;
+        background: radial-gradient( circle, rgba(0, 166, 218, 0.055), transparent 70% );
+        pointer-events: none;
+    }
+
+    .finance-content-card::after {
+        content: "";
+        position: absolute;
+        bottom: -110px;
+        inset-inline-start: -90px;
+        width: 230px;
+        height: 230px;
+        border-radius: 50%;
+        background: radial-gradient( circle, rgba(25, 135, 84, 0.045), transparent 72% );
+        pointer-events: none;
+    }
+
+    .finance-content-card > * {
+        position: relative;
+        z-index: 1;
+    }
+
+body.dark-mode .finance-content-card,
+body.dark-mode .finance-page .glass-card {
+    border-color: var(--finance-border);
+    background: var(--finance-card);
+}
+
+
+/* ==========================================================================
+ * 8. حركة محتوى التبويب
+ * ========================================================================== */
+
+.finance-tab-pane {
+    width: 100%;
+    max-width: 100%;
+    animation: financeTabFadeIn 0.38s ease both;
+}
+
+@keyframes financeTabFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+
+/* ==========================================================================
+ * 9. رأس أقسام المالية
+ * ========================================================================== */
+
+.finance-section-header {
+    width: 100%;
+    padding-bottom: 15px;
+    border-bottom: 1px solid var(--finance-border-light);
+}
+
+.finance-section-title {
+    color: var(--finance-text);
+    font-size: 1.06rem;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.finance-section-description {
+    color: var(--finance-muted) !important;
+    line-height: 1.65;
+    overflow-wrap: anywhere;
+}
+
+.finance-section-count {
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 8px 15px;
+    border-radius: 50px;
+    font-size: 0.74rem;
+    font-weight: 900;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+
+.due-count-badge {
+    border: 1px solid rgba(245, 158, 11, 0.17);
+    background: var(--finance-warning-soft);
+    color: var(--finance-warning-dark);
+}
+
+.paid-count-badge {
+    border: 1px solid rgba(25, 135, 84, 0.17);
+    background: var(--finance-success-soft);
+    color: var(--finance-success-dark);
+}
+
+
+/* ==========================================================================
+ * 10. حاوية الجداول
+ * ========================================================================== */
+
+.finance-table-wrapper {
+    width: 100%;
+    max-width: 100%;
+    border: 1px solid var(--finance-border);
+    border-radius: 19px;
+    background: var(--finance-card-solid);
+    box-shadow: var(--finance-shadow-soft);
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 166, 218, 0.35) transparent;
+}
+
+    .finance-table-wrapper::-webkit-scrollbar {
+        height: 7px;
+    }
+
+    .finance-table-wrapper::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .finance-table-wrapper::-webkit-scrollbar-thumb {
+        border-radius: 20px;
+        background: rgba(0, 166, 218, 0.32);
+    }
+
+
+/* ==========================================================================
+ * 11. الجداول على الكمبيوتر
+ * ========================================================================== */
+
+.finance-responsive-table {
+    width: 100%;
+    min-width: 900px;
+    margin: 0;
+    border-collapse: collapse;
+    color: var(--finance-text);
+}
+
+    .finance-responsive-table thead {
+        background: var(--finance-input);
+    }
+
+        .finance-responsive-table thead th {
+            padding: 16px 18px !important;
+            border-bottom: 2px solid var(--finance-border) !important;
+            background: var(--finance-input) !important;
+            color: var(--finance-navy) !important;
+            font-size: 0.82rem;
+            font-weight: 900;
+            line-height: 1.5;
+            vertical-align: middle;
+            white-space: nowrap;
+        }
+
+    .finance-responsive-table tbody tr {
+        background: transparent;
+        transition: background-color var(--finance-transition);
+    }
+
+        .finance-responsive-table tbody tr:hover {
+            background: rgba(0, 166, 218, 0.025) !important;
+        }
+
+    .finance-responsive-table tbody td {
+        padding: 16px 18px !important;
+        border-bottom: 1px solid var(--finance-border-light) !important;
+        background: transparent;
+        color: var(--finance-text-soft);
+        font-size: 0.85rem;
+        font-weight: 700;
+        line-height: 1.55;
+        vertical-align: middle;
+    }
+
+    .finance-responsive-table tbody tr:last-child td {
+        border-bottom: none !important;
+    }
+
+.finance-mobile-label {
+    display: none;
+}
+
+body.dark-mode .finance-responsive-table thead th {
+    background: #171a27 !important;
+    color: #e2e8f0 !important;
+}
+
+body.dark-mode .finance-responsive-table tbody td {
+    color: #d4dbe7;
+}
+
+
+/* ==========================================================================
+ * 12. معلومات المنشأة والعميل
+ * ========================================================================== */
+
+.finance-entity-info {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    max-width: 100%;
+    text-align: start;
+}
+
+.finance-entity-icon {
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    flex: 0 0 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    font-size: 0.95rem;
+    transition: transform var(--finance-transition), box-shadow var(--finance-transition);
+}
+
+.finance-place-icon {
+    border: 1px solid rgba(0, 166, 218, 0.13);
+    background: var(--finance-primary-soft);
+    color: var(--finance-primary);
+}
+
+.finance-customer-icon {
+    border: 1px solid rgba(124, 58, 237, 0.13);
+    background: var(--finance-purple-soft);
+    color: var(--finance-purple);
+}
+
+.finance-table-row:hover .finance-entity-icon {
+    transform: translateY(-2px) scale(1.04);
+}
+
+.finance-place-name,
+.finance-customer-name {
+    max-width: 220px;
+    color: var(--finance-text);
+    font-weight: 800;
+    overflow-wrap: anywhere;
+}
+
+
+/* ==========================================================================
+ * 13. الأرقام والمبالغ المالية
+ * ========================================================================== */
+
+.finance-booking-number,
+.finance-record-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 66px;
+    padding: 6px 10px;
+    border: 1px solid var(--finance-border-light);
+    border-radius: 10px;
+    background: var(--finance-input);
+    color: var(--finance-text-soft);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.75rem;
+    font-weight: 900;
+    direction: ltr;
+}
+
+.finance-amount {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    max-width: 100%;
+    font-size: 0.82rem;
+    font-weight: 900;
+    line-height: 1.55;
+    white-space: nowrap;
+    direction: rtl;
+}
+
+.finance-deposit-amount {
+    color: var(--finance-text-soft);
+}
+
+.finance-commission-amount {
+    padding: 6px 11px;
+    border: 1px solid rgba(0, 166, 218, 0.14);
+    border-radius: 10px;
+    background: var(--finance-primary-soft);
+    color: var(--finance-primary-dark) !important;
+}
+
+.finance-paid-commission-amount {
+    padding: 6px 11px;
+    border: 1px solid rgba(25, 135, 84, 0.15);
+    border-radius: 10px;
+    background: var(--finance-success-soft);
+    color: var(--finance-success-dark) !important;
+}
+
+
+/* ==========================================================================
+ * 14. شارة حالة العملية
+ * ========================================================================== */
+
+.finance-status-badge {
+    min-height: 35px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 7px 13px !important;
+    border: 1px solid rgba(25, 135, 84, 0.16);
+    border-radius: 50px;
+    background: var(--finance-success-soft) !important;
+    color: var(--finance-success-dark) !important;
+    font-size: 0.7rem;
+    font-weight: 900;
+    white-space: nowrap;
+    box-shadow: 0 4px 11px rgba(5, 32, 60, 0.045);
+}
+
+
+/* ==========================================================================
+ * 15. زر تأكيد السداد
+ * ========================================================================== */
+
+.finance-confirm-payment-btn,
+.finance-page .action-btn {
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin: 0 !important;
+    padding: 8px 15px !important;
+    border: 1px solid rgba(25, 135, 84, 0.18) !important;
+    border-radius: 11px;
+    background: var(--finance-success-soft) !important;
+    color: var(--finance-success-dark) !important;
+    font-family: inherit;
+    font-size: 0.74rem;
+    font-weight: 900;
+    line-height: 1.4;
+    white-space: nowrap;
+    box-shadow: none;
+    transition: color var(--finance-transition), background-color var(--finance-transition), border-color var(--finance-transition), transform var(--finance-transition), box-shadow var(--finance-transition);
+}
+
+    .finance-confirm-payment-btn:hover,
+    .finance-confirm-payment-btn:focus {
+        border-color: var(--finance-success) !important;
+        background: var(--finance-success) !important;
+        color: #ffffff !important;
+        transform: translateY(-2px);
+        box-shadow: 0 9px 20px rgba(25, 135, 84, 0.2);
+    }
+
+    .finance-confirm-payment-btn:focus-visible {
+        outline: none;
+        box-shadow: 0 0 0 4px rgba(25, 135, 84, 0.14);
+    }
+
+    .finance-confirm-payment-btn:disabled {
+        opacity: 0.65;
+        cursor: not-allowed;
+        transform: none;
+    }
+
+
+/* ==========================================================================
+ * 16. الحالة الفارغة
+ * ========================================================================== */
+
+.finance-empty-row {
+    background: transparent !important;
+}
+
+    .finance-empty-row:hover {
+        background: transparent !important;
+    }
+
+.finance-empty-state {
+    width: 100%;
+    padding: 30px 18px;
+    border: 1px dashed var(--finance-border);
+    border-radius: var(--finance-radius-md);
+    background: rgba(248, 250, 252, 0.55);
+    text-align: center;
+}
+
+.finance-empty-icon {
+    width: 58px;
+    height: 58px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 13px;
+    border: 1px solid rgba(100, 116, 139, 0.13);
+    border-radius: 18px;
+    background: rgba(100, 116, 139, 0.07);
+    color: var(--finance-muted);
+    font-size: 1.55rem;
+}
+
+.finance-empty-success {
+    border-color: rgba(25, 135, 84, 0.14);
+    background: var(--finance-success-soft);
+    color: var(--finance-success);
+}
+
+.finance-empty-state h6 {
+    color: var(--finance-text);
+    overflow-wrap: anywhere;
+}
+
+.finance-empty-state p {
+    color: var(--finance-muted);
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}
+
+body.dark-mode .finance-empty-state {
+    background: rgba(255, 255, 255, 0.025);
+}
+
+
+/* ==========================================================================
+ * 17. شبكة التقارير المالية
+ * ========================================================================== */
+
+.finance-reports-grid {
+    align-items: stretch;
+}
+
+.finance-report-card {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    padding: 24px;
+    border: 1px solid var(--finance-border);
+    border-radius: 22px;
+    background: var(--finance-card-solid);
+    box-shadow: var(--finance-shadow-soft);
+    overflow: hidden;
+    transition: border-color var(--finance-transition), transform var(--finance-transition), box-shadow var(--finance-transition);
+}
+
+    .finance-report-card::before {
+        content: "";
+        position: absolute;
+        top: -65px;
+        inset-inline-end: -55px;
+        width: 150px;
+        height: 150px;
+        border-radius: 50%;
+        opacity: 0.85;
+        pointer-events: none;
+    }
+
+.finance-revenue-card::before {
+    background: radial-gradient( circle, rgba(25, 135, 84, 0.11), transparent 72% );
+}
+
+.finance-expected-card::before {
+    background: radial-gradient( circle, rgba(245, 158, 11, 0.12), transparent 72% );
+}
+
+.finance-transactions-card::before {
+    background: radial-gradient( circle, rgba(0, 166, 218, 0.12), transparent 72% );
+}
+
+.finance-report-card:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--finance-shadow-hover);
+}
+
+.finance-revenue-card:hover {
+    border-color: rgba(25, 135, 84, 0.23);
+}
+
+.finance-expected-card:hover {
+    border-color: rgba(245, 158, 11, 0.24);
+}
+
+.finance-transactions-card:hover {
+    border-color: rgba(0, 166, 218, 0.24);
+}
+
+.finance-report-card-top {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    position: relative;
+    z-index: 1;
+}
+
+.finance-report-icon {
+    width: 55px;
+    height: 55px;
+    min-width: 55px;
+    flex: 0 0 55px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 17px;
+    font-size: 1.4rem;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+
+.finance-report-success-icon {
+    border: 1px solid rgba(25, 135, 84, 0.16);
+    background: var(--finance-success-soft);
+    color: var(--finance-success);
+}
+
+.finance-report-warning-icon {
+    border: 1px solid rgba(245, 158, 11, 0.17);
+    background: var(--finance-warning-soft);
+    color: var(--finance-warning-dark);
+}
+
+.finance-report-primary-icon {
+    border: 1px solid rgba(0, 166, 218, 0.15);
+    background: var(--finance-primary-soft);
+    color: var(--finance-primary);
+}
+
+.finance-report-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 7px 12px;
+    border-radius: 50px;
+    font-size: 0.67rem;
+    font-weight: 900;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+
+.finance-report-success-badge {
+    border: 1px solid rgba(25, 135, 84, 0.16);
+    background: var(--finance-success-soft);
+    color: var(--finance-success-dark);
+}
+
+.finance-report-warning-badge {
+    border: 1px solid rgba(245, 158, 11, 0.17);
+    background: var(--finance-warning-soft);
+    color: var(--finance-warning-dark);
+}
+
+.finance-report-primary-badge {
+    border: 1px solid rgba(0, 166, 218, 0.15);
+    background: var(--finance-primary-soft);
+    color: var(--finance-primary-dark);
+}
+
+.finance-report-content {
+    position: relative;
+    z-index: 1;
+}
+
+.finance-report-title {
+    margin-bottom: 11px;
+    color: var(--finance-muted) !important;
+    font-size: 0.82rem;
+    font-weight: 800;
+    line-height: 1.55;
+    overflow-wrap: anywhere;
+}
+
+.finance-report-value {
+    max-width: 100%;
+    margin-bottom: 11px;
+    font-size: clamp(1.35rem, 2.4vw, 2rem);
+    font-weight: 900;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+}
+
+.finance-report-unit {
+    font-size: 0.75rem;
+    font-weight: 800;
+}
+
+.finance-report-description {
+    color: var(--finance-muted) !important;
+    font-size: 0.72rem;
+    line-height: 1.75;
+    overflow-wrap: anywhere;
+}
+
+
+/* ==========================================================================
+ * 18. الوضع الليلي للعناصر الداخلية
+ * ========================================================================== */
+
+body.dark-mode .finance-table-wrapper,
+body.dark-mode .finance-report-card {
+    border-color: var(--finance-border);
+    background: var(--finance-card-solid);
+}
+
+body.dark-mode .finance-booking-number,
+body.dark-mode .finance-record-number {
+    border-color: var(--finance-border);
+    background: var(--finance-input);
+    color: #d8e0eb;
+}
+
+body.dark-mode .finance-page-icon,
+body.dark-mode .finance-report-icon {
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+
+/* ==========================================================================
+ * 19. SweetAlert على الكمبيوتر
+ * ========================================================================== */
+
+.swal2-container {
+    font-family: var(--finance-font) !important;
+    direction: rtl;
+    text-align: right;
+}
+
+    .swal2-container.swal2-backdrop-show {
+        background: rgba(15, 23, 42, 0.68) !important;
+        -webkit-backdrop-filter: blur(10px);
+        backdrop-filter: blur(10px);
+    }
+
+.swal2-popup {
+    max-width: calc(100vw - 30px);
+    border: 1px solid rgba(255, 255, 255, 0.58) !important;
+    border-radius: 28px !important;
+    background: rgba(255, 255, 255, 0.97) !important;
+    -webkit-backdrop-filter: blur(30px);
+    backdrop-filter: blur(30px);
+    color: var(--finance-text) !important;
+    box-shadow: 0 42px 95px rgba(0, 0, 0, 0.3) !important;
+    overflow: hidden;
+}
+
+.swal2-title {
+    max-width: 100%;
+    padding-inline: 18px !important;
+    color: var(--finance-navy) !important;
+    font-family: var(--finance-font) !important;
+    font-size: 1.3rem !important;
+    font-weight: 900 !important;
+    line-height: 1.55 !important;
+    overflow-wrap: anywhere;
+}
+
+.swal2-html-container {
+    max-width: 100%;
+    color: var(--finance-text-soft) !important;
+    font-family: var(--finance-font) !important;
+    font-size: 0.93rem !important;
+    line-height: 1.8 !important;
+    overflow-wrap: anywhere;
+}
+
+.swal2-actions {
+    gap: 9px;
+}
+
+.swal2-styled {
+    min-height: 44px;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50px !important;
+    font-family: var(--finance-font) !important;
+    font-size: 0.86rem !important;
+    font-weight: 900 !important;
+    box-shadow: none !important;
+    transition: transform var(--finance-transition), box-shadow var(--finance-transition) !important;
+}
+
+    .swal2-styled:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 9px 20px rgba(5, 32, 60, 0.12) !important;
+    }
+
+.swal2-close {
+    width: 38px !important;
+    height: 38px !important;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50% !important;
+    background: rgba(220, 53, 69, 0.08) !important;
+    color: var(--finance-danger) !important;
+    font-size: 1.65rem !important;
+    line-height: 1 !important;
+    transition: background-color var(--finance-transition), transform var(--finance-transition) !important;
+}
+
+    .swal2-close:hover {
+        background: rgba(220, 53, 69, 0.16) !important;
+        transform: rotate(90deg);
+    }
+
+body.dark-mode .swal2-popup {
+    border-color: rgba(255, 255, 255, 0.06) !important;
+    background: rgba(29, 31, 45, 0.98) !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .swal2-title {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .swal2-html-container {
+    color: #d4dbe7 !important;
+}
+
+
+/* ==========================================================================
+ * 20. التابلت
+ * ========================================================================== */
+
+@media (max-width: 991.98px) {
+
+    .finance-page {
+        padding-inline: 18px !important;
+        padding-top: 14px !important;
+    }
+
+
+    /* شريط التبويبات */
+
+    .finance-tabs-scroll {
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding-bottom: 4px;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior-inline: contain;
+        scroll-behavior: smooth;
+        scrollbar-width: none;
+    }
+
+        .finance-tabs-scroll::-webkit-scrollbar {
+            display: none;
+        }
+
+    .finance-page .custom-tabs-container,
+    .finance-tabs-track {
+        width: max-content;
+        min-width: 100%;
+        flex-wrap: nowrap;
+        padding-inline: 2px !important;
+    }
+
+        .finance-page
+        .custom-tabs-container
+        .tab-btn {
+            min-width: 170px;
+            flex: 0 0 auto;
+            padding: 11px 17px;
+            scroll-snap-align: start;
+        }
+
+
+    /* بطاقة المحتوى */
+
+    .finance-content-card,
+    .finance-page .glass-card {
+        padding: 19px !important;
+    }
+
+
+    /* التقارير */
+
+    .finance-report-card {
+        padding: 21px;
+    }
+}
+
+
+/* ==========================================================================
+ * 21. الهاتف
+ * ========================================================================== */
+
+@media (max-width: 767.98px) {
+
+    .finance-page {
+        padding-inline: 12px !important;
+        padding-top: 8px !important;
+        padding-bottom: 45px;
+    }
+
+
+    /* ----------------------------------------------------------------------
+     * مسار الصفحة
+     * ---------------------------------------------------------------------- */
+
+    .finance-breadcrumb {
+        margin-bottom: 12px !important;
+    }
+
+        .finance-breadcrumb > span {
+            font-size: 0.72rem;
+        }
+
+
+    /* ----------------------------------------------------------------------
+     * رأس الصفحة
+     * ---------------------------------------------------------------------- */
+
+    .finance-page-header {
+        margin-bottom: 20px !important;
+    }
+
+    .finance-heading-wrapper {
+        align-items: flex-start !important;
+        gap: 12px !important;
+    }
+
+    .finance-page-icon {
+        width: 52px;
+        height: 52px;
+        min-width: 52px;
+        flex-basis: 52px;
+        border-radius: 17px;
+        font-size: 1.35rem;
+    }
+
+    .finance-page-title {
+        font-size: 1.3rem;
+    }
+
+    .finance-page-description {
+        font-size: 0.76rem;
+        line-height: 1.65;
+    }
+
+
+    /* ----------------------------------------------------------------------
+     * التبويبات
+     * ---------------------------------------------------------------------- */
+
+    .finance-tabs-scroll {
+        margin-bottom: 16px !important;
+    }
+
+    .finance-page .custom-tabs-container,
+    .finance-tabs-track {
+        gap: 6px;
+        border-bottom: 1px solid var(--finance-border);
+    }
+
+        .finance-page
+        .custom-tabs-container
+        .tab-btn {
+            min-width: 155px;
+            min-height: 44px;
+            padding: 9px 12px;
+            border-radius: 12px 12px 0 0;
+            font-size: 0.75rem;
+        }
+
+            .finance-page
+            .custom-tabs-container
+            .tab-btn i {
+                margin: 0 !important;
+                font-size: 0.9rem;
+            }
+
+
+    /* ----------------------------------------------------------------------
+     * بطاقة المحتوى
+     * ---------------------------------------------------------------------- */
+
+    .finance-content-card,
+    .finance-page .glass-card {
+        padding: 13px !important;
+        border-radius: 19px;
+        box-shadow: var(--finance-shadow-soft);
+    }
+
+
+    /* ----------------------------------------------------------------------
+     * رأس القسم
+     * ---------------------------------------------------------------------- */
+
+    .finance-section-header {
+        margin-bottom: 14px !important;
+        padding-bottom: 12px;
+    }
+
+    .finance-section-title {
+        font-size: 0.96rem;
+    }
+
+    .finance-section-description {
+        font-size: 0.72rem;
+        line-height: 1.6;
+    }
+
+    .finance-section-count {
+        width: 100%;
+        min-height: 42px;
+        justify-content: center;
+        font-size: 0.7rem;
+    }
+
+
+    /* ----------------------------------------------------------------------
+     * تحويل الجداول إلى بطاقات
+     * ---------------------------------------------------------------------- */
+
+    .finance-table-wrapper {
+        border: none;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+        overflow: visible;
+    }
+
+    .finance-responsive-table {
+        width: 100%;
+        min-width: 0;
+        display: block;
+    }
+
+        .finance-responsive-table thead {
+            display: none;
+        }
+
+        .finance-responsive-table tbody {
+            width: 100%;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: 12px;
+        }
+
+            .finance-responsive-table tbody tr {
+                width: 100%;
+                display: block;
+                position: relative;
+                padding: 13px;
+                border: 1px solid var(--finance-border);
+                border-radius: 19px;
+                background: var(--finance-card-solid);
+                box-shadow: var(--finance-shadow-soft);
+                overflow: hidden;
+            }
+
+                .finance-responsive-table tbody tr::before {
+                    content: "";
+                    position: absolute;
+                    top: -55px;
+                    inset-inline-end: -45px;
+                    width: 125px;
+                    height: 125px;
+                    border-radius: 50%;
+                    background: radial-gradient( circle, rgba(0, 166, 218, 0.065), transparent 70% );
+                    pointer-events: none;
+                }
+
+            .finance-responsive-table
+            tbody
+            .paid-commission-row::before {
+                background: radial-gradient( circle, rgba(25, 135, 84, 0.065), transparent 70% );
+            }
+
+            .finance-responsive-table tbody tr:hover {
+                background: var(--finance-card-solid) !important;
+                transform: none;
+            }
+
+            .finance-responsive-table tbody td {
+                width: 100%;
+                min-width: 0;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 12px;
+                padding: 10px 0 !important;
+                border: none !important;
+                border-bottom: 1px dashed var(--finance-border) !important;
+                font-size: 0.79rem;
+                text-align: start !important;
+            }
+
+                .finance-responsive-table tbody td:last-child {
+                    border-bottom: none !important;
+                }
+
+    .finance-mobile-label {
+        min-width: 103px;
+        flex: 0 0 103px;
+        display: block;
+        color: var(--finance-muted);
+        font-size: 0.65rem;
+        font-weight: 900;
+        line-height: 1.45;
+        text-align: start;
+    }
+
+
+    /* المنشأة والعميل */
+
+    .finance-place-cell,
+    .finance-customer-cell {
+        flex-direction: column;
+        align-items: stretch !important;
+        gap: 8px !important;
+    }
+
+        .finance-place-cell
+        .finance-mobile-label,
+        .finance-customer-cell
+        .finance-mobile-label {
+            width: auto;
+            min-width: 0;
+            flex: none;
+        }
+
+    .finance-entity-info {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    .finance-place-name,
+    .finance-customer-name {
+        max-width: calc(100% - 49px);
+        font-size: 0.79rem;
+    }
+
+    .finance-entity-icon {
+        width: 40px;
+        height: 40px;
+        min-width: 40px;
+        flex-basis: 40px;
+        border-radius: 12px;
+    }
+
+
+    /* الأرقام والمبالغ */
+
+    .finance-booking-number,
+    .finance-record-number {
+        max-width: calc(100% - 115px);
+        font-size: 0.69rem;
+    }
+
+    .finance-amount,
+    .finance-status-badge {
+        max-width: calc(100% - 115px);
+        white-space: normal;
+        text-align: center;
+        overflow-wrap: anywhere;
+    }
+
+    .finance-amount {
+        font-size: 0.73rem;
+    }
+
+
+    /* زر السداد */
+
+    .finance-actions-cell {
+        flex-direction: column;
+        align-items: stretch !important;
+        gap: 8px !important;
+    }
+
+        .finance-actions-cell
+        .finance-mobile-label {
+            width: auto;
+            min-width: 0;
+            flex: none;
+        }
+
+    .finance-confirm-payment-btn {
+        width: 100%;
+        min-height: 44px;
+        padding: 8px 12px !important;
+        font-size: 0.72rem;
+        white-space: normal;
+    }
+
+
+    /* ----------------------------------------------------------------------
+     * الحالة الفارغة
+     * ---------------------------------------------------------------------- */
+
+    .finance-empty-row {
+        padding: 0 !important;
+        border: none !important;
+        background: transparent !important;
+        box-shadow: none !important;
+    }
+
+        .finance-empty-row::before {
+            display: none;
+        }
+
+        .finance-empty-row td {
+            display: block !important;
+            padding: 0 !important;
+            border: none !important;
+        }
+
+        .finance-empty-row
+        .finance-empty-state {
+            padding: 28px 15px;
+            border-radius: 17px;
+        }
+
+
+    /* ----------------------------------------------------------------------
+     * بطاقات التقارير
+     * ---------------------------------------------------------------------- */
+
+    .finance-reports-grid {
+        --bs-gutter-y: 12px;
+    }
+
+    .finance-report-card {
+        gap: 19px;
+        padding: 18px;
+        border-radius: 19px;
+    }
+
+        .finance-report-card:hover {
+            transform: none;
+        }
+
+    .finance-report-icon {
+        width: 49px;
+        height: 49px;
+        min-width: 49px;
+        flex-basis: 49px;
+        border-radius: 15px;
+        font-size: 1.18rem;
+    }
+
+    .finance-report-badge {
+        padding: 6px 10px;
+        font-size: 0.62rem;
+    }
+
+    .finance-report-title {
+        font-size: 0.75rem;
+    }
+
+    .finance-report-value {
+        margin-bottom: 8px;
+        font-size: 1.4rem;
+    }
+
+    .finance-report-description {
+        font-size: 0.68rem;
+    }
+
+
+    /* ----------------------------------------------------------------------
+     * SweetAlert كلوحة سفلية
+     * ---------------------------------------------------------------------- */
+
+    .swal2-container {
+        align-items: flex-end !important;
+        justify-content: center !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+    }
+
+        .swal2-container.swal2-backdrop-show {
+            background: rgba(15, 23, 42, 0.72) !important;
+            -webkit-backdrop-filter: blur(8px);
+            backdrop-filter: blur(8px);
+        }
+
+    .swal2-popup {
+        width: 100% !important;
+        max-width: none !important;
+        max-height: 90vh;
+        max-height: 90dvh;
+        position: relative;
+        display: flex !important;
+        flex-direction: column;
+        margin: 0 !important;
+        padding: 30px 14px calc(14px + env(safe-area-inset-bottom)) !important;
+        border: none !important;
+        border-radius: 28px 28px 0 0 !important;
+        box-shadow: 0 -25px 65px rgba(5, 32, 60, 0.27) !important;
+        overflow: hidden !important;
+        transform-origin: center bottom;
+    }
+
+
+        /* مقبض اللوحة */
+
+        .swal2-popup::before {
+            content: "";
+            width: 50px;
+            height: 5px;
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            border-radius: 50px;
+            background: rgba(100, 116, 139, 0.35);
+            transform: translateX(-50%);
+        }
+
+
+        /* حركة الفتح */
+
+        .swal2-popup.swal2-show {
+            animation: financeSheetOpen 0.38s cubic-bezier(0.22, 1, 0.36, 1) both !important;
+        }
+
+
+        /* حركة الإغلاق */
+
+        .swal2-popup.swal2-hide {
+            animation: financeSheetClose 0.25s ease both !important;
+        }
+
+    @keyframes financeSheetOpen {
+        from {
+            opacity: 0.65;
+            transform: translateY(32px) scale(0.985);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+    }
+
+    @keyframes financeSheetClose {
+        from {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+
+        to {
+            opacity: 0;
+            transform: translateY(27px) scale(0.985);
+        }
+    }
+
+
+    /* أيقونة النافذة */
+
+    .swal2-icon {
+        width: 4.15em !important;
+        height: 4.15em !important;
+        flex: 0 0 auto;
+        margin: 0.75em auto 0.65em !important;
+    }
+
+
+    /* عنوان النافذة */
+
+    .swal2-title {
+        flex: 0 0 auto;
+        padding: 0 12px !important;
+        font-size: 1.04rem !important;
+        line-height: 1.55 !important;
+    }
+
+
+    /* نص النافذة */
+
+    .swal2-html-container {
+        min-height: 0;
+        flex: 1 1 auto;
+        margin: 12px 0 0 !important;
+        padding: 0 5px 4px !important;
+        font-size: 0.8rem !important;
+        line-height: 1.75 !important;
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(0, 166, 218, 0.3) transparent;
+    }
+
+
+    /* أزرار النافذة */
+
+    .swal2-actions {
+        width: 100%;
+        flex: 0 0 auto;
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px !important;
+        margin: 15px 0 0 !important;
+        padding: 12px 0 0;
+        border-top: 1px solid var(--finance-border);
+    }
+
+    .swal2-styled {
+        width: 100%;
+        min-width: 0;
+        min-height: 46px;
+        margin: 0 !important;
+        padding: 9px 11px !important;
+        font-size: 0.78rem !important;
+        white-space: normal;
+    }
+
+
+    /* زر الإغلاق إن وجد */
+
+    .swal2-close {
+        top: 24px !important;
+        inset-inline-end: 12px !important;
+        width: 34px !important;
+        height: 34px !important;
+        font-size: 1.45rem !important;
+    }
+}
+
+
+/* ==========================================================================
+ * 22. الهواتف الصغيرة
+ * ========================================================================== */
+
+@media (max-width: 575.98px) {
+
+    .finance-page {
+        padding-inline: 9px !important;
+    }
+
+    .finance-page-icon {
+        width: 48px;
+        height: 48px;
+        min-width: 48px;
+        flex-basis: 48px;
+        border-radius: 15px;
+        font-size: 1.22rem;
+    }
+
+    .finance-page-title {
+        font-size: 1.17rem;
+    }
+
+    .finance-page-description {
+        font-size: 0.71rem;
+    }
+
+
+    /* التبويبات */
+
+    .finance-page
+    .custom-tabs-container
+    .tab-btn {
+        min-width: 145px;
+        min-height: 42px;
+        padding: 8px 10px;
+        font-size: 0.7rem;
+    }
+
+
+    /* بطاقة المحتوى */
+
+    .finance-content-card,
+    .finance-page .glass-card {
+        padding: 11px !important;
+        border-radius: 17px;
+    }
+
+
+    /* بطاقات الجداول */
+
+    .finance-responsive-table tbody tr {
+        padding: 11px;
+        border-radius: 17px;
+    }
+
+    .finance-responsive-table tbody td {
+        gap: 9px;
+        padding: 9px 0 !important;
+        font-size: 0.74rem;
+    }
+
+    .finance-mobile-label {
+        min-width: 91px;
+        flex-basis: 91px;
+        font-size: 0.61rem;
+    }
+
+    .finance-booking-number,
+    .finance-record-number,
+    .finance-amount,
+    .finance-status-badge {
+        max-width: calc(100% - 100px);
+    }
+
+    .finance-place-name,
+    .finance-customer-name {
+        font-size: 0.75rem;
+    }
+
+
+    /* التقارير */
+
+    .finance-report-card {
+        padding: 16px;
+        border-radius: 17px;
+    }
+
+    .finance-report-icon {
+        width: 45px;
+        height: 45px;
+        min-width: 45px;
+        flex-basis: 45px;
+    }
+
+    .finance-report-value {
+        font-size: 1.28rem;
+    }
+
+
+    /* SweetAlert */
+
+    .swal2-popup {
+        max-height: 92vh;
+        max-height: 92dvh;
+        padding-inline: 11px !important;
+        border-radius: 25px 25px 0 0 !important;
+    }
+
+    .swal2-title {
+        font-size: 0.95rem !important;
+    }
+
+    .swal2-html-container {
+        font-size: 0.75rem !important;
+    }
+
+    .swal2-actions {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .swal2-styled {
+        min-height: 45px;
+        font-size: 0.75rem !important;
+    }
+}
+
+
+/* ==========================================================================
+ * 23. الهواتف شديدة الصغر
+ * ========================================================================== */
+
+@media (max-width: 399.98px) {
+
+    .finance-page {
+        padding-inline: 7px !important;
+    }
+
+    .finance-heading-wrapper {
+        gap: 9px !important;
+    }
+
+    .finance-page-icon {
+        width: 44px;
+        height: 44px;
+        min-width: 44px;
+        flex-basis: 44px;
+    }
+
+    .finance-page-title {
+        font-size: 1.07rem;
+    }
+
+    .finance-page-description {
+        font-size: 0.66rem;
+    }
+
+    .finance-page
+    .custom-tabs-container
+    .tab-btn {
+        min-width: 137px;
+        font-size: 0.65rem;
+    }
+
+    .finance-responsive-table tbody tr {
+        padding: 9px;
+    }
+
+    .finance-responsive-table tbody td {
+        font-size: 0.7rem;
+    }
+
+    .finance-mobile-label {
+        min-width: 80px;
+        flex-basis: 80px;
+        font-size: 0.57rem;
+    }
+
+    .finance-booking-number,
+    .finance-record-number,
+    .finance-amount,
+    .finance-status-badge {
+        max-width: calc(100% - 88px);
+        font-size: 0.62rem;
+    }
+
+    .finance-confirm-payment-btn {
+        font-size: 0.67rem;
+    }
+
+    .finance-report-value {
+        font-size: 1.18rem;
+    }
+
+    .swal2-title {
+        font-size: 0.87rem !important;
+    }
+
+    .swal2-html-container {
+        font-size: 0.7rem !important;
+    }
+}
+
+
+/* ==========================================================================
+ * 24. الشاشات القصيرة
+ * ========================================================================== */
+
+@media (max-height: 650px) and (max-width: 767.98px) {
+
+    .swal2-popup {
+        max-height: 96vh;
+        max-height: 96dvh;
+    }
+
+    .swal2-icon {
+        width: 3.5em !important;
+        height: 3.5em !important;
+        margin-top: 0.45em !important;
+    }
+
+    .swal2-title {
+        font-size: 0.9rem !important;
+    }
+}
+
+
+/* ==========================================================================
+ * 25. دعم LTR
+ * ========================================================================== */
+
+html[dir="ltr"] .finance-page {
+    direction: ltr;
+    text-align: left;
+}
+
+    html[dir="ltr"]
+    .finance-page
+    .custom-tabs-container {
+        direction: ltr;
+    }
+
+html[dir="ltr"] .finance-entity-info {
+    text-align: left;
+}
+
+html[dir="ltr"] .swal2-container {
+    direction: ltr;
+    text-align: left;
+}
+
+
+/* ==========================================================================
+ * 26. تقليل الحركة
+ * ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+
+    .finance-page *,
+    .finance-page *::before,
+    .finance-page *::after,
+    .swal2-container *,
+    .swal2-container *::before,
+    .swal2-container *::after {
+        scroll-behavior: auto !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}

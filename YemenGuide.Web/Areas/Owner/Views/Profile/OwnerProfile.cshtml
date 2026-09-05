@@ -1,0 +1,1229 @@
+﻿@model YemenGuide.Core.DTOs.Owner.OwnerProfileDto
+@inject YemenGuide.Web.Services.ExchangeRates.CurrencyDisplayService CurrencyDisplay
+
+@{
+    ViewData["Title"] = "الملف الشخصي - المالك";
+    // استخدام الـ Layout المخصص للوحة تحكم المالك
+    Layout = "~/Areas/Owner/Views/Shared/_OwnerLayout.cshtml";
+
+    var activeCurrency =
+        YemenGuide.Web.Services.ExchangeRates.CurrencyDisplayService.NormalizeCurrency(
+            Model.PreferredCurrency);
+
+    if (string.IsNullOrWhiteSpace(activeCurrency))
+    {
+        activeCurrency = await CurrencyDisplay.GetPreferredCurrencyAsync();
+    }
+
+    var walletConvertedAmount =
+        await CurrencyDisplay.ConvertAmountByCityNameAsync(
+            Model.WalletBalance,
+            Model.City);
+
+    var walletCurrencySymbol =
+        YemenGuide.Web.Services.ExchangeRates.CurrencyDisplayService.GetCurrencySymbol(
+            activeCurrency);
+}
+
+@section Styles {
+    <!-- نستخدم نفس التنسيقات الفخمة التي استخدمناها للعميل لضمان توحيد الهوية البصرية -->
+    <link rel="stylesheet"
+      href="~/css/owner/owner-profile.css"
+      asp-append-version="true" />
+
+    <link rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/intl-tel-input@23.0.4/build/css/intlTelInput.css">
+}
+
+    <div class="profile-container container-fluid px-4 px-lg-5"
+     style="margin-bottom: 80px;">
+
+        <!-- ==========================================
+             1. البطاقة العلوية (Hero Section & Wallet)
+             ========================================== -->
+        <div class="premium-glass-card hero-section p-4 p-lg-5 mb-4 mt-3">
+
+            <div class="row align-items-center g-4">
+
+                <div class="col-xl-8 col-lg-7 d-flex flex-column flex-md-row align-items-center align-items-md-start gap-4 text-center text-md-start">
+
+                    <div class="avatar-wrapper position-relative">
+
+                        <div class="avatar-circle-premium d-flex align-items-center justify-content-center shadow-lg"
+                         id="avatarPreview"
+                         title="اضغط لإدارة الصورة الشخصية"
+                         style="background: @(string.IsNullOrEmpty(Model.ProfileImage) ? "linear-gradient(135deg, #05203C 0%, #00A6DA 100%)" : $"url('{Model.ProfileImage}') center/cover no-repeat");">
+
+                        @if (string.IsNullOrEmpty(Model.ProfileImage))
+                        {
+                            <span class="avatar-initial text-white fw-bold display-4"
+                              id="mainAvatarInitial">
+                                @Model.InitialLetter
+                            </span>
+                        }
+
+                    </div>
+
+                    <button class="camera-floating-btn shadow-sm d-flex align-items-center justify-content-center"
+                            id="uploadCameraBtn"
+                            type="button">
+
+                        <i class="bi bi-camera-fill"></i>
+                    </button>
+
+                    <input type="file"
+                           id="profileImageUpload"
+                           accept="image/*"
+                           hidden />
+
+                </div>
+
+                <div class="flex-grow-1 pt-md-2">
+
+                    <div class="d-inline-flex align-items-center mb-2">
+
+                        <h2 class="fw-bold text-dark profile-name mb-0 me-2">
+                            @Model.FullName
+                        </h2>
+
+                        @if (Model.IsEmailVerified)
+                        {
+                            <i class="bi bi-patch-check-fill text-primary fs-5"
+                           title="حساب موثق"></i>
+                        }
+
+                    </div>
+
+                    <div class="d-flex flex-wrap justify-content-center justify-content-md-start gap-3 mt-2 user-meta-info">
+
+                        <span class="badge-premium text-white"
+                              style="background: var(--primary-light);">
+
+                            <i class="bi bi-building"></i>
+                            مالك منشأة
+                        </span>
+
+                        <span class="badge-premium">
+
+                            <i class="bi bi-hash"></i>
+                            المالك: @Model.UserId
+                        </span>
+
+                        <span class="badge-premium">
+
+                            <i class="bi bi-at"></i>
+                            @Model.Username
+                        </span>
+
+                        <span class="badge-premium">
+
+                            <i class="bi bi-shield-check"></i>
+                            الحالة:
+                            @(Model.AccountState == "Active" ? "نشط" : "معلق")
+                        </span>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            <!-- المحفظة المالية للمالك -->
+            <div class="col-xl-4 col-lg-5">
+
+                <div class="wallet-mini-card shadow-sm p-4 d-flex flex-column justify-content-center position-relative overflow-hidden">
+
+                    <div class="wallet-decorator"></div>
+
+                    <div class="d-flex justify-content-between align-items-center mb-1 relative-z">
+
+                        <span class="text-white text-opacity-75 small fw-semibold">
+                            رصيد الأرباح المتاح
+                        </span>
+
+                        <i class="bi bi-wallet2 text-white fs-4 opacity-50"></i>
+
+                    </div>
+
+                    <div class="relative-z d-flex align-items-baseline gap-2">
+
+                        <h3 class="text-white fw-bold mb-0 wallet-amount">
+                            @YemenGuide.Web.Services.ExchangeRates.CurrencyDisplayService.FormatNumber(walletConvertedAmount, activeCurrency)
+                        </h3>
+
+                        <span class="text-white text-opacity-75 small">
+                            @walletCurrencySymbol
+                        </span>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- ==========================================
+         2. شريط التبويبات الفاخر
+         ========================================== -->
+    <div class="tabs-floating-wrapper mb-4">
+
+        <ul class="nav nav-pills custom-segmented-tabs"
+            id="profileTab"
+            role="tablist">
+
+            <li class="nav-item"
+                role="presentation">
+
+                <button class="nav-link active"
+                        id="personal-tab"
+                        data-bs-toggle="pill"
+                        data-bs-target="#personal"
+                        type="button"
+                        role="tab">
+
+                    <i class="bi bi-person-lines-fill me-2"></i>
+                    البيانات الشخصية
+                </button>
+
+            </li>
+
+            <li class="nav-item"
+                role="presentation">
+
+                <button class="nav-link"
+                        id="settings-tab"
+                        data-bs-toggle="pill"
+                        data-bs-target="#settings"
+                        type="button"
+                        role="tab">
+
+                    <i class="bi bi-sliders me-2"></i>
+                    الإعدادات
+                </button>
+
+            </li>
+
+            <li class="nav-item"
+                role="presentation">
+
+                <button class="nav-link text-danger-hover"
+                        id="security-tab"
+                        data-bs-toggle="pill"
+                        data-bs-target="#security"
+                        type="button"
+                        role="tab">
+
+                    <i class="bi bi-shield-lock me-2"></i>
+                    الأمان
+                </button>
+
+            </li>
+
+        </ul>
+
+    </div>
+
+    <!-- ==========================================
+         3. محتوى التبويبات
+         ========================================== -->
+    <div class="tab-content"
+         id="profileTabContent">
+
+        <!-- تبويبة البيانات الشخصية -->
+        <div class="tab-pane fade show active"
+             id="personal"
+             role="tabpanel">
+
+            <div class="premium-glass-card p-4 p-lg-5">
+
+                <div class="premium-section-title mb-4">
+
+                    <h4>
+                        <i class="bi bi-person-badge text-primary me-2"></i>
+                        الهوية والمعلومات الأساسية
+                    </h4>
+
+                    <p class="text-muted small mb-0">
+                        قم بتحديث بياناتك لضمان موثوقية منشأتك لدى العملاء.
+                    </p>
+
+                </div>
+
+                <form id="personalInfoForm">
+
+                    <div class="row g-4">
+
+                        <!-- الاسم الكامل -->
+                        <div class="col-md-6">
+
+                            <label class="premium-label">
+                                الاسم الكامل
+                            </label>
+
+                            <div class="premium-input-group">
+
+                                <i class="bi bi-person input-icon"></i>
+
+                                <input type="text"
+                                       class="form-control"
+                                       id="fullName"
+                                       value="@Model.FullName"
+                                       required>
+
+                                <button class="edit-btn-inset edit-icon"
+                                        type="button"
+                                        data-target="fullName">
+
+                                    <i class="bi bi-pencil-square"></i>
+                                </button>
+
+                            </div>
+
+                        </div>
+
+                        <!-- اسم المستخدم -->
+                        <div class="col-md-6">
+
+                            <label class="premium-label">
+                                اسم المستخدم (Unique)
+                            </label>
+
+                            <div class="premium-input-group">
+
+                                <i class="bi bi-at input-icon"></i>
+
+                                <input type="text"
+                                       class="form-control"
+                                       id="username"
+                                       value="@Model.Username"
+                                       required>
+
+                                <button class="edit-btn-inset edit-icon"
+                                        type="button"
+                                        data-target="username">
+
+                                    <i class="bi bi-pencil-square"></i>
+                                </button>
+
+                            </div>
+
+                            <div id="profileUsernameError"
+                                 class="premium-error-text mt-1"
+                                 style="display: none;">
+                            </div>
+
+                        </div>
+
+                        <!-- البريد الإلكتروني -->
+                        <div class="col-md-6">
+
+                            <label class="premium-label">
+                                البريد الإلكتروني (أساسي)
+                            </label>
+
+                            <div class="premium-input-group">
+
+                                <i class="bi bi-envelope input-icon"></i>
+
+                                <input type="email"
+                                       class="form-control"
+                                       id="contactInfo"
+                                       value="@Model.ContactInfo"
+                                       required>
+
+                                <div class="inset-badges d-flex align-items-center">
+
+                                    <span class="verify-badge @(Model.IsEmailVerified ? "" : "d-none")"
+                                          id="emailVerifiedBadge"
+                                          title="موثق">
+
+                                        <i class="bi bi-check-circle-fill"></i>
+                                    </span>
+
+                                    <button class="edit-btn-inset edit-icon ms-1"
+                                            type="button"
+                                            data-target="contactInfo">
+
+                                        <i class="bi bi-pencil-square"></i>
+                                    </button>
+
+                                </div>
+
+                            </div>
+
+                            <div id="emailVerificationWarning"
+                                 class="premium-inline-alert d-none mt-2">
+
+                                <div class="d-flex justify-content-between align-items-center">
+
+                                    <span>
+                                        <i class="bi bi-info-circle-fill me-1"></i>
+                                        يتطلب التحقق.
+                                    </span>
+
+                                    <button type="button"
+                                            class="btn-verify-now"
+                                            id="inlineVerifyEmailBtn">
+
+                                        تحقق
+                                        <i class="bi bi-arrow-left-short"></i>
+                                    </button>
+
+                                </div>
+
+                            </div>
+
+                            <div id="profileEmailError"
+                                 class="premium-error-text mt-1"
+                                 style="display: none;">
+                            </div>
+
+                        </div>
+
+                        <!-- رقم الهاتف -->
+                        <div class="col-md-6">
+
+                            <label class="premium-label">
+                                رقم الهاتف (للتواصل التجاري)
+                            </label>
+
+                            <div class="premium-input-group-phone phone-wrapper-ltr"
+                                 dir="ltr">
+
+                                <input type="tel"
+                                       class="form-control"
+                                       id="phoneNumber"
+                                       value="@Model.PhoneNumber"
+                                       required>
+
+                            </div>
+
+                            <div id="profilePhoneError"
+                                 class="premium-error-text mt-1"
+                                 style="display: none;">
+                            </div>
+
+                        </div>
+
+                        <!-- المدينة -->
+                        <div class="col-md-4">
+
+                            <label class="premium-label">
+                                المدينة
+                            </label>
+
+                            <div class="premium-input-group">
+
+                                <i class="bi bi-geo-alt input-icon"></i>
+
+                                <input type="text"
+                                       class="form-control"
+                                       id="city"
+                                       value="@Model.City"
+                                       placeholder="مثال: صنعاء">
+
+                                <button class="edit-btn-inset edit-icon"
+                                        type="button"
+                                        data-target="city">
+
+                                    <i class="bi bi-pencil-square"></i>
+                                </button>
+
+                            </div>
+
+                        </div>
+
+                        <!-- الجنس -->
+                        <div class="col-md-4">
+
+                            <label class="premium-label">
+                                الجنس
+                            </label>
+
+                            <div class="premium-input-group">
+
+                                <i class="bi bi-gender-ambiguous input-icon"></i>
+
+                                <select class="form-select premium-select"
+                                        id="gender">
+
+                                    <option value=""
+                                            selected="@(string.IsNullOrEmpty(Model.Gender))">
+
+                                        -- اختر --
+                                    </option>
+
+                                    <option value="ذكر"
+                                            selected="@(Model.Gender == "ذكر")">
+
+                                        👨🏻 ذكر
+                                    </option>
+
+                                    <option value="أنثى"
+                                            selected="@(Model.Gender == "أنثى")">
+
+                                        👩🏻 أنثى
+                                    </option>
+
+                                </select>
+
+                            </div>
+
+                        </div>
+
+                        <!-- تاريخ الميلاد -->
+                        <div class="col-md-4">
+
+                            <label class="premium-label">
+                                تاريخ الميلاد
+                            </label>
+
+                            <div class="premium-input-group">
+
+                                <i class="bi bi-calendar-event input-icon text-primary"></i>
+
+                                <input type="date"
+                                       class="form-control fw-bold premium-date"
+                                       id="dateOfBirth"
+                                       value="@(Model.DateOfBirth?.ToString("yyyy-MM-dd"))">
+
+                            </div>
+
+                        </div>
+
+                        <!-- النبذة -->
+                        <div class="col-12">
+
+                            <label class="premium-label">
+                                نبذة عن المالك (Bio)
+                            </label>
+
+                            <div class="premium-input-group align-items-start">
+
+                                <i class="bi bi-card-text input-icon pt-3"></i>
+
+                                <textarea class="form-control"
+                                          id="bio"
+                                          rows="3"
+                                          placeholder="أخبرنا قليلاً عن خبرتك ومجال عملك...">@Model.Bio</textarea>
+
+                                <button class="edit-btn-inset edit-icon pt-3"
+                                        type="button"
+                                        data-target="bio">
+
+                                    <i class="bi bi-pencil-square"></i>
+                                </button>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <!-- الروابط الاجتماعية -->
+                    <div class="premium-section-title mt-5 mb-4">
+
+                        <h4>
+                            <i class="bi bi-share text-primary me-2"></i>
+                            الروابط الاجتماعية (تظهر للعملاء)
+                        </h4>
+
+                    </div>
+
+                    <div class="row g-4">
+
+                        <div class="col-md-4">
+
+                            <div class="premium-input-group">
+
+                                <i class="bi bi-facebook input-icon text-primary"></i>
+
+                                <input type="url"
+                                       class="form-control text-start"
+                                       dir="ltr"
+                                       id="facebookUrl"
+                                       value="@Model.FacebookUrl"
+                                       placeholder="facebook.com/...">
+
+                            </div>
+
+                        </div>
+
+                        <div class="col-md-4">
+
+                            <div class="premium-input-group">
+
+                                <i class="bi bi-twitter-x input-icon text-dark"></i>
+
+                                <input type="url"
+                                       class="form-control text-start"
+                                       dir="ltr"
+                                       id="twitterUrl"
+                                       value="@Model.TwitterUrl"
+                                       placeholder="x.com/...">
+
+                            </div>
+
+                        </div>
+
+                        <div class="col-md-4">
+
+                            <div class="premium-input-group">
+
+                                <i class="bi bi-instagram input-icon text-danger"></i>
+
+                                <input type="url"
+                                       class="form-control text-start"
+                                       dir="ltr"
+                                       id="instagramUrl"
+                                       value="@Model.InstagramUrl"
+                                       placeholder="instagram.com/...">
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <div class="form-actions mt-5 pt-4 border-top d-flex gap-3 justify-content-end">
+
+                        <button type="reset"
+                                class="btn-premium-cancel"
+                                id="cancelEditBtn">
+
+                            إلغاء
+                        </button>
+
+                        <button type="submit"
+                                class="btn-premium-save">
+
+                            <i class="bi bi-floppy-fill me-2"></i>
+                            حفظ التحديثات
+                        </button>
+
+                    </div>
+
+                </form>
+
+            </div>
+
+        </div>
+
+        <!-- تبويبة الإعدادات -->
+        <div class="tab-pane fade"
+             id="settings"
+             role="tabpanel">
+
+            <div class="premium-glass-card p-4 p-lg-5">
+
+                <div class="premium-section-title mb-4">
+
+                    <h4>
+                        <i class="bi bi-sliders2 text-primary me-2"></i>
+                        تفضيلات واجهة لوحة التحكم
+                    </h4>
+
+                </div>
+
+                <div class="row g-4 mb-5">
+
+                    <!-- الوضع الليلي -->
+                    <div class="col-md-6">
+
+                        <div class="premium-toggle-card">
+
+                            <div class="d-flex justify-content-between align-items-center">
+
+                                <div class="d-flex align-items-center gap-3">
+
+                                    <div class="icon-box-glass text-warning">
+
+                                        <i class="bi @(Model.DarkModeEnabled ? "bi-sun-fill" : "bi-moon-stars-fill")"
+                                           id="profileDarkModeIcon"></i>
+
+                                    </div>
+
+                                    <span class="fw-bold text-dark">
+                                        الوضع الليلي
+                                    </span>
+
+                                </div>
+
+                                <div class="form-switch ios-switch">
+
+                                    <input class="form-check-input"
+                                           type="checkbox"
+                                           id="profileDarkModeSwitch"
+                                           @(Model.DarkModeEnabled ? "checked" : "")>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <!-- القائمة المدمجة -->
+                    <div class="col-md-6">
+
+                        <div class="premium-toggle-card">
+
+                            <div class="d-flex justify-content-between align-items-center">
+
+                                <div class="d-flex align-items-center gap-3">
+
+                                    <div class="icon-box-glass text-primary">
+                                        <i class="bi bi-grid-1x2-fill"></i>
+                                    </div>
+
+                                    <span class="fw-bold text-dark">
+                                        القائمة الجانبية المدمجة
+                                    </span>
+
+                                </div>
+
+                                <div class="form-switch ios-switch">
+
+                                    <input class="form-check-input"
+                                           type="checkbox"
+                                           id="compactModeToggle"
+                                           @(Model.CompactMode ? "checked" : "")>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <!-- لغة العرض -->
+                    <div class="col-md-6">
+
+                        <div class="premium-toggle-card">
+
+                            <div class="d-flex justify-content-between align-items-center">
+
+                                <div class="d-flex align-items-center gap-3">
+
+                                    <div class="icon-box-glass text-info">
+                                        <i class="bi bi-translate"></i>
+                                    </div>
+
+                                    <span class="fw-bold text-dark">
+                                        لغة العرض
+                                    </span>
+
+                                </div>
+
+                                @{
+                                    var currentCulture =
+                                    System.Globalization.CultureInfo.CurrentCulture.Name;
+                                }
+
+                                <select class="premium-select-inline"
+                                        id="languageSelect">
+
+                                    @if (currentCulture.StartsWith("ar"))
+                                    {
+                                        <option value="ar" selected>
+                                            🌐 العربية
+                                        </option>
+
+                                        <option value="en">
+                                            🌐 English
+                                        </option>
+                                    }
+                                    else
+                                    {
+                                        <option value="ar">
+                                            🌐 العربية
+                                        </option>
+
+                                        <option value="en" selected>
+                                            🌐 English
+                                        </option>
+                                    }
+
+                                </select>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <!-- العملة -->
+                    <div class="col-md-6">
+
+                        <div class="premium-toggle-card">
+
+                            <div class="d-flex justify-content-between align-items-center">
+
+                                <div class="d-flex align-items-center gap-3">
+
+                                    <div class="icon-box-glass text-success">
+                                        <i class="bi bi-cash-stack"></i>
+                                    </div>
+
+                                    <span class="fw-bold text-dark">
+                                        عملة الأرباح المفضلة
+                                    </span>
+
+                                </div>
+
+                                <select class="premium-select-inline"
+                                        id="currencySelect">
+
+                                    <option value="ريال يمني"
+                                            selected="@(activeCurrency == "ريال يمني" ? "selected" : null)">
+                                        🇾🇪 ريال يمني (YER)
+                                    </option>
+
+                                    <option value="ريال سعودي"
+                                            selected="@(activeCurrency == "ريال سعودي" ? "selected" : null)">
+                                        🇸🇦 ريال سعودي (SAR)
+                                    </option>
+
+                                    <option value="دولار أمريكي"
+                                            selected="@(activeCurrency == "دولار أمريكي" ? "selected" : null)">
+                                        💵 دولار أمريكي (USD)
+                                    </option>
+
+                                </select>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <div class="premium-section-title mb-4">
+
+                    <h4>
+                        <i class="bi bi-bell-fill text-primary me-2"></i>
+                        إشعارات وتنبيهات الأعمال الحية
+                    </h4>
+
+                </div>
+
+                <div class="row g-4">
+
+                    <!-- الحجوزات -->
+                    <div class="col-md-6">
+
+                        <div class="premium-toggle-card">
+
+                            <div class="d-flex justify-content-between align-items-center">
+
+                                <span class="fw-semibold text-dark">
+
+                                    <i class="bi bi-calendar-check me-2 text-success"></i>
+                                    طلبات حجز وعرابين جديدة
+                                </span>
+
+                                <div class="form-switch ios-switch">
+
+                                    <input class="form-check-input alert-toggle"
+                                           data-key="NewReservationAlert"
+                                           type="checkbox"
+                                           id="newReservationAlert"
+                                           @(Model.NewReservationAlert ? "checked" : "")>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <!-- الرسائل -->
+                    <div class="col-md-6">
+
+                        <div class="premium-toggle-card">
+
+                            <div class="d-flex justify-content-between align-items-center">
+
+                                <span class="fw-semibold text-dark">
+
+                                    <i class="bi bi-chat-dots me-2 text-info"></i>
+                                    رسائل ودردشات من العملاء
+                                </span>
+
+                                <div class="form-switch ios-switch">
+
+                                    <input class="form-check-input alert-toggle"
+                                           data-key="NewMessageAlert"
+                                           type="checkbox"
+                                           id="newMessageAlert"
+                                           @(Model.NewMessageAlert ? "checked" : "")>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <!-- التقييمات -->
+                    <div class="col-md-6">
+
+                        <div class="premium-toggle-card">
+
+                            <div class="d-flex justify-content-between align-items-center">
+
+                                <span class="fw-semibold text-dark">
+
+                                    <i class="bi bi-star-half me-2 text-warning"></i>
+                                    تعليقات وتقييمات جديدة للمنشأة
+                                </span>
+
+                                <div class="form-switch ios-switch">
+
+                                    <input class="form-check-input alert-toggle"
+                                           data-key="NewReviewAlert"
+                                           type="checkbox"
+                                           id="newReviewAlert"
+                                           @(Model.NewReviewAlert ? "checked" : "")>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <!-- الصوت -->
+                    <div class="col-md-6">
+
+                        <div class="premium-toggle-card promo-card">
+
+                            <div class="d-flex justify-content-between align-items-center">
+
+                                <span class="fw-bold text-danger">
+
+                                    <i class="bi bi-volume-up-fill me-2"></i>
+                                    التنبيهات الصوتية الحية
+                                </span>
+
+                                <div class="form-switch ios-switch-danger">
+
+                                    <input class="form-check-input alert-toggle"
+                                           data-key="SoundAlert"
+                                           type="checkbox"
+                                           id="soundAlert"
+                                           @(Model.SoundAlert ? "checked" : "")>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <!-- تبويبة الأمان -->
+        <div class="tab-pane fade"
+             id="security"
+             role="tabpanel">
+
+            <div class="premium-glass-card p-4 p-lg-5">
+
+                <div class="premium-section-title mb-4">
+
+                    <h4>
+                        <i class="bi bi-shield-lock-fill text-primary me-2"></i>
+                        بروتوكول الأمان وكلمة المرور
+                    </h4>
+
+                </div>
+
+                <form id="passwordForm"
+                      class="mb-5">
+
+                    <div class="row g-4">
+
+                        <!-- الحالية -->
+                        <div class="col-md-4">
+
+                            <label class="premium-label">
+                                كلمة المرور الحالية
+                            </label>
+
+                            <div class="premium-input-group">
+
+                                <i class="bi bi-lock input-icon"></i>
+
+                                <input type="password"
+                                       class="form-control"
+                                       id="currentPassword"
+                                       required
+                                       placeholder="••••••••">
+
+                                <button class="edit-btn-inset toggle-password"
+                                        type="button"
+                                        data-target="currentPassword">
+
+                                    <i class="bi bi-eye-slash"></i>
+                                </button>
+
+                            </div>
+
+                        </div>
+
+                        <!-- الجديدة -->
+                        <div class="col-md-4">
+
+                            <label class="premium-label">
+                                كلمة المرور الجديدة
+                            </label>
+
+                            <div class="premium-input-group">
+
+                                <i class="bi bi-key input-icon"></i>
+
+                                <input type="password"
+                                       class="form-control"
+                                       id="newPassword"
+                                       required
+                                       placeholder="••••••••">
+
+                                <button class="edit-btn-inset toggle-password"
+                                        type="button"
+                                        data-target="newPassword">
+
+                                    <i class="bi bi-eye-slash"></i>
+                                </button>
+
+                            </div>
+
+                            <div id="profilePasswordError"
+                                 class="premium-error-text mt-1"
+                                 style="display: none;">
+                            </div>
+
+                            <div class="password-strength-container mt-2">
+
+                                <div class="progress strength-progress">
+
+                                    <div class="strength-bar progress-bar"
+                                         role="progressbar">
+                                    </div>
+
+                                </div>
+
+                                <small class="strength-text d-block mt-1"></small>
+
+                            </div>
+
+                        </div>
+
+                        <!-- التأكيد -->
+                        <div class="col-md-4">
+
+                            <label class="premium-label">
+                                تأكيد الكلمة الجديدة
+                            </label>
+
+                            <div class="premium-input-group">
+
+                                <i class="bi bi-check2-all input-icon"></i>
+
+                                <input type="password"
+                                       class="form-control"
+                                       id="confirmPassword"
+                                       required
+                                       placeholder="••••••••">
+
+                                <button class="edit-btn-inset toggle-password"
+                                        type="button"
+                                        data-target="confirmPassword">
+
+                                    <i class="bi bi-eye-slash"></i>
+                                </button>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <div class="mt-4 pt-3 border-top text-end">
+
+                        <button type="submit"
+                                class="btn-premium-save">
+
+                            <i class="bi bi-shield-check me-2"></i>
+                            تحديث بروتوكول الأمان
+                        </button>
+
+                    </div>
+
+                </form>
+
+                <!-- منطقة الخطر -->
+                <div class="premium-danger-zone p-4 p-lg-5">
+
+                    <div class="d-flex align-items-center mb-3">
+
+                        <div class="danger-icon-box me-3">
+                            <i class="bi bi-exclamation-triangle-fill"></i>
+                        </div>
+
+                        <div>
+
+                            <h5 class="fw-bold text-danger mb-1">
+                                منطقة الخطر وصلاحيات المالك
+                            </h5>
+
+                            <p class="text-muted small mb-0">
+                                تنفيذ هذه الإجراءات يؤثر فوراً على ظهور حسابك
+                                ومنشآتك للعملاء في النظام.
+                            </p>
+
+                        </div>
+
+                    </div>
+
+                    <div class="row g-3 mt-2">
+
+                        <div class="col-md-6">
+
+                            <button class="btn-premium-danger-outline w-100"
+                                    id="suspendAccountBtn"
+                                    type="button">
+
+                                <i class="bi bi-pause-circle me-2"></i>
+                                إيقاف حساب المالك ومنشآته مؤقتاً
+                            </button>
+
+                        </div>
+
+                        <div class="col-md-6">
+
+                            <button class="btn-premium-danger-outline w-100"
+                                    id="logoutAllDevicesBtn"
+                                    type="button"
+                                    onclick="window.location.href='/Account/Logout'">
+
+                                <i class="bi bi-laptop me-2"></i>
+                                الخروج من كل الأجهزة وإنهاء الجلسات
+                            </button>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<!-- ==========================================
+     4. نافذة التحكم بالصورة الشخصية (Modal)
+     ========================================== -->
+<div class="modal fade"
+     id="avatarManageModal"
+     tabindex="-1"
+     aria-hidden="true"
+     data-bs-backdrop="true">
+
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+
+        <div class="modal-content glass-modal border-0 shadow-lg">
+
+            <div class="modal-header border-bottom-0 pb-0 justify-content-between">
+
+                <h6 class="modal-title fw-bold text-dark">
+
+                    <i class="bi bi-image text-primary me-2"></i>
+                    إدارة صورة المالك
+                </h6>
+
+                <button type="button"
+                        class="btn-close"
+                        data-bs-dismiss="modal"
+                        aria-label="Close">
+                </button>
+
+            </div>
+
+            <div class="modal-body text-center pt-4 pb-4">
+
+                <div class="modal-avatar-preview shadow-sm mx-auto mb-4"
+                     id="modalAvatarPreview"
+                     style="background: @(string.IsNullOrEmpty(Model.ProfileImage) ? "linear-gradient(135deg, #05203C 0%, #00A6DA 100%)" : $"url('{Model.ProfileImage}') center/cover no-repeat");">
+
+                    @if (string.IsNullOrEmpty(Model.ProfileImage))
+                    {
+                        <div class="d-flex align-items-center justify-content-center h-100"
+                         id="modalInitialContainer">
+
+                            <span class="text-white fw-bold display-3"
+                              id="modalAvatarInitial">
+
+                                @Model.InitialLetter
+                            </span>
+
+                        </div>
+                    }
+
+                </div>
+
+                <div class="d-grid gap-2 mt-3">
+
+                    <button type="button"
+                            class="btn-premium-save py-2"
+                            id="modalUploadBtn">
+
+                        <i class="bi bi-cloud-arrow-up-fill me-2"></i>
+                        رفع صورة جديدة
+                    </button>
+
+                    <button type="button"
+                            class="btn-premium-danger-outline py-2 border-0"
+                            id="modalDeleteBtn"
+                            style="@(string.IsNullOrEmpty(Model.ProfileImage) ? "display: none;" : "display: block;")">
+
+                        <i class="bi bi-trash3-fill me-2"></i>
+                        حذف الحالية
+                    </button>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+@section Scripts {
+    <script src="~/lib/sweetalert2/sweetalert2.js"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/intl-tel-input@23.0.4/build/js/intlTelInput.min.js"></script>
+
+    <script src="~/js/owner/owner-profile.js"
+        asp-append-version="true"></script>
+}

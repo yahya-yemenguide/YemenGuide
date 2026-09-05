@@ -1,0 +1,1360 @@
+@model IEnumerable<YemenGuide.Core.Entities.User>
+
+@using System.Security.Claims
+@using System.Globalization
+@using YemenGuide.Core.Constants
+@inject YemenGuide.Web.Services.Employees.IAdminPermissionService AdminPermissionService
+
+@{
+    bool isArabic =
+        string.Equals(
+            CultureInfo.CurrentUICulture.TwoLetterISOLanguageName,
+            "ar",
+            StringComparison.OrdinalIgnoreCase);
+
+    string L(string ar, string en) =>
+        isArabic ? ar : en;
+
+    ViewData["Title"] = L("إدارة المستخدمين", "User Management");
+    Layout = "~/Areas/Admin/Views/Shared/_AdminLayout.cshtml";
+
+    var currentAdminUserId =
+        int.TryParse(
+            User.FindFirstValue(ClaimTypes.NameIdentifier),
+            out var parsedAdminUserId)
+            ? parsedAdminUserId
+            : 0;
+
+    var canViewVerificationDocuments =
+        await AdminPermissionService.HasPermissionAsync(
+            currentAdminUserId,
+            AdminPermissionKeys.Users.ViewVerificationDocuments);
+
+    var canChangeUserState =
+        await AdminPermissionService.HasPermissionAsync(
+            currentAdminUserId,
+            AdminPermissionKeys.Users.ChangeState);
+
+    var canDeleteUsers =
+        await AdminPermissionService.HasPermissionAsync(
+            currentAdminUserId,
+            AdminPermissionKeys.Users.Delete);
+
+    var totalUsersCount = Model.Count();
+    var ownersCount = Model.Count(u =>
+        u.Role == "Owner" &&
+        u.AccountState != "Pending" &&
+        u.AccountState != "Rejected");
+    var pendingOwnersCount = Model.Count(u =>
+        u.Role == "Owner" &&
+        u.AccountState == "Pending");
+    var rejectedOwnersCount = Model.Count(u =>
+        u.Role == "Owner" &&
+        u.AccountState == "Rejected");
+    var customersCount = Model.Count(u => u.Role == "Customer");
+    var adminsCount = Model.Count(u => u.Role == "Admin");
+
+    var usersPermissionClasses =
+        $"{(!canViewVerificationDocuments ? "users-no-documents" : string.Empty)} " +
+        $"{(!canChangeUserState ? "users-no-state-actions" : string.Empty)} " +
+        $"{(!canDeleteUsers ? "users-no-delete" : string.Empty)}";
+}
+
+
+@section Styles {
+    <link rel="stylesheet"
+      href="~/css/admin/users.css"
+      asp-append-version="true" />
+}
+
+    <div class="container-fluid px-4 py-3 users-management-page @usersPermissionClasses"
+     data-language="@(isArabic ? "ar" : "en")">
+        <!-- =========================================================
+                     مقدمة الصفحة — موحدة مع تبويب الموظفين
+                     ========================================================= -->
+
+        <section class="users-page-intro">
+
+            <div class="users-page-intro__copy">
+
+                <span class="users-page-intro__eyebrow">
+                    <i class="bi bi-people-fill" aria-hidden="true"></i>
+                    @L("مجتمع المنصة", "Platform community")
+                </span>
+
+                <h1>@L("إدارة المستخدمين", "User Management")</h1>
+
+                <p>
+                    @L("إدارة حسابات المُلّاك والعملاء، مراجعة طلبات الانضمام، ومتابعة الحسابات المرفوضة ومديري النظام من مكان واحد.", "Manage owner and customer accounts, review join requests, and follow rejected accounts and system administrators from one place.")
+                </p>
+
+            </div>
+
+            <div class="users-page-intro__summary"
+             aria-label="@L("ملخص حسابات المستخدمين", "User accounts summary")">
+
+                <article>
+                    <span class="users-page-intro__summary-icon">
+                        <i class="bi bi-person-check-fill" aria-hidden="true"></i>
+                    </span>
+                    <div>
+                        <strong>@totalUsersCount</strong>
+                        <small>@L("إجمالي الحسابات", "Total accounts")</small>
+                    </div>
+                </article>
+
+                <article class="is-review">
+                    <span class="users-page-intro__summary-icon">
+                        <i class="bi bi-hourglass-split" aria-hidden="true"></i>
+                    </span>
+                    <div>
+                        <strong>@pendingOwnersCount</strong>
+                        <small>@L("بانتظار المراجعة", "Awaiting review")</small>
+                    </div>
+                </article>
+
+            </div>
+
+        </section>
+
+
+        <!-- =========================================================
+             تبويبات إدارة المستخدمين — الشكل الموحد
+             ========================================================= -->
+
+        <nav class="custom-tabs-container users-unified-tabs"
+         role="tablist"
+         aria-label="@L("تبويبات إدارة المستخدمين", "User management tabs")">
+
+            <button type="button"
+                class="tab-btn active"
+                data-target="owners-tab"
+                role="tab"
+                aria-selected="true">
+                <span class="tab-icon">
+                    <i class="bi bi-shop" aria-hidden="true"></i>
+                </span>
+                <span class="tab-label">@L("المُلّاك", "Owners")</span>
+                <span class="tab-count">@ownersCount</span>
+            </button>
+
+            <button type="button"
+                class="tab-btn"
+                data-target="pending-tab"
+                role="tab"
+                aria-selected="false">
+                <span class="tab-icon">
+                    <i class="bi bi-clock-history" aria-hidden="true"></i>
+                </span>
+                <span class="tab-label">@L("طلبات الانضمام", "Join requests")</span>
+                <span class="tab-count">@pendingOwnersCount</span>
+            </button>
+
+            <button type="button"
+                class="tab-btn rejected-tab-btn"
+                data-target="rejected-tab"
+                role="tab"
+                aria-selected="false">
+                <span class="tab-icon">
+                    <i class="bi bi-x-circle" aria-hidden="true"></i>
+                </span>
+                <span class="tab-label">@L("المرفوضون", "Rejected")</span>
+                <span class="tab-count">@rejectedOwnersCount</span>
+            </button>
+
+            <button type="button"
+                class="tab-btn"
+                data-target="customers-tab"
+                role="tab"
+                aria-selected="false">
+                <span class="tab-icon">
+                    <i class="bi bi-people" aria-hidden="true"></i>
+                </span>
+                <span class="tab-label">@L("العملاء", "Customers")</span>
+                <span class="tab-count">@customersCount</span>
+            </button>
+
+            <button type="button"
+                class="tab-btn"
+                data-target="admins-tab"
+                role="tab"
+                aria-selected="false">
+                <span class="tab-icon">
+                    <i class="bi bi-shield-lock" aria-hidden="true"></i>
+                </span>
+                <span class="tab-label">@L("مديرو النظام", "System admins")</span>
+                <span class="tab-count">@adminsCount</span>
+            </button>
+
+        </nav>
+
+
+        <!-- =========================================================
+             حاوية محتوى التبويبات
+             ========================================================= -->
+
+        <main class="tabs-content-card users-content-card p-3 mb-5">
+
+
+            @* =========================================================
+        1. تبويب المُلّاك
+        ========================================================= *@
+
+            <section class="tab-pane-content owners-tab users-tab-pane is-initial-active">
+
+
+                <div class="users-section-header mb-3">
+
+                    <h5 class="users-section-title fw-bold mb-1">
+
+                        <i class="bi bi-buildings me-1 text-primary"
+                       aria-hidden="true"></i>
+
+                        @L("حسابات المُلّاك", "Owner accounts")
+
+                    </h5>
+
+
+                    <p class="users-section-description text-muted small mb-0">
+                        @L("إدارة حسابات ملاك المنشآت النشطة والمعلقة والمحظورة.", "Manage active, suspended, and blocked owner accounts.")
+                    </p>
+
+                </div>
+
+
+                <div class="table-responsive users-table-wrapper">
+
+                    <table class="table custom-table users-responsive-table text-center align-middle mb-0">
+
+                        <thead>
+
+                            <tr>
+
+                                <th class="py-3">
+                                    @L("الاسم", "Name")
+                                </th>
+
+                                <th class="py-3">
+                                    @L("اسم المستخدم", "Username")
+                                </th>
+
+                                <th class="py-3">
+                                    @L("الحالة", "Status")
+                                </th>
+
+                                <th class="py-3">
+                                    @L("الإجراءات", "Actions")
+                                </th>
+
+                            </tr>
+
+                        </thead>
+
+
+                        <tbody>
+
+                            @*
+                        إبقاء المالك في هذه القائمة عند تغير حالته
+                        إلى Active أو Accepted أو Suspended أو Blocked.
+                        *@
+
+                        @foreach (
+                        var item in Model.Where(
+                        u => u.Role == "Owner" &&
+                        u.AccountState != "Pending" &&
+                        u.AccountState != "Rejected"
+                        )
+                        )
+                        {
+                            <tr class="border-bottom users-table-row users-mobile-card-row"
+                            data-user-id="@item.UserId">
+
+
+                                <!-- الاسم -->
+
+                                <td class="py-3 fw-bold text-dark users-table-cell users-name-cell"
+                                data-label="@L("الاسم", "Name")">
+
+                                    <div class="user-identity">
+
+
+                                        <div class="user-avatar owner-user-avatar"
+                                         aria-hidden="true">
+
+                                            <i class="bi bi-shop"></i>
+
+                                        </div>
+
+
+                                        <div class="user-identity-text">
+
+                                            <strong class="user-full-name">
+                                                @item.FullName
+                                            </strong>
+
+                                            <small class="user-role-caption text-muted">
+                                                @L("مالك منشأة", "Owner")
+                                            </small>
+
+                                        </div>
+
+                                    </div>
+
+                                </td>
+
+
+                                <!-- اسم المستخدم -->
+
+                                <td class="py-3 users-table-cell users-username-cell"
+                                data-label="@L("اسم المستخدم", "Username")">
+
+                                    <span class="user-username"
+                                      dir="ltr">
+
+                                        @item.Username
+
+                                    </span>
+
+                                </td>
+
+
+                                <!-- الحالة -->
+
+                                <td class="py-3 users-table-cell users-status-cell"
+                                data-label="@L("الحالة", "Status")">
+
+                                    <span class="badge users-status-badge
+                                        @(item.AccountState == "Active"
+                                            ? "bg-success"
+                                            : (
+                                                item.AccountState == "Accepted"
+                                                    ? "bg-info text-white"
+                                                    : (
+                                                        item.AccountState == "Suspended"
+                                                            ? "bg-warning text-dark"
+                                                            : "bg-danger"
+                                                    )
+                                            ))">
+
+                                        @(
+                                            item.AccountState == "Suspended"
+                                            ? L("معلق مؤقتاً", "Suspended")
+                                            : (
+                                            item.AccountState == "Blocked"
+                                            ? L("محظور", "Blocked")
+                                            : (
+                                            item.AccountState == "Accepted"
+                                            ? L("مقبول مبدئيًا", "Provisionally accepted")
+                                            : L("نشط", "Active")
+                                            )
+                                            )
+                                            )
+
+                                    </span>
+
+                                </td>
+
+
+                                <!-- الإجراءات -->
+
+                                <td class="py-3 users-table-cell users-actions-cell"
+                                data-label="@L("الإجراءات", "Actions")">
+
+                                    <div class="users-actions-group">
+
+
+                                        @if (item.AccountState == "Blocked")
+                                        {
+                                            <button type="button"
+                                            class="btn btn-success action-btn activate-btn px-3"
+                                            data-id="@item.UserId"
+                                            data-state="Unblock">
+
+                                                <i class="bi bi-unlock-fill"
+                                           aria-hidden="true"></i>
+
+                                                <span>
+                                                    @L("إلغاء الحظر", "Unblock")
+                                                </span>
+
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            @if (item.AccountState == "Suspended")
+                                            {
+                                                <button type="button"
+                                            class="btn btn-success action-btn activate-btn px-3 me-2"
+                                            data-id="@item.UserId"
+                                            data-state="Activate">
+
+                                                    <i class="bi bi-play-circle-fill"
+                                           aria-hidden="true"></i>
+
+                                                    <span>
+                                                        @L("تنشيط ورفع التعليق", "Reactivate")
+                                                    </span>
+
+                                                </button>
+                                            }
+                                            else if (item.AccountState == "Accepted")
+                                            {
+                                                <span class="owner-waiting-note text-muted small d-inline-flex align-items-center gap-1 me-2">
+
+                                                    <i class="bi bi-hourglass-split"
+                                           aria-hidden="true"></i>
+
+                                                    @L("بانتظار استكمال المالك", "Waiting for owner completion")
+
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <button type="button"
+                                            class="btn btn-warning action-btn suspend-btn px-3 me-2 text-dark"
+                                            data-id="@item.UserId"
+                                            data-state="Suspended">
+
+                                                    <i class="bi bi-pause-circle-fill"
+                                           aria-hidden="true"></i>
+
+                                                    <span>
+                                                        @L("تعليق مؤقت", "Suspend")
+                                                    </span>
+
+                                                </button>
+                                            }
+
+
+                                            @if (item.AccountState != "Accepted")
+                                            {
+                                                <button type="button"
+                                            class="btn btn-danger action-btn block-btn px-3"
+                                            data-id="@item.UserId"
+                                            data-state="Blocked">
+
+                                                    <i class="bi bi-slash-circle-fill"
+                                           aria-hidden="true"></i>
+
+                                                    <span>
+                                                        @L("حظر", "Block")
+                                                    </span>
+
+                                                </button>
+                                            }
+                                        }
+
+                                    </div>
+
+                                </td>
+
+                            </tr>
+                        }
+
+
+                        @if (
+                        !Model.Any(
+                        u => u.Role == "Owner" &&
+                        u.AccountState != "Pending" &&
+                        u.AccountState != "Rejected"
+                        )
+                        )
+                        {
+                            <tr class="users-empty-row">
+
+                                <td colspan="4"
+                                class="text-muted py-5">
+
+                                    <div class="users-empty-state">
+
+                                        <i class="bi bi-shop-window display-6 text-muted opacity-50 d-block mb-2"
+                                       aria-hidden="true"></i>
+
+                                        <h6 class="fw-bold mb-1">
+                                            @L("لا توجد حسابات ملاك", "No owner accounts")
+                                        </h6>
+
+                                        <p class="small mb-0">
+                                            @L("لا توجد حسابات ملاك نشطة أو معلقة في الوقت الحالي.", "There are no active or suspended owner accounts at the moment.")
+                                        </p>
+
+                                    </div>
+
+                                </td>
+
+                            </tr>
+                        }
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </section>
+
+
+        @* =========================================================
+        2. تبويب طلبات الانضمام
+        ========================================================= *@
+
+        <section class="tab-pane-content pending-tab users-tab-pane">
+
+
+            <div class="users-section-header mb-3">
+
+                <h5 class="users-section-title fw-bold mb-1">
+
+                    <i class="bi bi-person-check-fill me-1 text-warning"
+                       aria-hidden="true"></i>
+
+                    @L("طلبات انضمام المُلّاك", "Owner join requests")
+
+                </h5>
+
+
+                <p class="users-section-description text-muted small mb-0">
+                    @L("مراجعة وثائق أصحاب المنشآت وقبول أو رفض طلبات الانضمام.", "Review owner verification documents and approve or reject join requests.")
+                </p>
+
+            </div>
+
+
+            <div class="table-responsive users-table-wrapper">
+
+                <table class="table custom-table users-responsive-table text-center align-middle mb-0">
+
+                    <thead>
+
+                        <tr>
+
+                            <th class="py-3">
+                                @L("الاسم", "Name")
+                            </th>
+
+                            <th class="py-3">
+                                @L("اسم المستخدم", "Username")
+                            </th>
+
+                            <th class="py-3">
+                                @L("الحالة", "Status")
+                            </th>
+
+                            <th class="py-3">
+                                @L("الإجراءات", "Actions")
+                            </th>
+
+                        </tr>
+
+                    </thead>
+
+
+                    <tbody>
+
+                        @foreach (
+                        var item in Model.Where(
+                        u => u.Role == "Owner" &&
+                        u.AccountState == "Pending"
+                        )
+                        )
+                        {
+                            <tr class="border-bottom users-table-row users-mobile-card-row"
+                            data-user-id="@item.UserId">
+
+
+                                <!-- الاسم -->
+
+                                <td class="py-3 fw-bold text-dark users-table-cell users-name-cell"
+                                data-label="@L("الاسم", "Name")">
+
+                                    <div class="user-identity">
+
+
+                                        <div class="user-avatar pending-user-avatar"
+                                         aria-hidden="true">
+
+                                            <i class="bi bi-person-badge"></i>
+
+                                        </div>
+
+
+                                        <div class="user-identity-text">
+
+                                            <strong class="user-full-name">
+                                                @item.FullName
+                                            </strong>
+
+                                            <small class="user-role-caption text-muted">
+                                                @L("طلب مالك جديد", "New owner request")
+                                            </small>
+
+                                        </div>
+
+                                    </div>
+
+                                </td>
+
+
+                                <!-- اسم المستخدم -->
+
+                                <td class="py-3 users-table-cell users-username-cell"
+                                data-label="@L("اسم المستخدم", "Username")">
+
+                                    <span class="user-username"
+                                      dir="ltr">
+
+                                        @item.Username
+
+                                    </span>
+
+                                </td>
+
+
+                                <!-- الحالة -->
+
+                                <td class="py-3 users-table-cell users-status-cell"
+                                data-label="@L("الحالة", "Status")">
+
+                                    <span class="badge bg-warning text-dark users-status-badge">
+
+                                        <i class="bi bi-hourglass-split me-1"
+                                       aria-hidden="true"></i>
+
+                                        @L("قيد المراجعة", "Under review")
+
+                                    </span>
+
+                                </td>
+
+
+                                <!-- الإجراءات -->
+
+                                <td class="py-3 users-table-cell users-actions-cell"
+                                data-label="@L("الإجراءات", "Actions")">
+
+                                    <div class="users-actions-group pending-actions-group">
+
+
+                                        <button type="button"
+                                            class="view-docs-btn"
+                                            data-id="@item.UserId"
+                                            data-name="@item.FullName">
+
+                                            <i class="bi bi-file-earmark-vcard"
+                                           aria-hidden="true"></i>
+
+                                            <span>
+                                                @L("مراجعة الوثائق", "Review documents")
+                                            </span>
+
+                                        </button>
+
+
+                                        <button type="button"
+                                            class="btn btn-success action-btn activate-btn px-3"
+                                            data-id="@item.UserId"
+                                            data-state="Activate">
+
+                                            <i class="bi bi-check-circle-fill"
+                                           aria-hidden="true"></i>
+
+                                            <span>
+                                                @L("قبول", "Approve")
+                                            </span>
+
+                                        </button>
+
+
+                                        <button type="button"
+                                            class="btn btn-danger action-btn reject-btn px-3"
+                                            data-id="@item.UserId"
+                                            data-state="Rejected">
+
+                                            <i class="bi bi-x-circle-fill"
+                                           aria-hidden="true"></i>
+
+                                            <span>
+                                                @L("رفض", "Reject")
+                                            </span>
+
+                                        </button>
+
+                                    </div>
+
+                                </td>
+
+                            </tr>
+                        }
+
+
+                        @if (
+                        !Model.Any(
+                        u => u.Role == "Owner" &&
+                        u.AccountState == "Pending"
+                        )
+                        )
+                        {
+                            <tr class="users-empty-row">
+
+                                <td colspan="4"
+                                class="text-muted py-5">
+
+                                    <div class="users-empty-state">
+
+                                        <i class="bi bi-check-circle display-6 text-success d-block mb-2"
+                                       aria-hidden="true"></i>
+
+                                        <h6 class="fw-bold mb-1">
+                                            @L("لا توجد طلبات معلقة", "No pending requests")
+                                        </h6>
+
+                                        <p class="small mb-0">
+                                            @L("تمت مراجعة جميع طلبات انضمام الملاك الحالية.", "All current owner join requests have been reviewed.")
+                                        </p>
+
+                                    </div>
+
+                                </td>
+
+                            </tr>
+                        }
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </section>
+
+
+        @* =========================================================
+        3. تبويب الحسابات المرفوضة
+        ========================================================= *@
+
+        <section class="tab-pane-content rejected-tab users-tab-pane">
+
+
+            <div class="users-section-header mb-3">
+
+                <h5 class="users-section-title fw-bold mb-1">
+
+                    <i class="bi bi-person-x-fill me-1 text-danger"
+                       aria-hidden="true"></i>
+
+                    @L("طلبات المُلّاك المرفوضة", "Rejected owner requests")
+
+                </h5>
+
+
+                <p class="users-section-description text-muted small mb-0">
+                    @L("مراجعة الحسابات المرفوضة أو قبولها لاحقًا أو حذفها نهائيًا.", "Review rejected accounts, approve them later, or permanently delete them.")
+                </p>
+
+            </div>
+
+
+            <div class="table-responsive users-table-wrapper">
+
+                <table class="table custom-table users-responsive-table text-center align-middle mb-0">
+
+                    <thead>
+
+                        <tr>
+
+                            <th class="py-3">
+                                @L("الاسم", "Name")
+                            </th>
+
+                            <th class="py-3">
+                                @L("اسم المستخدم", "Username")
+                            </th>
+
+                            <th class="py-3">
+                                @L("الحالة", "Status")
+                            </th>
+
+                            <th class="py-3">
+                                @L("الإجراءات", "Actions")
+                            </th>
+
+                        </tr>
+
+                    </thead>
+
+
+                    <tbody>
+
+                        @foreach (
+                        var item in Model.Where(
+                        u => u.Role == "Owner" &&
+                        u.AccountState == "Rejected"
+                        )
+                        )
+                        {
+                            <tr class="border-bottom users-table-row users-mobile-card-row rejected-user-row"
+                            data-user-id="@item.UserId">
+
+
+                                <!-- الاسم -->
+
+                                <td class="py-3 fw-bold text-dark users-table-cell users-name-cell"
+                                data-label="@L("الاسم", "Name")">
+
+                                    <div class="user-identity">
+
+
+                                        <div class="user-avatar rejected-user-avatar"
+                                         aria-hidden="true">
+
+                                            <i class="bi bi-person-x"></i>
+
+                                        </div>
+
+
+                                        <div class="user-identity-text">
+
+                                            <strong class="user-full-name">
+                                                @item.FullName
+                                            </strong>
+
+                                            <small class="user-role-caption text-muted">
+                                                @L("طلب مالك مرفوض", "Rejected owner request")
+                                            </small>
+
+                                        </div>
+
+                                    </div>
+
+                                </td>
+
+
+                                <!-- اسم المستخدم -->
+
+                                <td class="py-3 users-table-cell users-username-cell"
+                                data-label="@L("اسم المستخدم", "Username")">
+
+                                    <span class="user-username"
+                                      dir="ltr">
+
+                                        @item.Username
+
+                                    </span>
+
+                                </td>
+
+
+                                <!-- الحالة -->
+
+                                <td class="py-3 users-table-cell users-status-cell"
+                                data-label="@L("الحالة", "Status")">
+
+                                    <span class="badge bg-danger text-white users-status-badge">
+
+                                        <i class="bi bi-x-octagon me-1"
+                                       aria-hidden="true"></i>
+
+                                        @L("مرفوض قانونيًا", "Rejected")
+
+                                    </span>
+
+                                </td>
+
+
+                                <!-- الإجراءات -->
+
+                                <td class="py-3 users-table-cell users-actions-cell"
+                                data-label="@L("الإجراءات", "Actions")">
+
+                                    <div class="users-actions-group rejected-actions-group">
+
+
+                                        <button type="button"
+                                            class="view-docs-btn"
+                                            data-id="@item.UserId"
+                                            data-name="@item.FullName">
+
+                                            <i class="bi bi-file-earmark-vcard"
+                                           aria-hidden="true"></i>
+
+                                            <span>
+                                                @L("مراجعة الوثائق", "Review documents")
+                                            </span>
+
+                                        </button>
+
+
+                                        <button type="button"
+                                            class="btn btn-success action-btn activate-btn px-3"
+                                            data-id="@item.UserId"
+                                            data-state="Activate">
+
+                                            <i class="bi bi-check-circle-fill"
+                                           aria-hidden="true"></i>
+
+                                            <span>
+                                                @L("قبول وتنشيط", "Approve & activate")
+                                            </span>
+
+                                        </button>
+
+
+                                        <button type="button"
+                                            class="btn btn-danger action-btn permanent-delete-btn px-3"
+                                            data-id="@item.UserId">
+
+                                            <i class="bi bi-trash3"
+                                           aria-hidden="true"></i>
+
+                                            <span>
+                                                @L("حذف نهائي", "Delete permanently")
+                                            </span>
+
+                                        </button>
+
+                                    </div>
+
+                                </td>
+
+                            </tr>
+                        }
+
+
+                        @if (
+                        !Model.Any(
+                        u => u.Role == "Owner" &&
+                        u.AccountState == "Rejected"
+                        )
+                        )
+                        {
+                            <tr class="users-empty-row">
+
+                                <td colspan="4"
+                                class="text-muted py-5">
+
+                                    <div class="users-empty-state">
+
+                                        <i class="bi bi-shield-check display-6 text-muted d-block mb-2"
+                                       aria-hidden="true"></i>
+
+                                        <h6 class="fw-bold mb-1">
+                                            @L("قائمة المرفوضين فارغة", "Rejected list is empty")
+                                        </h6>
+
+                                        <p class="small mb-0">
+                                            @L("لا توجد حاليًا طلبات انضمام مرفوضة.", "There are currently no rejected join requests.")
+                                        </p>
+
+                                    </div>
+
+                                </td>
+
+                            </tr>
+                        }
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </section>
+
+
+        @* =========================================================
+        4. تبويب العملاء
+        ========================================================= *@
+
+        <section class="tab-pane-content customers-tab users-tab-pane">
+
+
+            <div class="users-section-header mb-3">
+
+                <h5 class="users-section-title fw-bold mb-1">
+
+                    <i class="bi bi-person-heart me-1 text-primary"
+                       aria-hidden="true"></i>
+
+                    @L("حسابات العملاء", "Customer accounts")
+
+                </h5>
+
+
+                <p class="users-section-description text-muted small mb-0">
+                    @L("إدارة حسابات العملاء النشطة والمحظورة في المنصة.", "Manage active and blocked customer accounts on the platform.")
+                </p>
+
+            </div>
+
+
+            <div class="table-responsive users-table-wrapper">
+
+                <table class="table custom-table users-responsive-table text-center align-middle mb-0">
+
+                    <thead>
+
+                        <tr>
+
+                            <th class="py-3">
+                                @L("الاسم", "Name")
+                            </th>
+
+                            <th class="py-3">
+                                @L("اسم المستخدم", "Username")
+                            </th>
+
+                            <th class="py-3">
+                                @L("الحالة", "Status")
+                            </th>
+
+                            <th class="py-3">
+                                @L("الإجراءات", "Actions")
+                            </th>
+
+                        </tr>
+
+                    </thead>
+
+
+                    <tbody>
+
+                        @foreach (
+                        var item in Model.Where(
+                        u => u.Role == "Customer"
+                        )
+                        )
+                        {
+                            <tr class="border-bottom users-table-row users-mobile-card-row"
+                            data-user-id="@item.UserId">
+
+
+                                <!-- الاسم -->
+
+                                <td class="py-3 users-table-cell users-name-cell"
+                                data-label="@L("الاسم", "Name")">
+
+                                    <div class="user-identity">
+
+
+                                        <div class="user-avatar customer-user-avatar"
+                                         aria-hidden="true">
+
+                                            <i class="bi bi-person"></i>
+
+                                        </div>
+
+
+                                        <div class="user-identity-text">
+
+                                            <strong class="user-full-name">
+                                                @item.FullName
+                                            </strong>
+
+                                            <small class="user-role-caption text-muted">
+                                                @L("عميل", "Customer")
+                                            </small>
+
+                                        </div>
+
+                                    </div>
+
+                                </td>
+
+
+                                <!-- اسم المستخدم -->
+
+                                <td class="py-3 users-table-cell users-username-cell"
+                                data-label="@L("اسم المستخدم", "Username")">
+
+                                    <span class="user-username"
+                                      dir="ltr">
+
+                                        @item.Username
+
+                                    </span>
+
+                                </td>
+
+
+                                <!-- الحالة -->
+
+                                <td class="py-3 users-table-cell users-status-cell"
+                                data-label="@L("الحالة", "Status")">
+
+                                    <span class="badge users-status-badge
+                                        @(item.AccountState == "Blocked"
+                                            ? "bg-danger"
+                                            : "bg-success")">
+
+                                        @(item.AccountState == "Blocked"
+                                            ? L("محظور", "Blocked")
+                                            : L("نشط", "Active"))
+
+                                    </span>
+
+                                </td>
+
+
+                                <!-- الإجراءات -->
+
+                                <td class="py-3 users-table-cell users-actions-cell"
+                                data-label="@L("الإجراءات", "Actions")">
+
+                                    <div class="users-actions-group">
+
+
+                                        @if (item.AccountState == "Blocked")
+                                        {
+                                            <button type="button"
+                                            class="btn btn-success action-btn activate-btn px-3"
+                                            data-id="@item.UserId"
+                                            data-state="Unblock">
+
+                                                <i class="bi bi-unlock-fill"
+                                           aria-hidden="true"></i>
+
+                                                <span>
+                                                    @L("إلغاء الحظر", "Unblock")
+                                                </span>
+
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <button type="button"
+                                            class="btn btn-danger action-btn block-btn px-3"
+                                            data-id="@item.UserId"
+                                            data-state="Blocked">
+
+                                                <i class="bi bi-slash-circle-fill"
+                                           aria-hidden="true"></i>
+
+                                                <span>
+                                                    @L("حظر", "Block")
+                                                </span>
+
+                                            </button>
+                                        }
+
+                                    </div>
+
+                                </td>
+
+                            </tr>
+                        }
+
+
+                        @if (!Model.Any(u => u.Role == "Customer"))
+                        {
+                            <tr class="users-empty-row">
+
+                                <td colspan="4"
+                                class="text-muted py-5">
+
+                                    <div class="users-empty-state">
+
+                                        <i class="bi bi-people display-6 text-muted opacity-50 d-block mb-2"
+                                       aria-hidden="true"></i>
+
+                                        <h6 class="fw-bold mb-1">
+                                            @L("لا توجد حسابات عملاء", "No customer accounts")
+                                        </h6>
+
+                                        <p class="small mb-0">
+                                            @L("لم يتم تسجيل أي حساب عميل حتى الآن.", "No customer accounts have been registered yet.")
+                                        </p>
+
+                                    </div>
+
+                                </td>
+
+                            </tr>
+                        }
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </section>
+
+
+        @* =========================================================
+        5. تبويب مديري النظام
+        ========================================================= *@
+
+        <section class="tab-pane-content admins-tab users-tab-pane">
+
+
+            <div class="users-section-header mb-3">
+
+                <h5 class="users-section-title fw-bold mb-1">
+
+                    <i class="bi bi-shield-lock-fill me-1 text-primary"
+                       aria-hidden="true"></i>
+
+                    @L("مديرو النظام", "System admins")
+
+                </h5>
+
+
+                <p class="users-section-description text-muted small mb-0">
+                    @L("الحسابات الإدارية التي تملك صلاحية الوصول إلى لوحة التحكم.", "Administrative accounts that can access the control panel.")
+                </p>
+
+            </div>
+
+
+            <div class="table-responsive users-table-wrapper">
+
+                <table class="table custom-table users-responsive-table text-center align-middle mb-0">
+
+                    <thead>
+
+                        <tr>
+
+                            <th class="py-3">
+                                @L("الاسم", "Name")
+                            </th>
+
+                            <th class="py-3">
+                                @L("اسم المستخدم", "Username")
+                            </th>
+
+                            <th class="py-3">
+                                @L("الصلاحية", "Permission")
+                            </th>
+
+                        </tr>
+
+                    </thead>
+
+
+                    <tbody>
+
+                        @foreach (
+                        var item in Model.Where(
+                        u => u.Role == "Admin"
+                        )
+                        )
+                        {
+                            <tr class="border-bottom users-table-row users-mobile-card-row admin-user-row"
+                            data-user-id="@item.UserId">
+
+
+                                <!-- الاسم -->
+
+                                <td class="py-3 fw-bold users-table-cell users-name-cell"
+                                data-label="@L("الاسم", "Name")">
+
+                                    <div class="user-identity">
+
+
+                                        <div class="user-avatar admin-user-avatar"
+                                         aria-hidden="true">
+
+                                            <i class="bi bi-shield-check"></i>
+
+                                        </div>
+
+
+                                        <div class="user-identity-text">
+
+                                            <strong class="user-full-name">
+                                                @item.FullName
+                                            </strong>
+
+                                            <small class="user-role-caption text-muted">
+                                                @L("إدارة النظام", "System administration")
+                                            </small>
+
+                                        </div>
+
+                                    </div>
+
+                                </td>
+
+
+                                <!-- اسم المستخدم -->
+
+                                <td class="py-3 users-table-cell users-username-cell"
+                                data-label="@L("اسم المستخدم", "Username")">
+
+                                    <span class="user-username"
+                                      dir="ltr">
+
+                                        @item.Username
+
+                                    </span>
+
+                                </td>
+
+
+                                <!-- الصلاحية -->
+
+                                <td class="py-3 users-table-cell users-status-cell"
+                                data-label="@L("الصلاحية", "Permission")">
+
+                                    <span class="badge bg-primary users-status-badge">
+
+                                        <i class="bi bi-shield-fill-check me-1"
+                                       aria-hidden="true"></i>
+
+                                        @L("مدير نظام", "System admin")
+
+                                    </span>
+
+                                </td>
+
+                            </tr>
+                        }
+
+
+                        @if (!Model.Any(u => u.Role == "Admin"))
+                        {
+                            <tr class="users-empty-row">
+
+                                <td colspan="3"
+                                class="text-muted py-5">
+
+                                    <div class="users-empty-state">
+
+                                        <i class="bi bi-shield-lock display-6 text-muted opacity-50 d-block mb-2"
+                                       aria-hidden="true"></i>
+
+                                        <h6 class="fw-bold mb-1">
+                                            @L("لا توجد حسابات إدارية", "No admin accounts")
+                                        </h6>
+
+                                        <p class="small mb-0">
+                                            @L("لا توجد حسابات مدير نظام ظاهرة حاليًا.", "No system administrator accounts are currently visible.")
+                                        </p>
+
+                                    </div>
+
+                                </td>
+
+                            </tr>
+                        }
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </section>
+
+    </main>
+
+</div>
+
+
+@section Scripts {
+
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <script src="~/js/admin/users-actions.js"
+        asp-append-version="true"></script>
+}

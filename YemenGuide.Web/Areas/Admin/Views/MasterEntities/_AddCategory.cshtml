@@ -1,0 +1,291 @@
+﻿@model YemenGuide.Core.Entities.Category
+
+@{
+    var defaultColor = "#00A6DA";
+    var defaultIcon = "bi-building";
+}
+
+<div class="offcanvas offcanvas-end entity-offcanvas category-entity-offcanvas"
+     tabindex="-1"
+     id="addCategoryOffcanvas"
+     aria-labelledby="addCategoryLabel"
+     data-bs-backdrop="true"
+     data-bs-scroll="false">
+
+    <div class="entity-sheet-handle" aria-hidden="true"><span></span></div>
+
+    <div class="offcanvas-header entity-offcanvas-header">
+        <div class="entity-offcanvas-heading">
+            <div class="entity-heading-icon"><i class="bi bi-tags-fill"></i></div>
+            <div class="entity-heading-text">
+                <div class="entity-heading-kicker">إدارة الفئات</div>
+                <h5 class="offcanvas-title" id="addCategoryLabel">إضافة فئة جديدة</h5>
+                <small class="entity-heading-description">أنشئ هوية الفئة واضبط نظام الحجز وصلاحية إضافة المنشآت.</small>
+            </div>
+        </div>
+
+        <button type="button"
+                class="btn-close btn-close-white entity-offcanvas-close"
+                data-bs-dismiss="offcanvas"
+                aria-label="إغلاق"></button>
+    </div>
+
+    <div class="offcanvas-body entity-offcanvas-body p-0">
+        <form id="addCategoryForm" class="entity-offcanvas-form" autocomplete="off">
+            <input type="hidden" id="categoryId" value="0" />
+
+            <div class="entity-form-scroll">
+
+                <section class="preview-card category-preview-card" aria-label="معاينة الفئة">
+                    <div class="preview-card-glow preview-card-glow--one"></div>
+                    <div class="preview-card-glow preview-card-glow--two"></div>
+
+                    <div class="preview-card-content">
+                        <div class="preview-card-label"><i class="bi bi-stars"></i> معاينة مباشرة</div>
+
+                        <div class="category-preview-main">
+                            <div class="preview-icon category-preview-icon">
+                                <i id="previewCategoryIcon" class="bi @defaultIcon" style="color:@defaultColor"></i>
+                            </div>
+
+                            <div class="category-preview-copy">
+                                <h5 id="previewCategoryName" class="category-preview-name">فئة جديدة</h5>
+                                <p id="previewCategoryBooking" class="category-preview-booking">بدون حجز</p>
+                            </div>
+                        </div>
+
+                        <div class="category-preview-footer">
+                            <span id="previewCategoryAccess" class="preview-access-badge preview-access-badge--open">
+                                <i class="bi bi-people-fill"></i>
+                                المالك والإدارة
+                            </span>
+                            <span class="preview-system-badge"><i class="bi bi-shield-check"></i> إعداد نظامي</span>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="entity-form-section">
+                    <div class="entity-section-heading">
+                        <div class="entity-section-number">01</div>
+                        <div class="entity-section-icon"><i class="bi bi-info-circle-fill"></i></div>
+                        <div class="entity-section-heading-text">
+                            <h6 class="entity-section-title">المعلومات الأساسية</h6>
+                            <p class="entity-section-description">اكتب اسمًا واضحًا ومميزًا يظهر للمستخدمين.</p>
+                        </div>
+                    </div>
+
+                    <div class="entity-field-group">
+                        <label class="entity-field-label" for="categoryNameInput">
+                            <span>اسم الفئة</span><span class="entity-required-mark">*</span>
+                        </label>
+
+                        <div class="entity-input-group">
+                            <span class="entity-input-icon"><i class="bi bi-tag-fill"></i></span>
+                            <input type="text"
+                                   class="form-control category-name-input"
+                                   id="categoryNameInput"
+                                   name="CategoryName"
+                                   placeholder="مثال: فنادق، مطاعم، معالم أثرية..."
+                                   maxlength="50"
+                                   required />
+                        </div>
+
+                        <small class="entity-field-help"><i class="bi bi-lightbulb"></i> استخدم اسمًا مختصرًا ومفهومًا دون تكرار.</small>
+                    </div>
+                </section>
+
+                <section class="entity-form-section">
+                    <div class="entity-section-heading">
+                        <div class="entity-section-number">02</div>
+                        <div class="entity-section-icon"><i class="bi bi-palette-fill"></i></div>
+                        <div class="entity-section-heading-text">
+                            <h6 class="entity-section-title">الهوية البصرية</h6>
+                            <p class="entity-section-description">اختر لونًا وأيقونة تعبّران عن نوع الفئة.</p>
+                        </div>
+                    </div>
+
+                    <div class="entity-field-group">
+                        <label class="entity-field-label" for="categoryColorPicker">لون الفئة</label>
+
+                        <div class="category-color-panel">
+                            <label class="category-color-selector" for="categoryColorPicker" title="اختيار اللون">
+                                <input type="color"
+                                       class="category-color-picker"
+                                       id="categoryColorPicker"
+                                       name="ThemeColor"
+                                       value="@defaultColor" />
+                                <span class="category-color-selector-icon"><i class="bi bi-eyedropper"></i></span>
+                            </label>
+
+                            <div class="category-color-details">
+                                <span class="category-color-caption">اللون المختار</span>
+                                <strong class="category-color-hex" dir="ltr">@defaultColor</strong>
+                            </div>
+
+                            <span class="category-color-status"><i class="bi bi-check-circle-fill"></i></span>
+                        </div>
+                    </div>
+
+                    <div class="entity-field-group">
+                        <label class="entity-field-label" for="categoryIconSearch">أيقونة الفئة</label>
+
+                        <div class="icon-picker-container category-icon-picker">
+                            <div class="category-icon-search-group">
+                                <span><i class="bi bi-search"></i></span>
+                                <input type="search"
+                                       class="form-control category-icon-search"
+                                       id="categoryIconSearch"
+                                       placeholder="ابحث باسم الفئة أو الأيقونة..." />
+                                <span class="category-icon-search-hint" title="اقتراح ذكي"><i class="bi bi-stars"></i></span>
+                            </div>
+
+                            <div class="category-icon-grid icon-grid" role="listbox" aria-label="أيقونات الفئات"></div>
+
+                            <div class="icon-picker-footer">
+                                <i class="bi bi-lightbulb-fill"></i>
+                                اكتب اسم الفئة وسيتم اقتراح أقرب أيقونة تلقائيًا.
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="entity-form-section">
+                    <div class="entity-section-heading">
+                        <div class="entity-section-number">03</div>
+                        <div class="entity-section-icon"><i class="bi bi-image-fill"></i></div>
+                        <div class="entity-section-heading-text">
+                            <h6 class="entity-section-title">صورة الفئة</h6>
+                            <p class="entity-section-description">صورة أفقية واضحة تستخدم في بطاقات الفئة.</p>
+                        </div>
+                    </div>
+
+                    <div class="entity-field-group">
+                        <label class="entity-field-label" for="categoryImageInput">
+                            صورة الخلفية
+                            <span class="entity-required-note">مطلوبة عند الإضافة</span>
+                        </label>
+
+                        <label class="category-upload-wrapper" for="categoryImageInput">
+                            <div class="category-upload-visual">
+                                <span class="category-upload-icon"><i class="bi bi-cloud-arrow-up-fill"></i></span>
+                                <div class="category-upload-copy">
+                                    <strong class="category-upload-title">اختر صورة للفئة</strong>
+                                    <span class="category-upload-description">JPG / PNG / WEBP — يفضّل مقاس أفقي وجودة عالية</span>
+                                </div>
+                            </div>
+
+                            <div class="category-upload-preview" id="categoryImagePreview" hidden>
+                                <img id="categoryImagePreviewImg" alt="معاينة صورة الفئة" />
+                                <span class="category-upload-preview__overlay"><i class="bi bi-arrow-repeat"></i> تغيير الصورة</span>
+                            </div>
+
+                            <input type="file"
+                                   id="categoryImageInput"
+                                   name="imageFile"
+                                   accept="image/*"
+                                   hidden />
+                        </label>
+
+                        <small class="entity-field-help"><i class="bi bi-info-circle"></i> عند تعديل فئة موجودة يمكنك إبقاء الصورة الحالية دون رفع صورة جديدة.</small>
+                    </div>
+                </section>
+
+                <section class="entity-form-section booking-system-section">
+                    <div class="entity-section-heading">
+                        <div class="entity-section-number">04</div>
+                        <div class="entity-section-icon"><i class="bi bi-calendar2-check-fill"></i></div>
+                        <div class="entity-section-heading-text">
+                            <h6 class="entity-section-title">نظام الحجز</h6>
+                            <p class="entity-section-description">حدد الطريقة التي تتعامل بها منشآت هذه الفئة مع الحجز.</p>
+                        </div>
+                    </div>
+
+                    <div class="entity-field-group">
+                        <label class="entity-field-label" for="bookingSystemId">نوع نظام الحجز</label>
+
+                        <div class="premium-booking-select-wrapper">
+                            <span class="premium-booking-select-icon"><i class="bi bi-calendar-week-fill"></i></span>
+                            <select class="form-select premium-booking-select" id="bookingSystemId" name="BookingSystemId">
+                                <option value="0">بدون حجز — معلومات المنشأة فقط</option>
+                                <option value="1">الغرف والأيام — فنادق وشقق وسكن</option>
+                                <option value="2">الباقات والفترات — شاليهات واستراحات</option>
+                                <option value="3">المناسبات والقاعات — قاعات وحفلات</option>
+                            </select>
+                            <span class="premium-booking-select-arrow"><i class="bi bi-chevron-down"></i></span>
+                        </div>
+
+                        <div class="booking-system-help">
+                            <div class="booking-help-item" data-booking-help="0"><span>0</span><p><strong>بدون حجز</strong> للمعالم والمطاعم والخدمات العامة.</p></div>
+                            <div class="booking-help-item" data-booking-help="1"><span>1</span><p><strong>غرف وأيام</strong> حسب الوصول والمغادرة.</p></div>
+                            <div class="booking-help-item" data-booking-help="2"><span>2</span><p><strong>باقات وفترات</strong> صباحية أو مسائية أو مخصصة.</p></div>
+                            <div class="booking-help-item" data-booking-help="3"><span>3</span><p><strong>قاعات ومناسبات</strong> حسب التاريخ والوقت.</p></div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="entity-form-section category-access-section">
+                    <div class="entity-section-heading">
+                        <div class="entity-section-number">05</div>
+                        <div class="entity-section-icon entity-section-icon--coral"><i class="bi bi-shield-lock-fill"></i></div>
+                        <div class="entity-section-heading-text">
+                            <h6 class="entity-section-title">صلاحية إضافة المنشآت</h6>
+                            <p class="entity-section-description">حدد من يحق له إنشاء منشآت جديدة تحت هذه الفئة.</p>
+                        </div>
+                    </div>
+
+                    <div class="category-access-options" role="radiogroup" aria-label="صلاحية إضافة المنشآت">
+                        <label class="category-access-card is-selected" data-access-card="true">
+                            <input type="radio"
+                                   name="OwnerCanAddPlacesChoice"
+                                   value="true"
+                                   checked />
+                            <span class="category-access-card__check"><i class="bi bi-check-lg"></i></span>
+                            <span class="category-access-card__icon category-access-card__icon--open"><i class="bi bi-people-fill"></i></span>
+                            <span class="category-access-card__copy">
+                                <strong>المالك والإدارة</strong>
+                                <small>تظهر الفئة للمالك ويمكنه إضافة منشآت جديدة ضمنها.</small>
+                            </span>
+                            <span class="category-access-card__status category-access-card__status--open">مفتوحة</span>
+                        </label>
+
+                        <label class="category-access-card" data-access-card="false">
+                            <input type="radio"
+                                   name="OwnerCanAddPlacesChoice"
+                                   value="false" />
+                            <span class="category-access-card__check"><i class="bi bi-check-lg"></i></span>
+                            <span class="category-access-card__icon category-access-card__icon--locked"><i class="bi bi-lock-fill"></i></span>
+                            <span class="category-access-card__copy">
+                                <strong>الإدارة فقط</strong>
+                                <small>مناسبة للمعالم الأثرية والجهات والمواقع الحكومية والعامة.</small>
+                            </span>
+                            <span class="category-access-card__status category-access-card__status--locked">مقيدة</span>
+                        </label>
+                    </div>
+
+                    <div class="category-access-note">
+                        <i class="bi bi-shield-check"></i>
+                        <div>
+                            <strong>القيد سيطبق على إضافة المنشآت</strong>
+                            <span>اختيار «الإدارة فقط» يعني أن المالك لن يتمكن من إنشاء منشآت جديدة داخل هذه الفئة بعد تفعيل حماية المالك.</span>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <div class="entity-form-footer">
+                <div class="entity-footer-security">
+                    <i class="bi bi-shield-check"></i>
+                    <div>
+                        <strong>حفظ آمن</strong>
+                        <span>سيتم تطبيق الإعدادات على الفئة فورًا.</span>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-save-entity btn-save-category" id="saveCategoryBtn">
+                    <span class="btn-save-entity-icon"><i class="bi bi-floppy-fill"></i></span>
+                    <span class="btn-save-entity-text">حفظ الفئة</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>

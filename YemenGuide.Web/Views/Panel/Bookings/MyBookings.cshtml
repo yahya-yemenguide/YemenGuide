@@ -1,0 +1,536 @@
+﻿@using System
+@using YemenGuide.Core.DTOs.Customer
+
+@model CustomerBookingsPageDto
+
+@{
+    ViewData["Title"] = "حجوزاتي";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+
+    var bookings =
+        Model?.Bookings ??
+        Array.Empty<CustomerBookingItemDto>();
+}
+
+@section Styles {
+    <link rel="stylesheet"
+      href="~/css/customer/customer-sidebar.css"
+      asp-append-version="true" />
+
+    <link rel="stylesheet"
+      href="~/css/customer/customer-bookings.css"
+      asp-append-version="true" />
+
+    <link rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/intl-tel-input@23.0.4/build/css/intlTelInput.css" />
+}
+
+    <div class="customer-dashboard-layout">
+
+        <!-- =============================================================
+             القائمة الجانبية
+             ============================================================= -->
+
+        <partial name="_CustomerSidebar" />
+
+        <!-- =============================================================
+             محتوى صفحة حجوزاتي
+             ============================================================= -->
+
+        <main class="customer-main-content">
+
+            <div class="bookings-wrapper
+                    container-fluid
+                    px-3
+                    px-md-4
+                    px-xl-5"
+             dir="rtl">
+
+                <form id="customerBookingAntiForgeryForm"
+                  class="d-none">
+                    @Html.AntiForgeryToken()
+                </form>
+
+                <!-- =====================================================
+                     رأس الصفحة
+                     ===================================================== -->
+
+                <header class="customer-bookings-header">
+
+                    <div class="customer-bookings-heading">
+
+                        <span class="customer-bookings-heading-icon">
+                            <i class="bi bi-calendar-check-fill"></i>
+                        </span>
+
+                        <div>
+
+                            <h3 class="customer-bookings-title">
+                                حجوزاتي
+                            </h3>
+
+                            <p class="customer-bookings-description">
+                                تابعي طلبات الحجز وحالات الدفع والمواعيد
+                                من مكان واحد.
+                            </p>
+
+                        </div>
+
+                    </div>
+
+                    <div class="customer-bookings-total-count">
+
+                        <span>
+                            إجمالي الحجوزات
+                        </span>
+
+                        <strong>
+                            @Model.TotalCount
+                        </strong>
+
+                    </div>
+
+                </header>
+
+                <!-- =====================================================
+                     البحث
+                     ===================================================== -->
+
+                <section class="customer-bookings-search-section"
+                     aria-label="البحث داخل الحجوزات">
+
+                    <div class="glass-search-box">
+
+                        <span class="search-icon-position">
+                            <i class="bi bi-search"></i>
+                        </span>
+
+                        <input type="search"
+                           id="bookingSearchInput"
+                           class="customer-bookings-search-input"
+                           placeholder="ابحث باسم المنشأة، الوحدة أو رقم الحجز..."
+                           autocomplete="off"
+                           aria-label="البحث داخل حجوزاتي" />
+
+                        <button type="button"
+                            id="clearBookingSearch"
+                            class="clear-booking-search"
+                            title="مسح البحث"
+                            aria-label="مسح البحث"
+                            hidden>
+
+                            <i class="bi bi-x-lg"></i>
+
+                        </button>
+
+                    </div>
+
+                </section>
+
+                <!-- =====================================================
+                     فلاتر الحالات
+                     ===================================================== -->
+
+                <section class="customer-bookings-filters"
+                     aria-label="تصفية الحجوزات حسب الحالة">
+
+                    <div class="filters-scroll-container"
+                     role="tablist">
+
+                        <!-- الكل -->
+
+                        <button type="button"
+                            class="filter-pill active"
+                            data-status="all"
+                            role="tab"
+                            aria-selected="true">
+
+                            <span>
+                                الكل
+                            </span>
+
+                            <strong class="filter-pill-count">
+                                @Model.TotalCount
+                            </strong>
+
+                        </button>
+
+                        <!-- بانتظار موافقة المالك -->
+
+                        <button type="button"
+                            class="filter-pill"
+                            data-status="pending"
+                            role="tab"
+                            aria-selected="false">
+
+                            <span>
+                                بانتظار موافقة المالك
+                            </span>
+
+                            <strong class="filter-pill-count">
+                                @Model.PendingCount
+                            </strong>
+
+                        </button>
+
+                        <!-- مطلوب دفع العربون -->
+
+                        <button type="button"
+                            class="filter-pill"
+                            data-status="awaiting-payment"
+                            role="tab"
+                            aria-selected="false">
+
+                            <span>
+                                مطلوب دفع العربون
+                            </span>
+
+                            <strong class="filter-pill-count">
+                                @Model.AwaitingPaymentCount
+                            </strong>
+
+                        </button>
+
+                        <!-- في انتظار مراجعة الدفع -->
+
+                        <button type="button"
+                            class="filter-pill"
+                            data-status="payment-review"
+                            role="tab"
+                            aria-selected="false">
+
+                            <span>
+                                إثبات الدفع قيد المراجعة
+                            </span>
+
+                            <strong class="filter-pill-count">
+                                @Model.PaymentReviewCount
+                            </strong>
+
+                        </button>
+
+                        <!-- حجز مؤكد -->
+
+                        <button type="button"
+                            class="filter-pill"
+                            data-status="confirmed"
+                            role="tab"
+                            aria-selected="false">
+
+                            <span>
+                                حجز مؤكد
+                            </span>
+
+                            <strong class="filter-pill-count">
+                                @Model.ConfirmedCount
+                            </strong>
+
+                        </button>
+
+                        <!-- حجز مكتمل -->
+
+                        <button type="button"
+                            class="filter-pill"
+                            data-status="completed"
+                            role="tab"
+                            aria-selected="false">
+
+                            <span>
+                                حجز مكتمل
+                            </span>
+
+                            <strong class="filter-pill-count">
+                                @Model.CompletedCount
+                            </strong>
+
+                        </button>
+
+                        <!-- انتهت مهلة الدفع -->
+
+                        <button type="button"
+                            class="filter-pill"
+                            data-status="expired"
+                            role="tab"
+                            aria-selected="false">
+
+                            <span>
+                                انتهت مهلة الدفع
+                            </span>
+
+                            <strong class="filter-pill-count">
+                                @Model.ExpiredCount
+                            </strong>
+
+                        </button>
+
+                        <!-- عدم حضور -->
+
+                        <button type="button"
+                            class="filter-pill"
+                            data-status="no-show"
+                            role="tab"
+                            aria-selected="false">
+
+                            <span>
+                                عدم حضور
+                            </span>
+
+                            <strong class="filter-pill-count">
+                                @Model.NoShowCount
+                            </strong>
+
+                        </button>
+
+                        <!-- حجز ملغي -->
+
+                        <button type="button"
+                            class="filter-pill"
+                            data-status="cancelled"
+                            role="tab"
+                            aria-selected="false">
+
+                            <span>
+                                حجز ملغي
+                            </span>
+
+                            <strong class="filter-pill-count">
+                                @Model.CancelledCount
+                            </strong>
+
+                        </button>
+
+                        <!-- طلب مرفوض -->
+
+                        <button type="button"
+                            class="filter-pill"
+                            data-status="rejected"
+                            role="tab"
+                            aria-selected="false">
+
+                            <span>
+                                طلب مرفوض
+                            </span>
+
+                            <strong class="filter-pill-count">
+                                @Model.RejectedCount
+                            </strong>
+
+                        </button>
+
+                    </div>
+
+                </section>
+
+                <!-- =====================================================
+                     شريط نتيجة البحث والفلترة
+                     ===================================================== -->
+            @if (bookings.Count > 0)
+            {
+                <div class="customer-bookings-result-bar">
+
+                    <div class="customer-result-info">
+
+                        <i class="bi bi-list-check"></i>
+
+                        <span id="bookingResultsText">
+                            عرض جميع الحجوزات
+                        </span>
+
+                    </div>
+
+                    <span id="visibleBookingsCount"
+                      class="customer-result-count">
+
+                        @bookings.Count
+
+                    </span>
+
+                </div>
+            }
+
+            <!-- =====================================================
+                 قائمة الحجوزات الحقيقية
+                 ===================================================== -->
+
+            <section id="bookingsContainer"
+                     class="customer-bookings-list"
+                     aria-live="polite">
+
+                @foreach (var booking in bookings)
+                {
+                    <partial name="~/Views/Panel/Bookings/_CustomerBookingRow.cshtml"
+                         model="booking" />
+                }
+
+            </section>
+
+            <!-- =====================================================
+                 لا توجد حجوزات أساسًا
+                 ===================================================== -->
+            @if (bookings.Count == 0)
+            {
+                <section id="noBookingsState"
+                     class="customer-bookings-empty-state">
+
+                    <div class="customer-empty-illustration animate-float">
+
+                        <svg width="190"
+                         height="190"
+                         viewBox="0 0 200 200"
+                         fill="none"
+                         xmlns="http://www.w3.org/2000/svg"
+                         aria-hidden="true">
+
+                            <circle cx="100"
+                                cy="100"
+                                r="70"
+                                fill="#00A6DA"
+                                fill-opacity="0.06" />
+
+                            <circle cx="100"
+                                cy="100"
+                                r="52"
+                                fill="#FFFFFF"
+                                stroke="#00A6DA"
+                                stroke-opacity="0.22"
+                                stroke-width="2" />
+
+                            <rect x="67"
+                              y="71"
+                              width="66"
+                              height="60"
+                              rx="10"
+                              fill="#00A6DA"
+                              fill-opacity="0.08"
+                              stroke="#00A6DA"
+                              stroke-width="3" />
+
+                            <path d="M67 90H133"
+                              stroke="#00A6DA"
+                              stroke-width="3" />
+
+                            <path d="M82 63V78"
+                              stroke="#05203C"
+                              stroke-width="4"
+                              stroke-linecap="round" />
+
+                            <path d="M118 63V78"
+                              stroke="#05203C"
+                              stroke-width="4"
+                              stroke-linecap="round" />
+
+                            <path d="M86 107L96 117L116 97"
+                              stroke="#10B981"
+                              stroke-width="5"
+                              stroke-linecap="round"
+                              stroke-linejoin="round" />
+
+                        </svg>
+
+                    </div>
+
+                    <h4>
+                        لا توجد لديك حجوزات بعد
+                    </h4>
+
+                    <p>
+                        عندما تحجزين منشأة أو غرفة أو باقة،
+                        ستظهر تفاصيل الحجز وحالته هنا.
+                    </p>
+
+                    <a href="/Places"
+                   class="customer-empty-action">
+
+                        <i class="bi bi-compass"></i>
+
+                        <span>
+                            استكشفي المنشآت
+                        </span>
+
+                    </a>
+
+                </section>
+            }
+
+            <!-- =====================================================
+                 لا توجد نتائج بعد البحث أو الفلترة
+                 ===================================================== -->
+
+            <section id="emptyBookingsState"
+                     class="customer-bookings-empty-state
+                            customer-filter-empty-state
+                            d-none">
+
+                <div class="customer-empty-illustration">
+
+                    <svg width="160"
+                         height="160"
+                         viewBox="0 0 200 200"
+                         fill="none"
+                         xmlns="http://www.w3.org/2000/svg"
+                         aria-hidden="true">
+
+                        <circle cx="90"
+                                cy="90"
+                                r="55"
+                                fill="#64748B"
+                                fill-opacity="0.08" />
+
+                        <circle cx="90"
+                                cy="90"
+                                r="35"
+                                stroke="#64748B"
+                                stroke-width="4" />
+
+                        <path d="M116 116L145 145"
+                              stroke="#64748B"
+                              stroke-width="7"
+                              stroke-linecap="round" />
+
+                        <path d="M77 90H103"
+                              stroke="#94A3B8"
+                              stroke-width="4"
+                              stroke-linecap="round" />
+
+                    </svg>
+
+                </div>
+
+                <h4>
+                    لا توجد حجوزات مطابقة
+                </h4>
+
+                <p id="emptyBookingsMessage">
+                    لا توجد حجوزات ضمن الحالة أو عبارة البحث المحددة.
+                </p>
+
+                <button type="button"
+                        id="resetBookingFilters"
+                        class="customer-empty-action">
+
+                    <i class="bi bi-arrow-counterclockwise"></i>
+
+                    <span>
+                        عرض جميع الحجوزات
+                    </span>
+
+                </button>
+
+            </section>
+
+        </div>
+
+    </main>
+
+</div>
+
+@section Scripts {
+
+    <script src="~/js/customer/customer-sidebar.js"
+        asp-append-version="true"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/intl-tel-input@23.0.4/build/js/intlTelInput.min.js"></script>
+
+    <script src="~/js/customer/customer-bookings.js"
+        asp-append-version="true"></script>
+}

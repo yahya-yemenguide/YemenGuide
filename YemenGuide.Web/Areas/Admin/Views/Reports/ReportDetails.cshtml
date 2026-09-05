@@ -1,0 +1,424 @@
+@using System
+@using System.Linq
+@using YemenGuide.Core.Constants
+@using YemenGuide.Core.DTOs.Admin
+@model AdminReportDetailsDto
+
+@{
+    ViewData["Title"] = $"القضية {Model.ReportNumber}";
+    Layout = "~/Areas/Admin/Views/Shared/_AdminLayout.cshtml";
+
+    string StatusTone(string? status)
+    {
+        if (ReportConstants.EqualsState(status, ReportConstants.Statuses.Pending)) return "new";
+        if (ReportConstants.EqualsState(status, ReportConstants.Statuses.InReview)) return "review";
+        if (ReportConstants.EqualsState(status, ReportConstants.Statuses.WaitingForReporter) ||
+            ReportConstants.EqualsState(status, ReportConstants.Statuses.WaitingForReportedParty)) return "waiting";
+        if (ReportConstants.EqualsState(status, ReportConstants.Statuses.Escalated)) return "escalated";
+        if (ReportConstants.EqualsState(status, ReportConstants.Statuses.Resolved)) return "resolved";
+        if (ReportConstants.EqualsState(status, ReportConstants.Statuses.Rejected)) return "rejected";
+        if (ReportConstants.EqualsState(status, ReportConstants.Statuses.Closed)) return "closed";
+        if (ReportConstants.EqualsState(status, ReportConstants.Statuses.Withdrawn)) return "withdrawn";
+        return "neutral";
+    }
+
+    string PriorityTone(string? priority)
+    {
+        if (ReportConstants.EqualsState(priority, ReportConstants.Priorities.Urgent)) return "urgent";
+        if (ReportConstants.EqualsState(priority, ReportConstants.Priorities.High)) return "high";
+        if (ReportConstants.EqualsState(priority, ReportConstants.Priorities.Low)) return "low";
+        return "normal";
+    }
+
+    string Initial(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "؟";
+        return name.Trim().Substring(0, 1).ToUpperInvariant();
+    }
+
+    var statusTone = StatusTone(Model.Status);
+    var priorityTone = PriorityTone(Model.Priority);
+    var hasPrimaryActions = Model.CanStartReview || Model.CanRequestReporterClarification ||
+                            Model.CanRequestOwnerResponse || Model.CanConfirmCustomerViolation ||
+                            Model.CanDismissCustomerViolation || Model.CanResolve || Model.CanReject ||
+                            Model.CanRequestResolutionConfirmation || Model.CanClose || Model.CanReopen;
+    var againstHasHistory = Model.ReportedParty.UserId.HasValue &&
+                            (Model.ReportedParty.ReportsAgainstCount > 0 ||
+                             Model.ReportedParty.ComplaintsAgainstCount > 0 ||
+                             Model.ReportedParty.WarningCount > 0 ||
+                             Model.ReportedParty.ConfirmedViolationsCount > 0);
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/admin/admin-reports.css" asp-append-version="true" />
+}
+
+    <div class="ar-page ar-details-page ar-v3" id="adminReportDetails" data-report-id="@Model.ReportId" dir="rtl">
+        <form id="reportAntiForgeryForm" class="d-none">@Html.AntiForgeryToken()</form>
+
+        <div class="ar-details-nav ar-details-nav--v3">
+            <a asp-area="Admin" asp-controller="Reports" asp-action="ReportsCenter" class="ar-back-link"><i class="bi bi-arrow-right"></i> مركز البلاغات</a>
+            <span><i class="bi bi-clock-history"></i> آخر تحديث @Model.UpdatedAt.ToString("yyyy/MM/dd - HH:mm")</span>
+        </div>
+
+        <section class="ar-case-hero ar-case-hero--v3">
+            <div class="ar-case-hero__main">
+                <div class="ar-case-hero__number">
+                    <span>رقم القضية</span>
+                    <strong>@Model.ReportNumber</strong>
+                    <button type="button" data-copy-text="@Model.ReportNumber" aria-label="نسخ رقم القضية"><i class="bi bi-copy"></i></button>
+                </div>
+                <span class="ar-scenario-badge"><i class="bi @Model.TypeIcon"></i> @Model.ScenarioLabel</span>
+                <h1>@Model.Title</h1>
+                <p>@Model.CurrentStepDescription</p>
+            </div>
+            <div class="ar-case-hero__state">
+                <span class="ar-status ar-status--@statusTone ar-status--large">@Model.StatusLabel</span>
+                <span class="ar-priority ar-priority--@priorityTone ar-priority--large"><i class="bi bi-flag-fill"></i> @Model.PriorityLabel</span>
+            @if (Model.IsOverdue)
+            {
+                <span class="ar-overdue-chip"><i class="bi bi-alarm-fill"></i> تجاوزت المهلة</span>
+            }
+        </div>
+    </section>
+
+    <section class="ar-identity-stage" aria-labelledby="caseDirectionTitle">
+        <div class="ar-identity-stage__head">
+            <div><small>الصورة الأساسية للقضية</small><h2 id="caseDirectionTitle">من بلّغ ضد من؟</h2></div>
+            <span class="ar-identity-stage__hint">الأسماء، الأدوار، حالة الحساب والسوابق أمامك من أول نظرة.</span>
+        </div>
+
+        @if (Model.IsPlatformCase)
+        {
+            <div class="ar-identity-flow ar-identity-flow--platform">
+                <article class="ar-person-scene ar-person-scene--reporter">
+                    <div class="ar-person-scene__orb">@Initial(Model.Reporter.FullName)</div>
+                    <div class="ar-person-scene__content">
+                        <span>المبلّغ</span><h3>@Model.Reporter.FullName</h3><p>@Model.Reporter.RoleLabel · الحساب @Model.Reporter.AccountStateLabel</p>
+                    </div>
+                </article>
+                <article class="ar-platform-scene">
+                    <span>البلاغ عن</span><h3>المنصة / مشكلة تقنية</h3><p>لا يوجد مستخدم مبلّغ ضده في هذه القضية.</p>
+                </article>
+            </div>
+        }
+        else
+        {
+            <div class="ar-identity-flow">
+                <article class="ar-person-scene ar-person-scene--reporter">
+                    <div class="ar-person-scene__orb">
+                        @if (!string.IsNullOrWhiteSpace(Model.Reporter.ProfileImage))
+                        {
+                            <img src="@Model.Reporter.ProfileImage" alt="" />
+                        }
+                        else
+                        {
+                            <text>@Initial(Model.Reporter.FullName)</text>
+                        }
+                    </div>
+                    <div class="ar-person-scene__content">
+                        <span>المبلّغ</span>
+                        <h3>@Model.Reporter.FullName</h3>
+                        <p>@Model.Reporter.RoleLabel · الحساب @Model.Reporter.AccountStateLabel</p>
+                        <div class="ar-person-scene__stats">
+                            <b><small>بلاغات قدّمها</small>@Model.Reporter.ReportsFiledCount</b>
+                            <b><small>شكاوى قدّمها</small>@Model.Reporter.ComplaintsFiledCount</b>
+                            <b><small>تحذيرات الحساب</small>@Model.Reporter.WarningCount</b>
+                        </div>
+                    </div>
+                </article>
+
+                <div class="ar-identity-arrow" aria-hidden="true"><span>بلّغ ضد</span><i class="bi bi-arrow-left"></i></div>
+
+                <article class="ar-person-scene ar-person-scene--against @(againstHasHistory ? "has-history" : "")">
+                    <div class="ar-person-scene__orb">
+                        @if (!string.IsNullOrWhiteSpace(Model.ReportedParty.ProfileImage))
+                        {
+                            <img src="@Model.ReportedParty.ProfileImage" alt="" />
+                        }
+                        else
+                        {
+                            <text>@Initial(Model.ReportedParty.FullName)</text>
+                        }
+                    </div>
+                    <div class="ar-person-scene__content">
+                        <span>المبلّغ ضده</span>
+                        <h3>@Model.ReportedParty.FullName</h3>
+                        <p>@Model.ReportedParty.RoleLabel · الحساب @Model.ReportedParty.AccountStateLabel</p>
+                        <div class="ar-person-scene__stats ar-person-scene__stats--against">
+                            <b class="@(Model.ReportedParty.ReportsAgainstCount > 0 ? "is-alert" : "")"><small>بلاغات سابقة ضده</small>@Model.ReportedParty.ReportsAgainstCount</b>
+                            <b class="@(Model.ReportedParty.ComplaintsAgainstCount > 0 ? "is-alert" : "")"><small>شكاوى سابقة ضده</small>@Model.ReportedParty.ComplaintsAgainstCount</b>
+                            <b class="@(Model.ReportedParty.WarningCount > 0 ? "is-danger" : "")"><small>تحذيرات الحساب</small>@Model.ReportedParty.WarningCount</b>
+                            <b><small>مخالفات مثبتة</small>@Model.ReportedParty.ConfirmedViolationsCount</b>
+                        </div>
+                    </div>
+                </article>
+            </div>
+
+            @if (Model.ReportedParty.UserId.HasValue)
+            {
+                var previousAgainstCount =
+                    Model.ReportedParty.ReportsAgainstCount +
+                    Model.ReportedParty.ComplaintsAgainstCount;
+
+                <div class="ar-history-strip @(againstHasHistory ? "has-record" : "is-clean")">
+                    <div class="ar-history-strip__head">
+                        <div>
+                            <small>سجل المبلّغ ضده</small>
+                            <strong>سوابق وتحذيرات @Model.ReportedParty.RoleLabel.ToLowerInvariant()</strong>
+                        </div>
+                        <span>@previousAgainstCount قضية سابقة ضده</span>
+                    </div>
+
+                    @if (Model.ReportedParty.RecentCasesAgainst.Count > 0)
+                    {
+                        <div class="ar-history-strip__list">
+                            @foreach (var history in Model.ReportedParty.RecentCasesAgainst)
+                            {
+                                <a asp-area="Admin" asp-controller="Reports" asp-action="ReportDetails" asp-route-id="@history.ReportId" class="ar-history-chip">
+                                    <span>@history.RequestKindLabel</span>
+                                    <strong>@history.ReportNumber</strong>
+                                    <small>@history.StatusLabel · @history.CreatedAt.ToString("yyyy/MM/dd")</small>
+                                    @if (history.HasWarning)
+                                    {
+                                        <em><i class="bi bi-exclamation-triangle-fill"></i> نتج عنها تحذير</em>
+                                    }
+                                </a>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="ar-history-empty @(againstHasHistory ? "has-alerts" : "is-clean")">
+                            <span>
+                                <i class="bi @(againstHasHistory ? "bi-exclamation-triangle-fill" : "bi-shield-check")"></i>
+                            </span>
+                            <div>
+                                <strong>
+                                    @(againstHasHistory
+                                        ? "لا توجد قضايا سابقة ظاهرة، لكن الحساب يحمل مؤشرات مسجلة"
+                                        : $"لا توجد سوابق مسجلة على هذا {Model.ReportedParty.RoleLabel}")
+                                </strong>
+                                <small>
+                                    @(againstHasHistory
+                                        ? $"تحذيرات الحساب: {Model.ReportedParty.WarningCount} · مخالفات مثبتة: {Model.ReportedParty.ConfirmedViolationsCount}"
+                                        : "السجل الحالي نظيف داخل مركز البلاغات.")
+                                </small>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        }
+    </section>
+
+    <div class="ar-workboard">
+        <section class="ar-panel ar-reference-panel">
+            <div class="ar-section-heading ar-section-heading--clean">
+                <div><small>مرجع القضية</small><h2>عن ماذا البلاغ؟</h2></div>
+            </div>
+            <div class="ar-reference-card ar-reference-card--v3">
+                <span class="ar-reference-icon"><i class="bi @Model.TypeIcon"></i></span>
+                <div class="ar-reference-copy">
+                    <small>@Model.ReportTypeLabel · @Model.CategoryLabel</small>
+                    <h3>@Model.Reference.PrimaryLabel</h3>
+                    @if (!string.IsNullOrWhiteSpace(Model.Reference.SecondaryLabel))
+                    {
+                        <p>@Model.Reference.SecondaryLabel</p>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(Model.Reference.PlaceName))
+                    {
+                        <span><i class="bi bi-building"></i> @Model.Reference.PlaceName</span>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(Model.Reference.ExtraInfo))
+                    {
+                        <span><i class="bi bi-info-circle"></i> @Model.Reference.ExtraInfo</span>
+                    }
+                </div>
+            </div>
+        </section>
+
+        <section class="ar-action-center ar-action-center--v3">
+            <div class="ar-action-center__head">
+                <div><small>الخطوة الحالية</small><h2>ماذا تحتاج الإدارة الآن؟</h2><p>@Model.CurrentStepLabel</p></div>
+                <span class="ar-action-center__pulse"><i class="bi bi-lightning-charge-fill"></i></span>
+            </div>
+
+            @if (Model.IsOwnerAgainstCustomer)
+            {
+                <div class="ar-owner-customer-rule"><i class="bi bi-shield-lock-fill"></i><div><strong>بلاغ مالك ضد عميل</strong><p>لا يُطلب من العميل الرد داخل القضية. الإدارة تراجع الأدلة وتثبت أو تنفي المخالفة.</p></div></div>
+            }
+
+            @if (hasPrimaryActions)
+            {
+                <div class="ar-primary-actions ar-primary-actions--v3">
+                    @if (Model.CanStartReview)
+                    {
+                        <button type="button" class="ar-big-action ar-big-action--primary" data-report-action="start-review" data-endpoint="@Url.Action("StartReview", "Reports", new { area = "Admin" })">
+                            <span><i class="bi bi-play-circle-fill"></i></span><div><strong>بدء مراجعة القضية</strong><small>ابدأ التعامل الرسمي معها</small></div><i class="bi bi-arrow-left"></i>
+                        </button>
+                    }
+
+                    @if (Model.CanRequestReporterClarification)
+                    {
+                        <button type="button" class="ar-big-action" data-report-action="request-clarification" data-endpoint="@Url.Action("RequestClarification", "Reports", new { area = "Admin" })">
+                            <span><i class="bi bi-chat-left-text-fill"></i></span>
+                            <div><strong>@(Model.IsOwnerAgainstCustomer ? "أحتاج توضيحًا من المالك المبلّغ" : Model.IsCustomerAgainstOwner ? "أحتاج توضيحًا من العميل" : "أحتاج توضيحًا من المبلّغ")</strong><small>اطلب فقط المعلومة الناقصة</small></div><i class="bi bi-arrow-left"></i>
+                        </button>
+                    }
+
+                    @if (Model.CanRequestOwnerResponse)
+                    {
+                        <button type="button" class="ar-big-action ar-big-action--orange-soft" data-report-action="request-owner-response" data-endpoint="@Url.Action("RequestOwnerResponse", "Reports", new { area = "Admin" })">
+                            <span><i class="bi bi-building-fill"></i></span><div><strong>أحتاج ردًا من المالك</strong><small>يرسل له طلب رسمي داخل نفس القضية</small></div><i class="bi bi-arrow-left"></i>
+                        </button>
+                    }
+
+                    @if (Model.CanConfirmCustomerViolation)
+                    {
+                        <button type="button" class="ar-big-action ar-big-action--danger" data-report-action="confirm-customer-violation" data-endpoint="@Url.Action("ConfirmCustomerViolation", "Reports", new { area = "Admin" })">
+                            <span><i class="bi bi-exclamation-triangle-fill"></i></span><div><strong>المخالفة مثبتة</strong><small>تسجيل تحذير وإرسال تنبيه للعميل</small></div><i class="bi bi-arrow-left"></i>
+                        </button>
+                    }
+                    @if (Model.CanDismissCustomerViolation)
+                    {
+                        <button type="button" class="ar-big-action ar-big-action--success" data-report-action="dismiss-customer-violation" data-endpoint="@Url.Action("DismissCustomerViolation", "Reports", new { area = "Admin" })">
+                            <span><i class="bi bi-shield-check"></i></span><div><strong>المخالفة غير مثبتة</strong><small>رفض البلاغ مع توثيق سبب القرار</small></div><i class="bi bi-arrow-left"></i>
+                        </button>
+                    }
+
+                    @if (Model.CanResolve || Model.CanReject)
+                    {
+                        <button type="button" class="ar-big-action ar-big-action--decision" data-toggle-decisions><span><i class="bi bi-check2-square"></i></span><div><strong>لدي قرار</strong><small>الحل أو الرفض بعد اكتمال المراجعة</small></div><i class="bi bi-chevron-down" data-decision-chevron></i></button>
+                        <div class="ar-decision-actions" data-decision-actions hidden>
+                            @if (Model.CanResolve)
+                            {
+                                <button type="button" data-report-action="resolve" data-endpoint="@Url.Action("Resolve", "Reports", new { area = "Admin" })"><i class="bi bi-check-circle-fill"></i><span><strong>تسجيل الحل</strong><small>الحل والإجراء المتخذ</small></span></button>
+                            }
+                            @if (Model.CanReject)
+                            {
+                                <button type="button" class="is-reject" data-report-action="reject" data-endpoint="@Url.Action("Reject", "Reports", new { area = "Admin" })"><i class="bi bi-x-circle-fill"></i><span><strong>رفض البلاغ</strong><small>سبب واضح يظهر للمبلّغ</small></span></button>
+                            }
+                        </div>
+                    }
+
+                    @if (Model.CanRequestResolutionConfirmation)
+                    {
+                        <button type="button" class="ar-big-action ar-big-action--success" data-report-action="request-resolution-confirmation" data-endpoint="@Url.Action("RequestResolutionConfirmation", "Reports", new { area = "Admin" })"><span><i class="bi bi-patch-question-fill"></i></span><div><strong>تأكيد الحل من العميل</strong><small>نعم تم الحل / لا ما زالت المشكلة</small></div><i class="bi bi-arrow-left"></i></button>
+                    }
+                    @if (Model.CanClose)
+                    {
+                        <button type="button" class="ar-big-action ar-big-action--close" data-report-action="close" data-endpoint="@Url.Action("Close", "Reports", new { area = "Admin" })"><span><i class="bi bi-lock-fill"></i></span><div><strong>إغلاق القضية</strong><small>إنهاؤها رسميًا بعد اكتمال المعالجة</small></div><i class="bi bi-arrow-left"></i></button>
+                    }
+                    @if (Model.CanReopen)
+                    {
+                        <button type="button" class="ar-big-action ar-big-action--reopen" data-report-action="reopen" data-endpoint="@Url.Action("Reopen", "Reports", new { area = "Admin" })"><span><i class="bi bi-arrow-counterclockwise"></i></span><div><strong>إعادة فتح القضية</strong><small>نفس الرقم ونفس السجل</small></div><i class="bi bi-arrow-left"></i></button>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="ar-finished-state"><span><i class="bi bi-hourglass-split"></i></span><strong>لا يوجد إجراء مباشر الآن</strong><p>@Model.CurrentStepDescription</p></div>
+            }
+        </section>
+    </div>
+
+    <section class="ar-panel ar-problem-panel">
+        <div class="ar-section-heading ar-section-heading--clean"><div><small>البلاغ الأصلي</small><h2>المشكلة والأدلة</h2></div></div>
+        <div class="ar-report-text ar-report-text--v3">@Model.ReportReason</div>
+        @if (!string.IsNullOrWhiteSpace(Model.EvidenceImageUrl))
+        {
+            <a class="ar-evidence-card ar-evidence-card--v3" href="@Model.EvidenceImageUrl" target="_blank" rel="noopener"><span><i class="bi bi-paperclip"></i></span><div><strong>الدليل المرفق</strong><small>فتح المرفق بالحجم الكامل</small></div><i class="bi bi-box-arrow-up-left"></i></a>
+        }
+        else
+        {
+            <div class="ar-no-evidence"><i class="bi bi-paperclip"></i> لم يُرفق دليل مع البلاغ الأصلي.</div>
+        }
+    </section>
+
+    <section class="ar-panel ar-timeline-panel ar-timeline-panel--v3">
+        <div class="ar-section-heading ar-section-heading--clean ar-timeline-head"><div><small>كل ما حدث داخل نفس القضية</small><h2>سجل القضية</h2></div><b>@Model.Timeline.Count</b></div>
+        <div class="ar-timeline ar-timeline--v3">
+            @foreach (var item in Model.Timeline)
+            {
+                <article class="ar-timeline-item is-@item.Tone">
+                    <div class="ar-timeline-rail"><span><i class="bi @item.Icon"></i></span></div>
+                    <div class="ar-timeline-card">
+                        <div class="ar-timeline-card__head"><div><strong>@item.Title</strong><small>@item.ActorName · @item.ActorRoleLabel</small></div><time>@item.OccurredAt.ToString("yyyy/MM/dd - HH:mm")</time></div>
+                        @if (!string.IsNullOrWhiteSpace(item.Description))
+                        {
+                            <p>@item.Description</p>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(item.AttachmentUrl))
+                        {
+                            <a href="@item.AttachmentUrl" target="_blank" rel="noopener"><i class="bi bi-paperclip"></i> فتح المرفق</a>
+                        }
+                    </div>
+                </article>
+            }
+        </div>
+    </section>
+
+    <div class="ar-bottom-board">
+        <section class="ar-panel ar-quick-tools ar-quick-tools--v3">
+            <button type="button" class="ar-collapsible-head" data-toggle-tools aria-expanded="false"><span><i class="bi bi-sliders2"></i></span><div><small>ليست إجراءات رئيسية</small><strong>أدوات إضافية</strong></div><i class="bi bi-chevron-down" data-tools-chevron></i></button>
+            <div class="ar-quick-tools__body" data-tools-body hidden>
+                @if (Model.CanChangePriority)
+                {
+                    <button type="button" data-report-action="change-priority" data-endpoint="@Url.Action("ChangePriority", "Reports", new { area = "Admin" })"><i class="bi bi-flag-fill"></i><span>تغيير الأولوية</span></button>
+                }
+                @if (Model.CanEscalate)
+                {
+                    <button type="button" data-report-action="escalate" data-endpoint="@Url.Action("Escalate", "Reports", new { area = "Admin" })"><i class="bi bi-arrow-up-right-circle-fill"></i><span>تصعيد القضية</span></button>
+                }
+                @if (Model.CanAddInternalNote)
+                {
+                    <button type="button" data-report-action="internal-note" data-endpoint="@Url.Action("AddInternalNote", "Reports", new { area = "Admin" })"><i class="bi bi-journal-plus"></i><span>ملاحظة داخلية</span></button>
+                }
+            </div>
+        </section>
+
+        <section class="ar-panel ar-internal-notes ar-internal-notes--v3">
+            <div class="ar-section-heading ar-section-heading--clean"><div><small>الإدارة فقط</small><h2>الملاحظات الداخلية</h2></div></div>
+            @if (Model.InternalNotes.Count > 0)
+            {
+                <div class="ar-internal-notes__list">
+                    @foreach (var note in Model.InternalNotes)
+                    {
+                        <article><p>@note.NoteText</p><span>@note.AdminName · @note.CreatedAt.ToString("yyyy/MM/dd - HH:mm")</span></article>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="ar-empty-note"><i class="bi bi-journal"></i> لا توجد ملاحظات داخلية حتى الآن.</div>
+            }
+        </section>
+    </div>
+</div>
+
+<div class="ar-modal-layer" id="reportActionModal" hidden aria-hidden="true">
+    <div class="ar-modal-backdrop" data-close-report-modal></div>
+    <section class="ar-modal" role="dialog" aria-modal="true" aria-labelledby="reportModalTitle">
+        <div class="ar-modal__head">
+            <div class="ar-modal__head-icon" id="reportModalIcon"><i class="bi bi-lightning-charge-fill"></i></div>
+            <div><small id="reportModalEyebrow">إجراء على القضية</small><h2 id="reportModalTitle">تأكيد الإجراء</h2><p id="reportModalDescription"></p></div>
+            <button type="button" class="ar-modal-close" data-close-report-modal aria-label="إغلاق"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <form id="reportActionForm" novalidate>
+            <input type="hidden" name="ReportId" value="@Model.ReportId" />
+            <div id="reportModalFields"></div>
+            <div class="ar-modal-error" id="reportModalError" hidden></div>
+            <div class="ar-modal__actions">
+                <button type="button" class="ar-button ar-button--ghost" data-close-report-modal>إلغاء</button>
+                <button type="submit" class="ar-button ar-button--primary" id="reportModalSubmit"><span>تنفيذ الإجراء</span><i class="bi bi-arrow-left"></i></button>
+            </div>
+        </form>
+    </section>
+</div>
+
+<div class="ar-toast-stack" id="reportToastStack" aria-live="polite" aria-atomic="true"></div>
+
+@section Scripts {
+    <script src="~/js/admin/admin-reports.js" asp-append-version="true"></script>
+}

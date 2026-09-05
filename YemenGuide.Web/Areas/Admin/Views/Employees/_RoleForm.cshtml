@@ -1,0 +1,444 @@
+@model YemenGuide.Core.DTOs.Admin.AdminRoleFormDto
+@using System.Globalization
+@using System.Linq
+@using System
+
+@{
+    bool isArabic = string.Equals(CultureInfo.CurrentUICulture.TwoLetterISOLanguageName, "ar", StringComparison.OrdinalIgnoreCase);
+    string L(string ar, string en) => isArabic ? ar : en;
+
+    string GroupLabel(string? groupName) =>
+        isArabic ? (groupName ?? string.Empty) : (groupName ?? string.Empty) switch
+        {
+            "لوحة التحكم" => "Dashboard",
+            "إدارة المستخدمين" => "User management",
+            "إدارة المنشآت" => "Place management",
+            "تصنيفات النظام" => "Master data",
+            "الشكاوى والبلاغات" => "Cases & reports",
+            "الإدارة المالية" => "Finance",
+            "إدارة الإعلانات" => "Advertisements",
+            "إعدادات النظام" => "System settings",
+            "الموظفون والصلاحيات" => "Employees & permissions",
+            _ => groupName ?? string.Empty
+        };
+
+    string PermissionLabel(string? key, string? fallback) =>
+        isArabic ? (fallback ?? key ?? string.Empty) : (key ?? string.Empty) switch
+        {
+            "Dashboard.View" => "View dashboard",
+            "Users.View" => "View users",
+            "Users.ViewVerificationDocuments" => "Review verification documents",
+            "Users.ChangeState" => "Change user status",
+            "Users.Delete" => "Delete user",
+            "Places.View" => "View places",
+            "Places.Create" => "Create place",
+            "Places.Edit" => "Edit place",
+            "Places.Review" => "Review place",
+            "Places.ChangeStatus" => "Change place status",
+            "Places.Delete" => "Delete place",
+            "Places.ReassignOwner" => "Reassign place owner",
+            "MasterData.View" => "View master data",
+            "MasterData.ManageCategories" => "Manage categories",
+            "MasterData.ManageCities" => "Manage cities",
+            "Cases.View" => "View cases",
+            "Cases.Create" => "Create case",
+            "Cases.Assign" => "Assign case",
+            "Cases.Manage" => "Manage case",
+            "Cases.Escalate" => "Escalate case",
+            "Cases.Resolve" => "Resolve case",
+            "Cases.Reopen" => "Reopen case",
+            "Finance.View" => "View finance",
+            "Finance.ReviewTopUps" => "Review top-ups",
+            "Finance.ManageCommissionAccounts" => "Manage commission accounts",
+            "Finance.ManagePlatformWallets" => "Manage platform wallets",
+            "Finance.ManageSettings" => "Manage finance settings",
+            "Finance.Reports" => "View finance reports",
+            "Advertisements.View" => "View advertisements",
+            "Advertisements.Review" => "Review advertisements",
+            "Advertisements.ManagePlans" => "Manage advertisement plans",
+            "Advertisements.Control" => "Control advertisements",
+            "Advertisements.Reports" => "View advertisement reports",
+            "Settings.View" => "View system settings",
+            "Settings.ManageGeneral" => "Manage general settings",
+            "Settings.ManagePaymentNetworks" => "Manage payment networks",
+            "Settings.ManageHeroSlides" => "Manage home slides",
+            "Employees.View" => "View employees",
+            "Employees.Create" => "Create employee",
+            "Employees.Edit" => "Edit employee",
+            "Employees.ChangeStatus" => "Change employee status",
+            "Roles.View" => "View roles & permissions",
+            "Roles.Manage" => "Manage roles & permissions",
+            "AuditLogs.View" => "View audit log",
+            _ => fallback ?? key ?? string.Empty
+        };
+
+    string PermissionDescription(string? key, string? description) =>
+        isArabic
+            ? (string.IsNullOrWhiteSpace(description) ? key ?? string.Empty : description)
+            : key ?? string.Empty;
+
+    var totalPermissions = Model.PermissionGroups.Sum(group => group.Permissions.Count);
+
+    string GroupIcon(string groupName)
+    {
+        var name = (groupName ?? string.Empty).Trim();
+
+        if (name.Contains("مستخدم", StringComparison.OrdinalIgnoreCase)) return "bi-people-fill";
+        if (name.Contains("منش", StringComparison.OrdinalIgnoreCase) || name.Contains("مكان", StringComparison.OrdinalIgnoreCase)) return "bi-buildings-fill";
+        if (name.Contains("مالي", StringComparison.OrdinalIgnoreCase) || name.Contains("عمول", StringComparison.OrdinalIgnoreCase)) return "bi-wallet2";
+        if (name.Contains("إعلان", StringComparison.OrdinalIgnoreCase)) return "bi-megaphone-fill";
+        if (name.Contains("شك", StringComparison.OrdinalIgnoreCase) || name.Contains("بلاغ", StringComparison.OrdinalIgnoreCase) || name.Contains("قضي", StringComparison.OrdinalIgnoreCase)) return "bi-chat-square-text-fill";
+        if (name.Contains("إعداد", StringComparison.OrdinalIgnoreCase) || name.Contains("نظام", StringComparison.OrdinalIgnoreCase)) return "bi-sliders2";
+        if (name.Contains("موظ", StringComparison.OrdinalIgnoreCase)) return "bi-person-workspace";
+        if (name.Contains("دور", StringComparison.OrdinalIgnoreCase) || name.Contains("صلاح", StringComparison.OrdinalIgnoreCase)) return "bi-shield-lock-fill";
+        if (name.Contains("تصنيف", StringComparison.OrdinalIgnoreCase) || name.Contains("مدن", StringComparison.OrdinalIgnoreCase) || name.Contains("بيانات", StringComparison.OrdinalIgnoreCase)) return "bi-diagram-3-fill";
+        if (name.Contains("سجل", StringComparison.OrdinalIgnoreCase) || name.Contains("تدقيق", StringComparison.OrdinalIgnoreCase)) return "bi-journal-check";
+        if (name.Contains("لوحة", StringComparison.OrdinalIgnoreCase) || name.Contains("رئيس", StringComparison.OrdinalIgnoreCase)) return "bi-grid-1x2-fill";
+
+        return "bi-grid-fill";
+    }
+
+    int OperationRank(string permissionKey)
+    {
+        var key = (permissionKey ?? string.Empty).ToLowerInvariant();
+        if (key.EndsWith(".view")) return 1;
+        if (key.Contains("verification") || key.Contains("review")) return 2;
+        if (key.EndsWith(".create") || key.Contains("add")) return 3;
+        if (key.EndsWith(".edit") || key.Contains("update") || key.Contains("manage")) return 4;
+        if (key.Contains("approve") || key.Contains("accept") || key.Contains("resolve")) return 5;
+        if (key.Contains("status") || key.Contains("suspend") || key.Contains("change")) return 6;
+        if (key.Contains("delete")) return 99;
+        return 50;
+    }
+}
+
+<div class="employees-drawer-form role-drawer-form role-v6-shell" data-role-form-shell>
+    <header class="employees-drawer-header role-v6-header">
+        <div class="employees-drawer-header__icon role-v6-header__icon">
+            <i class="bi bi-shield-lock-fill"></i>
+        </div>
+
+        <div class="role-v6-header__copy">
+            <span>@(Model.IsEdit ? L("إدارة قالب الصلاحيات", "Manage permission template") : L("قالب صلاحيات جديد", "New permission template"))</span>
+            <h2>@(Model.IsEdit ? Model.Role.RoleName : L("إنشاء دور وظيفي", "Create role"))</h2>
+            <p>@L("حدد ما يستطيع موظفو هذا الدور مشاهدته وتنفيذه داخل لوحة الإدارة.", "Choose what employees in this role can view and perform in the admin panel.")</p>
+        </div>
+
+        <button type="button"
+                class="employees-drawer-close"
+                data-close-drawer
+                aria-label="@L("إغلاق", "Close")">
+            <i class="bi bi-x-lg"></i>
+        </button>
+    </header>
+
+    <form class="role-v6-form" data-role-form novalidate>
+        <input type="hidden" name="AdminRoleId" value="@Model.Role.AdminRoleId" />
+
+        <div class="role-v6-scroll" data-role-scroll>
+            @if (Model.IsSystemRole)
+            {
+                <div class="role-v6-system-banner">
+                    <span class="role-v6-system-banner__icon">
+                        <i class="bi bi-shield-fill-check"></i>
+                    </span>
+                    <div>
+                        <strong>@L("Super Admin — دور نظام محمي", "Super Admin — protected system role")</strong>
+                        <p>@L("يمكنك مشاهدة الصلاحيات فقط. لا يمكن تعديل هذا الدور أو إيقافه.", "You can view permissions only. This role cannot be edited or disabled.")</p>
+                    </div>
+                </div>
+            }
+
+            <section class="role-v6-section role-v6-identity-section">
+                <div class="role-v6-section-heading">
+                    <span><i class="bi bi-person-vcard-fill"></i></span>
+                    <div>
+                        <h3>@L("هوية الدور", "Role identity")</h3>
+                        <p>@L("اسم واضح ووصف قصير يساعدانك على معرفة وظيفة هذا الدور بسرعة.", "A clear name and short description make the role easy to identify.")</p>
+                    </div>
+                </div>
+
+                <div class="role-v6-fields-grid">
+                    <label class="role-v6-field">
+                        <span class="role-v6-field__label">
+                            @L("اسم الدور", "Role name") <b>*</b>
+                        </span>
+                        <div class="role-v6-control">
+                            <i class="bi bi-person-badge-fill"></i>
+                            <input type="text"
+                                   name="RoleName"
+                                   value="@Model.Role.RoleName"
+                                   maxlength="100"
+                                   minlength="2"
+                                   placeholder="@L("مثال: موظف خدمة العملاء", "Example: Customer service agent")"
+                                   autocomplete="off"
+                                   required
+                                   @(Model.IsSystemRole ? "disabled" : null) />
+                        </div>
+                        <small>@L("اختر اسمًا يصف المهمة الوظيفية، وليس اسم الموظف.", "Use a name that describes the job function, not the employee.")</small>
+                    </label>
+
+                    <label class="role-v6-field role-v6-field--wide">
+                        <span class="role-v6-field__label">@L("وصف الدور", "Role description")</span>
+                        <div class="role-v6-control role-v6-control--textarea">
+                            <i class="bi bi-card-text"></i>
+                            <textarea name="Description"
+                                      maxlength="500"
+                                      rows="3"
+                                      placeholder="@L("مثال: متابعة طلبات العملاء والشكاوى والرد عليها...", "Example: Follow up customer requests and complaints...")"
+                                      @(Model.IsSystemRole ? "disabled" : null)>@Model.Role.Description</textarea>
+                        </div>
+                        <small>@L("الوصف للتوضيح فقط؛ التحكم الحقيقي يتم من الصلاحيات أدناه.", "The description is informational; actual access is controlled by the permissions below.")</small>
+                    </label>
+                </div>
+            </section>
+
+            <section class="role-v6-section role-v6-permissions-section">
+                <div class="role-v6-permissions-head">
+                    <div class="role-v6-section-heading role-v6-section-heading--compact">
+                        <span><i class="bi bi-ui-checks-grid"></i></span>
+                        <div>
+                            <h3>@L("صلاحيات الدور", "Role permissions")</h3>
+                            <p>@L("كل بطاقة تمثل قسمًا من لوحة الإدارة. افتح القسم واختر العمليات المطلوبة فقط.", "Each card represents an admin section. Open it and choose only the required actions.")</p>
+                        </div>
+                    </div>
+
+                    <div class="role-v6-summary" aria-live="polite">
+                        <span class="role-v6-summary__selected">
+                            <strong data-selected-permissions-count>@Model.SelectedPermissionsCount</strong>
+                            <small>@L("مختارة", "Selected")</small>
+                        </span>
+                        <span class="role-v6-summary__divider"></span>
+                        <span>
+                            <strong>@totalPermissions</strong>
+                            <small>@L("متاحة", "Available")</small>
+                        </span>
+                    </div>
+                </div>
+
+                <div class="role-v6-toolbar">
+                    <label class="role-v6-search">
+                        <i class="bi bi-search"></i>
+                        <input type="search"
+                               data-permission-search
+                               placeholder="@L("ابحث باسم الصلاحية أو العملية...", "Search by permission or action...")"
+                               autocomplete="off" />
+                        <button type="button"
+                                data-clear-permission-search
+                                aria-label="@L("مسح البحث", "Clear search")"
+                                hidden>
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </label>
+
+                    @if (!Model.IsSystemRole)
+                    {
+                        <div class="role-v6-quick-actions" aria-label="@L("اختيارات سريعة", "Quick selections")">
+                            <button type="button" class="role-v6-quick-btn" data-permissions-select-all>
+                                <i class="bi bi-check2-square"></i>
+                                @L("تحديد الكل", "Select all")
+                            </button>
+                            <button type="button" class="role-v6-quick-btn role-v6-quick-btn--muted" data-permissions-clear-all>
+                                <i class="bi bi-square"></i>
+                                @L("إلغاء الاختيار", "Clear selection")
+                            </button>
+                        </div>
+                    }
+                </div>
+
+                <div class="role-v6-tip">
+                    <i class="bi bi-lightbulb-fill"></i>
+                    <span><strong>@L("طريقة الاستخدام:", "How to use:")</strong> @L("أعطِ الدور أقل قدر من الصلاحيات التي يحتاجها الموظف فعلًا. الصلاحيات الحساسة مميزة باللون المرجاني.", "Give the role only the permissions employees actually need. Sensitive permissions are highlighted in coral.")</span>
+                </div>
+
+                <div class="role-v6-groups" data-permission-groups>
+                    @for (var index = 0; index < Model.PermissionGroups.Count; index++)
+                    {
+                        var group = Model.PermissionGroups[index];
+                        var groupId = $"role-v6-group-{index}";
+                        var groupIcon = GroupIcon(group.GroupName);
+                        var isInitiallyOpen = index == 0 || group.SelectedCount > 0;
+
+                        <article class="role-v6-group @(group.SelectedCount > 0 ? "has-selection" : "")"
+                             data-permission-group
+                             data-group-name="@GroupLabel(group.GroupName)">
+
+                            <button type="button"
+                                class="role-v6-group__header"
+                                data-toggle-permission-group="@groupId"
+                                aria-controls="@groupId"
+                                aria-expanded="@(isInitiallyOpen ? "true" : "false")">
+
+                                <span class="role-v6-group__icon">
+                                    <i class="bi @groupIcon"></i>
+                                </span>
+
+                                <span class="role-v6-group__title">
+                                    <strong>@GroupLabel(group.GroupName)</strong>
+                                    <small>
+                                        @group.Permissions.Count @L("صلاحية متاحة", "available permissions")
+                                        @if (group.SelectedCount > 0)
+                                        {
+                                            <em>• @group.SelectedCount @L("محددة", "selected")</em>
+                                        }
+                                    </small>
+                                </span>
+
+                                <span class="role-v6-group__progress" aria-label="@L("عدد الصلاحيات المختارة", "Selected permission count")">
+                                    <b data-group-selected-count>@group.SelectedCount</b>
+                                    <em>@L("من", "of")</em>
+                                    <small>@group.Permissions.Count</small>
+                                </span>
+
+                                <span class="role-v6-group__chevron">
+                                    <i class="bi bi-chevron-down"></i>
+                                </span>
+                            </button>
+
+                            <div id="@groupId"
+                             class="role-v6-group__body @(isInitiallyOpen ? "is-open" : "")"
+                             data-permission-group-body>
+
+                                <div class="role-v6-group-tools">
+                                    <div>
+                                        <strong>@L("عمليات هذا القسم", "Section actions")</strong>
+                                        <small>@L("حدد فقط ما يحتاجه موظفو هذا الدور.", "Select only what employees in this role need.")</small>
+                                    </div>
+
+                                    @if (!Model.IsSystemRole)
+                                    {
+                                        <label class="role-v6-select-all">
+                                            <input type="checkbox"
+                                           data-group-select-all
+                                           checked="@group.AllSelected" />
+                                            <span class="role-v6-select-all__box">
+                                                <i class="bi bi-check-lg"></i>
+                                            </span>
+                                            <span class="role-v6-select-all__copy">
+                                                <strong>@L("تحديد القسم كاملًا", "Select entire section")</strong>
+                                                <small>@L("يمكنك إلغاء أي عملية بعد ذلك", "You can clear individual actions afterward")</small>
+                                            </span>
+                                        </label>
+                                    }
+                                </div>
+
+                                <div class="role-v6-permission-list">
+                                    @foreach (var permission in group.Permissions
+                                   .OrderBy(permission => OperationRank(permission.PermissionKey))
+                                   .ThenBy(permission => permission.PermissionName))
+                                    {
+                                        var key = permission.PermissionKey ?? string.Empty;
+                                        var keyLower = key.ToLowerInvariant();
+                                        var operationIcon = keyLower.Contains("delete")
+                                        ? "bi-trash3"
+                                        : keyLower.Contains("create") || keyLower.Contains("add")
+                                        ? "bi-plus-circle"
+                                        : keyLower.Contains("edit") || keyLower.Contains("update")
+                                        ? "bi-pencil-square"
+                                        : keyLower.Contains("approve") || keyLower.Contains("accept") || keyLower.Contains("resolve")
+                                        ? "bi-check-circle"
+                                        : keyLower.Contains("status") || keyLower.Contains("suspend") || keyLower.Contains("change")
+                                        ? "bi-arrow-repeat"
+                                        : keyLower.Contains("view") || keyLower.Contains("report")
+                                        ? "bi-eye"
+                                        : "bi-key";
+
+                                        <label class="role-v6-permission @(permission.IsSelected ? "is-selected" : "") @(permission.IsSensitive ? "is-sensitive" : "")"
+                                       data-permission-item
+                                       data-permission-search-text="@($"{GroupLabel(group.GroupName)} {PermissionLabel(permission.PermissionKey, permission.PermissionName)} {permission.PermissionKey} {permission.Description}")">
+
+                                            <input type="checkbox"
+                                           name="PermissionIds"
+                                           value="@permission.AdminPermissionId"
+                                           checked="@permission.IsSelected"
+                                           @(Model.IsSystemRole ? "disabled" : null) />
+
+                                            <span class="role-v6-permission__check" aria-hidden="true">
+                                                <i class="bi bi-check-lg"></i>
+                                            </span>
+
+                                            <span class="role-v6-permission__operation-icon" aria-hidden="true">
+                                                <i class="bi @operationIcon"></i>
+                                            </span>
+
+                                            <span class="role-v6-permission__copy">
+                                                <span class="role-v6-permission__title-line">
+                                                    <strong>@PermissionLabel(permission.PermissionKey, permission.PermissionName)</strong>
+
+                                                    <span class="role-v6-permission__badges">
+                                                        @if (permission.IsSensitive)
+                                                        {
+                                                            <em class="is-sensitive">
+                                                                <i class="bi bi-exclamation-diamond-fill"></i>
+                                                                @L("حساسة", "Sensitive")
+                                                            </em>
+                                                        }
+                                                    </span>
+                                                </span>
+
+                                                <small>
+                                                    @PermissionDescription(permission.PermissionKey, permission.Description)
+                                                </small>
+                                            </span>
+                                        </label>
+                                    }
+                                </div>
+                            </div>
+                        </article>
+                    }
+                </div>
+
+                <div class="role-v6-no-results" data-permission-no-results hidden>
+                    <span><i class="bi bi-search"></i></span>
+                    <strong>@L("لا توجد صلاحيات مطابقة", "No matching permissions")</strong>
+                    <small>@L("جرّب كلمة بحث مختلفة.", "Try a different search term.")</small>
+                </div>
+            </section>
+
+            @if (!Model.IsSystemRole)
+            {
+                <section class="role-v6-status-section">
+                    <label class="role-v6-status-switch">
+                        <input type="checkbox"
+                           name="IsActive"
+                           value="true"
+                           checked="@Model.Role.IsActive" />
+                        <input type="hidden" name="IsActive" value="false" />
+
+                        <span class="role-v6-status-switch__track"><i></i></span>
+
+                        <span class="role-v6-status-switch__copy">
+                            <strong>@L("الدور نشط", "Role is active")</strong>
+                            <small>@L("إيقاف الدور يعطل صلاحياته عن الموظفين المرتبطين به بدون حذف الدور.", "Disabling the role turns off its permissions for linked employees without deleting it.")</small>
+                        </span>
+                    </label>
+                </section>
+            }
+        </div>
+
+        <footer class="employee-form-footer role-form-footer role-v6-footer">
+            <span class="role-v6-footer__hint">
+                <i class="bi bi-shield-check"></i>
+                @L("الصلاحيات تحفظ على الدور وتنتقل تلقائيًا إلى الموظف المرتبط به.", "Permissions are saved on the role and inherited by linked employees.")
+            </span>
+
+            <div class="role-v6-footer__actions">
+                <button type="button"
+                        class="employees-btn employees-btn--soft"
+                        data-close-drawer>
+                    @L("إغلاق", "Close")
+                </button>
+
+                @if (!Model.IsSystemRole)
+                {
+                    <button type="submit"
+                        class="employees-btn employees-btn--primary role-v6-save-btn"
+                        data-role-submit>
+                        <i class="bi bi-check2-circle"></i>
+                        @L("حفظ الدور والصلاحيات", "Save role & permissions")
+                    </button>
+                }
+            </div>
+        </footer>
+    </form>
+</div>

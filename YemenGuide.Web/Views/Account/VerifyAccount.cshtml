@@ -1,0 +1,856 @@
+﻿@using System.Globalization
+@using System.Linq
+@using System.Collections.Generic
+@using YemenGuide.Core.DTOs.Owner
+@inject YemenGuide.Data.AppDbContext _context
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+@{
+    Layout = null;
+
+    var settings = _context.SystemSettings.FirstOrDefault();
+    string siteName = settings?.SiteName ?? "دليلك اليمني";
+    ViewData["Title"] = $"توثيق الشراكة - {siteName}";
+    string logoPath = settings?.LogoPath ?? "/images/logo1.png";
+    string favicon = settings?.FaviconPath ?? "/favicon.ico";
+    decimal commission = settings?.CommissionPercentage ?? 10.0m;
+    var verificationCategories =
+        ViewBag.Categories as IEnumerable<YemenGuide.Core.Entities.Category>
+        ?? Enumerable.Empty<YemenGuide.Core.Entities.Category>();
+
+    string supportWhatsapp = (settings?.WhatsAppNumber ?? string.Empty)
+        .Replace("+", string.Empty)
+        .Replace(" ", string.Empty)
+        .Replace("-", string.Empty);
+
+    var isRtl = CultureInfo.CurrentCulture.TextInfo.IsRightToLeft;
+    var direction = isRtl ? "rtl" : "ltr";
+
+    bool isAlreadyUploaded = ViewBag.IsUploaded ?? false;
+    string accountState = ViewBag.AccountState as string ?? "";
+    bool isAccepted = accountState == "Accepted";
+    bool requiresGooglePasswordSetup =
+        ViewBag.RequiresGooglePasswordSetup is bool needsPassword && needsPassword;
+
+    int verificationPlaceId =
+        ViewBag.VerificationPlaceId is int savedPlaceId ? savedPlaceId : 0;
+    int verificationPlaceCategoryId =
+        ViewBag.VerificationPlaceCategoryId is int savedCategoryId ? savedCategoryId : 0;
+    string verificationPlaceName =
+        ViewBag.VerificationPlaceName as string ?? string.Empty;
+    int verificationPlaceBookingSystemId =
+        ViewBag.VerificationPlaceBookingSystemId is int savedBookingSystemId
+            ? savedBookingSystemId
+            : 0;
+    bool verificationPlaceHasPolicy =
+        ViewBag.VerificationPlaceHasPolicy is bool hasSavedPolicy &&
+        hasSavedPolicy;
+    string verificationOwnerJobTitle =
+        ViewBag.VerificationOwnerJobTitle as string ?? string.Empty;
+    string verificationOwnerPhone =
+        ViewBag.VerificationOwnerPhone as string ?? string.Empty;
+
+    var contractPolicy =
+        ViewBag.ContractPolicy as OwnerVerificationContractPolicyDto
+        ?? new OwnerVerificationContractPolicyDto
+                {
+                    GeneralCommissionPercentage = commission,
+                    Currency = settings?.DefaultCurrency ?? "ريال يمني",
+                    MinimumCommissionTopUp = settings?.MinimumCommissionTopUp ?? 0m,
+                    LowBalanceThreshold = settings?.DefaultLowBalanceThreshold ?? 0m,
+                    AllowNegativeBalance = settings?.AllowNegativeCommissionBalance ?? false,
+                    DebtLimit = settings?.DefaultCommissionDebtLimit ?? 0m,
+                    DebtGraceDays = settings?.CommissionDebtGraceDays ?? 0,
+                    SuspendBookingWhenBalanceInsufficient = settings?.SuspendBookingWhenBalanceInsufficient ?? true,
+                    HidePlaceWhenCommissionSuspended = settings?.HidePlaceWhenCommissionSuspended ?? false
+                };
+
+    string financialPolicySource = contractPolicy.UsesPlaceSpecificFinancialPolicy
+        ? "السياسة الفعلية لحساب ضمان المنشأة"
+        : "السياسة المالية العامة للمنصة";
+
+    string minimumTopUpText = contractPolicy.MinimumCommissionTopUp > 0
+        ? $"{contractPolicy.MinimumCommissionTopUp:N0} {contractPolicy.Currency}"
+        : "أي مبلغ أكبر من صفر";
+
+    string lowBalanceText = contractPolicy.LowBalanceThreshold > 0
+        ? $"{contractPolicy.LowBalanceThreshold:N0} {contractPolicy.Currency}"
+        : "لا يوجد حد تنبيه محدد";
+
+    string debtPolicyText = contractPolicy.AllowNegativeBalance
+        ? (contractPolicy.DebtLimit > 0
+            ? $"مسموح حتى {contractPolicy.DebtLimit:N0} {contractPolicy.Currency}"
+            : "مفعّل لكن حد الدين الحالي صفر")
+        : "غير مسموح";
+
+    string debtGraceText = !contractPolicy.AllowNegativeBalance
+        ? "غير مطبقة"
+        : contractPolicy.DebtGraceDays > 0
+            ? $"{contractPolicy.DebtGraceDays} يوم"
+            : "السداد فور نشوء الدين";
+
+    string googleMapsApiKey = Configuration["GoogleMaps:ApiKey"];
+}
+
+<!DOCTYPE html>
+<html lang="@CultureInfo.CurrentCulture.Name" dir="@direction">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
+    <title>@ViewData["Title"]</title>
+    <link rel="icon" type="image/x-icon" href="@favicon" />
+
+    <link rel="stylesheet" href="~/lib/bootstrap/css/@(isRtl ? "bootstrap.rtl.min.css" : "bootstrap.min.css")">
+    <link rel="stylesheet" href="~/lib/bootstrap-icons/bootstrap-icons.css">
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/intl-tel-input@23.0.4/build/css/intlTelInput.css">
+
+    <link rel="stylesheet" href="~/css/shared/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/shared/verify-account.css" asp-append-version="true">
+
+    @if (requiresGooglePasswordSetup)
+    {
+        <link rel="stylesheet" href="~/css/shared/auth-security-modal.css" asp-append-version="true" />
+    }
+
+    <!-- المرحلة الثانية: نفس ملفات إضافة المنشأة المستخدمة داخل لوحة المالك -->
+    <link rel="stylesheet" href="~/css/owner/places/add-place.css" asp-append-version="true" />
+</head>
+<body class="dashboard-body verification-body @(Context.Request.Cookies["darkMode"] == "enabled" ? "dark-mode" : "") @(requiresGooglePasswordSetup ? "auth-security-locked" : "")"
+      data-default-commission="@(commission.ToString("0.##", CultureInfo.InvariantCulture))"
+      data-verification-place-id="@verificationPlaceId"
+      data-verification-place-category-id="@verificationPlaceCategoryId"
+      data-verification-place-name="@verificationPlaceName"
+      data-verification-place-booking-system-id="@verificationPlaceBookingSystemId"
+      data-verification-place-has-policy="@(verificationPlaceHasPolicy ? "true" : "false")"
+      data-verification-owner-job-title="@verificationOwnerJobTitle"
+      data-verification-owner-phone="@verificationOwnerPhone">
+
+    @if (requiresGooglePasswordSetup)
+    {
+        <partial name="_GooglePasswordSetupModal" />
+    }
+
+    <div class="verification-container">
+
+        <nav class="verification-topbar container" aria-label="شريط رحلة التوثيق">
+            <a class="verification-brand" asp-controller="Home" asp-action="Index" aria-label="@siteName">
+                <span class="verification-brand__mark">
+                    <img src="@logoPath" alt="" onerror="this.onerror=null;this.src='/images/logo1.png';">
+                </span>
+                <span>
+                    <small>بوابة الشركاء</small>
+                    <strong>@siteName</strong>
+                </span>
+            </a>
+
+            <a asp-action="Logout" asp-controller="Account" class="verification-logout">
+                <i class="bi bi-box-arrow-right"></i>
+                <span>تسجيل الخروج</span>
+            </a>
+        </nav>
+
+        <div class="container verification-stage">
+
+            @if (accountState == "Accepted" || accountState == "Rejected" || (isAlreadyUploaded && accountState != "Rejected"))
+            {
+                <div class="glass-card verification-status-card text-center w-100">
+                    @if (accountState == "Accepted")
+                    {
+                        <div id="acceptedSection" class="py-4">
+                            <div class="mb-4 position-relative d-inline-block celebration-icon">
+                                <div class="d-inline-flex align-items-center justify-content-center bg-success bg-opacity-10 rounded-circle text-success mb-3 shadow-sm" style="width: 120px; height: 120px; border: 4px solid #198754;">
+                                    <i class="bi bi-patch-check-fill display-2"></i>
+                                </div>
+                            </div>
+                            <h2 class="fw-extrabold text-success mb-3">تهانينا! تم توثيق واعتماد حسابك 🎉</h2>
+                            <p class="text-muted px-md-4 mt-2 fs-5">يسعدنا انضمامك رسميًا لشركاء النجاح في "@siteName". تم اعتماد طلبك وأصبحت جاهزًا للانتقال إلى لوحة التحكم.</p>
+                            <div class="d-flex justify-content-center mt-5">
+                                <form asp-action="FinalizeActivation" asp-controller="Account" method="post" class="w-100" style="max-width: 400px;">
+                                    <button type="submit" class="btn btn-success w-100 py-3 rounded-pill fw-bold fs-5 shadow-lg d-flex justify-content-center align-items-center gap-2">
+                                        <span>الانتقال إلى لوحة التحكم</span> <i class="bi bi-arrow-left-circle fs-4"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    }
+                    else if (accountState == "Rejected")
+                    {
+                        <div id="rejectedSection" class="py-4">
+                            <div class="mb-4 position-relative d-inline-block">
+                                <div class="text-danger" style="font-size: 5.5rem;">
+                                    <i class="bi bi-x-octagon-fill d-inline-block" style="color: #dc3545; filter: drop-shadow(0 10px 15px rgba(220,53,69,0.3));"></i>
+                                </div>
+                            </div>
+                            <h2 class="fw-bold text-danger">نعتذر، لم يتم اعتماد طلبك</h2>
+                            <p class="text-muted px-md-4 mt-3 fs-5">يبدو أن هناك نقصاً أو عدم وضوح في الوثائق القانونية المرفقة. يرجى التواصل مع الدعم الفني لمراجعة طلبك وإعادة تفعيله.</p>
+                            @if (!string.IsNullOrWhiteSpace(supportWhatsapp))
+                            {
+                                <div class="d-flex justify-content-center gap-3 flex-wrap mt-4">
+                                    <a href="https://wa.me/@supportWhatsapp" target="_blank" rel="noopener" class="btn btn-success px-4 py-2.5 rounded-pill fw-bold shadow-sm d-flex align-items-center gap-2">
+                                        <i class="bi bi-whatsapp fs-5"></i> تواصل مع الدعم الفني
+                                    </a>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div id="pendingSection" class="py-4">
+                            <div class="mb-4 position-relative d-inline-block">
+                                <div class="text-info" style="font-size: 5.5rem;">
+                                    <i class="bi bi-hourglass-split d-inline-block animate-float" style="color: #00A6DA;"></i>
+                                </div>
+                            </div>
+                            <h2 class="fw-bold text-info" style="color: #00A6DA !important;">طلبك قيد المراجعة والتدقيق</h2>
+                            <p class="text-muted px-md-4 mt-3 fs-5">يقوم فريق "@siteName" حاليًا بمراجعة الوثائق القانونية المرفقة. ستظهر نتيجة المراجعة هنا فور اعتمادها.</p>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="stepper-wrapper glass-card w-100 d-none" id="mainStepper" aria-label="تقدم رحلة التوثيق">
+                    <div class="progress position-absolute top-50 start-0 w-100 translate-middle-y px-4" style="height: 3px; z-index: 0; opacity: 0.3;">
+                        <div class="progress-bar bg-primary" id="wizardProgressBar" style="width: 0%;"></div>
+                    </div>
+
+                    <div class="step-item text-center position-relative z-1 active" data-step="1">
+                        <div class="step-icon shadow-sm mx-auto"><i class="bi bi-person-vcard-fill"></i></div>
+                        <span class="step-label fw-bold mt-2 d-block small" id="step1Label">بيانات المالك</span>
+                    </div>
+                    <div class="step-item text-center position-relative z-1" data-step="2">
+                        <div class="step-icon shadow-sm mx-auto"><i class="bi bi-file-earmark-ruled-fill"></i></div>
+                        <span class="step-label fw-bold mt-2 d-block small text-muted" id="step2Label">اتفاقية الشراكة</span>
+                    </div>
+                    <div class="step-item text-center position-relative z-1" data-step="3">
+                        <div class="step-icon shadow-sm mx-auto"><i class="bi bi-shield-check"></i></div>
+                        <span class="step-label fw-bold mt-2 d-block small text-muted" id="step3Label">التوثيق القانوني</span>
+                    </div>
+                    <div class="step-item text-center position-relative z-1 d-none" data-step="4" id="step4Item">
+                        <div class="step-icon shadow-sm mx-auto"><i class="bi bi-file-earmark-ruled-fill"></i></div>
+                        <span class="step-label fw-bold mt-2 d-block small text-muted" id="step4Label">العقد</span>
+                    </div>
+                    <div class="step-item text-center position-relative z-1 d-none" data-step="5" id="step5Item">
+                        <div class="step-icon shadow-sm mx-auto"><i class="bi bi-shield-check"></i></div>
+                        <span class="step-label fw-bold mt-2 d-block small text-muted" id="step5Label">التوثيق القانوني</span>
+                    </div>
+                </div>
+
+                <main class="glass-card verification-workspace w-100 position-relative" id="verificationWorkspace">
+
+                    <div class="wizard-step active-step" id="step0_Gateway">
+                        <header class="verification-intro text-center">
+                            <span class="verification-intro__badge"><i class="bi bi-stars"></i> رحلة شريك جديدة</span>
+                            <h1>أهلًا بك في شركاء <span>@siteName</span></h1>
+                            <p>اختر الطريقة الأنسب لك. تستطيع توثيق حسابك بسرعة وإضافة منشأتك بعد الدخول، أو تجهيز المنشأة من البداية.</p>
+                        </header>
+
+                        <div class="row g-4 justify-content-center px-md-3">
+                            <div class="col-md-6">
+                                <button type="button" class="track-card track-card--fast h-100 text-center" onclick="selectTrack('fast')">
+                                    <div class="icon-wrap mb-4">
+                                        <i class="bi bi-lightning-charge-fill display-5 text-warning" style="filter: drop-shadow(0 4px 6px rgba(255,193,7,0.4));"></i>
+                                    </div>
+                                    <span class="track-card__eyebrow">الأسرع</span>
+                                    <h4>التسجيل السريع</h4>
+                                    <p>وثّق حسابك الآن، اختر فئة منشأتك لتظهر لك نسبة العمولة الصحيحة في العقد، ثم أضف المنشأة بعد الدخول.</p>
+                                    <span class="track-card__action">ابدأ التسجيل السريع <i class="bi bi-arrow-left"></i></span>
+                                </button>
+                            </div>
+
+                            <div class="col-md-6">
+                                <button type="button" class="track-card track-card--full h-100 text-center" onclick="selectTrack('full')">
+                                    <div class="icon-wrap mb-4">
+                                        <i class="bi bi-building-fill-add display-5 text-primary" style="filter: drop-shadow(0 4px 6px rgba(0,166,218,0.4));"></i>
+                                    </div>
+                                    <span class="track-card__eyebrow">تجهيز كامل</span>
+                                    <h4>إنشاء المنشأة الآن</h4>
+                                    <p>جهّز منشأتك قبل الدخول بنفس خطوات إضافة المنشأة الموجودة في لوحة المالك، ثم اختر السياسة الافتراضية أو اضبطها يدويًا قبل العقد والتوثيق.</p>
+                                    <span class="track-card__action">ابدأ إنشاء المنشأة <i class="bi bi-arrow-left"></i></span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <form id="fastTrackForm" class="wizard-step d-none" style="display: none;">
+                        <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
+                            <div>
+                                <h4 class="fw-bold text-primary-dark m-0"><i class="bi bi-lightning-charge-fill text-warning me-2"></i> التسجيل السريع</h4>
+                                <span class="text-muted small">ثلاث معلومات فقط قبل عرض عقدك</span>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill fw-bold px-3" onclick="resetToGateway()"><i class="bi bi-arrow-right me-1"></i> تغيير المسار</button>
+                        </div>
+
+                        <div class="row g-4">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold d-block"><i class="bi bi-person-badge me-1 text-primary"></i> صفتك الوظيفية بالمؤسسة <span class="text-danger">*</span></label>
+                                <select class="form-select custom-select-luxury" id="JobTitleSelectFast" name="JobTitle" required>
+                                    <option value="" selected disabled>-- يرجى تحديد صلاحيتك --</option>
+                                    <option value="المالك الفعلي">المالك الفعلي للمنشأة</option>
+                                    <option value="المدير العام / الممثل القانوني">المدير العام / الممثل القانوني</option>
+                                    <option value="أخرى">أخرى (مفوض)</option>
+                                </select>
+
+                                <!-- ✅ تم نقل حقل أخرى ليظهر مباشرة تحت القائمة المنسدلة -->
+                                <div class="col-md-12 d-none" id="JobTitleOtherContainerFast" style="padding: 0; margin-top: 10px;">
+                                    <input type="text" class="form-control custom-input-luxury" id="JobTitleOtherFast" placeholder="اكتب صفتك الوظيفية بصلاحية الإدارة..." />
+                                </div>
+                            </div>
+
+                            <div class="col-md-6 text-start" dir="ltr">
+                                <label class="form-label fw-bold d-block text-end" dir="rtl" style="width: 100%;"><i class="bi bi-phone-vibrate-fill me-1 text-primary"></i> هاتف التواصل المباشر معك <span class="text-danger">*</span></label>
+                                <input type="tel" id="AdminPhoneDisplay" class="form-control custom-input-luxury w-100" style="padding-left: 55px !important;" required>
+                                <input type="hidden" name="AdminPhone" id="AdminPhoneFast">
+                                <span id="phone-error-msg" class="text-danger small mt-1 d-none fw-bold d-block text-end" dir="rtl"></span>
+                                <span id="phone-valid-msg" class="text-success small mt-1 d-none fw-bold d-block text-end" dir="rtl"><i class="bi bi-check-circle-fill"></i> رقم صحيح</span>
+                            </div>
+                        </div>
+
+                        <section class="fast-category-section" aria-labelledby="fastCategoryTitle">
+                            <div class="fast-category-heading">
+                                <div>
+                                    <span class="verification-kicker"><i class="bi bi-grid-fill"></i> الفئة المتوقعة</span>
+                                    <h5 id="fastCategoryTitle">ما نوع المنشأة التي ستضيفها؟ <span class="text-danger">*</span></h5>
+                                    <p>نحتاج الفئة فقط لعرض نسبة العمولة الصحيحة في العقد. لن يتم إنشاء منشأة في المسار السريع.</p>
+                                </div>
+                                <div class="fast-category-selected" id="fastCategorySelected" hidden>
+                                    <small>النسبة في العقد</small>
+                                    <strong><span id="fastCommissionPreview">@(commission.ToString("0.##"))</span>%</strong>
+                                </div>
+                            </div>
+
+                            <input type="hidden" name="CategoryId" id="FastCategoryId" value="" />
+                            <div class="fast-category-grid" id="fastCategoryGrid">
+                                @if (verificationCategories.Any())
+                                {
+                                    foreach (var category in verificationCategories)
+                                    {
+                                        var effectiveCommission = category.CommissionPercentage ?? commission;
+                                        var commissionSource = category.CommissionPercentage.HasValue ? "خاص بالفئة" : "النسبة العامة";
+                                        var iconClass = string.IsNullOrWhiteSpace(category.IconClass) ? "bi-building" : category.IconClass;
+                                        var themeColor = string.IsNullOrWhiteSpace(category.ThemeColor) ? "#00A6DA" : category.ThemeColor;
+
+                                        <button type="button"
+                                    class="fast-category-card"
+                                    data-fast-category
+                                    data-category-id="@category.CategoryId"
+                                    data-category-name="@category.CategoryName"
+                                    data-commission="@(effectiveCommission.ToString("0.##", CultureInfo.InvariantCulture))"
+                                    data-commission-source="@commissionSource"
+                                    style="--category-accent:@themeColor">
+                                            <span class="fast-category-card__icon"><i class="bi @iconClass"></i></span>
+                                            <span class="fast-category-card__copy">
+                                                <strong>@category.CategoryName</strong>
+                                                <small>عمولة العقد <b>@(effectiveCommission.ToString("0.##"))%</b></small>
+                                            </span>
+                                            <span class="fast-category-card__check"><i class="bi bi-check-lg"></i></span>
+                                        </button>
+                                    }
+                                }
+                            </div>
+                            <div class="verification-field-error" id="fastCategoryError" aria-live="polite"></div>
+                        </section>
+
+                        <div class="verification-actions verification-actions--forward">
+                            <button type="button" class="verification-primary-action btn-next-fast">
+                                <span>عرض العقد</span>
+                                <i class="bi bi-arrow-left"></i>
+                            </button>
+                        </div>
+                    </form>
+
+                    <div class="wizard-step d-none" id="step1_Full" style="display: none; width: 100%;">
+                        <!--
+                            وضع إنشاء المنشأة داخل التوثيق يستخدم نفس AddPlace نفسه،
+                            لكن عند عدم وجود PlaceId تعرض هذه الخطوة كشاشة مستقلة بالكامل.
+                            لا نكرر عنواناً أو Card فوق AddPlace حتى تبقى تجربة المالك كما هي.
+                        -->
+                        <button type="button"
+                            class="verification-full-stage-back"
+                            id="verificationFullStageBack"
+                            onclick="resetToGateway()"
+                            aria-label="العودة لاختيار مسار التوثيق">
+                            <i class="bi bi-arrow-right"></i>
+                            <span>تغيير المسار</span>
+                        </button>
+
+                        <div id="fullPlaceCheckpoint"
+                         class="verification-place-checkpoint @(verificationPlaceId > 0 ? "" : "d-none")"
+                         aria-live="polite">
+                            <span class="verification-place-checkpoint__icon"><i class="bi bi-building-check"></i></span>
+                            <div class="verification-place-checkpoint__copy">
+                                <span class="verification-kicker"><i class="bi bi-check2-circle"></i> تم حفظ المنشأة</span>
+                                <h5>منشأتك جاهزة للخطوة التالية</h5>
+                                <p>
+                                    تم حفظ <strong id="verificationSavedPlaceName">@(string.IsNullOrWhiteSpace(verificationPlaceName) ? "المنشأة الجديدة" : verificationPlaceName)</strong>
+                                    بنفس نموذج إضافة المنشآت الكامل. الآن أكمل إعداد سياسات المنشأة، ثم سيظهر لك العقد بنسبة العمولة الصحيحة حسب الفئة.
+                                </p>
+                            </div>
+                            <button type="button"
+                                class="verification-place-checkpoint__next"
+                                id="fullPlaceContinueButton">
+                                <small>التالي</small>
+                                <strong id="fullPlaceNextLabel">سياسات المنشأة</strong>
+                                <i class="bi bi-arrow-left"></i>
+                            </button>
+                        </div>
+
+                        <div id="fullWizardContainer" class="w-100 mt-3 @(verificationPlaceId > 0 ? "d-none" : "")">
+                            @if (ViewBag.Categories != null)
+                            {
+                                @await Html.PartialAsync("~/Areas/Owner/Views/Place/_AddPlaceWizard.cshtml")
+                            }
+                        </div>
+                    </div>
+
+                    <div class="wizard-step d-none verification-policy-step"
+                     id="stepPolicies"
+                     style="display: none;"
+                     aria-labelledby="verificationPolicyTitle">
+
+                        <header class="verification-policy-step__header">
+                            <button type="button"
+                                class="verification-policy-back"
+                                id="policyBackToPlace">
+                                <i class="bi bi-arrow-right"></i>
+                                <span>المنشأة</span>
+                            </button>
+
+                            <div>
+                                <span class="verification-kicker">
+                                    <i class="bi bi-sliders2"></i>
+                                    إعداد التشغيل
+                                </span>
+                                <h2 id="verificationPolicyTitle">كيف تريد إعداد سياسات منشأتك؟</h2>
+                                <p>
+                                    يمكنك اعتماد الإعدادات الجاهزة الآن، أو فتح نفس صفحة سياسات المنشأة وضبطها يدويًا قبل توقيع العقد.
+                                </p>
+                            </div>
+                        </header>
+
+                        <div id="verificationPolicyReady"
+                         class="verification-policy-ready @(verificationPlaceHasPolicy ? "" : "d-none")"
+                         aria-live="polite">
+                            <span class="verification-policy-ready__icon">
+                                <i class="bi bi-patch-check-fill"></i>
+                            </span>
+                            <div>
+                                <small>تم إعداد السياسات</small>
+                                <h3>سياسات هذه المنشأة محفوظة وجاهزة</h3>
+                                <p>يمكنك مراجعتها يدويًا أو المتابعة مباشرة إلى اتفاقية الشراكة.</p>
+                            </div>
+                            <div class="verification-policy-ready__actions">
+                                <button type="button"
+                                    class="verification-policy-review"
+                                    id="reviewSavedPolicies">
+                                    <i class="bi bi-pencil-square"></i>
+                                    <span>مراجعة / تعديل</span>
+                                </button>
+                                <button type="button" id="continueAfterPolicies">
+                                    <span>متابعة إلى العقد</span>
+                                    <i class="bi bi-arrow-left"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div id="verificationPolicyChoice"
+                         class="verification-policy-choice @(verificationPlaceHasPolicy ? "d-none" : "")">
+                            <button type="button"
+                                class="verification-policy-card verification-policy-card--default"
+                                id="useDefaultPolicies">
+                                <span class="verification-policy-card__icon">
+                                    <i class="bi bi-magic"></i>
+                                </span>
+                                <span class="verification-policy-card__copy">
+                                    <small>الأسرع</small>
+                                    <strong>عرض السياسات الافتراضية</strong>
+                                    <p>شاهد نفس السياسات الجاهزة المستخدمة في إدارة المنشأة، ثم قرر اعتمادها أو الانتقال للضبط اليدوي.</p>
+                                    <span class="verification-policy-card__meta">
+                                        <i class="bi bi-eye"></i>
+                                        لن يتم تطبيقها إلا بعد موافقتك
+                                    </span>
+                                </span>
+                                <i class="bi bi-arrow-left verification-policy-card__arrow"></i>
+                            </button>
+
+                            <button type="button"
+                                class="verification-policy-card verification-policy-card--manual"
+                                id="useManualPolicies">
+                                <span class="verification-policy-card__icon">
+                                    <i class="bi bi-toggles2"></i>
+                                </span>
+                                <span class="verification-policy-card__copy">
+                                    <small>تحكم كامل</small>
+                                    <strong>ضبط السياسات يدويًا</strong>
+                                    <p>ستظهر لك نفس صفحة السياسات الحالية بكل أقسامها وحقولها داخل رحلة التوثيق.</p>
+                                    <span class="verification-policy-card__meta">
+                                        <i class="bi bi-phone"></i>
+                                        محسنة للهاتف وبدون الخروج من الرحلة
+                                    </span>
+                                </span>
+                                <i class="bi bi-arrow-left verification-policy-card__arrow"></i>
+                            </button>
+                        </div>
+
+                        <div id="verificationPolicyManualShell"
+                         class="verification-policy-manual d-none">
+                            <div class="verification-policy-manual__toolbar">
+                                <div>
+                                    <span class="verification-kicker">
+                                        <i class="bi bi-pencil-square"></i>
+                                        سياسة يدوية
+                                    </span>
+                                    <strong>عدّل نفس سياسات المنشأة الحالية</strong>
+                                </div>
+                                <button type="button" id="backToPolicyChoice">
+                                    <i class="bi bi-arrow-right"></i>
+                                    <span>طريقة أخرى</span>
+                                </button>
+                            </div>
+
+                            <div class="verification-policy-frame-shell">
+                                <div class="verification-policy-frame-loading"
+                                 id="verificationPolicyFrameLoading">
+                                    <span class="spinner-border spinner-border-sm" role="status"></span>
+                                    <strong>جاري تجهيز صفحة السياسات...</strong>
+                                </div>
+                                <iframe id="verificationPolicyFrame"
+                                    title="إعداد سياسات المنشأة يدويًا"
+                                    loading="eager"
+                                    scrolling="no"></iframe>
+                            </div>
+                        </div>
+                    </div>
+
+                    <form id="verificationDocsForm" method="post" enctype="multipart/form-data">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="IsFastTrack" id="IsFastTrackInput" value="true" />
+                        <input type="hidden" name="CategoryId" id="VerificationCategoryId" value="@(verificationPlaceCategoryId > 0 ? verificationPlaceCategoryId.ToString() : string.Empty)" />
+                        <input type="hidden" name="PlaceId" id="VerificationPlaceId" value="@(verificationPlaceId > 0 ? verificationPlaceId.ToString() : string.Empty)" />
+
+                        <div class="wizard-step d-none verification-policy-review-step" id="stepPolicyReview" style="display: none;">
+                            <section class="policy-review-shell">
+                                <header class="policy-review-hero">
+                                    <div class="policy-review-hero__icon"><i class="bi bi-clipboard2-check-fill"></i></div>
+                                    <div class="policy-review-hero__copy">
+                                        <span class="verification-kicker"><i class="bi bi-eye-fill"></i> قبل توقيع العقد</span>
+                                        <h2>راجع سياسة منشأتك بهدوء</h2>
+                                        <p>هذه هي القيم المحفوظة فعليًا للمنشأة. اقرأها الآن، وإذا لم تناسبك ارجع وعدّلها قبل الانتقال إلى اتفاقية الشراكة.</p>
+                                    </div>
+                                    <span class="policy-review-mode" id="policyReviewMode">سياسة محفوظة</span>
+                                </header>
+
+                                <div class="policy-review-place">
+                                    <span><i class="bi bi-building-check"></i></span>
+                                    <div>
+                                        <small>المنشأة التي ستطبق عليها هذه السياسة</small>
+                                        <strong id="policyReviewPlaceName">@(string.IsNullOrWhiteSpace(verificationPlaceName) ? "المنشأة الجديدة" : verificationPlaceName)</strong>
+                                    </div>
+                                    <em><i class="bi bi-database-check"></i> محفوظة في النظام</em>
+                                </div>
+
+                                <div class="policy-review-grid" id="policyReviewSummaryGrid"></div>
+
+                                <div class="policy-review-note">
+                                    <i class="bi bi-info-circle-fill"></i>
+                                    <div>
+                                        <strong>هذه الصفحة للمراجعة وليست عقدًا.</strong>
+                                        <span>العقد في الخطوة التالية مستقل ويشرح سياسة المنصة والعمولة والضمان والمسؤوليات. تستطيع الرجوع من أي خطوة قبل الإرسال النهائي.</span>
+                                    </div>
+                                </div>
+
+                                <div class="verification-actions policy-review-actions">
+                                    <button type="button" class="verification-secondary-action" id="policyReviewBackToPolicies">
+                                        <i class="bi bi-pencil-square"></i><span>العودة وتعديل السياسات</span>
+                                    </button>
+                                    <button type="button" class="verification-primary-action" id="policyReviewContinue">
+                                        <span>السياسات مناسبة — عرض العقد</span><i class="bi bi-arrow-left"></i>
+                                    </button>
+                                </div>
+                            </section>
+                        </div>
+
+                        <div class="wizard-step d-none" id="step2" style="display: none;">
+                            <section class="premium-contract-shell">
+                                <div class="premium-contract-ribbon"><span></span><span></span><span></span></div>
+
+                                <header class="premium-contract-header">
+                                    <div class="premium-contract-brand">
+                                        <span class="premium-contract-brand__mark"><img src="@logoPath" alt="@siteName" onerror="this.onerror=null;this.src='/images/logo1.png';" /></span>
+                                        <div>
+                                            <small>اتفاقية إلكترونية لشركاء المنصة</small>
+                                            <strong>@siteName</strong>
+                                        </div>
+                                    </div>
+                                    <div class="premium-contract-meta">
+                                        <span><small>تاريخ العرض</small><strong>@DateTime.Now.ToString("dd/MM/yyyy")</strong></span>
+                                        <span><small>نوع الاتفاقية</small><strong>شراكة ووساطة</strong></span>
+                                    </div>
+                                </header>
+
+                                <div class="premium-contract-title">
+                                    <span class="verification-kicker"><i class="bi bi-file-earmark-lock2-fill"></i> اقرأ قبل الموافقة</span>
+                                    <h2>اتفاقية الشراكة والوساطة الإلكترونية</h2>
+                                    <p>بنود واضحة ومختصرة تشرح دور المنصة، مسؤوليات المنشأة، الحجوزات، وسياسة العمولة والضمان المالي قبل إرسال طلب الاعتماد.</p>
+                                </div>
+
+                                <div class="contract-summary contract-summary--premium" id="contractSummary">
+                                    <div class="contract-summary__place d-none" id="contractPlaceSummary">
+                                        <small><i class="bi bi-building"></i> المنشأة</small>
+                                        <strong id="contractPlaceName">@(string.IsNullOrWhiteSpace(verificationPlaceName) ? "المنشأة الجديدة" : verificationPlaceName)</strong>
+                                    </div>
+                                    <div>
+                                        <small><i class="bi bi-grid"></i> الفئة</small>
+                                        <strong id="contractCategoryName">سيتم تحديدها من اختيارك</strong>
+                                    </div>
+                                    <div class="contract-summary__commission">
+                                        <small><i class="bi bi-percent"></i> عمولة المنصة</small>
+                                        <strong><span id="contractCommissionValue">@(commission.ToString("0.##"))</span>%</strong>
+                                        <em id="contractCommissionSource">النسبة العامة للمنصة</em>
+                                    </div>
+                                </div>
+
+                                <div class="contract-read-first contract-read-first--premium">
+                                    <i class="bi bi-shield-check"></i>
+                                    <div>
+                                        <strong>لا توجد رسوم أو شروط مخفية داخل هذه الرحلة.</strong>
+                                        <span>نسبة العمولة والقيم المالية أدناه مأخوذة من سياسة المنصة الحالية. الشحن الفعلي ليس جزءًا من التسجيل الآن، لكنك ترى قواعده قبل الموافقة.</span>
+                                    </div>
+                                </div>
+
+                                <div class="premium-contract-clauses">
+                                    <article class="premium-clause">
+                                        <span class="premium-clause__number">01</span>
+                                        <div>
+                                            <h3>الشراكة ودور المنصة</h3>
+                                            <p>تعمل منصة "@siteName" كوسيط تقني لعرض المنشأة وتنظيم الحجز والتواصل والسجلات المرتبطة بالعملية. تبقى المنشأة مسؤولة عن تقديم الخدمة الفعلية والالتزام بالأنظمة المرتبطة بنشاطها.</p>
+                                        </div>
+                                    </article>
+
+                                    <article class="premium-clause">
+                                        <span class="premium-clause__number">02</span>
+                                        <div>
+                                            <h3>بيانات المنشأة والأسعار والتوافر</h3>
+                                            <p>يتحمل المالك مسؤولية صحة الاسم والوصف والصور والأسعار والمرافق والخدمات والوحدات والتوافر. يجب تحديث التوافر وعدم مطالبة العميل برسوم لم تكن ظاهرة له ضمن تفاصيل الحجز.</p>
+                                        </div>
+                                    </article>
+
+                                    <article class="premium-clause">
+                                        <span class="premium-clause__number">03</span>
+                                        <div>
+                                            <h3>الحجوزات وسياسة المنشأة</h3>
+                                            <p>عند قبول أو تأكيد الحجز تلتزم المنشأة بالخدمة والمواصفات المسجلة. السياسة التي راجعتها في الخطوة السابقة هي المرجع التشغيلي للحجز وتشمل العربون والسداد والإلغاء وعدم الحضور والاسترداد وأوقات التشغيل حسب القيم المحفوظة.</p>
+                                        </div>
+                                    </article>
+
+                                    <article class="premium-clause premium-clause--finance">
+                                        <span class="premium-clause__number"><i class="bi bi-wallet2"></i></span>
+                                        <div>
+                                            <div class="premium-clause__heading-row">
+                                                <h3>العمولة والضمان المالي</h3>
+                                                <small>@financialPolicySource</small>
+                                            </div>
+                                            <p>تستحق المنصة عمولة وساطة بنسبة <strong><span id="contractCommissionInline">@(commission.ToString("0.##"))</span>%</strong> للحجوزات التي تستحق عليها العمولة وفق دورة الحجز. لكل منشأة حساب ضمان عمولات تُدار منه المبالغ المتاحة والمحجوزة وأي دين مسموح به وفق سياسة المنصة.</p>
+
+                                            <div class="contract-finance-snapshot">
+                                                <div><small>الحد الأدنى لعملية الشحن</small><strong>@minimumTopUpText</strong></div>
+                                                <div><small>تنبيه الرصيد المنخفض</small><strong>@lowBalanceText</strong></div>
+                                                <div><small>سياسة الرصيد السالب / الدين</small><strong>@debtPolicyText</strong></div>
+                                                <div><small>مهلة الدين عند السماح به</small><strong>@debtGraceText</strong></div>
+                                            </div>
+
+                                            <p class="premium-clause__subnote">عند الحاجة للشحن لاحقًا يرسل المالك طلب شحن موثقًا عبر حسابات المنصة، ولا يضاف الرصيد إلا بعد اعتماد الإدارة. وإذا كان على الحساب دين قائم، يستخدم الشحن المعتمد لسداد الدين أولًا ثم يضاف المتبقي إلى الرصيد. وعند عدم كفاية الرصيد تطبق سياسة المنصة الحالية: <strong>@(contractPolicy.SuspendBookingWhenBalanceInsufficient ? "يمكن تعليق استقبال الحجوزات" : "لا يتم تعليق الحجوزات تلقائيًا")</strong>@(contractPolicy.HidePlaceWhenCommissionSuspended ? "، وقد تُخفى المنشأة عند تعليق حساب الضمان." : ".")</p>
+                                        </div>
+                                    </article>
+
+                                    <article class="premium-clause">
+                                        <span class="premium-clause__number">05</span>
+                                        <div>
+                                            <h3>الإلغاء والاسترداد والتسويات</h3>
+                                            <p>تتم معالجة الإلغاءات وعدم الحضور والاستردادات وفق سياسة المنشأة التي ظهرت للعميل وقت الحجز والسجلات المالية المعتمدة في النظام، ولا تستخدم أي تعديلات لاحقة للإضرار بحقوق حجز قائم.</p>
+                                        </div>
+                                    </article>
+
+                                    <article class="premium-clause">
+                                        <span class="premium-clause__number">06</span>
+                                        <div>
+                                            <h3>الصفة القانونية والوثائق والمحتوى</h3>
+                                            <p>يقر مقدم الطلب بصحة صفته وصلاحيته لتمثيل المنشأة، ويتحمل مسؤولية صحة السجل أو الرخصة والهوية والتفويض والمحتوى والصور التي يرفعها، وأنه يملك حق استخدامها ولا تتضمن معلومات مضللة أو مخالفة.</p>
+                                        </div>
+                                    </article>
+
+                                    <article class="premium-clause">
+                                        <span class="premium-clause__number">07</span>
+                                        <div>
+                                            <h3>التواصل وبيانات العملاء</h3>
+                                            <p>تستخدم بيانات العميل المتاحة للمنشأة فقط لتنفيذ الحجز وما يرتبط به، ويلتزم المالك بعدم إساءة استخدامها أو مشاركتها خارج الغرض التشغيلي المسموح.</p>
+                                        </div>
+                                    </article>
+
+                                    <article class="premium-clause">
+                                        <span class="premium-clause__number">08</span>
+                                        <div>
+                                            <h3>المراجعة والمخالفات والموافقة الإلكترونية</h3>
+                                            <p>يخضع الحساب والمنشأة للمراجعة قبل الاعتماد، ويجوز تعليق بعض الصلاحيات عند وجود مخالفة جوهرية أو بيانات مضللة أو إخلال متكرر. وضع علامة الموافقة والمتابعة يعد إقرارًا بقراءة هذه الاتفاقية والسياسات المرتبطة بها قبل إرسال الطلب.</p>
+                                        </div>
+                                    </article>
+                                </div>
+
+                                <div class="contract-acceptance-card">
+                                    <div class="contract-acceptance-card__icon"><i class="bi bi-pen-fill"></i></div>
+                                    <div class="form-check custom-checkbox-luxury">
+                                        <input class="form-check-input" type="checkbox" id="termsCheckbox" name="IsAgreedToTerms" value="true" required>
+                                        <label class="form-check-label" for="termsCheckbox">
+                                            <strong>أقر بأنني قرأت الاتفاقية وفهمت سياسة العمولة والضمان المالي.</strong>
+                                            <span>وأوافق على البنود أعلاه بصفتي الممثل القانوني للمنشأة.</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="verification-actions premium-contract-actions">
+                                    <button type="button" class="verification-secondary-action btn-prev-to-1"><i class="bi bi-arrow-right"></i><span>الخطوة السابقة</span></button>
+                                    <button type="button" class="verification-primary-action btn-next-to-3"><span>أوافق وأنتقل للتوثيق القانوني</span><i class="bi bi-arrow-left"></i></button>
+                                </div>
+                            </section>
+                        </div>
+
+                        <div class="wizard-step d-none" id="step3" style="display: none;">
+                            <section class="legal-verification-shell">
+                                <header class="legal-verification-hero">
+                                    <div class="legal-verification-hero__mark"><i class="bi bi-patch-check-fill"></i></div>
+                                    <div>
+                                        <span class="verification-kicker"><i class="bi bi-lock-fill"></i> الخطوة الأخيرة</span>
+                                        <h2>التوثيق القانوني للمنشأة</h2>
+                                        <p>ارفع نسخًا واضحة من الوثائق المطلوبة. الملفات تستخدم لمراجعة واعتماد حساب الشريك فقط.</p>
+                                    </div>
+                                    <span class="legal-verification-hero__secure"><i class="bi bi-shield-lock-fill"></i> رفع آمن</span>
+                                </header>
+
+                                <div class="legal-trust-strip">
+                                    <span><i class="bi bi-file-earmark-check"></i><b>PDF / JPG / PNG</b><small>صيغ معتمدة</small></span>
+                                    <span><i class="bi bi-eye"></i><b>صور واضحة</b><small>بدون قص البيانات</small></span>
+                                    <span><i class="bi bi-person-lock"></i><b>للمراجعة فقط</b><small>توثيق حساب الشريك</small></span>
+                                </div>
+
+                                <div class="legal-documents-grid">
+                                    <article class="legal-document-card legal-document-card--wide">
+                                        <div class="legal-document-card__head">
+                                            <span class="legal-document-card__icon"><i class="bi bi-file-earmark-richtext"></i></span>
+                                            <div><small>وثيقة المنشأة</small><h3>السجل التجاري / رخصة المزاولة</h3></div>
+                                            <em>مطلوب</em>
+                                        </div>
+                                        <div class="dropzone-area legal-dropzone" id="dropzoneCommercial">
+                                            <i class="bi bi-cloud-arrow-up zone-icon"></i>
+                                            <p class="zone-text">اسحب الملف هنا أو اضغط لاختيار نسخة واضحة</p>
+                                            <span>PDF أو صورة واضحة</span>
+                                            <strong class="file-name-preview"></strong>
+                                            <input type="file" id="commercialFile" name="CommercialRegister" accept=".pdf, .jpg, .jpeg, .png" required>
+                                        </div>
+                                    </article>
+
+                                    <article class="legal-document-card">
+                                        <div class="legal-document-card__head">
+                                            <span class="legal-document-card__icon"><i class="bi bi-person-vcard"></i></span>
+                                            <div><small>إثبات الهوية</small><h3>الوجه الأمامي</h3></div>
+                                            <em>مطلوب</em>
+                                        </div>
+                                        <div class="dropzone-area legal-dropzone" id="dropzoneIdFront">
+                                            <i class="bi bi-cloud-arrow-up zone-icon"></i>
+                                            <p class="zone-text">ارفع صورة واضحة للوجه الأمامي</p>
+                                            <span>JPG أو PNG</span>
+                                            <strong class="file-name-preview"></strong>
+                                            <input type="file" id="idFrontFile" name="IdentityCardFront" accept=".jpg, .jpeg, .png" required>
+                                        </div>
+                                    </article>
+
+                                    <article class="legal-document-card">
+                                        <div class="legal-document-card__head">
+                                            <span class="legal-document-card__icon"><i class="bi bi-person-vcard-fill"></i></span>
+                                            <div><small>إثبات الهوية</small><h3>الوجه الخلفي</h3></div>
+                                            <em>مطلوب</em>
+                                        </div>
+                                        <div class="dropzone-area legal-dropzone" id="dropzoneIdBack">
+                                            <i class="bi bi-cloud-arrow-up zone-icon"></i>
+                                            <p class="zone-text">ارفع صورة واضحة للوجه الخلفي</p>
+                                            <span>JPG أو PNG</span>
+                                            <strong class="file-name-preview"></strong>
+                                            <input type="file" id="idBackFile" name="IdentityCardBack" accept=".jpg, .jpeg, .png" required>
+                                        </div>
+                                    </article>
+
+                                    <article class="legal-document-card legal-document-card--wide" id="AuthorizationContainer">
+                                        <div class="legal-document-card__head">
+                                            <span class="legal-document-card__icon"><i class="bi bi-file-earmark-person"></i></span>
+                                            <div><small>إثبات الصفة</small><h3>خطاب التفويض / التوكيل الرسمي</h3></div>
+                                            <em id="authRequiredStar">مطلوب</em>
+                                            <span class="legal-optional d-none" id="authOptionalSpan">اختياري للمالك الفعلي</span>
+                                        </div>
+                                        <div class="dropzone-area legal-dropzone" id="dropzoneAuthorization">
+                                            <i class="bi bi-cloud-arrow-up zone-icon"></i>
+                                            <p class="zone-text">مطلوب للمدير أو الممثل غير المالك الفعلي</p>
+                                            <span>PDF أو صورة واضحة</span>
+                                            <strong class="file-name-preview"></strong>
+                                            <input type="file" id="authorizationFile" name="AuthorizationLetter" accept=".pdf, .jpg, .jpeg, .png">
+                                        </div>
+                                    </article>
+                                </div>
+
+                                <div class="legal-final-note">
+                                    <i class="bi bi-hourglass-split"></i>
+                                    <div><strong>ماذا يحدث بعد الإرسال؟</strong><span>يدخل الطلب للمراجعة الإدارية، ولن تحتاج إلى إعادة تعبئة هذه الرحلة ما لم تطلب الإدارة استكمالًا أو تعديلًا.</span></div>
+                                </div>
+
+                                <div class="verification-actions verification-actions--final legal-final-actions">
+                                    <button type="button" class="verification-secondary-action btn-prev-to-2"><i class="bi bi-arrow-right"></i><span>العودة للعقد</span></button>
+                                    <button type="submit" class="verification-submit-action" id="btnSubmitFinal">
+                                        <i class="bi bi-send-fill"></i><span>إرسال طلب التوثيق للمراجعة</span>
+                                    </button>
+                                </div>
+                            </section>
+                        </div>
+                    </form>
+                </main>
+            }
+
+        </div>
+    </div>
+
+
+    <div id="verificationCategoryData" hidden aria-hidden="true">
+        @if (verificationCategories.Any())
+        {
+            foreach (var category in verificationCategories)
+            {
+                var effectiveCommission = category.CommissionPercentage ?? commission;
+                var commissionSource = category.CommissionPercentage.HasValue ? "خاص بالفئة" : "النسبة العامة";
+                <span data-verification-category
+              data-category-id="@category.CategoryId"
+              data-category-name="@category.CategoryName"
+              data-commission="@(effectiveCommission.ToString("0.##", CultureInfo.InvariantCulture))"
+              data-commission-source="@commissionSource"
+              data-booking-system-id="@category.BookingSystemId"></span>
+            }
+        }
+    </div>
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/intl-tel-input@23.0.4/build/js/intlTelInput.min.js"></script>
+
+    @if (!string.IsNullOrEmpty(googleMapsApiKey))
+    {
+        <script src="https://maps.googleapis.com/maps/api/js?key=@googleMapsApiKey&libraries=places&language=ar"></script>
+    }
+
+    <!-- نفس عقل إضافة المنشأة المستخدم داخل لوحة المالك، لكن بوضع verification -->
+    <script src="~/js/owner/places/add-place.js" asp-append-version="true"></script>
+    <script src="~/js/shared/verify-account.js" asp-append-version="true"></script>
+
+    @if (requiresGooglePasswordSetup)
+    {
+        <script src="~/js/shared/auth-security-modal.js" asp-append-version="true"></script>
+    }
+</body>
+</html>

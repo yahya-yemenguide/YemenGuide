@@ -1,0 +1,257 @@
+@using System
+@using YemenGuide.Core.Constants
+@using YemenGuide.Core.DTOs.Customer
+@model CustomerReportsPageDto
+
+@{
+    ViewData["Title"] = "بلاغاتي";
+    ViewData["IsCustomerDashboardPage"] = true;
+    ViewData["HideFooter"] = true;
+    Layout = "~/Views/Shared/_Layout.cshtml";
+
+    var activeGroup = string.IsNullOrWhiteSpace(Model.Filter?.StatusGroup)
+        ? ReportConstants.StatusGroups.All
+        : Model.Filter.StatusGroup;
+
+    var search = Model.Filter?.Search ?? string.Empty;
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/customer/customer-sidebar.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/customer/customer-reports.css" asp-append-version="true" />
+}
+
+<div class="customer-dashboard-layout">
+    <partial name="_CustomerSidebar" />
+
+    <main class="customer-main-content customer-reports-main">
+        <div class="cr-shell" data-customer-reports-page="list" dir="rtl">
+
+            <section class="cr-list-hero">
+                <div class="cr-list-hero__copy">
+                    <div class="cr-eyebrow">
+                        <span class="cr-eyebrow__icon"><i class="bi bi-shield-check"></i></span>
+                        <span>مركز البلاغات</span>
+                    </div>
+                    <h1>قضاياك، واضحة من أول نظرة</h1>
+                    <p>تابع حالة كل بلاغ، اعرف متى تحتاج الإدارة ردك، وارجع إلى سجل القضية كاملًا بدون تشتيت.</p>
+                </div>
+
+                <a asp-controller="Reports" asp-action="CreateReport" class="cr-primary-cta">
+                    <span class="cr-primary-cta__icon"><i class="bi bi-plus-lg"></i></span>
+                    <span>
+                        <small>مشكلة تحتاج تدخل الإدارة؟</small>
+                        <strong>تقديم بلاغ جديد</strong>
+                    </span>
+                    <i class="bi bi-arrow-left cr-primary-cta__arrow"></i>
+                </a>
+            </section>
+
+            <section class="cr-smartbar" aria-label="ملخص البلاغات">
+                <a asp-controller="Reports" asp-action="MyReports"
+                   asp-route-statusGroup="@ReportConstants.StatusGroups.All"
+                   class="cr-smartbar__item @(activeGroup == ReportConstants.StatusGroups.All ? "is-active" : string.Empty)">
+                    <span class="cr-smartbar__icon"><i class="bi bi-grid-1x2-fill"></i></span>
+                    <span><small>الكل</small><strong>@Model.Summary.TotalCount</strong></span>
+                </a>
+
+                <a asp-controller="Reports" asp-action="MyReports"
+                   asp-route-statusGroup="@ReportConstants.StatusGroups.NeedsResponse"
+                   class="cr-smartbar__item is-attention @(activeGroup == ReportConstants.StatusGroups.NeedsResponse ? "is-active" : string.Empty)">
+                    <span class="cr-smartbar__icon"><i class="bi bi-bell-fill"></i></span>
+                    <span><small>تحتاج ردك</small><strong>@Model.Summary.NeedsResponseCount</strong></span>
+                </a>
+
+                <a asp-controller="Reports" asp-action="MyReports"
+                   asp-route-statusGroup="@ReportConstants.StatusGroups.Active"
+                   class="cr-smartbar__item @(activeGroup == ReportConstants.StatusGroups.Active ? "is-active" : string.Empty)">
+                    <span class="cr-smartbar__icon"><i class="bi bi-arrow-repeat"></i></span>
+                    <span><small>قيد المتابعة</small><strong>@Model.Summary.ActiveCount</strong></span>
+                </a>
+
+                <a asp-controller="Reports" asp-action="MyReports"
+                   asp-route-statusGroup="@ReportConstants.StatusGroups.Completed"
+                   class="cr-smartbar__item @(activeGroup == ReportConstants.StatusGroups.Completed ? "is-active" : string.Empty)">
+                    <span class="cr-smartbar__icon"><i class="bi bi-check2-circle"></i></span>
+                    <span><small>المنتهية</small><strong>@Model.Summary.CompletedCount</strong></span>
+                </a>
+            </section>
+
+            <section class="cr-list-tools">
+                <div class="cr-tabs" role="tablist" aria-label="فلترة البلاغات">
+                    <a asp-controller="Reports" asp-action="MyReports"
+                       asp-route-statusGroup="@ReportConstants.StatusGroups.All"
+                       asp-route-search="@search"
+                       class="cr-tab @(activeGroup == ReportConstants.StatusGroups.All ? "is-active" : string.Empty)">الكل</a>
+                    <a asp-controller="Reports" asp-action="MyReports"
+                       asp-route-statusGroup="@ReportConstants.StatusGroups.NeedsResponse"
+                       asp-route-search="@search"
+                       class="cr-tab @(activeGroup == ReportConstants.StatusGroups.NeedsResponse ? "is-active" : string.Empty)">تحتاج ردك</a>
+                    <a asp-controller="Reports" asp-action="MyReports"
+                       asp-route-statusGroup="@ReportConstants.StatusGroups.Active"
+                       asp-route-search="@search"
+                       class="cr-tab @(activeGroup == ReportConstants.StatusGroups.Active ? "is-active" : string.Empty)">قيد المتابعة</a>
+                    <a asp-controller="Reports" asp-action="MyReports"
+                       asp-route-statusGroup="@ReportConstants.StatusGroups.Completed"
+                       asp-route-search="@search"
+                       class="cr-tab @(activeGroup == ReportConstants.StatusGroups.Completed ? "is-active" : string.Empty)">المنتهية</a>
+                </div>
+
+                <form asp-controller="Reports" asp-action="MyReports" method="get" class="cr-search">
+                    <input type="hidden" name="statusGroup" value="@activeGroup" />
+                    <span class="cr-search__icon"><i class="bi bi-search"></i></span>
+                    <input type="search" name="search" value="@search"
+                           placeholder="ابحث برقم القضية، العنوان أو المنشأة..." autocomplete="off" />
+                    @if (!string.IsNullOrWhiteSpace(search))
+                    {
+                        <a asp-controller="Reports" asp-action="MyReports"
+                           asp-route-statusGroup="@activeGroup"
+                           class="cr-search__clear" aria-label="مسح البحث"><i class="bi bi-x-lg"></i></a>
+                    }
+                    <button type="submit">بحث</button>
+                </form>
+            </section>
+
+            <div class="cr-result-head">
+                <div>
+                    <strong>@Model.FilteredCount</strong>
+                    <span>قضية في هذه القائمة</span>
+                </div>
+                <small><i class="bi bi-clock-history"></i> مرتبة حسب آخر تحديث</small>
+            </div>
+
+            <section class="cr-case-grid" data-customer-reports-list>
+                @if (Model.Items == null || Model.Items.Count == 0)
+                {
+                    <div class="cr-empty-state">
+                        <span class="cr-empty-state__art"><i class="bi bi-inbox"></i></span>
+                        <h2>@(string.IsNullOrWhiteSpace(search) ? "لا توجد قضايا هنا حاليًا" : "لا توجد نتيجة مطابقة")</h2>
+                        <p>@(string.IsNullOrWhiteSpace(search)
+                            ? "عندما ترسل بلاغًا سيظهر هنا مع حالته وآخر تحديث عليه."
+                            : "جرّب عبارة بحث أقصر أو امسح البحث لرؤية بقية القضايا.")</p>
+                        <a asp-controller="Reports" asp-action="CreateReport" class="cr-empty-state__action">
+                            <i class="bi bi-plus-lg"></i> تقديم بلاغ جديد
+                        </a>
+                    </div>
+                }
+                else
+                {
+                    foreach (var item in Model.Items)
+                    {
+                        var typeLabel = string.IsNullOrWhiteSpace(item.OtherReportTypeDescription)
+                            ? item.ReportTypeLabel
+                            : item.OtherReportTypeDescription;
+
+                        var categoryLabel = string.IsNullOrWhiteSpace(item.OtherCategoryDescription)
+                            ? item.CategoryLabel
+                            : item.OtherCategoryDescription;
+
+                        <article class="cr-case-card @(item.NeedsCustomerAction ? "needs-action" : string.Empty)"
+                                 data-report-card
+                                 data-report-url="@Url.Action("ReportDetails", "Reports", new { id = item.ReportId })"
+                                 tabindex="0">
+                            <div class="cr-case-card__accent"></div>
+
+                            <div class="cr-case-card__top">
+                                <span class="cr-case-type"><i class="bi bi-shield-exclamation"></i>@typeLabel</span>
+                                <span class="cr-status is-@item.StatusTone">
+                                    <i class="bi @(item.NeedsCustomerAction ? "bi-bell-fill" : "bi-circle-fill")"></i>
+                                    @item.StatusLabel
+                                </span>
+                            </div>
+
+                            <div class="cr-case-card__number">
+                                <span>رقم القضية</span>
+                                <button type="button" data-copy-report-number="@item.ReportNumber" title="نسخ رقم القضية">
+                                    <strong>@item.ReportNumber</strong><i class="bi bi-copy"></i>
+                                </button>
+                            </div>
+
+                            <h2>@item.Title</h2>
+
+                            @if (!string.IsNullOrWhiteSpace(categoryLabel))
+                            {
+                                <span class="cr-case-card__category"><i class="bi bi-tag"></i>@categoryLabel</span>
+                            }
+
+                            <div class="cr-case-card__refs">
+                                @if (!string.IsNullOrWhiteSpace(item.PlaceName))
+                                {
+                                    <span><i class="bi bi-building"></i><b>@item.PlaceName</b></span>
+                                }
+                                @if (item.BookingId.HasValue)
+                                {
+                                    <span><i class="bi bi-calendar2-check"></i><b>الحجز #@item.BookingId</b></span>
+                                }
+                                @if (item.ReviewId.HasValue)
+                                {
+                                    <span><i class="bi bi-star"></i><b>التقييم #@item.ReviewId</b></span>
+                                }
+                                @if (item.PromotionId.HasValue)
+                                {
+                                    <span><i class="bi bi-tags"></i><b>العرض #@item.PromotionId</b></span>
+                                }
+                                @if (item.AdvertisementId.HasValue)
+                                {
+                                    <span><i class="bi bi-megaphone"></i><b>الإعلان #@item.AdvertisementId</b></span>
+                                }
+                            </div>
+
+                            @if (item.NeedsCustomerAction)
+                            {
+                                <div class="cr-case-card__attention">
+                                    <span><i class="bi bi-chat-square-dots-fill"></i></span>
+                                    <div>
+                                        <strong>هذه القضية تحتاج إجراء منك</strong>
+                                        <small>
+                                            @if (item.ReplyDeadline.HasValue)
+                                            {
+                                                <text>المهلة: @item.ReplyDeadline.Value.ToString("yyyy/MM/dd - hh:mm tt")</text>
+                                            }
+                                            else
+                                            {
+                                                <text>افتح القضية لمعرفة المطلوب.</text>
+                                            }
+                                        </small>
+                                    </div>
+                                </div>
+                            }
+
+                            <footer class="cr-case-card__footer">
+                                <span><i class="bi bi-clock-history"></i> آخر تحديث @item.UpdatedAt.ToString("yyyy/MM/dd")</span>
+                                <a asp-controller="Reports" asp-action="ReportDetails" asp-route-id="@item.ReportId">
+                                    عرض القضية <i class="bi bi-arrow-left"></i>
+                                </a>
+                            </footer>
+                        </article>
+                    }
+                }
+            </section>
+
+            @if (Model.TotalPages > 1)
+            {
+                <nav class="cr-pagination" aria-label="صفحات البلاغات">
+                    <a asp-controller="Reports" asp-action="MyReports"
+                       asp-route-statusGroup="@activeGroup" asp-route-search="@search"
+                       asp-route-page="@(Model.CurrentPage - 1)" asp-route-pageSize="@Model.PageSize"
+                       class="@(!Model.HasPreviousPage ? "is-disabled" : string.Empty)"
+                       aria-disabled="@(!Model.HasPreviousPage)">
+                        <i class="bi bi-chevron-right"></i> السابق
+                    </a>
+                    <span>صفحة <strong>@Model.CurrentPage</strong> من <strong>@Model.TotalPages</strong></span>
+                    <a asp-controller="Reports" asp-action="MyReports"
+                       asp-route-statusGroup="@activeGroup" asp-route-search="@search"
+                       asp-route-page="@(Model.CurrentPage + 1)" asp-route-pageSize="@Model.PageSize"
+                       class="@(!Model.HasNextPage ? "is-disabled" : string.Empty)"
+                       aria-disabled="@(!Model.HasNextPage)">
+                        التالي <i class="bi bi-chevron-left"></i>
+                    </a>
+                </nav>
+            }
+        </div>
+    </main>
+</div>
+
+@section Scripts {
+    <script src="~/js/customer/customer-reports.js" asp-append-version="true"></script>
+}

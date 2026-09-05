@@ -1,0 +1,454 @@
+﻿@using System
+@using System.Collections.Generic
+@using System.Linq
+@using YemenGuide.Core.Entities
+
+@{
+    ViewData["Title"] = "لوحة القيادة - ملخص الحساب";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+
+    var currentUser = ViewBag.CurrentUser as User;
+    var nextBooking = ViewBag.NextBooking as Booking;
+    var featuredPromotions = ViewBag.FeaturedPromotions as List<Promotion> ?? new List<Promotion>();
+
+    var featuredPromotionDiscountTexts =
+        ViewBag.FeaturedPromotionDiscountTexts as Dictionary<int, string> ??
+        new Dictionary<int, string>();
+
+    var bookingsCount = ViewBag.BookingsCount is int bookings ? bookings : 0;
+    var reviewsCount = ViewBag.ReviewsCount is int reviews ? reviews : 0;
+    var unreadMessagesCount = ViewBag.UnreadMessagesCount is int messages ? messages : 0;
+    var favoritesCount = ViewBag.FavoritesCount is int favorites ? favorites : 0;
+    var requiresActionCount = ViewBag.RequiresActionCount is int actionCount ? actionCount : 0;
+    var isProfileComplete = ViewBag.IsProfileComplete is bool profileComplete && profileComplete;
+
+    var profileImage = currentUser?.ProfileImage?.Trim() ?? string.Empty;
+    var fullName = !string.IsNullOrWhiteSpace(currentUser?.FullName)
+        ? currentUser!.FullName!.Trim()
+        : !string.IsNullOrWhiteSpace(currentUser?.Username)
+            ? currentUser!.Username!.Trim()
+            : "عميل دليلك اليمني";
+
+    var firstName = fullName.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "صديقي";
+    var initialLetter = firstName.Length > 0 ? firstName[..1].ToUpperInvariant() : "U";
+    var roleName = string.Equals(currentUser?.Role, "Owner", StringComparison.OrdinalIgnoreCase)
+        ? "مالك منشأة"
+        : "عميل";
+
+    var currentHour = DateTime.Now.Hour;
+    var greetingMsg = currentHour >= 4 && currentHour < 12 ? "صباح الخير" : "مساء الخير";
+    var greetingIcon = currentHour >= 4 && currentHour < 12 ? "☀️" : "🌙";
+
+    string GetBookingStateText(string? state)
+    {
+        return state?.Trim() switch
+        {
+            "Pending" => "بانتظار موافقة المالك",
+            "AwaitingPayment" => "مطلوب دفع العربون",
+            "PaymentReview" => "إثبات الدفع قيد المراجعة",
+            "Confirmed" => "حجز مؤكد",
+            _ => "الحجز قيد المتابعة"
+        };
+    }
+
+    string GetBookingStateClass(string? state)
+    {
+        return state?.Trim() switch
+        {
+            "AwaitingPayment" => "is-action",
+            "PaymentReview" => "is-review",
+            "Confirmed" => "is-confirmed",
+            _ => "is-pending"
+        };
+    }
+
+    string GetReservationUnitName(Booking booking)
+    {
+        if (booking.Room != null && !string.IsNullOrWhiteSpace(booking.Room.RoomType))
+        {
+            return booking.Room.RoomType.Trim();
+        }
+
+        if (booking.Package != null && !string.IsNullOrWhiteSpace(booking.Package.PackageName))
+        {
+            return booking.Package.PackageName.Trim();
+        }
+
+        return "حجز المنشأة";
+    }
+
+    string GetPromotionValue(Promotion promotion)
+    {
+        if (featuredPromotionDiscountTexts.TryGetValue(
+                promotion.PromotionId,
+                out var displayText) &&
+            !string.IsNullOrWhiteSpace(displayText))
+        {
+            return displayText;
+        }
+
+        return string.Equals(
+            promotion.DiscountType,
+            "Percentage",
+            StringComparison.OrdinalIgnoreCase)
+                ? $"{promotion.DiscountValue:N0}%"
+                : $"{promotion.DiscountValue:N0} ر.ي";
+    }
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/customer/customer-sidebar.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/customer/overview.css" asp-append-version="true" />
+}
+
+    <div class="customer-dashboard-layout position-relative">
+        <partial name="_CustomerSidebar" />
+
+        <main class="customer-main-content">
+            <div class="overview-wrapper" id="customerOverviewPage">
+                <div class="overview-ambient" aria-hidden="true">
+                    <span class="overview-orb overview-orb--cyan"></span>
+                    <span class="overview-orb overview-orb--coral"></span>
+                    <span class="overview-orb overview-orb--pearl"></span>
+                </div>
+
+                <div class="overview-shell">
+
+                <section class="overview-hero js-reveal js-tilt" data-tilt-strength="5">
+                    <div class="overview-hero-glow" aria-hidden="true"></div>
+                    <div class="overview-hero-shine" aria-hidden="true"></div>
+
+                    <div class="overview-identity-panel">
+                        <div class="overview-avatar-stage">
+                            <span class="overview-avatar-ring overview-avatar-ring--one" aria-hidden="true"></span>
+                            <span class="overview-avatar-ring overview-avatar-ring--two" aria-hidden="true"></span>
+
+                            <div class="overview-avatar" style="@(string.IsNullOrWhiteSpace(profileImage) ? string.Empty : $"background-image:url('{profileImage}');")">
+                                @if (string.IsNullOrWhiteSpace(profileImage))
+                                {
+                                    <span>@initialLetter</span>
+                                }
+                            </div>
+
+                            <a href="/Profile/CustomerProfile" class="overview-avatar-edit" title="تعديل الملف الشخصي" aria-label="تعديل الملف الشخصي">
+                                <i class="bi bi-pencil-fill"></i>
+                            </a>
+                        </div>
+
+                        <div class="overview-identity-copy">
+                            <span class="overview-role-pill">
+                                <i class="bi bi-person-heart"></i>
+                                @roleName
+                            </span>
+                            <h2>@fullName</h2>
+                            <span class="overview-profile-state @(isProfileComplete ? "is-complete" : "is-incomplete")">
+                                <i class="bi @(isProfileComplete ? "bi-patch-check-fill" : "bi-stars")"></i>
+                                @(isProfileComplete ? "ملفك جاهز للحجز" : "ملفك يحتاج استكمال")
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="overview-welcome-panel">
+                        <span class="overview-kicker">لوحة حسابك</span>
+                        <h1>@greetingMsg، <span>@firstName</span> @greetingIcon</h1>
+
+                        @if (isProfileComplete)
+                        {
+                            <p>
+                                أهلاً بعودتك. تابع حجوزاتك، رسائلك، مفضلاتك والعروض المناسبة لك من مكان واحد.
+                            </p>
+                        }
+                        else
+                        {
+                            <p>
+                                استكمال بياناتك يجعل تجربة الحجز أسرع ويساعد المنشآت على خدمتك بصورة أفضل.
+                            </p>
+                        }
+
+                        <div class="overview-hero-actions">
+                            @if (!isProfileComplete)
+                            {
+                                <a href="/Profile/CustomerProfile" class="overview-primary-button overview-primary-button--hero">
+                                    <span>استكمال البيانات</span>
+                                    <i class="bi bi-arrow-left"></i>
+                                </a>
+                            }
+                            else
+                            {
+                                <a href="/Places/Search" class="overview-primary-button overview-primary-button--hero">
+                                    <span>اكتشف أماكن جديدة</span>
+                                    <i class="bi bi-compass"></i>
+                                </a>
+                            }
+
+                            <a href="/Bookings/MyBookings" class="overview-ghost-button overview-ghost-button--hero">
+                                <span>حجوزاتي</span>
+                                <i class="bi bi-calendar2-check"></i>
+                            </a>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="overview-stats-grid" aria-label="ملخص النشاط">
+                    <a href="/Bookings/MyBookings" class="overview-stat-card js-reveal js-tilt" data-tilt-strength="3">
+                        <span class="overview-stat-orb is-cyan"><i class="bi bi-calendar2-check"></i></span>
+                        <span class="overview-stat-copy">
+                            <strong class="js-count-up" data-count="@bookingsCount">0</strong>
+                            <small>إجمالي الحجوزات</small>
+                        </span>
+                        <i class="bi bi-arrow-up-left overview-stat-arrow"></i>
+                    </a>
+
+                    <a href="/Favorites/MyFavorites" class="overview-stat-card js-reveal js-tilt" data-tilt-strength="3">
+                        <span class="overview-stat-orb is-coral"><i class="bi bi-heart-fill"></i></span>
+                        <span class="overview-stat-copy">
+                            <strong class="js-count-up" data-count="@favoritesCount">0</strong>
+                            <small>في المفضلة</small>
+                        </span>
+                        <i class="bi bi-arrow-up-left overview-stat-arrow"></i>
+                    </a>
+
+                    <a href="/Messages/MyMessages" class="overview-stat-card js-reveal js-tilt" data-tilt-strength="3">
+                        <span class="overview-stat-orb is-sky"><i class="bi bi-chat-dots-fill"></i></span>
+                        <span class="overview-stat-copy">
+                            <strong class="js-count-up" data-count="@unreadMessagesCount">0</strong>
+                            <small>رسائل جديدة</small>
+                        </span>
+                        @if (unreadMessagesCount > 0)
+                        {
+                            <span class="overview-live-dot" aria-label="يوجد رسائل جديدة"></span>
+                        }
+                        <i class="bi bi-arrow-up-left overview-stat-arrow"></i>
+                    </a>
+
+                    <div class="overview-stat-card overview-stat-card--static js-reveal" aria-label="عدد التقييمات التي كتبتها">
+                        <span class="overview-stat-orb is-gold"><i class="bi bi-star-fill"></i></span>
+                        <span class="overview-stat-copy">
+                            <strong class="js-count-up" data-count="@reviewsCount">0</strong>
+                            <small>تقييماتي</small>
+                        </span>
+                        <span class="overview-stat-static-mark" aria-hidden="true"><i class="bi bi-stars"></i></span>
+                    </div>
+                </section>
+
+                <section class="overview-smart-grid">
+                    <article class="overview-next-card js-reveal js-tilt" data-tilt-strength="3">
+                        <div class="overview-section-head">
+                            <div>
+                                <span class="overview-eyebrow">المحطة القادمة</span>
+                                <h3>حجزك القادم</h3>
+                            </div>
+                            <span class="overview-section-icon"><i class="bi bi-suitcase2-fill"></i></span>
+                        </div>
+
+                        @if (nextBooking != null)
+                        {
+                            var nextPlaceName = !string.IsNullOrWhiteSpace(nextBooking.Place?.PlaceNameAndDesc)
+                            ? nextBooking.Place!.PlaceNameAndDesc!.Trim()
+                            : "منشأة دليلك اليمني";
+                            var nextImage = !string.IsNullOrWhiteSpace(nextBooking.Place?.CoverImage)
+                            ? nextBooking.Place!.CoverImage!
+                            : "/images/bg1.jpg";
+                            var nextUnitName = GetReservationUnitName(nextBooking);
+                            var nextStateText = GetBookingStateText(nextBooking.BookingState);
+                            var nextStateClass = GetBookingStateClass(nextBooking.BookingState);
+                            var nextDateIso = nextBooking.StartDate.ToString("yyyy-MM-ddTHH:mm:ss");
+
+                            <div class="overview-next-booking">
+                                <a href="/Places/BookingDetails/@nextBooking.BookingId" class="overview-next-media" aria-label="فتح تفاصيل الحجز">
+                                    <img src="@nextImage" alt="@nextPlaceName" loading="lazy" />
+                                    <span class="overview-next-overlay"></span>
+                                    @if (nextBooking.DiscountAmount > 0m && nextBooking.PromotionId.HasValue)
+                                    {
+                                        <span class="overview-booked-offer"><i class="bi bi-fire"></i> تم الحجز بعرض</span>
+                                    }
+                                    <span class="overview-next-number">#@nextBooking.BookingId.ToString("D6")</span>
+                                </a>
+
+                                <div class="overview-next-content">
+                                    <div class="overview-next-title-row">
+                                        <div>
+                                            <h4>@nextPlaceName</h4>
+                                            <span>@nextUnitName</span>
+                                        </div>
+                                        <span class="overview-booking-status @nextStateClass">@nextStateText</span>
+                                    </div>
+
+                                    <div class="overview-next-meta">
+                                        <span><i class="bi bi-calendar-event"></i> @nextBooking.StartDate.ToString("dd MMM yyyy")</span>
+                                        <span><i class="bi bi-people"></i> @(Math.Max(0, nextBooking.AdultsCount + nextBooking.ChildrenCount)) أشخاص</span>
+                                    </div>
+
+                                    <div class="overview-countdown" data-countdown-to="@nextDateIso">
+                                        <span class="overview-countdown-label"><i class="bi bi-hourglass-split"></i> الوقت المتبقي</span>
+                                        <strong data-countdown-output>يتم الحساب...</strong>
+                                    </div>
+
+                                    <div class="overview-card-actions">
+                                        <a href="/Places/BookingDetails/@nextBooking.BookingId" class="overview-primary-button overview-primary-button--compact">
+                                            عرض الحجز
+                                            <i class="bi bi-arrow-left"></i>
+                                        </a>
+                                        @if (string.Equals(nextBooking.BookingState, "AwaitingPayment", StringComparison.OrdinalIgnoreCase))
+                                        {
+                                            <a href="/BookingFlow/Payment/@nextBooking.BookingId" class="overview-action-button">
+                                                دفع العربون
+                                                <i class="bi bi-wallet2"></i>
+                                            </a>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="overview-empty-journey">
+                                <div class="overview-empty-orbit"><i class="bi bi-compass-fill"></i></div>
+                                <div>
+                                    <h4>ما عندك حجز قادم حتى الآن</h4>
+                                    <p>اكتشف الفنادق والشاليهات والقاعات والأماكن المناسبة لك.</p>
+                                    <a href="/Places/Search" class="overview-primary-button overview-primary-button--compact">
+                                        ابدأ الاستكشاف
+                                        <i class="bi bi-arrow-left"></i>
+                                    </a>
+                                </div>
+                            </div>
+                        }
+                    </article>
+
+                    <aside class="overview-attention-card js-reveal js-tilt @(requiresActionCount > 0 ? "has-action" : "is-clear")" data-tilt-strength="3">
+                        <div class="overview-section-head">
+                            <div>
+                                <span class="overview-eyebrow">متابعة ذكية</span>
+                                <h3>يحتاج انتباهك</h3>
+                            </div>
+                            <span class="overview-section-icon"><i class="bi bi-bell-fill"></i></span>
+                        </div>
+
+                        @if (requiresActionCount > 0)
+                        {
+                            <div class="overview-attention-number">
+                                <strong class="js-count-up" data-count="@requiresActionCount">0</strong>
+                                <span>حجز يحتاج إجراء منك</span>
+                            </div>
+                            <p>يوجد حجز بانتظار دفع العربون. أكمل الإجراء قبل انتهاء المهلة حتى لا تفقد حجزك.</p>
+                            <a href="/Bookings/MyBookings?status=awaiting-payment" class="overview-action-button overview-action-button--wide">
+                                متابعة الآن
+                                <i class="bi bi-arrow-left"></i>
+                            </a>
+                        }
+                        else
+                        {
+                            <div class="overview-clear-state">
+                                <span class="overview-clear-icon"><i class="bi bi-check2"></i></span>
+                                <h4>كل شيء مرتب ✨</h4>
+                                <p>لا يوجد إجراء عاجل مطلوب منك الآن.</p>
+                            </div>
+                        }
+                    </aside>
+                </section>
+
+                <section class="overview-quick-section js-reveal">
+                    <div class="overview-section-head overview-section-head--wide">
+                        <div>
+                            <span class="overview-eyebrow">وصول سريع</span>
+                            <h3>اختصاراتك اليومية</h3>
+                        </div>
+                    </div>
+
+                    <div class="overview-quick-grid">
+                        <a href="/Places/Search" class="overview-quick-card js-tilt" data-tilt-strength="4">
+                            <span class="overview-quick-icon is-cyan"><i class="bi bi-compass"></i></span>
+                            <strong>استكشف</strong>
+                            <small>اعثر على مكانك القادم</small>
+                        </a>
+                        <a href="/Bookings/MyBookings" class="overview-quick-card js-tilt" data-tilt-strength="4">
+                            <span class="overview-quick-icon is-sky"><i class="bi bi-calendar2-week"></i></span>
+                            <strong>حجوزاتي</strong>
+                            <small>تابع كل حجوزاتك</small>
+                        </a>
+                        <a href="/Favorites/MyFavorites" class="overview-quick-card js-tilt" data-tilt-strength="4">
+                            <span class="overview-quick-icon is-coral"><i class="bi bi-heart"></i></span>
+                            <strong>المفضلة</strong>
+                            <small>أماكن حفظتها للعودة</small>
+                        </a>
+                        <a href="/Messages/MyMessages" class="overview-quick-card js-tilt" data-tilt-strength="4">
+                            <span class="overview-quick-icon is-gold"><i class="bi bi-chat-heart"></i></span>
+                            <strong>الرسائل</strong>
+                            <small>تواصل مع المنشآت</small>
+                        </a>
+                    </div>
+                </section>
+
+                @if (featuredPromotions.Count > 0)
+                {
+                    <section class="overview-offers-section js-reveal">
+                        <div class="overview-section-head overview-section-head--wide">
+                            <div>
+                                <span class="overview-eyebrow">فرص مميزة</span>
+                                <h3>عروض قد تعجبك</h3>
+                            </div>
+                            <a href="/Places/Search?onlyWithOffers=true" class="overview-text-link">
+                                كل العروض <i class="bi bi-arrow-left"></i>
+                            </a>
+                        </div>
+
+                        <div class="overview-offers-grid">
+                            @foreach (var promotion in featuredPromotions)
+                            {
+                                var offerImage = !string.IsNullOrWhiteSpace(promotion.ImagePath)
+                                ? promotion.ImagePath
+                                : !string.IsNullOrWhiteSpace(promotion.Place?.CoverImage)
+                                ? promotion.Place!.CoverImage
+                                : "/images/bg1.jpg";
+                                var offerPlaceName = !string.IsNullOrWhiteSpace(promotion.Place?.PlaceNameAndDesc)
+                                ? promotion.Place!.PlaceNameAndDesc!.Trim()
+                                : "منشأة مميزة";
+
+                                <a href="/Places/Details/@promotion.PlaceId?promotionId=@promotion.PromotionId"
+                           class="overview-offer-card js-tilt"
+                           data-tilt-strength="4">
+                                    <img src="@offerImage" alt="@promotion.PromotionTitle" loading="lazy" />
+                                    <span class="overview-offer-overlay"></span>
+                                    <span class="overview-offer-discount">
+                                        <i class="bi bi-fire"></i>
+                                        خصم @GetPromotionValue(promotion)
+                                    </span>
+                                    <div class="overview-offer-content">
+                                        <span>@offerPlaceName</span>
+                                        <h4>@promotion.PromotionTitle</h4>
+                                        <small>حتى @promotion.EndDate.ToString("dd MMM")</small>
+                                    </div>
+                                    <span class="overview-offer-arrow"><i class="bi bi-arrow-up-left"></i></span>
+                                </a>
+                            }
+                        </div>
+                    </section>
+                }
+
+                <section class="overview-owner-cta js-reveal js-tilt" data-tilt-strength="2">
+                    <div class="overview-owner-visual" aria-hidden="true">
+                        <span class="overview-owner-orb"><i class="bi bi-buildings-fill"></i></span>
+                        <span class="overview-owner-ring"></span>
+                    </div>
+                    <div class="overview-owner-copy">
+                        <span class="overview-eyebrow">لديك منشأة؟</span>
+                        <h3>حوّل مكانك إلى فرصة جديدة</h3>
+                        <p>اعرض شاليهك أو فندقك أو قاعتك وابدأ استقبال الحجوزات عبر دليلك اليمني.</p>
+                    </div>
+                    <a href="/Account/VerifyAccount" class="overview-primary-button overview-primary-button--owner">
+                        سجل منشأتك الآن
+                        <i class="bi bi-arrow-left"></i>
+                    </a>
+                </section>
+            </div>
+
+            <div class="overview-toast-stack" id="overviewToastStack" aria-live="polite" aria-atomic="true"></div>
+        </div>
+    </main>
+</div>
+
+@section Scripts {
+    <script src="~/js/customer/customer-sidebar.js" asp-append-version="true"></script>
+    <script src="~/js/customer/overview.js" asp-append-version="true"></script>
+}

@@ -1,0 +1,154 @@
+@model YemenGuide.Core.DTOs.Admin.AdminRolesTabDto
+@using System.Linq
+@using System.Globalization
+@{
+    bool isArabic = string.Equals(CultureInfo.CurrentUICulture.TwoLetterISOLanguageName, "ar", StringComparison.OrdinalIgnoreCase);
+    string L(string ar, string en) => isArabic ? ar : en;
+    string GroupLabel(string? groupName) => isArabic ? (groupName ?? string.Empty) : (groupName ?? string.Empty) switch { "لوحة التحكم" => "Dashboard", "إدارة المستخدمين" => "User management", "إدارة المنشآت" => "Place management", "تصنيفات النظام" => "Master data", "الشكاوى والبلاغات" => "Cases & reports", "الإدارة المالية" => "Finance", "إدارة الإعلانات" => "Advertisements", "إعدادات النظام" => "System settings", "الموظفون والصلاحيات" => "Employees & permissions", _ => groupName ?? string.Empty };
+}
+
+<div class="employees-tab-panel" data-panel="roles">
+    <div class="employees-panel-heading">
+        <div>
+            <span class="employees-section-kicker">@L("قوالب العمل", "Work templates")</span>
+            <h2>@L("الأدوار والصلاحيات", "Roles & permissions")</h2>
+            <p>@L("أنشئ دورًا واحدًا، حدّد صلاحياته من أقسام المنصة، ثم اربطه بأي موظف.", "Create a role, choose its permissions, then assign it to employees.")</p>
+        </div>
+
+        @if (Model.CanManage)
+        {
+            <button type="button"
+                    class="employees-btn employees-btn--primary"
+                    data-open-role-form>
+                <i class="bi bi-plus-lg"></i>
+                @L("إنشاء دور", "Create role")
+            </button>
+        }
+    </div>
+
+    <div class="roles-explainer">
+        <span class="roles-explainer__icon"><i class="bi bi-lightbulb-fill"></i></span>
+        <div>
+            <strong>@L("الدور ليس قسمًا واحدًا.", "A role is not limited to one section.")</strong>
+            <p>@L("يمكن للدور نفسه أن يجمع صلاحيات من المستخدمين والملاك والشكاوى والمالية معًا. الموظف يأخذ كل ما تم تحديده داخل دوره.", "A role can combine permissions from multiple platform sections. Employees inherit everything selected in the role.")</p>
+        </div>
+    </div>
+
+    <div class="roles-toolbar">
+        <form class="roles-search" data-roles-search>
+            <i class="bi bi-search"></i>
+            <input type="search"
+                   name="search"
+                   value="@Model.Search"
+                   placeholder="@L("ابحث باسم الدور...", "Search by role name...")" />
+            <button type="submit">@L("بحث", "Search")</button>
+        </form>
+
+        <div class="roles-toolbar__meta">
+            <span><strong>@Model.ActiveRolesCount</strong> @L("دور نشط", "active roles")</span>
+            <span><strong>@Model.TotalPermissionsCount</strong> @L("صلاحية متاحة", "available permissions")</span>
+        </div>
+    </div>
+
+    @if (Model.Roles.Count == 0)
+    {
+        <div class="employees-empty-state">
+            <span><i class="bi bi-person-badge"></i></span>
+            <h3>@L("لا توجد أدوار", "No roles")</h3>
+            <p>@L("أنشئ أول دور وظيفي ثم اختر له الصلاحيات المناسبة.", "Create the first role and select its permissions.")</p>
+        </div>
+    }
+    else
+    {
+        <div class="roles-grid">
+            @foreach (var role in Model.Roles)
+            {
+                <article class="role-card @(role.IsSystemRole ? "is-system-role" : "") @(role.IsActive ? "" : "is-disabled")">
+                    <div class="role-card__top">
+                        <span class="role-card__icon">
+                            <i class="bi @(role.IsSystemRole ? "bi-shield-fill-check" : "bi-person-badge-fill")"></i>
+                        </span>
+
+                        <span class="role-status @(role.IsActive ? "is-active" : "is-inactive")">
+                            <i></i>
+                            @(role.IsActive ? L("نشط", "Active") : L("موقوف", "Inactive"))
+                        </span>
+                    </div>
+
+                    <div class="role-card__copy">
+                        <div class="role-card__title-line">
+                            <h3>@role.RoleName</h3>
+                            @if (role.IsSystemRole)
+                            {
+                                <span class="role-system-badge">@L("دور نظام", "System role")</span>
+                            }
+                        </div>
+                        <p>@(string.IsNullOrWhiteSpace(role.Description) ? L("لا يوجد وصف لهذا الدور.", "No description for this role.") : role.Description)</p>
+                    </div>
+
+                    <div class="role-card__numbers">
+                        <span>
+                            <i class="bi bi-people"></i>
+                            <strong>@role.EmployeesCount</strong>
+                            <small>@L("موظف", "Employees")</small>
+                        </span>
+                        <span>
+                            <i class="bi bi-key"></i>
+                            <strong>@role.PermissionsCount</strong>
+                            <small>@L("صلاحية", "Permissions")</small>
+                        </span>
+                    </div>
+
+                    <div class="role-card__groups">
+                        @if (role.PermissionGroupNames.Count == 0)
+                        {
+                            <span class="role-group-chip is-empty">@L("بدون مجموعات", "No groups")</span>
+                        }
+                        else
+                        {
+                            foreach (var group in role.PermissionGroupNames.Take(4))
+                            {
+                                <span class="role-group-chip">@GroupLabel(group)</span>
+                            }
+                            if (role.PermissionGroupNames.Count > 4)
+                            {
+                                <span class="role-group-chip is-more">+@(role.PermissionGroupNames.Count - 4)</span>
+                            }
+                        }
+                    </div>
+
+                    <div class="role-card__footer">
+                        <span class="role-created-at">
+                            <i class="bi bi-calendar3"></i>
+                            @role.CreatedAt.ToString("yyyy/MM/dd", CultureInfo.CurrentCulture)
+                        </span>
+
+                        <div class="role-card__actions">
+                            @if (Model.CanManage)
+                            {
+                                <button type="button"
+                                        class="employees-btn employees-btn--soft"
+                                        data-edit-role="@role.AdminRoleId">
+                                    <i class="bi @(role.IsSystemRole ? "bi-eye" : "bi-sliders")"></i>
+                                    @(role.IsSystemRole ? L("عرض", "View") : L("إدارة الصلاحيات", "Manage permissions"))
+                                </button>
+
+                                @if (!role.IsSystemRole)
+                                {
+                                    <button type="button"
+                                            class="employee-icon-btn @(role.IsActive ? "is-warning" : "is-success")"
+                                            data-role-status="@role.AdminRoleId"
+                                            data-role-name="@role.RoleName"
+                                            data-next-active="@(!role.IsActive ? "true" : "false")"
+                                            title="@(role.IsActive ? L("إيقاف الدور", "Disable role") : L("تفعيل الدور", "Enable role"))">
+                                        <i class="bi @(role.IsActive ? "bi-pause-circle" : "bi-play-circle")"></i>
+                                    </button>
+                                }
+                            }
+                        </div>
+                    </div>
+                </article>
+            }
+        </div>
+    }
+</div>

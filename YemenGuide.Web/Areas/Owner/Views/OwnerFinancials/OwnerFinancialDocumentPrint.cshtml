@@ -1,0 +1,226 @@
+@using System
+@using System.Collections.Generic
+@using System.Globalization
+@using YemenGuide.Core.DTOs.Owner
+
+@model FinancialDocumentDetailsDto
+
+@{
+    Layout = null;
+    var pageModel = Model ?? new FinancialDocumentDetailsDto();
+    var lines = pageModel.Lines ?? new List<FinancialDocumentLineDto>();
+    var amountLines = pageModel.AmountLines ?? new List<FinancialDocumentAmountLineDto>();
+    var culture = CultureInfo.GetCultureInfo("en-US");
+
+    string Money(decimal value)
+    {
+        var format = decimal.Truncate(value) == value ? "N0" : "N2";
+        return $"{value.ToString(format, culture)} {pageModel.Currency}";
+    }
+
+    string DateText(DateTime? value) => value?.ToString("dd/MM/yyyy", culture) ?? "—";
+    string DateTimeText(DateTime value) => value.ToString("dd/MM/yyyy - hh:mm tt", culture);
+    string Initial(string? value) => string.IsNullOrWhiteSpace(value) ? "د" : value.Trim().Substring(0, 1).ToUpperInvariant();
+
+    string StatusClass(string? value)
+    {
+        var normalized = value?.Trim().ToLowerInvariant() ?? string.Empty;
+        if (normalized.Contains("مكتمل") || normalized.Contains("مؤكد") || normalized.Contains("مدفوع") || normalized.Contains("محرر")) return "is-success";
+        if (normalized.Contains("مراجعة") || normalized.Contains("انتظار") || normalized.Contains("جزئي") || normalized.Contains("محجوز")) return "is-warning";
+        if (normalized.Contains("فشل") || normalized.Contains("مرفوض") || normalized.Contains("ملغى") || normalized.Contains("منتهي") || normalized.Contains("دين")) return "is-danger";
+        return "is-neutral";
+    }
+}
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>@pageModel.DocumentTypeLabel - @pageModel.DocumentNumber</title>
+    <link rel="stylesheet" href="~/lib/bootstrap-icons/font/bootstrap-icons.css" />
+    <link rel="stylesheet" href="~/css/owner/financials/owner-financial-document-print.css" asp-append-version="true" />
+</head>
+<body class="financial-print-page">
+
+    <div class="financial-print-toolbar" data-print-toolbar>
+        <div>
+            <span><i class="bi bi-file-earmark-check"></i></span>
+            <div><strong>معاينة المستند المالي</strong><small>@pageModel.DocumentNumber</small></div>
+        </div>
+        <div>
+            <button type="button" onclick="window.print()"><i class="bi bi-printer"></i>طباعة أو حفظ PDF</button>
+            <button type="button" class="is-secondary" onclick="window.close()"><i class="bi bi-x-lg"></i>إغلاق</button>
+        </div>
+    </div>
+
+    <main class="financial-document-sheet">
+        <header class="financial-document-sheet__topline">
+            <div class="financial-document-sheet__brand">
+                <span>د</span>
+                <div>
+                    <small>منصة الحجوزات والخدمات اليمنية</small>
+                    <strong>@pageModel.PlatformName</strong>
+                    <p>مستند مالي إلكتروني</p>
+                </div>
+            </div>
+
+            <div class="financial-document-sheet__number">
+                <small>@pageModel.DocumentTypeLabel</small>
+                <strong dir="ltr">@pageModel.DocumentNumber</strong>
+                <span>@DateTimeText(pageModel.DocumentDate)</span>
+            </div>
+        </header>
+
+        <section class="financial-document-sheet__title">
+            <div>
+                <small>المستند</small>
+                <h1>@pageModel.Title</h1>
+                <p>@pageModel.Subtitle</p>
+            </div>
+            <div class="financial-document-sheet__total">
+                <span>@pageModel.GrandTotalLabel</span>
+                <strong>@Money(pageModel.GrandTotal)</strong>
+            </div>
+        </section>
+
+        <section class="financial-document-sheet__parties">
+            <article>
+                <header><span><i class="bi bi-building"></i></span><div><small>المنشأة</small><h2>@pageModel.PlaceName</h2></div></header>
+                <div class="financial-document-sheet__party-content">
+                    @if (!string.IsNullOrWhiteSpace(pageModel.PlaceLogoUrl))
+                    {
+                        <span class="financial-document-sheet__avatar has-image"><img src="@Url.Content(pageModel.PlaceLogoUrl)" alt="" /></span>
+                    }
+                    else
+                    {
+                        <span class="financial-document-sheet__avatar">@Initial(pageModel.PlaceName)</span>
+                    }
+                    <dl>
+                        @if (!string.IsNullOrWhiteSpace(pageModel.PlaceAddress)){<div><dt>العنوان</dt><dd>@pageModel.PlaceAddress</dd></div>}
+                        @if (!string.IsNullOrWhiteSpace(pageModel.PlacePhone)){<div><dt>الهاتف</dt><dd dir="ltr">@pageModel.PlacePhone</dd></div>}
+                        @if (!string.IsNullOrWhiteSpace(pageModel.PlaceEmail)){<div><dt>البريد</dt><dd dir="ltr">@pageModel.PlaceEmail</dd></div>}
+                    </dl>
+                </div>
+            </article>
+
+            <article>
+                <header><span><i class="bi bi-person"></i></span><div><small>العميل</small><h2>@pageModel.CustomerName</h2></div></header>
+                <div class="financial-document-sheet__party-content">
+                    <span class="financial-document-sheet__avatar is-customer">@Initial(pageModel.CustomerName)</span>
+                    <dl>
+                        @if (pageModel.CustomerId.HasValue){<div><dt>رقم العميل</dt><dd>#@pageModel.CustomerId</dd></div>}
+                        @if (!string.IsNullOrWhiteSpace(pageModel.CustomerPhone)){<div><dt>الهاتف</dt><dd dir="ltr">@pageModel.CustomerPhone</dd></div>}
+                        @if (!string.IsNullOrWhiteSpace(pageModel.CustomerEmail)){<div><dt>البريد</dt><dd dir="ltr">@pageModel.CustomerEmail</dd></div>}
+                    </dl>
+                </div>
+            </article>
+        </section>
+
+        @if (pageModel.BookingId.HasValue)
+        {
+            <section class="financial-document-sheet__booking">
+                <header><span><i class="bi bi-calendar2-check"></i></span><div><small>بيانات الحجز</small><h2>الحجز #@pageModel.BookingId</h2></div></header>
+                <div class="financial-document-sheet__booking-grid">
+                    <article><small>بداية الحجز</small><strong>@DateText(pageModel.BookingStartDate)</strong></article>
+                    <article><small>نهاية الحجز</small><strong>@DateText(pageModel.BookingEndDate)</strong></article>
+                    <article><small>الحجز</small><strong class="@StatusClass(pageModel.BookingStateLabel)">@pageModel.BookingStateLabel</strong></article>
+                    <article><small>الدفع</small><strong class="@StatusClass(pageModel.PaymentStatusLabel)">@pageModel.PaymentStatusLabel</strong></article>
+                    <article><small>العمولة</small><strong class="@StatusClass(pageModel.CommissionStatusLabel)">@pageModel.CommissionStatusLabel</strong></article>
+                    <article><small>السجل</small><strong class="@StatusClass(pageModel.RecordStatusLabel)">@pageModel.RecordStatusLabel</strong></article>
+                </div>
+            </section>
+        }
+
+        @if (pageModel.HasPromotion)
+        {
+            <section class="financial-document-sheet__promotion">
+                <span><i class="bi bi-tags"></i></span>
+                <div>
+                    <small>عرض محفوظ وقت إنشاء الحجز</small>
+                    <strong>@pageModel.PromotionTitleDisplay</strong>
+                    <p>
+                        قبل الخصم @Money(pageModel.OriginalTotalPrice)
+                        • الخصم @Money(pageModel.DiscountAmount)
+                        • بعد الخصم @Money(pageModel.FinalTotalPrice)
+                    </p>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(pageModel.PromotionCodeSnapshot))
+                {
+                    <em dir="ltr">@pageModel.PromotionCodeSnapshot</em>
+                }
+            </section>
+        }
+
+        @if (lines.Count > 0)
+        {
+            <section class="financial-document-sheet__section">
+                <header class="financial-document-sheet__section-head"><div><small>بنود المستند</small><h2>تفاصيل الخدمة أو العملية</h2></div><span>@lines.Count بند</span></header>
+                <div class="financial-document-sheet__table-wrap">
+                    <table>
+                        <thead><tr><th>البيان</th><th>التفاصيل</th><th>الكمية</th><th>سعر الوحدة</th><th>الإجمالي</th></tr></thead>
+                        <tbody>
+                            @foreach (var line in lines)
+                            {
+                                <tr>
+                                    <td><strong>@line.Description</strong></td>
+                                    <td>@(string.IsNullOrWhiteSpace(line.Details) ? "—" : line.Details)</td>
+                                    <td>@line.Quantity.ToString("0.##", culture)</td>
+                                    <td>@Money(line.UnitPrice)</td>
+                                    <td class="is-money">@Money(line.Total)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        }
+
+        <section class="financial-document-sheet__settlement">
+            <div class="financial-document-sheet__amounts">
+                <header class="financial-document-sheet__section-head"><div><small>التسوية</small><h2>الملخص المالي</h2></div></header>
+                <dl>
+                    @foreach (var item in amountLines)
+                    {
+                        <div class="@(item.IsHighlight ? "is-highlight" : string.Empty) @(item.IsNegative ? "is-negative" : string.Empty)">
+                            <dt>@item.Label</dt>
+                            <dd>@(item.IsNegative ? "− " : string.Empty)@Money(item.Amount)</dd>
+                        </div>
+                    }
+                    <div class="is-grand"><dt>@pageModel.GrandTotalLabel</dt><dd>@Money(pageModel.GrandTotal)</dd></div>
+                </dl>
+            </div>
+
+            <aside class="financial-document-sheet__verification">
+                <header><span><i class="bi bi-shield-check"></i></span><div><small>التوثيق</small><h2>بيانات المرجع</h2></div></header>
+                <dl>
+                    <div><dt>رقم المستند</dt><dd dir="ltr">@pageModel.DocumentNumber</dd></div>
+                    <div><dt>رقم المصدر</dt><dd>#@pageModel.SourceId</dd></div>
+                    @if (!string.IsNullOrWhiteSpace(pageModel.ReferenceNumber)){<div><dt>المرجع المالي</dt><dd dir="ltr">@pageModel.ReferenceNumber</dd></div>}
+                    <div><dt>تاريخ الإصدار</dt><dd>@DateTimeText(pageModel.DocumentDate)</dd></div>
+                </dl>
+                @if (!string.IsNullOrWhiteSpace(pageModel.Notes))
+                {
+                    <div class="financial-document-sheet__notes"><strong>ملاحظات</strong><p>@pageModel.Notes</p></div>
+                }
+            </aside>
+        </section>
+
+        <footer class="financial-document-sheet__footer">
+            <div><span><i class="bi bi-patch-check-fill"></i></span><p>@pageModel.VerificationText</p></div>
+            <small>لا يُعد هذا المستند فاتورة ضريبية ما لم تُذكر بيانات ضريبية صريحة.</small>
+        </footer>
+    </main>
+
+    <script>
+        (() => {
+            'use strict';
+            const query = new URLSearchParams(window.location.search);
+            if (query.get('print') === '1') {
+                window.addEventListener('load', () => window.print(), { once: true });
+            }
+        })();
+    </script>
+</body>
+</html>

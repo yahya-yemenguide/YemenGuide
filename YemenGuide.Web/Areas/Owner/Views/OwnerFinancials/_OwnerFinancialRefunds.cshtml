@@ -1,0 +1,948 @@
+@using System
+@using System.Collections.Generic
+@using System.Globalization
+@using System.Linq
+@using YemenGuide.Core.DTOs.Owner
+
+@model RefundsTabDto
+
+@{
+    var pageModel = Model ?? new RefundsTabDto();
+    var filter = pageModel.Filter ?? new RefundFilterDto();
+    var summary = pageModel.Summary ?? new RefundsSummaryDto();
+    var refunds = pageModel.Refunds ?? new List<RefundRequestItemDto>();
+    var statusOptions = pageModel.StatusOptions ?? new List<FinancialStatusOptionDto>();
+
+    var culture = CultureInfo.GetCultureInfo("en-US");
+    var currency = string.IsNullOrWhiteSpace(pageModel.Currency)
+        ? "ريال يمني"
+        : pageModel.Currency.Trim();
+
+    var currentPage = Math.Max(1, pageModel.PageNumber);
+    var totalPages = Math.Max(0, pageModel.TotalPages);
+
+    var activeFilterCount = new[]
+    {
+        !string.IsNullOrWhiteSpace(filter.Search),
+        !string.IsNullOrWhiteSpace(filter.Status),
+        filter.BookingId.HasValue,
+        filter.CustomerId.HasValue,
+        filter.FromDate.HasValue,
+        filter.ToDate.HasValue
+    }.Count(value => value);
+
+    string Money(decimal value)
+    {
+        var normalized = Math.Max(0m, value);
+        var format = decimal.Truncate(normalized) == normalized ? "N0" : "N2";
+        return $"{normalized.ToString(format, culture)} {currency}";
+    }
+
+    string DateText(DateTime? value) =>
+        value.HasValue
+            ? value.Value.ToString("dd/MM/yyyy", culture)
+            : "—";
+
+    string DateTimeText(DateTime? value) =>
+        value.HasValue
+            ? value.Value.ToString("dd/MM/yyyy - hh:mm tt", culture)
+            : "—";
+
+    string MaskAccount(string? value)
+    {
+        var text = value?.Trim() ?? string.Empty;
+        if (text.Length <= 5) return text;
+
+        return $"{new string('•', Math.Min(8, text.Length - 4))}{text[^4..]}";
+    }
+
+    string VisualState(RefundRequestItemDto item)
+    {
+        if (item.IsCompleted) return "completed";
+        if (item.WaitingForCustomerConfirmation) return "processing";
+        if (item.CanMarkTransferred) return "ready";
+        if (item.IsPending && item.RefundAmount > 0m && !item.IsRefundFundingVerified) return "review";
+        if (item.IsPending && item.RefundAmount > 0m && !item.HasRefundDestination) return "waiting";
+        if (item.IsRejected || item.IsFailed) return "danger";
+        return "neutral";
+    }
+
+    string VisualLabel(RefundRequestItemDto item)
+    {
+        if (item.IsCompleted) return "مكتمل";
+        if (item.WaitingForCustomerConfirmation) return "بانتظار تأكيد العميل";
+        if (item.CanMarkTransferred) return "جاهز للتحويل";
+        if (item.IsPending && item.RefundAmount > 0m && !item.IsRefundFundingVerified) return "يحتاج مراجعة";
+        if (item.IsPending && item.RefundAmount > 0m && !item.HasRefundDestination) return "بانتظار حساب العميل";
+        if (item.RefundAmount <= 0m) return "لا يوجد تحويل";
+        return item.StatusLabel;
+    }
+
+    string VisualIcon(RefundRequestItemDto item)
+    {
+        if (item.IsCompleted) return "bi-patch-check-fill";
+        if (item.WaitingForCustomerConfirmation) return "bi-send-check-fill";
+        if (item.CanMarkTransferred) return "bi-lightning-charge-fill";
+        if (item.IsPending && item.RefundAmount > 0m && !item.IsRefundFundingVerified) return "bi-shield-exclamation";
+        if (item.IsPending && item.RefundAmount > 0m && !item.HasRefundDestination) return "bi-person-clock";
+        return "bi-arrow-counterclockwise";
+    }
+
+    string RefundKind(RefundRequestItemDto item)
+    {
+        if (item.RefundAmount <= 0m) return "تسوية مالية";
+
+        if (item.DepositPaid > 0m &&
+            item.RefundAmount + 0.01m >= item.DepositPaid)
+        {
+            return "استرداد كامل";
+        }
+
+        return "استرداد جزئي";
+    }
+}
+
+<link rel="stylesheet"
+      href="~/css/owner/financials/owner-financial-refunds.css"
+      asp-append-version="true" />
+
+<section class="refund-signature"
+         dir="rtl"
+         data-owner-financial-partial="refunds"
+         data-load-url="@Url.Content("~/Owner/Financials/Refunds")"
+         data-transfer-url="@Url.Content("~/Owner/Financials/Refunds/MarkTransferred")">
+
+    <header class="refund-signature__hero">
+        <div class="refund-signature__hero-copy">
+            <span class="refund-signature__hero-mark">
+                <i class="bi bi-arrow-counterclockwise"></i>
+            </span>
+
+            <div>
+                <span class="refund-signature__eyebrow">
+                    <i class="bi bi-stars"></i>
+                    التسويات والاستردادات
+                </span>
+
+                <h2>الاستردادات والإلغاءات</h2>
+
+                <p>
+                    واجهة مالية هادئة توضح لك المبلغ، حالة الطلب، وجهة العميل،
+                    وأثر العمولة بدون ازدحام أو تفاصيل مشتتة.
+                </p>
+            </div>
+        </div>
+
+        <div class="refund-signature__hero-money">
+            <span class="refund-signature__hero-money-icon">
+                <i class="bi bi-cash-stack"></i>
+            </span>
+
+            <div>
+                <small>الاستردادات المفتوحة المؤكدة</small>
+                <strong>@Money(summary.VerifiedOpenRefundAmount)</strong>
+                <span>@summary.OpenRequestsCount طلب مفتوح</span>
+            </div>
+        </div>
+    </header>
+
+    <section class="refund-signature__pulse">
+        <div class="is-ready">
+            <i class="bi bi-lightning-charge-fill"></i>
+            <span>جاهز للتحويل</span>
+            <strong>@summary.ReadyForTransferCount</strong>
+        </div>
+
+        <div class="is-waiting">
+            <i class="bi bi-person-clock"></i>
+            <span>بانتظار الحساب</span>
+            <strong>@summary.WaitingDestinationCount</strong>
+        </div>
+
+        <div class="is-processing">
+            <i class="bi bi-send-check"></i>
+            <span>بانتظار التأكيد</span>
+            <strong>@summary.WaitingCustomerConfirmationCount</strong>
+        </div>
+
+        <div class="is-review">
+            <i class="bi bi-shield-exclamation"></i>
+            <span>تحتاج مراجعة</span>
+            <strong>@summary.FundingReviewCount</strong>
+        </div>
+
+        <div class="is-returned">
+            <i class="bi bi-arrow-return-left"></i>
+            <span>عمولة عادت لرصيدك</span>
+            <strong>@Money(summary.TotalCommissionReleased)</strong>
+        </div>
+    </section>
+
+    <section class="refund-signature__toolbar">
+        <form data-refund-filter-form>
+
+            <label class="refund-signature__search">
+                <i class="bi bi-search"></i>
+                <input type="search"
+                       name="Search"
+                       value="@filter.Search"
+                       maxlength="100"
+                       placeholder="ابحث برقم الاسترداد، الحجز، العميل أو المرجع..." />
+            </label>
+
+            <label class="refund-signature__select">
+                <i class="bi bi-funnel"></i>
+                <select name="Status">
+                    <option value="">كل الحالات</option>
+                    @foreach (var option in statusOptions)
+                    {
+                        <option value="@option.Value"
+                            selected="@(string.Equals(option.Value, filter.Status, StringComparison.OrdinalIgnoreCase) ? "selected" : null)">
+                            @option.Label
+                        </option>
+                    }
+                </select>
+            </label>
+
+            <button type="button"
+                    class="refund-signature__more @(activeFilterCount > 0 ? "has-value" : string.Empty)"
+                    data-refund-toggle-advanced
+                    aria-expanded="@(activeFilterCount > 0 ? "true" : "false")">
+                <i class="bi bi-sliders2"></i>
+                فلاتر أكثر
+                @if (activeFilterCount > 0)
+                {
+                    <b>@activeFilterCount</b>
+                }
+            </button>
+
+            <button type="submit"
+                    class="refund-signature__apply">
+                <i class="bi bi-arrow-repeat"></i>
+                تطبيق
+            </button>
+
+            <div class="refund-signature__advanced"
+                 data-refund-advanced
+                 hidden="@(activeFilterCount == 0 ? "hidden" : null)">
+
+                <label>
+                    <span>رقم الحجز</span>
+                    <input type="number"
+                           name="BookingId"
+                           min="1"
+                           value="@filter.BookingId" />
+                </label>
+
+                <label>
+                    <span>رقم العميل</span>
+                    <input type="number"
+                           name="CustomerId"
+                           min="1"
+                           value="@filter.CustomerId" />
+                </label>
+
+                <label>
+                    <span>من تاريخ</span>
+                    <input type="date"
+                           name="FromDate"
+                           value="@(filter.FromDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))" />
+                </label>
+
+                <label>
+                    <span>إلى تاريخ</span>
+                    <input type="date"
+                           name="ToDate"
+                           value="@(filter.ToDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))" />
+                </label>
+
+                <label>
+                    <span>عدد النتائج</span>
+                    <select name="PageSize">
+                        <option value="10" selected="@(pageModel.PageSize == 10 ? "selected" : null)">10</option>
+                        <option value="25" selected="@(pageModel.PageSize == 25 ? "selected" : null)">25</option>
+                        <option value="50" selected="@(pageModel.PageSize == 50 ? "selected" : null)">50</option>
+                    </select>
+                </label>
+
+                <button type="button"
+                        data-refund-clear-filter>
+                    <i class="bi bi-eraser"></i>
+                    مسح
+                </button>
+            </div>
+
+            <input type="hidden"
+                   name="PageNumber"
+                   value="@currentPage"
+                   data-refund-page-input />
+        </form>
+    </section>
+
+    @if (summary.FundingReviewCount > 0)
+    {
+        <div class="refund-signature__review-note">
+            <i class="bi bi-shield-exclamation"></i>
+
+            <div>
+                <strong>@summary.FundingReviewCount سجل يحتاج مراجعة مالية</strong>
+                <span>
+                    لا يسمح النظام بتحويل هذه السجلات لأن مبلغ الاسترداد
+                    أكبر من المبلغ الإلكتروني المعتمد فعليًا.
+                </span>
+            </div>
+        </div>
+    }
+
+    @if (refunds.Count > 0)
+    {
+        <section class="refund-signature__list">
+            @foreach (var item in refunds)
+            {
+                var state = VisualState(item);
+                var stateLabel = VisualLabel(item);
+                var stateIcon = VisualIcon(item);
+
+                var proofUrl =
+                Url.Content(
+                $"~/Owner/Financials/Refunds/Proof/{item.RefundRequestId}");
+
+                var accountStepDone = item.HasRefundDestination;
+                var transferStepDone = item.TransferredAt.HasValue;
+                var confirmationStepDone = item.CustomerConfirmedAt.HasValue;
+
+                <article class="refund-signature-card is-@state"
+                 data-refund-card
+                 data-refund-id="@item.RefundRequestId"
+                 data-booking-id="@item.BookingId">
+
+                    <header class="refund-signature-card__top">
+                        <div class="refund-signature-card__identity">
+                            <span class="refund-signature-card__avatar">
+                                @(string.IsNullOrWhiteSpace(item.CustomerName)
+                                    ? "ع"
+                                    : StringInfo.GetNextTextElement(item.CustomerName.Trim()))
+                            </span>
+
+                            <div>
+                                <div class="refund-signature-card__meta">
+                                    <strong>R-@item.RefundRequestId.ToString("D5", culture)</strong>
+                                    <span>@RefundKind(item)</span>
+                                </div>
+
+                                <h3>@item.CustomerName</h3>
+
+                                <p>
+                                    <span>
+                                        <i class="bi bi-receipt"></i>
+                                        حجز #@item.BookingId
+                                    </span>
+
+                                    <span>
+                                        <i class="bi bi-calendar3"></i>
+                                        @DateText(item.RequestedAt)
+                                    </span>
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="refund-signature-card__status is-@state">
+                            <span>
+                                <i class="bi @stateIcon"></i>
+                            </span>
+                            <div>
+                                <small>الحالة</small>
+                                <strong>@stateLabel</strong>
+                            </div>
+                        </div>
+                    </header>
+
+                    <div class="refund-signature-card__content">
+
+                        <section class="refund-signature-card__amount">
+                            <span class="refund-signature-card__amount-icon">
+                                <i class="bi bi-wallet2"></i>
+                            </span>
+
+                            <div>
+                                <small>المبلغ المستحق للعميل</small>
+                                <strong>@Money(item.RefundAmount)</strong>
+
+                                @if (item.CommissionReleased > 0m)
+                                {
+                                    <span class="is-returned">
+                                        <i class="bi bi-arrow-return-left"></i>
+                                        عاد لرصيدك @Money(item.CommissionReleased)
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span>
+                                        <i class="bi bi-shield-check"></i>
+                                        محسوب من التسوية المالية
+                                    </span>
+                                }
+                            </div>
+                        </section>
+
+                        <section class="refund-signature-card__destination">
+                            <span>
+                                <i class="bi bi-credit-card-2-front"></i>
+                            </span>
+
+                            <div>
+                                <small>وجهة الاسترداد</small>
+
+                                @if (item.HasRefundDestination)
+                                {
+                                    <strong>
+                                        @(string.IsNullOrWhiteSpace(item.RefundWalletName)
+                                            ? "محفظة العميل"
+                                            : item.RefundWalletName)
+                                    </strong>
+
+                                    <em dir="ltr">@MaskAccount(item.RefundAccountNumber)</em>
+                                }
+                                else if (item.RefundAmount > 0m)
+                                {
+                                    <strong class="is-muted">
+                                        لم يحدد العميل حساب الاستلام بعد
+                                    </strong>
+                                }
+                                else
+                                {
+                                    <strong class="is-muted">
+                                        لا يوجد مبلغ يحتاج إلى تحويل
+                                    </strong>
+                                }
+                            </div>
+                        </section>
+
+                        <section class="refund-signature-card__reason">
+                            <span>
+                                <i class="bi bi-chat-left-text"></i>
+                            </span>
+
+                            <div>
+                                <small>سبب التسوية</small>
+                                <strong title="@item.Reason">
+                                    @(string.IsNullOrWhiteSpace(item.Reason)
+                                        ? "إلغاء أو تسوية مالية للحجز"
+                                        : item.Reason)
+                                </strong>
+                            </div>
+                        </section>
+
+                    </div>
+
+                    <div class="refund-signature-card__journey">
+                        <div class="is-done">
+                            <span><i class="bi bi-check-lg"></i></span>
+                            <small>طلب الاسترداد</small>
+                        </div>
+
+                        <i class="bi bi-chevron-left"></i>
+
+                        <div class="@(accountStepDone ? "is-done" : "is-current")">
+                            <span>
+                                <i class="bi @(accountStepDone ? "bi-check-lg" : "bi-person")"></i>
+                            </span>
+                            <small>حساب العميل</small>
+                        </div>
+
+                        <i class="bi bi-chevron-left"></i>
+
+                        <div class="@(transferStepDone ? "is-done" : item.CanMarkTransferred ? "is-current" : string.Empty)">
+                            <span>
+                                <i class="bi @(transferStepDone ? "bi-check-lg" : "bi-send")"></i>
+                            </span>
+                            <small>التحويل</small>
+                        </div>
+
+                        <i class="bi bi-chevron-left"></i>
+
+                        <div class="@(confirmationStepDone ? "is-done" : item.WaitingForCustomerConfirmation ? "is-current" : string.Empty)">
+                            <span>
+                                <i class="bi @(confirmationStepDone ? "bi-check-lg" : "bi-person-check")"></i>
+                            </span>
+                            <small>تأكيد العميل</small>
+                        </div>
+                    </div>
+
+                    <footer class="refund-signature-card__footer">
+                        <button type="button"
+                        class="is-details"
+                        data-refund-open-details="@item.RefundRequestId">
+                            <i class="bi bi-eye"></i>
+                            عرض التفاصيل
+                        </button>
+
+                        <div>
+                            @if (item.CanMarkTransferred)
+                            {
+                                <button type="button"
+                            class="is-transfer"
+                            data-refund-open-transfer="@item.RefundRequestId"
+                            data-refund-amount-text="@Money(item.RefundAmount)"
+                            data-refund-customer="@item.CustomerName"
+                            data-refund-wallet="@item.RefundWalletName"
+                            data-refund-account="@item.RefundAccountNumber"
+                            data-refund-beneficiary="@item.RefundBeneficiaryName">
+                                    <i class="bi bi-send-check"></i>
+                                    تنفيذ الاسترداد
+                                </button>
+                            }
+                            else if (item.WaitingForCustomerConfirmation)
+                            {
+                                <span class="is-state is-processing">
+                                    <i class="bi bi-hourglass-split"></i>
+                                    تم التحويل — بانتظار العميل
+                                </span>
+                            }
+                            else if (item.IsCompleted)
+                            {
+                                <span class="is-state is-completed">
+                                    <i class="bi bi-patch-check-fill"></i>
+                                    اكتملت التسوية
+                                </span>
+                            }
+                            else if (item.IsPending &&
+                            item.RefundAmount > 0m &&
+                            !item.IsRefundFundingVerified)
+                            {
+                                <span class="is-state is-review">
+                                    <i class="bi bi-shield-exclamation"></i>
+                                    يحتاج مراجعة مالية
+                                </span>
+                            }
+                            else if (item.IsPending &&
+                            item.RefundAmount > 0m &&
+                            !item.HasRefundDestination)
+                            {
+                                <span class="is-state is-waiting">
+                                    <i class="bi bi-person-clock"></i>
+                                    بانتظار حساب العميل
+                                </span>
+                            }
+                        </div>
+                    </footer>
+
+                </article>
+
+                <template data-refund-detail-template="@item.RefundRequestId">
+                    <div class="refund-signature-dossier">
+
+                        <section class="refund-signature-dossier__head">
+                            <div>
+                                <span>
+                                    <i class="bi bi-arrow-counterclockwise"></i>
+                                </span>
+
+                                <div>
+                                    <small>ملف التسوية المالي</small>
+                                    <h3>R-@item.RefundRequestId.ToString("D5", culture)</h3>
+                                    <p>الحجز #@item.BookingId · @item.CustomerName</p>
+                                </div>
+                            </div>
+
+                            <div>
+                                <small>المستحق للعميل</small>
+                                <strong>@Money(item.RefundAmount)</strong>
+                            </div>
+                        </section>
+
+                        @if (!item.IsRefundFundingVerified &&
+                       item.RefundAmount > 0m)
+                        {
+                            <section class="refund-signature-dossier__warning">
+                                <i class="bi bi-shield-exclamation"></i>
+                                <div>
+                                    <strong>هذا السجل يحتاج مراجعة مالية</strong>
+                                    <p>
+                                        مبلغ الاسترداد أكبر من AmountPaidOnline المعتمد،
+                                        ولذلك يمنع النظام تنفيذ التحويل من هذا السجل.
+                                    </p>
+                                </div>
+                            </section>
+                        }
+
+                        <section class="refund-signature-dossier__equation">
+                            <article>
+                                <small>المدفوع المعتمد</small>
+                                <strong>@Money(item.AmountPaidOnline)</strong>
+                            </article>
+
+                            <i class="bi bi-dash-lg"></i>
+
+                            <article>
+                                <small>احتفظت المنشأة</small>
+                                <strong>@Money(item.RetainedAmount)</strong>
+                            </article>
+
+                            <i class="bi bi-equals"></i>
+
+                            <article class="is-result">
+                                <small>الاسترداد</small>
+                                <strong>@Money(item.RefundAmount)</strong>
+                            </article>
+                        </section>
+
+                        <div class="refund-signature-dossier__grid">
+                            <section>
+                                <header>
+                                    <span><i class="bi bi-receipt"></i></span>
+                                    <div>
+                                        <small>الحجز</small>
+                                        <h4>الحساب الأصلي</h4>
+                                    </div>
+                                </header>
+
+                                <dl>
+                                    <div><dt>السعر الأصلي</dt><dd>@Money(item.BookingOriginalTotalPrice)</dd></div>
+                                    <div><dt>الخصم</dt><dd>@Money(item.BookingDiscountAmount)</dd></div>
+                                    <div><dt>السعر النهائي</dt><dd>@Money(item.BookingTotalPrice)</dd></div>
+                                    <div><dt>العربون المطلوب</dt><dd>@Money(item.RequiredDepositAmount)</dd></div>
+                                    <div><dt>المدفوع إلكترونيًا</dt><dd>@Money(item.AmountPaidOnline)</dd></div>
+                                </dl>
+                            </section>
+
+                            <section>
+                                <header>
+                                    <span class="is-orange"><i class="bi bi-percent"></i></span>
+                                    <div>
+                                        <small>المنصة</small>
+                                        <h4>تسوية العمولة</h4>
+                                    </div>
+                                </header>
+
+                                <dl>
+                                    <div><dt>العمولة السابقة</dt><dd>@Money(item.PreviousPlatformCommission)</dd></div>
+                                    <div><dt>أساس العمولة النهائي</dt><dd>@Money(item.CommissionBaseAmount)</dd></div>
+                                    <div><dt>نسبة العمولة</dt><dd>@item.CommissionRateSnapshot.ToString("0.##", culture)%</dd></div>
+                                    <div><dt>العمولة النهائية</dt><dd>@Money(item.PlatformCommission)</dd></div>
+                                    <div class="is-highlight"><dt>عاد إلى رصيدك</dt><dd>+ @Money(item.CommissionReleased)</dd></div>
+                                </dl>
+                            </section>
+
+                            <section>
+                                <header>
+                                    <span class="is-green"><i class="bi bi-wallet2"></i></span>
+                                    <div>
+                                        <small>العميل</small>
+                                        <h4>وجهة الاسترداد</h4>
+                                    </div>
+                                </header>
+
+                                <dl>
+                                    <div><dt>المحفظة</dt><dd>@(string.IsNullOrWhiteSpace(item.RefundWalletName) ? "—" : item.RefundWalletName)</dd></div>
+                                    <div><dt>المستفيد</dt><dd>@(string.IsNullOrWhiteSpace(item.RefundBeneficiaryName) ? "—" : item.RefundBeneficiaryName)</dd></div>
+                                    <div><dt>رقم الحساب</dt><dd dir="ltr">@(string.IsNullOrWhiteSpace(item.RefundAccountNumber) ? "—" : item.RefundAccountNumber)</dd></div>
+                                    <div><dt>رقم الحوالة</dt><dd dir="ltr">@(string.IsNullOrWhiteSpace(item.ReferenceNumber) ? "—" : item.ReferenceNumber)</dd></div>
+
+                                    @if (item.HasProof)
+                                    {
+                                        <div>
+                                            <dt>الإثبات</dt>
+                                            <dd>
+                                                <a href="@proofUrl"
+                                       target="_blank"
+                                       rel="noopener">
+                                                    عرض السند
+                                                    <i class="bi bi-box-arrow-up-left"></i>
+                                                </a>
+                                            </dd>
+                                        </div>
+                                    }
+                                </dl>
+                            </section>
+
+                            <section>
+                                <header>
+                                    <span class="is-violet"><i class="bi bi-clock-history"></i></span>
+                                    <div>
+                                        <small>التتبع</small>
+                                        <h4>مسار العملية</h4>
+                                    </div>
+                                </header>
+
+                                <div class="refund-signature-dossier__timeline">
+                                    <article class="is-done">
+                                        <span><i class="bi bi-check-lg"></i></span>
+                                        <div>
+                                            <strong>إنشاء الطلب</strong>
+                                            <small>@DateTimeText(item.RequestedAt)</small>
+                                        </div>
+                                    </article>
+
+                                    <article class="@(item.HasRefundDestination ? "is-done" : "is-current")">
+                                        <span><i class="bi @(item.HasRefundDestination ? "bi-check-lg" : "bi-person")"></i></span>
+                                        <div>
+                                            <strong>حساب الاستلام</strong>
+                                            <small>@(item.HasRefundDestination ? "تم تحديده" : "بانتظار العميل")</small>
+                                        </div>
+                                    </article>
+
+                                    <article class="@(item.TransferredAt.HasValue ? "is-done" : item.CanMarkTransferred ? "is-current" : "")">
+                                        <span><i class="bi @(item.TransferredAt.HasValue ? "bi-check-lg" : "bi-send")"></i></span>
+                                        <div>
+                                            <strong>تحويل المبلغ</strong>
+                                            <small>@(item.TransferredAt.HasValue ? DateTimeText(item.TransferredAt) : item.CanMarkTransferred ? "جاهز للتنفيذ" : "لم ينفذ بعد")</small>
+                                        </div>
+                                    </article>
+
+                                    <article class="@(item.CustomerConfirmedAt.HasValue ? "is-done" : item.WaitingForCustomerConfirmation ? "is-current" : "")">
+                                        <span><i class="bi @(item.CustomerConfirmedAt.HasValue ? "bi-check-lg" : "bi-person-check")"></i></span>
+                                        <div>
+                                            <strong>تأكيد العميل</strong>
+                                            <small>@(item.CustomerConfirmedAt.HasValue ? DateTimeText(item.CustomerConfirmedAt) : item.WaitingForCustomerConfirmation ? "بانتظار التأكيد" : "—")</small>
+                                        </div>
+                                    </article>
+                                </div>
+                            </section>
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(item.Reason) ||
+                       !string.IsNullOrWhiteSpace(item.Notes))
+                        {
+                            <section class="refund-signature-dossier__notes">
+                                @if (!string.IsNullOrWhiteSpace(item.Reason))
+                                {
+                                    <div><small>سبب التسوية</small><strong>@item.Reason</strong></div>
+                                }
+
+                                @if (!string.IsNullOrWhiteSpace(item.Notes))
+                                {
+                                    <div><small>ملاحظات</small><strong>@item.Notes</strong></div>
+                                }
+                            </section>
+                        }
+                    </div>
+                </template>
+            }
+        </section>
+
+        <footer class="refund-signature__pager">
+            <span>
+                عرض
+                <strong>@pageModel.FirstItemNumber–@pageModel.LastItemNumber</strong>
+                من
+                <strong>@pageModel.TotalCount</strong>
+            </span>
+
+            <div>
+                <button type="button"
+                    data-refund-page="@(currentPage - 1)"
+                    disabled="@(currentPage <= 1 ? "disabled" : null)">
+                    <i class="bi bi-chevron-right"></i>
+                </button>
+
+                <span>
+                    صفحة <strong>@currentPage</strong>
+                    من <strong>@Math.Max(1, totalPages)</strong>
+                </span>
+
+                <button type="button"
+                    data-refund-page="@(currentPage + 1)"
+                    disabled="@(totalPages == 0 || currentPage >= totalPages ? "disabled" : null)">
+                    <i class="bi bi-chevron-left"></i>
+                </button>
+            </div>
+        </footer>
+    }
+    else
+    {
+        <section class="refund-signature__empty">
+            <span><i class="bi bi-arrow-counterclockwise"></i></span>
+            <h3>لا توجد استردادات</h3>
+            <p>عند إنشاء أول طلب استرداد سيظهر هنا تلقائيًا.</p>
+
+            @if (activeFilterCount > 0)
+            {
+                <button type="button"
+                data-refund-clear-filter>
+                    مسح الفلاتر
+                </button>
+            }
+        </section>
+    }
+
+    <dialog class="refund-signature__details-dialog"
+            data-refund-details-dialog>
+        <div class="refund-signature__dialog-shell">
+
+            <header class="refund-signature__dialog-header">
+                <div>
+                    <span>
+                        <i class="bi bi-file-earmark-text"></i>
+                    </span>
+
+                    <div>
+                        <small>Refund dossier</small>
+                        <h2>تفاصيل الاسترداد</h2>
+                        <p>الحساب الكامل للتسوية في نافذة واحدة مرتبة.</p>
+                    </div>
+                </div>
+
+                <button type="button"
+                        data-refund-close-details
+                        aria-label="إغلاق">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </header>
+
+            <div class="refund-signature__dialog-body"
+                 data-refund-details-content></div>
+        </div>
+    </dialog>
+
+    <dialog class="refund-signature__transfer-dialog"
+            data-refund-transfer-dialog>
+        <form class="refund-signature__dialog-shell"
+              method="post"
+              enctype="multipart/form-data"
+              data-refund-transfer-form>
+
+            @Html.AntiForgeryToken()
+
+            <header class="refund-signature__dialog-header">
+                <div>
+                    <span class="is-green">
+                        <i class="bi bi-send-check"></i>
+                    </span>
+
+                    <div>
+                        <small>تنفيذ الاسترداد</small>
+                        <h2>تسجيل تحويل العميل</h2>
+                        <p>حوّل المبلغ خارج النظام ثم سجّل رقم الحوالة والإثبات.</p>
+                    </div>
+                </div>
+
+                <button type="button"
+                        data-refund-close-transfer
+                        aria-label="إغلاق">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </header>
+
+            <div class="refund-signature__dialog-body">
+                <input type="hidden"
+                       name="RefundRequestId"
+                       data-refund-transfer-id />
+
+                <section class="refund-signature-transfer__summary">
+                    <article class="is-amount">
+                        <small>المبلغ المطلوب تحويله</small>
+                        <strong data-refund-transfer-amount>—</strong>
+                        <em>ثابت من النظام</em>
+                    </article>
+
+                    <article>
+                        <small>العميل</small>
+                        <strong data-refund-transfer-customer>—</strong>
+                    </article>
+
+                    <article>
+                        <small>المحفظة</small>
+                        <strong data-refund-transfer-wallet>—</strong>
+                    </article>
+
+                    <article class="is-account">
+                        <small>رقم الحساب</small>
+                        <strong dir="ltr"
+                                data-refund-transfer-account>—</strong>
+
+                        <button type="button"
+                                data-refund-copy-account
+                                title="نسخ رقم الحساب">
+                            <i class="bi bi-copy"></i>
+                        </button>
+                    </article>
+                </section>
+
+                <div class="refund-signature-transfer__beneficiary">
+                    <i class="bi bi-person-check"></i>
+                    <span>المستفيد</span>
+                    <strong data-refund-transfer-beneficiary>—</strong>
+                </div>
+
+                <section class="refund-signature-transfer__fields">
+                    <label>
+                        <span>رقم الحوالة</span>
+
+                        <div>
+                            <i class="bi bi-hash"></i>
+
+                            <input type="text"
+                                   name="ReferenceNumber"
+                                   maxlength="100"
+                                   autocomplete="off"
+                                   required
+                                   placeholder="رقم العملية كما يظهر في السند" />
+                        </div>
+                    </label>
+
+                    <label class="is-proof">
+                        <span>إثبات التحويل</span>
+
+                        <div class="refund-signature-transfer__proof"
+                             data-refund-proof-drop>
+
+                            <input type="file"
+                                   name="proofFile"
+                                   accept=".jpg,.jpeg,.png,.webp"
+                                   required />
+
+                            <i class="bi bi-cloud-arrow-up"></i>
+
+                            <strong data-refund-proof-title>
+                                اختر صورة سند التحويل
+                            </strong>
+
+                            <small data-refund-proof-subtitle>
+                                JPG / PNG / WEBP — حتى 5 MB
+                            </small>
+                        </div>
+                    </label>
+
+                    <label class="is-notes">
+                        <span>
+                            ملاحظة
+                            <em>اختياري</em>
+                        </span>
+
+                        <textarea name="Notes"
+                                  rows="3"
+                                  maxlength="1000"
+                                  placeholder="ملاحظة قصيرة إن وجدت..."></textarea>
+                    </label>
+                </section>
+
+                <div class="refund-signature-transfer__message"
+                     data-refund-transfer-message
+                     role="alert"></div>
+            </div>
+
+            <footer class="refund-signature__dialog-footer">
+                <span>
+                    <i class="bi bi-shield-check"></i>
+                    بعد التسجيل ينتظر النظام تأكيد العميل.
+                </span>
+
+                <div>
+                    <button type="button"
+                            class="is-light"
+                            data-refund-close-transfer>
+                        إلغاء
+                    </button>
+
+                    <button type="submit"
+                            data-refund-submit-transfer>
+                        <i class="bi bi-send-check"></i>
+                        تسجيل التحويل
+                    </button>
+                </div>
+            </footer>
+        </form>
+    </dialog>
+
+</section>

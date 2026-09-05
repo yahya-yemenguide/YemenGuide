@@ -1,0 +1,230 @@
+﻿@using YemenGuide.Core.DTOs.Admin
+@model AdminFinancialManagePageDto
+
+@{
+    var shell = Model?.Shell ?? new AdminFinancialShellDto();
+    var access = Model?.Access ?? new AdminFinancialAccessDto();
+    var selectedTab = string.IsNullOrWhiteSpace(shell.SelectedTab)
+        ? AdminFinancialTabs.Overview
+        : shell.SelectedTab.Trim().ToLowerInvariant();
+
+    bool IsActive(string tab) =>
+        string.Equals(selectedTab, tab, StringComparison.OrdinalIgnoreCase);
+
+    var canOpenManagement =
+        access.CanManageSettings ||
+        access.CanManagePlatformWallets;
+
+    ViewData["Title"] = "الإدارة المالية";
+}
+
+<link rel="stylesheet" href="~/css/admin/financials/admin-financials-shell.css" asp-append-version="true" />
+<link rel="stylesheet" href="~/css/admin/financials/admin-financial-overview.css" asp-append-version="true" />
+<link rel="stylesheet" href="~/css/admin/financials/admin-commission-guarantee.css" asp-append-version="true" />
+<link rel="stylesheet" href="~/css/admin/financials/admin-topup-review.css" asp-append-version="true" />
+<link rel="stylesheet" href="~/css/admin/financials/admin-financial-transactions.css" asp-append-version="true" />
+<link rel="stylesheet" href="~/css/admin/financials/admin-financial-reports.css" asp-append-version="true" />
+<link rel="stylesheet" href="~/css/admin/financials/admin-financial-management.css" asp-append-version="true" />
+
+<main class="af-shell"
+      id="adminFinancialsRoot"
+      dir="rtl"
+      data-selected-tab="@selectedTab"
+      data-shell-url="@Url.Action("Shell", "AdminFinancials", new { area = "Admin" })"
+      data-management-url="@Url.Action("Index", "AdminFinancialManagement", new { area = "Admin" })">
+
+    <section class="af-hero" aria-labelledby="adminFinancialsTitle">
+        <div class="af-hero__content">
+            <div class="af-hero__eyebrow">
+                <span class="af-hero__eyebrow-mark" aria-hidden="true"></span>
+                مركز الإدارة المالية
+            </div>
+
+            <div class="af-hero__headline-row">
+                <div>
+                    <h1 class="af-hero__title" id="adminFinancialsTitle">الإدارة المالية</h1>
+                    <p class="af-hero__subtitle">
+                        متابعة عمولات المنصة، أرصدة الضمان، طلبات الشحن والحركات المالية
+                        من مكان واحد واضح وآمن.
+                    </p>
+                </div>
+
+                <div class="af-hero__actions">
+                    <button type="button"
+                            class="af-btn af-btn--ghost"
+                            data-finance-refresh>
+                        <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+                        <span>تحديث</span>
+                    </button>
+
+                    @if (canOpenManagement)
+                    {
+                        <button type="button"
+                            class="af-btn af-btn--primary"
+                            data-finance-management-open>
+                            <i class="bi bi-sliders2" aria-hidden="true"></i>
+                            <span>إدارة المالية</span>
+                        </button>
+                    }
+                </div>
+            </div>
+
+            <div class="af-hero__meta">
+                <span class="af-meta-pill">
+                    <i class="bi bi-cash-coin" aria-hidden="true"></i>
+                    العملة:
+                    <strong>@shell.Currency</strong>
+                </span>
+
+                <span class="af-meta-pill">
+                    <i class="bi bi-clock" aria-hidden="true"></i>
+                    آخر تحديث:
+                    <strong>@shell.GeneratedAt.ToString("yyyy/MM/dd - HH:mm")</strong>
+                </span>
+            </div>
+        </div>
+
+        <div class="af-attention-grid" aria-label="تنبيهات مالية سريعة">
+            @if (access.CanReviewTopUps)
+            {
+                <button type="button"
+                    class="af-attention-card af-attention-card--cyan"
+                    data-finance-tab="@AdminFinancialTabs.TopUps"
+                    data-finance-tab-url="@Url.Action("Index", "AdminTopUpReview", new { area = "Admin", Status = AdminCommissionTopUpStatuses.Pending })">
+                    <span class="af-attention-card__icon"><i class="bi bi-receipt-cutoff"></i></span>
+                    <span class="af-attention-card__body">
+                        <strong data-shell-counter="pending-topups">@shell.PendingTopUpsCount</strong>
+                        <small>طلبات شحن معلقة</small>
+                    </span>
+                    <i class="bi bi-arrow-left-short af-attention-card__arrow"></i>
+                </button>
+            }
+
+            <button type="button"
+                    class="af-attention-card af-attention-card--gold"
+                    data-finance-tab="@AdminFinancialTabs.CommissionGuarantee"
+                    data-finance-tab-url="@Url.Action("Index", "AdminCommissionGuarantee", new { area = "Admin", IsLowBalance = true })">
+                <span class="af-attention-card__icon"><i class="bi bi-battery-half"></i></span>
+                <span class="af-attention-card__body">
+                    <strong data-shell-counter="low-balance">@shell.LowBalanceAccountsCount</strong>
+                    <small>أرصدة منخفضة</small>
+                </span>
+                <i class="bi bi-arrow-left-short af-attention-card__arrow"></i>
+            </button>
+
+            <button type="button"
+                    class="af-attention-card af-attention-card--rose"
+                    data-finance-tab="@AdminFinancialTabs.CommissionGuarantee"
+                    data-finance-tab-url="@Url.Action("Index", "AdminCommissionGuarantee", new { area = "Admin", HasDebt = true })">
+                <span class="af-attention-card__icon"><i class="bi bi-exclamation-circle"></i></span>
+                <span class="af-attention-card__body">
+                    <strong data-shell-counter="in-debt">@shell.InDebtAccountsCount</strong>
+                    <small>حسابات عليها دين</small>
+                </span>
+                <i class="bi bi-arrow-left-short af-attention-card__arrow"></i>
+            </button>
+
+            <button type="button"
+                    class="af-attention-card af-attention-card--slate"
+                    data-finance-tab="@AdminFinancialTabs.CommissionGuarantee"
+                    data-finance-tab-url="@Url.Action("Index", "AdminCommissionGuarantee", new { area = "Admin", IsBookingSuspended = true })">
+                <span class="af-attention-card__icon"><i class="bi bi-pause-circle"></i></span>
+                <span class="af-attention-card__body">
+                    <strong data-shell-counter="suspended">@shell.SuspendedAccountsCount</strong>
+                    <small>حسابات موقوفة</small>
+                </span>
+                <i class="bi bi-arrow-left-short af-attention-card__arrow"></i>
+            </button>
+        </div>
+    </section>
+
+    <section class="af-workspace">
+        <nav class="af-tabs" role="tablist" aria-label="تبويبات الإدارة المالية">
+            @if (access.CanView)
+            {
+                <button type="button"
+                    class="af-tab @(IsActive(AdminFinancialTabs.Overview) ? "is-active" : null)"
+                    data-finance-tab="@AdminFinancialTabs.Overview"
+                    data-finance-tab-url="@Url.Action("Index", "AdminFinancialOverview", new { area = "Admin" })">
+                    <span class="af-tab__icon"><i class="bi bi-grid-1x2"></i></span>
+                    <span>نظرة عامة</span>
+                </button>
+
+                <button type="button"
+                    class="af-tab @(IsActive(AdminFinancialTabs.CommissionGuarantee) ? "is-active" : null)"
+                    data-finance-tab="@AdminFinancialTabs.CommissionGuarantee"
+                    data-finance-tab-url="@Url.Action("Index", "AdminCommissionGuarantee", new { area = "Admin" })">
+                    <span class="af-tab__icon"><i class="bi bi-shield-check"></i></span>
+                    <span>العمولات والضمان</span>
+                </button>
+            }
+
+            @if (access.CanReviewTopUps)
+            {
+                <button type="button"
+                    class="af-tab @(IsActive(AdminFinancialTabs.TopUps) ? "is-active" : null)"
+                    data-finance-tab="@AdminFinancialTabs.TopUps"
+                    data-finance-tab-url="@Url.Action("Index", "AdminTopUpReview", new { area = "Admin" })">
+                    <span class="af-tab__icon"><i class="bi bi-wallet2"></i></span>
+                    <span>طلبات الشحن</span>
+                    @if (shell.PendingTopUpsCount > 0)
+                    {
+                        <span class="af-tab__count">@shell.PendingTopUpsCount</span>
+                    }
+                </button>
+            }
+
+            @if (access.CanView)
+            {
+                <button type="button"
+                    class="af-tab @(IsActive(AdminFinancialTabs.Transactions) ? "is-active" : null)"
+                    data-finance-tab="@AdminFinancialTabs.Transactions"
+                    data-finance-tab-url="@Url.Action("Index", "AdminFinancialTransactions", new { area = "Admin" })">
+                    <span class="af-tab__icon"><i class="bi bi-arrow-left-right"></i></span>
+                    <span>كشف الحركات</span>
+                </button>
+            }
+
+            @if (access.CanViewReports)
+            {
+                <button type="button"
+                    class="af-tab @(IsActive(AdminFinancialTabs.Reports) ? "is-active" : null)"
+                    data-finance-tab="@AdminFinancialTabs.Reports"
+                    data-finance-tab-url="@Url.Action("Index", "AdminFinancialReports", new { area = "Admin" })">
+                    <span class="af-tab__icon"><i class="bi bi-file-earmark-bar-graph"></i></span>
+                    <span>التقارير والمستندات</span>
+                </button>
+            }
+        </nav>
+
+        <div class="af-tab-panel" id="adminFinancialTabHost" aria-live="polite">
+            <div class="af-loading-state" data-finance-loading>
+                <div class="af-loading-state__mark"><span></span><span></span><span></span></div>
+                <strong>جارٍ تجهيز البيانات المالية</strong>
+                <p>لحظات بسيطة...</p>
+            </div>
+        </div>
+    </section>
+
+    <div class="af-drawer-backdrop" data-finance-management-backdrop hidden></div>
+    <aside class="af-management-drawer"
+           data-finance-management-drawer
+           aria-hidden="true"
+           hidden>
+        <div class="af-management-drawer__host" data-finance-management-host></div>
+    </aside>
+
+    <div class="af-global-loader" data-finance-global-loader hidden>
+        <div class="af-global-loader__spinner"></div>
+    </div>
+
+    <div class="af-toast-stack" id="adminFinanceToastStack" aria-live="polite"></div>
+</main>
+
+<script src="~/js/admin/financials/admin-financials-shell.js" asp-append-version="true"></script>
+<script src="~/js/admin/financials/admin-financial-overview.js" asp-append-version="true"></script>
+<script src="~/js/admin/financials/admin-commission-guarantee.js" asp-append-version="true"></script>
+<script src="~/js/admin/financials/admin-topup-review.js" asp-append-version="true"></script>
+<script src="~/js/admin/financials/admin-financial-transactions.js" asp-append-version="true"></script>
+<script src="~/js/admin/financials/admin-financial-reports.js" asp-append-version="true"></script>
+<script src="~/js/admin/financials/admin-financial-management.js" asp-append-version="true"></script>

@@ -1,0 +1,691 @@
+@using System
+@using System.Collections.Generic
+@using System.Globalization
+@using System.Linq
+@using YemenGuide.Core.DTOs.Owner
+
+@model OwnerWalletsTabDto
+
+@{
+    var pageModel = Model ?? new OwnerWalletsTabDto();
+    var summary = pageModel.Summary ?? new OwnerWalletsSummaryDto();
+    var walletItems = pageModel.Wallets ?? new List<OwnerWalletItemDto>();
+    var walletOptions = pageModel.SupportedWallets ?? new List<SupportedWalletOptionDto>();
+
+    var activeWalletOptions =
+        walletOptions
+            .Where(walletOption => walletOption.IsActive)
+            .ToList();
+
+    var numberCulture = CultureInfo.GetCultureInfo("en-US");
+
+    string DateTimeText(DateTime? value)
+    {
+        return value.HasValue
+            ? value.Value.ToString("dd/MM/yyyy - hh:mm tt", numberCulture)
+            : "لم يُحدّث بعد";
+    }
+
+    string AccountState(OwnerWalletItemDto walletItem)
+    {
+        if (!walletItem.IsProviderActive)
+        {
+            return "provider-off";
+        }
+
+        return walletItem.IsActive
+            ? "active"
+            : "paused";
+    }
+
+    string AccountStateLabel(OwnerWalletItemDto walletItem)
+    {
+        if (!walletItem.IsProviderActive)
+        {
+            return "الشبكة موقوفة";
+        }
+
+        return walletItem.IsActive
+            ? "نشط للعملاء"
+            : "متوقف";
+    }
+
+    string AccountStateIcon(OwnerWalletItemDto walletItem)
+    {
+        if (!walletItem.IsProviderActive)
+        {
+            return "bi-cloud-slash";
+        }
+
+        return walletItem.IsActive
+            ? "bi-patch-check-fill"
+            : "bi-pause-circle-fill";
+    }
+}
+
+<link rel="stylesheet"
+      href="~/css/owner/financials/owner-financial-receiving-wallets.css"
+      asp-append-version="true" />
+
+<section class="wallet-vault"
+         dir="rtl"
+         data-owner-financial-partial="wallets"
+         data-load-url="@Url.Content("~/Owner/Financials/ReceivingWallets")"
+         data-save-url="@Url.Content("~/Owner/Financials/ReceivingWallets/Save")"
+         data-status-url="@Url.Content("~/Owner/Financials/ReceivingWallets/Status")"
+         data-total-accounts="@summary.TotalAccounts"
+         data-active-accounts="@summary.ActiveAccounts">
+
+    <header class="wallet-vault__hero">
+        <div class="wallet-vault__hero-copy">
+            <span class="wallet-vault__hero-icon">
+                <i class="bi bi-wallet2"></i>
+            </span>
+
+            <div>
+                <span class="wallet-vault__eyebrow">
+                    <i class="bi bi-stars"></i>
+                    حسابات استقبال دفعات العملاء
+                </span>
+
+                <h2>حسابات الاستقبال</h2>
+
+                <p>
+                    أدر حساباتك التجارية التي تظهر للعملاء عند الدفع،
+                    وعدّل بياناتها أو أوقفها متى احتجت.
+                </p>
+            </div>
+        </div>
+
+        <div class="wallet-vault__hero-side">
+            <div class="wallet-vault__scope">
+                <small>نطاق الحسابات</small>
+                <strong>حساب المالك بالكامل</strong>
+                <span>
+                    <i class="bi bi-buildings"></i>
+                    تُستخدم في جميع منشآتك
+                </span>
+            </div>
+
+            <button type="button"
+                    class="wallet-vault__add"
+                    data-ofw-open-add
+                    @(pageModel.CanAddWallet ? null : "disabled")>
+                <i class="bi bi-plus-lg"></i>
+                إضافة حساب استقبال
+            </button>
+        </div>
+    </header>
+
+    @if (summary.NeedsReceivingAccount)
+    {
+        <section class="wallet-vault__notice is-warning">
+            <span>
+                <i class="bi bi-exclamation-triangle-fill"></i>
+            </span>
+
+            <div>
+                <strong>لا يوجد حساب استقبال نشط</strong>
+                <p>
+                    لن يظهر للعملاء أي حساب دفع حتى تضيف حسابًا جديدًا
+                    أو تعيد تفعيل حساب موجود.
+                </p>
+            </div>
+
+            @if (pageModel.CanAddWallet)
+            {
+                <button type="button" data-ofw-open-add>
+                    إضافة أول حساب
+                </button>
+            }
+        </section>
+    }
+    else if (summary.UnavailableLinkedWallets > 0)
+    {
+        <section class="wallet-vault__notice is-info">
+            <span>
+                <i class="bi bi-info-circle-fill"></i>
+            </span>
+
+            <div>
+                <strong>توجد شبكة مرتبطة أوقفتها الإدارة</strong>
+                <p>
+                    الحساب محفوظ، لكنه لا يظهر للعملاء حتى تعيد الإدارة
+                    تفعيل شبكة الدفع.
+                </p>
+            </div>
+        </section>
+    }
+
+    <section class="wallet-vault__metrics">
+        <article>
+            <span class="is-cyan">
+                <i class="bi bi-wallet"></i>
+            </span>
+
+            <div>
+                <small>إجمالي الحسابات</small>
+                <strong>@summary.TotalAccounts.ToString("N0", numberCulture)</strong>
+            </div>
+        </article>
+
+        <article>
+            <span class="is-green">
+                <i class="bi bi-check-circle-fill"></i>
+            </span>
+
+            <div>
+                <small>نشطة للعملاء</small>
+                <strong>@summary.ActiveAccounts.ToString("N0", numberCulture)</strong>
+            </div>
+        </article>
+
+        <article>
+            <span class="is-violet">
+                <i class="bi bi-pause-circle-fill"></i>
+            </span>
+
+            <div>
+                <small>متوقفة أو غير متاحة</small>
+                <strong>@summary.InactiveAccounts.ToString("N0", numberCulture)</strong>
+            </div>
+        </article>
+
+        <article>
+            <span class="is-orange">
+                <i class="bi bi-plus-circle-fill"></i>
+            </span>
+
+            <div>
+                <small>شبكات متاحة للإضافة</small>
+                <strong>@summary.AvailableWallets.ToString("N0", numberCulture)</strong>
+            </div>
+        </article>
+    </section>
+
+    <section class="wallet-vault__accounts">
+
+        <header class="wallet-vault__section-head">
+            <div>
+                <span>
+                    <i class="bi bi-credit-card-2-front"></i>
+                </span>
+
+                <div>
+                    <small>حساباتك التجارية</small>
+                    <h3>حسابات استقبال الدفعات</h3>
+                    <p>ثلاث بطاقات في السطر على الشاشات الكبيرة، بدون جداول.</p>
+                </div>
+            </div>
+
+            <em>
+                آخر تحديث:
+                @DateTimeText(pageModel.LastUpdatedAt)
+            </em>
+        </header>
+
+        @if (walletItems.Count > 0)
+        {
+            <div class="wallet-vault__grid">
+
+                @foreach (var walletItem in walletItems)
+                {
+                    var state = AccountState(walletItem);
+
+                    <article class="wallet-card is-@state"
+                     data-ofw-account-card
+                     data-owner-wallet-id="@walletItem.OwnerWalletId">
+
+                        <div class="wallet-card__shine"></div>
+
+                        <header class="wallet-card__top">
+                            <div class="wallet-card__brand">
+                                @if (!string.IsNullOrWhiteSpace(walletItem.LogoPath))
+                                {
+                                    <span class="wallet-card__logo has-image">
+                                        <img src="@Url.Content(walletItem.LogoPath)"
+                                 alt=""
+                                 loading="lazy" />
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="wallet-card__logo is-placeholder">
+                                        @walletItem.WalletInitial
+                                    </span>
+                                }
+
+                                <div>
+                                    <small>شبكة الدفع</small>
+                                    <h4>@walletItem.WalletName</h4>
+                                </div>
+                            </div>
+
+                            <span class="wallet-card__status is-@state">
+                                <i class="bi @AccountStateIcon(walletItem)"></i>
+                                @AccountStateLabel(walletItem)
+                            </span>
+                        </header>
+
+                        <section class="wallet-card__number">
+                            <small>رقم الحساب التجاري</small>
+
+                            <div>
+                                <strong dir="ltr">
+                                    @walletItem.AccountNumberDisplay
+                                </strong>
+
+                                <button type="button"
+                                title="نسخ رقم الحساب"
+                                aria-label="نسخ رقم الحساب"
+                                data-ofw-copy
+                                data-copy-value="@walletItem.AccountNumber">
+                                    <i class="bi bi-copy"></i>
+                                </button>
+                            </div>
+
+                            <span dir="ltr">
+                                @walletItem.MaskedAccountNumber
+                            </span>
+                        </section>
+
+                        <section class="wallet-card__beneficiary">
+                            <span>
+                                <i class="bi bi-person-badge"></i>
+                            </span>
+
+                            <div>
+                                <small>اسم المستفيد</small>
+                                <strong>@walletItem.BeneficiaryName</strong>
+                            </div>
+                        </section>
+
+                        <section class="wallet-card__meta">
+                            <span>
+                                <i class="bi bi-clock-history"></i>
+                                @DateTimeText(walletItem.UpdatedAt)
+                            </span>
+
+                            <span class="@(walletItem.IsProviderActive ? "is-provider-on" : "is-provider-off")">
+                                <i class="bi @(walletItem.IsProviderActive ? "bi-broadcast-pin" : "bi-cloud-slash")"></i>
+                                @walletItem.ProviderStatusLabel
+                            </span>
+                        </section>
+
+                        @if (!walletItem.IsProviderActive)
+                        {
+                            <div class="wallet-card__warning">
+                                <i class="bi bi-cloud-slash"></i>
+                                <span>
+                                    أوقفت الإدارة هذه الشبكة مؤقتًا.
+                                    الحساب محفوظ ولن يظهر للعملاء.
+                                </span>
+                            </div>
+                        }
+
+                        <footer class="wallet-card__actions">
+                            <button type="button"
+                            class="is-edit"
+                            data-ofw-open-edit
+                            data-owner-wallet-id="@walletItem.OwnerWalletId"
+                            data-wallet-id="@walletItem.WalletId"
+                            data-wallet-name="@walletItem.WalletName"
+                            data-account-number="@walletItem.AccountNumber"
+                            data-beneficiary-name="@walletItem.BeneficiaryName"
+                            data-is-active="@walletItem.IsActive.ToString().ToLowerInvariant()"
+                            @(walletItem.CanEdit ? null : "disabled")>
+                                <i class="bi bi-pencil-square"></i>
+                                تعديل
+                            </button>
+
+                            @if (walletItem.IsActive)
+                            {
+                                <button type="button"
+                            class="is-stop"
+                            data-ofw-request-status
+                            data-owner-wallet-id="@walletItem.OwnerWalletId"
+                            data-wallet-name="@walletItem.WalletName"
+                            data-next-active="false">
+                                    <i class="bi bi-pause-circle"></i>
+                                    إيقاف
+                                </button>
+                            }
+                            else
+                            {
+                                <button type="button"
+                            class="is-start"
+                            data-ofw-request-status
+                            data-owner-wallet-id="@walletItem.OwnerWalletId"
+                            data-wallet-name="@walletItem.WalletName"
+                            data-next-active="true"
+                            @(walletItem.CanActivate ? null : "disabled")>
+                                    <i class="bi bi-play-circle"></i>
+                                    تفعيل
+                                </button>
+                            }
+                        </footer>
+
+                    </article>
+                }
+
+            </div>
+        }
+        else
+        {
+            <div class="wallet-vault__empty">
+                <span>
+                    <i class="bi bi-wallet2"></i>
+                </span>
+
+                <h4>لا توجد حسابات استقبال بعد</h4>
+
+                <p>
+                    أضف حسابك الأول حتى يتمكن العملاء من معرفة
+                    وجهة تحويل دفعات الحجوزات.
+                </p>
+
+                @if (pageModel.CanAddWallet)
+                {
+                    <button type="button" data-ofw-open-add>
+                        <i class="bi bi-plus-lg"></i>
+                        إضافة أول حساب
+                    </button>
+                }
+            </div>
+        }
+
+    </section>
+
+    <dialog class="wallet-vault__dialog"
+            data-ofw-wallet-dialog
+            aria-labelledby="ownerWalletDialogTitle">
+
+        <div class="wallet-vault__dialog-shell">
+
+            <header class="wallet-vault__dialog-head">
+                <div>
+                    <span class="wallet-vault__dialog-icon">
+                        <i class="bi bi-wallet2"></i>
+                    </span>
+
+                    <div>
+                        <small data-ofw-dialog-eyebrow>
+                            إضافة حساب جديد
+                        </small>
+
+                        <h2 id="ownerWalletDialogTitle"
+                            data-ofw-dialog-title>
+                            ربط حساب استقبال
+                        </h2>
+
+                        <p>
+                            اختر شبكة الدفع ثم أدخل بيانات الحساب
+                            التي ستظهر للعميل.
+                        </p>
+                    </div>
+                </div>
+
+                <button type="button"
+                        data-ofw-close-dialog
+                        aria-label="إغلاق نافذة حساب الاستقبال">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </header>
+
+            <form data-ofw-wallet-form novalidate>
+                @Html.AntiForgeryToken()
+
+                <input type="hidden"
+                       name="OwnerWalletId"
+                       value=""
+                       data-ofw-owner-wallet-id />
+
+                <div class="wallet-vault__form-alert"
+                     data-ofw-form-alert
+                     role="alert"
+                     aria-live="assertive"
+                     hidden>
+                </div>
+
+                <section class="wallet-vault__provider-step">
+                    <div class="wallet-vault__step-title">
+                        <span>1</span>
+                        <div>
+                            <strong>اختر شبكة الدفع</strong>
+                            <small>يمكن ربط حساب واحد لكل شبكة نشطة.</small>
+                        </div>
+                    </div>
+
+                    <div class="wallet-vault__provider-grid"
+                         data-ofw-wallet-choice-grid>
+
+                        @foreach (var walletOption in activeWalletOptions)
+                        {
+                            <button type="button"
+                                class="wallet-provider-choice @(walletOption.IsLinked ? "is-linked" : string.Empty)"
+                                data-ofw-wallet-choice
+                                data-wallet-id="@walletOption.WalletId"
+                                data-wallet-name="@walletOption.WalletName"
+                                data-owner-wallet-id="@(walletOption.OwnerWalletId?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)"
+                                @(walletOption.IsLinked ? "disabled" : null)>
+
+                                @if (!string.IsNullOrWhiteSpace(walletOption.LogoPath))
+                                {
+                                    <span class="wallet-provider-choice__logo has-image">
+                                        <img src="@Url.Content(walletOption.LogoPath)"
+                                     alt=""
+                                     loading="lazy" />
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="wallet-provider-choice__logo is-placeholder">
+                                        @walletOption.WalletInitial
+                                    </span>
+                                }
+
+                                <span>
+                                    <strong>@walletOption.WalletName</strong>
+                                    <small>
+                                        @(walletOption.IsLinked
+                                            ? "مرتبطة بحسابك"
+                                            : "متاحة للإضافة")
+                                    </small>
+                                </span>
+
+                                <i class="bi @(walletOption.IsLinked ? "bi-lock-fill" : "bi-check-circle-fill")"></i>
+                            </button>
+                        }
+
+                    </div>
+
+                    <label class="wallet-vault__field is-wallet-select">
+                        <span>
+                            شبكة الدفع
+                            <b>*</b>
+                        </span>
+
+                        <div class="wallet-vault__select-shell">
+                            <select name="WalletId"
+                                    required
+                                    data-ofw-wallet-id>
+                                <option value="">اختر شبكة الدفع</option>
+
+                                @foreach (var walletOption in activeWalletOptions)
+                                {
+                                    <option value="@walletOption.WalletId"
+                                        data-wallet-name="@walletOption.WalletName"
+                                        data-owner-wallet-id="@(walletOption.OwnerWalletId?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)">
+                                        @walletOption.WalletName
+                                    </option>
+                                }
+                            </select>
+
+                            <i class="bi bi-chevron-down"></i>
+                        </div>
+
+                        <span class="wallet-vault__field-error"
+                              data-ofw-error-for="WalletId"></span>
+                    </label>
+                </section>
+
+                <section class="wallet-vault__data-step">
+                    <div class="wallet-vault__step-title">
+                        <span>2</span>
+                        <div>
+                            <strong>بيانات الحساب</strong>
+                            <small>أدخل البيانات كما هي مسجلة لدى شبكة الدفع.</small>
+                        </div>
+                    </div>
+
+                    <div class="wallet-vault__fields-grid">
+
+                        <label class="wallet-vault__field">
+                            <span>
+                                رقم الحساب التجاري
+                                <b>*</b>
+                            </span>
+
+                            <div class="wallet-vault__input-shell">
+                                <i class="bi bi-hash"></i>
+
+                                <input type="text"
+                                       name="AccountNumber"
+                                       value=""
+                                       maxlength="6"
+                                       minlength="6"
+                                       inputmode="numeric"
+                                       autocomplete="off"
+                                       pattern="[0-9]{6}"
+                                       placeholder="مثال: 123456"
+                                       required
+                                       dir="ltr"
+                                       data-ofw-account-number />
+
+                                <em data-ofw-account-counter>
+                                    0/6
+                                </em>
+                            </div>
+
+                            <small>
+                                6 أرقام إنجليزية فقط، بدون مسافات أو شرطات.
+                            </small>
+
+                            <span class="wallet-vault__field-error"
+                                  data-ofw-error-for="AccountNumber"></span>
+                        </label>
+
+                        <label class="wallet-vault__field">
+                            <span>
+                                اسم المستفيد
+                                <b>*</b>
+                            </span>
+
+                            <div class="wallet-vault__input-shell">
+                                <i class="bi bi-person-badge"></i>
+
+                                <input type="text"
+                                       name="BeneficiaryName"
+                                       value=""
+                                       minlength="2"
+                                       maxlength="150"
+                                       autocomplete="name"
+                                       placeholder="الاسم المسجل لدى شبكة الدفع"
+                                       required
+                                       data-ofw-beneficiary-name />
+                            </div>
+
+                            <small>
+                                سيظهر هذا الاسم للعميل قبل تنفيذ التحويل.
+                            </small>
+
+                            <span class="wallet-vault__field-error"
+                                  data-ofw-error-for="BeneficiaryName"></span>
+                        </label>
+
+                    </div>
+
+                    <label class="wallet-vault__switch-card">
+                        <input type="checkbox"
+                               name="IsActive"
+                               value="true"
+                               checked
+                               data-ofw-is-active />
+
+                        <span class="wallet-vault__switch-control"></span>
+
+                        <span>
+                            <strong>إظهار الحساب للعملاء</strong>
+                            <small>
+                                لن يظهر إلا إذا كانت شبكة الدفع مفعلة من الإدارة.
+                            </small>
+                        </span>
+                    </label>
+                </section>
+
+                <footer class="wallet-vault__dialog-footer">
+                    <button type="button"
+                            class="is-cancel"
+                            data-ofw-close-dialog>
+                        إلغاء
+                    </button>
+
+                    <button type="submit"
+                            class="is-save"
+                            data-ofw-save-button>
+                        <i class="bi bi-check2-circle"></i>
+
+                        <span data-ofw-save-button-text>
+                            حفظ الحساب
+                        </span>
+                    </button>
+                </footer>
+            </form>
+        </div>
+    </dialog>
+
+    <dialog class="wallet-vault__confirm-dialog"
+            data-ofw-status-dialog
+            aria-labelledby="ownerWalletStatusTitle">
+
+        <div class="wallet-vault__confirm-shell">
+
+            <span class="wallet-vault__confirm-icon"
+                  data-ofw-status-icon>
+                <i class="bi bi-pause-circle"></i>
+            </span>
+
+            <small>تأكيد الإجراء</small>
+
+            <h2 id="ownerWalletStatusTitle"
+                data-ofw-status-title>
+                تغيير حالة الحساب
+            </h2>
+
+            <p data-ofw-status-message>
+                هل تريد تغيير حالة هذا الحساب؟
+            </p>
+
+            <input type="hidden"
+                   value=""
+                   data-ofw-status-owner-wallet-id />
+
+            <input type="hidden"
+                   value=""
+                   data-ofw-status-next-active />
+
+            <footer>
+                <button type="button"
+                        data-ofw-cancel-status>
+                    تراجع
+                </button>
+
+                <button type="button"
+                        data-ofw-confirm-status>
+                    تأكيد
+                </button>
+            </footer>
+        </div>
+    </dialog>
+
+</section>

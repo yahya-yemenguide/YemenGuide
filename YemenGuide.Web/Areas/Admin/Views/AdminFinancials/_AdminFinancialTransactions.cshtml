@@ -1,0 +1,374 @@
+﻿@using YemenGuide.Core.DTOs.Admin
+@model AdminFinancialTransactionPageDto
+
+@{
+    var filter = Model?.Filter ?? new AdminFinancialTransactionFilterDto();
+    var summary = Model?.Summary ?? new AdminFinancialTransactionSummaryDto();
+    var currency = string.IsNullOrWhiteSpace(Model?.Currency)
+        ? "ريال يمني"
+        : Model.Currency;
+
+    string Money(decimal value) => $"{value:N0} {currency}";
+
+    string MovementTone(string? type) =>
+        (type ?? string.Empty).Trim() switch
+        {
+            AdminFinanceTransactionTypes.TopUp => "cyan",
+            AdminFinanceTransactionTypes.CommissionCharge => "gold",
+            AdminFinanceTransactionTypes.CommissionHold => "violet",
+            AdminFinanceTransactionTypes.CommissionRelease => "mint",
+            AdminFinanceTransactionTypes.Debt => "rose",
+            AdminFinanceTransactionTypes.DebtPayment => "green",
+            AdminFinanceTransactionTypes.Adjustment => "slate",
+            _ => "neutral"
+        };
+}
+
+<section class="aft"
+         data-transactions-root
+         data-details-url="@Url.Action("Details", "AdminFinancialTransactions", new { area = "Admin" })">
+
+    <header class="aft-section-head">
+        <div>
+            <span class="aft-section-head__eyebrow">سجل غير قابل للالتباس</span>
+            <h2 class="aft-section-head__title">كشف الحركات المالية</h2>
+            <p class="aft-section-head__text">
+                تتبع كل تغيير في الرصيد المتاح والمحجوز والدين، مع مرجعه ومن أنشأه وراجعه.
+            </p>
+        </div>
+
+        <div class="aft-ledger-stamp">
+            <i class="bi bi-journal-text"></i>
+            <div>
+                <small>إجمالي الحركات</small>
+                <strong>@summary.TotalCount</strong>
+            </div>
+        </div>
+    </header>
+
+    <div class="aft-kpi-row">
+        <article class="aft-kpi aft-kpi--topup">
+            <small>شحنات مكتملة</small>
+            <strong>@Money(summary.TotalTopUps)</strong>
+        </article>
+
+        <article class="aft-kpi aft-kpi--charge">
+            <small>عمولات مخصومة</small>
+            <strong>@Money(summary.TotalCommissionCharged)</strong>
+        </article>
+
+        <article class="aft-kpi aft-kpi--debt">
+            <small>ديون مسجلة</small>
+            <strong>@Money(summary.TotalDebtRegistered)</strong>
+        </article>
+
+        <article class="aft-kpi aft-kpi--paid">
+            <small>ديون مسددة</small>
+            <strong>@Money(summary.TotalDebtPaid)</strong>
+        </article>
+    </div>
+
+    <form class="aft-filterbar"
+          method="get"
+          action="@Url.Action("Index", "AdminFinancialTransactions", new { area = "Admin" })"
+          data-transactions-filter-form>
+
+        <div class="aft-search">
+            <i class="bi bi-search"></i>
+            <input type="search"
+                   name="Search"
+                   value="@filter.Search"
+                   placeholder="منشأة، مالك، مرجع أو رقم حجز..." />
+        </div>
+
+        <select name="TransactionType" aria-label="نوع الحركة">
+            <option value="">كل أنواع الحركة</option>
+            @foreach (var option in Model.TransactionTypeOptions)
+            {
+                <option value="@option.Value"
+                        selected="@(option.IsSelected ? "selected" : null)">
+                    @option.Label
+                </option>
+            }
+        </select>
+
+        <select name="Status" aria-label="الحالة">
+            <option value="">كل الحالات</option>
+            @foreach (var option in Model.StatusOptions)
+            {
+                <option value="@option.Value"
+                        selected="@(option.IsSelected ? "selected" : null)">
+                    @option.Label
+                </option>
+            }
+        </select>
+
+        <select name="PlaceId" aria-label="المنشأة">
+            <option value="">كل المنشآت</option>
+            @foreach (var place in Model.Places)
+            {
+                <option value="@place.PlaceId"
+                        selected="@(filter.PlaceId == place.PlaceId ? "selected" : null)">
+                    @place.PlaceName
+                </option>
+            }
+        </select>
+
+        <input type="text"
+               name="ReferenceNumber"
+               value="@filter.ReferenceNumber"
+               placeholder="المرجع" />
+
+        <input type="date"
+               name="FromDate"
+               value="@(filter.FromDate?.ToString("yyyy-MM-dd"))"
+               aria-label="من تاريخ" />
+
+        <input type="date"
+               name="ToDate"
+               value="@(filter.ToDate?.ToString("yyyy-MM-dd"))"
+               aria-label="إلى تاريخ" />
+
+        <button type="submit" class="aft-btn aft-btn--primary">
+            <i class="bi bi-funnel"></i>
+            تطبيق
+        </button>
+    </form>
+
+    <section class="aft-ledger-card">
+        <div class="aft-ledger-card__head">
+            <div>
+                <h3>السجل المالي</h3>
+                <p>
+                    عرض
+                    @Model.Result.Pagination.FirstItemNumber
+                    –
+                    @Model.Result.Pagination.LastItemNumber
+                    من
+                    @Model.Result.Pagination.TotalCount
+                </p>
+            </div>
+
+            <div class="aft-ledger-card__legend">
+                <span><i class="aft-legend aft-legend--in"></i> إضافة</span>
+                <span><i class="aft-legend aft-legend--out"></i> خصم/حجز</span>
+            </div>
+        </div>
+
+        @if (Model.Result.Items.Count == 0)
+        {
+            <div class="aft-empty">
+                <span class="aft-empty__icon"><i class="bi bi-journal-x"></i></span>
+                <h4>لا توجد حركات مطابقة</h4>
+                <p>جرّب توسيع الفترة أو إزالة بعض الفلاتر.</p>
+            </div>
+        }
+        else
+        {
+            <div class="aft-table-wrap">
+                <table class="aft-table">
+                    <thead>
+                        <tr>
+                            <th>التاريخ</th>
+                            <th>المنشأة</th>
+                            <th>نوع الحركة</th>
+                            <th>المبلغ</th>
+                            <th>الحالة</th>
+                            <th>المرجع</th>
+                            <th>الرصيد بعد</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in Model.Result.Items)
+                        {
+                            <tr data-transaction-id="@row.CommissionTransactionId">
+                                <td>
+                                    <span class="aft-date">
+                                        <strong>@row.CreatedAt.ToString("yyyy/MM/dd")</strong>
+                                        <small>@row.CreatedAt.ToString("HH:mm")</small>
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="aft-place">
+                                        <strong>@row.PlaceName</strong>
+                                        <small>@row.OwnerName</small>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="aft-movement aft-movement--@MovementTone(row.TransactionType)">
+                                        <i class="aft-movement__dot"></i>
+                                        @row.TransactionTypeLabel
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="aft-amount" data-direction="@row.Direction">
+                                        @Money(row.Amount)
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="aft-status" data-status="@row.Status">
+                                        @row.StatusLabel
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="aft-reference">
+                                        @(string.IsNullOrWhiteSpace(row.ReferenceNumber)
+                                            ? (row.BookingId.HasValue ? $"حجز #{row.BookingId}" : "—")
+                                            : row.ReferenceNumber)
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="aft-balance-after">
+                                        <strong>@Money(row.AvailableBalanceAfter)</strong>
+                                        @if (row.DebtAfter > 0)
+                                        {
+                                            <small>دين: @Money(row.DebtAfter)</small>
+                                        }
+                                    </div>
+                                </td>
+                                <td>
+                                    <button type="button"
+                                            class="aft-details-btn"
+                                            data-transaction-details
+                                            data-transaction-id="@row.CommissionTransactionId">
+                                        <i class="bi bi-arrow-up-left"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="aft-pagination"
+                 data-transactions-pagination
+                 data-page="@Model.Result.Pagination.PageNumber"
+                 data-total-pages="@Model.Result.Pagination.TotalPages">
+                <button type="button"
+                        data-transactions-page="@(Model.Result.Pagination.PageNumber - 1)"
+                        disabled="@(!Model.Result.Pagination.HasPreviousPage ? "disabled" : null)">
+                    <i class="bi bi-chevron-right"></i>
+                </button>
+
+                <span>
+                    صفحة
+                    <strong>@Model.Result.Pagination.PageNumber</strong>
+                    من
+                    <strong>@Model.Result.Pagination.TotalPages</strong>
+                </span>
+
+                <button type="button"
+                        data-transactions-page="@(Model.Result.Pagination.PageNumber + 1)"
+                        disabled="@(!Model.Result.Pagination.HasNextPage ? "disabled" : null)">
+                    <i class="bi bi-chevron-left"></i>
+                </button>
+            </div>
+        }
+    </section>
+
+    <div class="aft-modal" data-transaction-modal aria-hidden="true">
+        <div class="aft-modal__backdrop" data-transaction-close></div>
+
+        <div class="aft-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="transactionDetailsTitle">
+            <header class="aft-modal__header">
+                <div>
+                    <span class="aft-modal__eyebrow">تفاصيل الحركة</span>
+                    <h3 id="transactionDetailsTitle">حركة مالية <span data-transaction-number></span></h3>
+                    <p data-transaction-subtitle></p>
+                </div>
+
+                <button type="button" class="aft-modal__close" data-transaction-close>
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </header>
+
+            <div class="aft-modal__body">
+                <div class="aft-modal-loading" data-transaction-loading>
+                    <span class="aft-spinner"></span>
+                    <strong>جارٍ قراءة الحركة المالية...</strong>
+                </div>
+
+                <div class="aft-details" data-transaction-content hidden>
+                    <div class="aft-details__hero">
+                        <div class="aft-details__type">
+                            <span data-transaction-type-icon></span>
+                            <div>
+                                <small>نوع الحركة</small>
+                                <strong data-transaction-type></strong>
+                            </div>
+                        </div>
+
+                        <div class="aft-details__amount">
+                            <small>المبلغ</small>
+                            <strong data-transaction-amount></strong>
+                            <span data-transaction-status></span>
+                        </div>
+                    </div>
+
+                    <section class="aft-detail-section">
+                        <div class="aft-detail-section__head">
+                            <span>أثر الحركة</span>
+                            <h4>قبل وبعد</h4>
+                        </div>
+
+                        <div class="aft-snapshot-grid">
+                            <article>
+                                <span class="aft-snapshot-grid__title">الرصيد المتاح</span>
+                                <div><small>قبل</small><strong data-transaction-available-before></strong></div>
+                                <i class="bi bi-arrow-left"></i>
+                                <div><small>بعد</small><strong data-transaction-available-after></strong></div>
+                            </article>
+
+                            <article>
+                                <span class="aft-snapshot-grid__title">الرصيد المحجوز</span>
+                                <div><small>قبل</small><strong data-transaction-held-before></strong></div>
+                                <i class="bi bi-arrow-left"></i>
+                                <div><small>بعد</small><strong data-transaction-held-after></strong></div>
+                            </article>
+
+                            <article>
+                                <span class="aft-snapshot-grid__title">الدين</span>
+                                <div><small>قبل</small><strong data-transaction-debt-before></strong></div>
+                                <i class="bi bi-arrow-left"></i>
+                                <div><small>بعد</small><strong data-transaction-debt-after></strong></div>
+                            </article>
+                        </div>
+                    </section>
+
+                    <section class="aft-detail-section">
+                        <div class="aft-detail-section__head">
+                            <span>المرجع</span>
+                            <h4>بيانات العملية</h4>
+                        </div>
+
+                        <div class="aft-info-grid">
+                            <div><small>المنشأة</small><strong data-transaction-place></strong></div>
+                            <div><small>المالك</small><strong data-transaction-owner></strong></div>
+                            <div><small>الحجز</small><strong data-transaction-booking></strong></div>
+                            <div><small>المرجع</small><strong data-transaction-reference></strong></div>
+                            <div><small>تاريخ الإنشاء</small><strong data-transaction-created-at></strong></div>
+                            <div><small>أنشأها</small><strong data-transaction-created-by></strong></div>
+                            <div><small>راجعها</small><strong data-transaction-reviewed-by></strong></div>
+                            <div><small>تاريخ المراجعة</small><strong data-transaction-reviewed-at></strong></div>
+                        </div>
+                    </section>
+
+                    <section class="aft-detail-section" data-transaction-notes-section>
+                        <div class="aft-detail-section__head">
+                            <span>التوثيق</span>
+                            <h4>الملاحظات</h4>
+                        </div>
+                        <div class="aft-notes" data-transaction-notes></div>
+                    </section>
+                </div>
+            </div>
+
+            <footer class="aft-modal__footer">
+                <button type="button" class="aft-btn aft-btn--ghost" data-transaction-close>
+                    إغلاق
+                </button>
+            </footer>
+        </div>
+    </div>
+</section>

@@ -1,0 +1,310 @@
+﻿@using YemenGuide.Core.DTOs.Admin
+@model AdminFinancialOverviewPageDto
+
+@{
+    var summary = Model?.Summary ?? new AdminFinancialOverviewSummaryDto();
+    var filter = Model?.Filter ?? new AdminFinancialOverviewFilterDto();
+    var currency = string.IsNullOrWhiteSpace(Model?.Currency)
+        ? "ريال يمني"
+        : Model.Currency;
+
+    string Money(decimal value) => $"{value:N0} {currency}";
+
+    string AlertTone(string? severity) =>
+        (severity ?? string.Empty).Trim().ToLowerInvariant() switch
+        {
+            "danger" or "critical" or "error" => "danger",
+            "warning" or "warn" => "warning",
+            "success" => "success",
+            _ => "info"
+        };
+}
+
+<section class="afo" data-overview-root>
+    <header class="afo-section-head">
+        <div>
+            <span class="afo-section-head__eyebrow">ملخص اليوم</span>
+            <h2 class="afo-section-head__title">الصورة المالية في لمحة</h2>
+            <p class="afo-section-head__text">
+                أهم الأرقام التي تحتاجها الإدارة بدون ازدحام أو تفاصيل زائدة.
+            </p>
+        </div>
+
+        <div class="afo-section-head__stamp">
+            <i class="bi bi-clock-history" aria-hidden="true"></i>
+            <span>آخر قراءة</span>
+            <strong>@Model.GeneratedAt.ToString("HH:mm")</strong>
+        </div>
+    </header>
+
+    <form class="afo-filterbar"
+          method="get"
+          action="@Url.Action("Index", "AdminFinancialOverview", new { area = "Admin" })"
+          data-overview-filter-form>
+        <div class="afo-filterbar__field">
+            <label for="overviewOwner">المالك</label>
+            <select id="overviewOwner" name="OwnerId">
+                <option value="">كل الملاك</option>
+                @foreach (var owner in Model.Owners)
+                {
+                    <option value="@owner.OwnerId"
+                            selected="@(filter.OwnerId == owner.OwnerId ? "selected" : null)">
+                        @owner.OwnerName
+                    </option>
+                }
+            </select>
+        </div>
+
+        <div class="afo-filterbar__field">
+            <label for="overviewPlace">المنشأة</label>
+            <select id="overviewPlace" name="PlaceId">
+                <option value="">كل المنشآت</option>
+                @foreach (var place in Model.Places)
+                {
+                    <option value="@place.PlaceId"
+                            selected="@(filter.PlaceId == place.PlaceId ? "selected" : null)">
+                        @place.PlaceName
+                    </option>
+                }
+            </select>
+        </div>
+
+        <div class="afo-filterbar__field">
+            <label for="overviewFromDate">من</label>
+            <input id="overviewFromDate"
+                   type="date"
+                   name="FromDate"
+                   value="@(filter.FromDate?.ToString("yyyy-MM-dd"))" />
+        </div>
+
+        <div class="afo-filterbar__field">
+            <label for="overviewToDate">إلى</label>
+            <input id="overviewToDate"
+                   type="date"
+                   name="ToDate"
+                   value="@(filter.ToDate?.ToString("yyyy-MM-dd"))" />
+        </div>
+
+        <div class="afo-filterbar__actions">
+            <button type="submit" class="afo-btn afo-btn--primary">
+                <i class="bi bi-funnel" aria-hidden="true"></i>
+                تطبيق
+            </button>
+
+            <button type="button"
+                    class="afo-btn afo-btn--ghost"
+                    data-overview-reset>
+                مسح
+            </button>
+        </div>
+    </form>
+
+    <div class="afo-kpi-grid">
+        <article class="afo-kpi-card afo-kpi-card--revenue">
+            <div class="afo-kpi-card__top">
+                <span class="afo-kpi-card__icon"><i class="bi bi-stars"></i></span>
+                <span class="afo-kpi-card__tag">إيراد فعلي</span>
+            </div>
+            <div class="afo-kpi-card__value">@Money(summary.TotalCommissionCharged)</div>
+            <h3>عمولات المنصة المخصومة</h3>
+            <p>العمولات التي تم تحصيلها فعليًا بعد التسوية.</p>
+        </article>
+
+        <article class="afo-kpi-card afo-kpi-card--available">
+            <div class="afo-kpi-card__top">
+                <span class="afo-kpi-card__icon"><i class="bi bi-wallet2"></i></span>
+                <span class="afo-kpi-card__tag">جاهز للاستخدام</span>
+            </div>
+            <div class="afo-kpi-card__value">@Money(summary.TotalAvailableGuaranteeBalance)</div>
+            <h3>رصيد الضمان المتاح</h3>
+            <p>إجمالي الرصيد المتاح في حسابات ضمان المنشآت.</p>
+        </article>
+
+        <article class="afo-kpi-card afo-kpi-card--held">
+            <div class="afo-kpi-card__top">
+                <span class="afo-kpi-card__icon"><i class="bi bi-lock"></i></span>
+                <span class="afo-kpi-card__tag">قيد التسوية</span>
+            </div>
+            <div class="afo-kpi-card__value">@Money(summary.TotalHeldGuaranteeBalance)</div>
+            <h3>الرصيد المحجوز</h3>
+            <p>مبالغ ضمان محجوزة حاليًا مقابل عمولات حجوزات نشطة.</p>
+        </article>
+
+        <article class="afo-kpi-card afo-kpi-card--debt">
+            <div class="afo-kpi-card__top">
+                <span class="afo-kpi-card__icon"><i class="bi bi-exclamation-diamond"></i></span>
+                <span class="afo-kpi-card__tag">يحتاج متابعة</span>
+            </div>
+            <div class="afo-kpi-card__value">@Money(summary.TotalCurrentDebt)</div>
+            <h3>إجمالي الدين الحالي</h3>
+            <p>الدين القائم على حسابات ضمان المنشآت في اللحظة الحالية.</p>
+        </article>
+    </div>
+
+    <div class="afo-status-strip">
+        <button type="button"
+                class="afo-status-pill afo-status-pill--cyan"
+                data-overview-open-tab="topups"
+                data-overview-query="Status=Pending">
+            <span>طلبات شحن معلقة</span>
+            <strong>@summary.PendingTopUpsCount</strong>
+        </button>
+
+        <button type="button"
+                class="afo-status-pill afo-status-pill--gold"
+                data-overview-open-tab="commission-guarantee"
+                data-overview-query="IsLowBalance=true">
+            <span>رصيد منخفض</span>
+            <strong>@summary.LowBalanceAccountsCount</strong>
+        </button>
+
+        <button type="button"
+                class="afo-status-pill afo-status-pill--rose"
+                data-overview-open-tab="commission-guarantee"
+                data-overview-query="HasDebt=true">
+            <span>عليها دين</span>
+            <strong>@summary.InDebtAccountsCount</strong>
+        </button>
+
+        <button type="button"
+                class="afo-status-pill afo-status-pill--slate"
+                data-overview-open-tab="commission-guarantee"
+                data-overview-query="IsBookingSuspended=true">
+            <span>موقوفة</span>
+            <strong>@summary.SuspendedAccountsCount</strong>
+        </button>
+    </div>
+
+    <div class="afo-content-grid">
+        <section class="afo-panel afo-panel--alerts">
+            <div class="afo-panel__head">
+                <div>
+                    <span class="afo-panel__eyebrow">الانتباه المطلوب</span>
+                    <h3>تنبيهات مالية</h3>
+                </div>
+                <span class="afo-panel__count">@Model.Alerts.Count</span>
+            </div>
+
+            <div class="afo-alert-list">
+                @if (Model.Alerts.Count == 0)
+                {
+                    <div class="afo-empty afo-empty--compact">
+                        <span class="afo-empty__icon"><i class="bi bi-check2-circle"></i></span>
+                        <div>
+                            <strong>لا توجد تنبيهات عاجلة</strong>
+                            <p>الوضع المالي مستقر حسب الفلاتر الحالية.</p>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    @foreach (var alert in Model.Alerts.Take(6))
+                    {
+                        <button type="button"
+                                class="afo-alert afo-alert--@AlertTone(alert.Severity)"
+                                data-overview-open-tab="@alert.TargetTab"
+                                data-overview-query="@alert.TargetQuery">
+                            <span class="afo-alert__marker"></span>
+                            <span class="afo-alert__body">
+                                <strong>@alert.Title</strong>
+                                <small>@alert.Description</small>
+                            </span>
+                            <span class="afo-alert__meta">
+                                @if (alert.Count > 0)
+                                {
+                                    <b>@alert.Count</b>
+                                }
+                                @if (alert.Amount.HasValue)
+                                {
+                                    <small>@Money(alert.Amount.Value)</small>
+                                }
+                            </span>
+                            <i class="bi bi-chevron-left"></i>
+                        </button>
+                    }
+                }
+            </div>
+        </section>
+
+        <section class="afo-panel afo-panel--movement">
+            <div class="afo-panel__head">
+                <div>
+                    <span class="afo-panel__eyebrow">آخر نشاط</span>
+                    <h3>أحدث الحركات المالية</h3>
+                </div>
+
+                <button type="button"
+                        class="afo-link-btn"
+                        data-overview-open-tab="transactions">
+                    عرض الكل
+                    <i class="bi bi-arrow-left"></i>
+                </button>
+            </div>
+
+            @if (Model.RecentTransactions.Count == 0)
+            {
+                <div class="afo-empty">
+                    <span class="afo-empty__icon"><i class="bi bi-arrow-left-right"></i></span>
+                    <strong>لا توجد حركات مالية</strong>
+                    <p>ستظهر أحدث العمليات هنا عند تسجيلها.</p>
+                </div>
+            }
+            else
+            {
+                <div class="afo-table-wrap">
+                    <table class="afo-table">
+                        <thead>
+                            <tr>
+                                <th>الحركة</th>
+                                <th>المنشأة</th>
+                                <th>المبلغ</th>
+                                <th>الحالة</th>
+                                <th>الوقت</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in Model.RecentTransactions.Take(7))
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="afo-transaction-name">
+                                            <span class="afo-transaction-name__mark"></span>
+                                            <strong>@item.TransactionTypeLabel</strong>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="afo-place-cell">
+                                            <strong>@item.PlaceName</strong>
+                                            <small>@item.OwnerName</small>
+                                        </div>
+                                    </td>
+                                    <td class="afo-money">@Money(item.Amount)</td>
+                                    <td>
+                                        <span class="afo-status-badge" data-status="@item.Status">
+                                            @item.StatusLabel
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="afo-date">
+                                            @item.CreatedAt.ToString("yyyy/MM/dd")
+                                            <small>@item.CreatedAt.ToString("HH:mm")</small>
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <button type="button"
+                                                class="afo-icon-btn"
+                                                title="فتح تفاصيل الحركة"
+                                                data-overview-transaction-id="@item.CommissionTransactionId">
+                                            <i class="bi bi-arrow-up-left"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+    </div>
+</section>

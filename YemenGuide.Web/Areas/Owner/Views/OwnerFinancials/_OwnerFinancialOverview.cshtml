@@ -1,0 +1,714 @@
+@using System
+@using System.Collections.Generic
+@using System.Globalization
+@using System.Linq
+@using YemenGuide.Core.DTOs.Owner
+
+@model FinancialOverviewTabDto
+
+@{
+    var pageModel = Model ?? new FinancialOverviewTabDto();
+    var summary = pageModel.Summary ?? new FinancialOverviewDto();
+    var accounts = pageModel.Accounts ?? new List<PlaceCommissionAccountDto>();
+    var recentTransactions = (pageModel.RecentTransactions ?? new List<CommissionTransactionItemDto>())
+        .OrderByDescending(item => item.EffectiveDate)
+        .Take(5)
+        .ToList();
+
+    var culture = CultureInfo.GetCultureInfo("en-US");
+    var currency = string.IsNullOrWhiteSpace(pageModel.Currency)
+        ? "ريال يمني"
+        : pageModel.Currency.Trim();
+
+    var selectedPlaceName = string.IsNullOrWhiteSpace(pageModel.SelectedPlaceName)
+        ? "المنشأة الحالية"
+        : pageModel.SelectedPlaceName.Trim();
+
+    var bookingValue = Math.Max(0m, summary.TotalBookingValue);
+    var totalCollected = Math.Max(0m, summary.TotalCollected);
+    var remaining = Math.Max(0m, summary.TotalRemainingAtProperty);
+    var commissionCalculated = Math.Max(0m, summary.TotalCommissionCalculated);
+    var commissionCharged = Math.Max(0m, summary.TotalCommissionCharged);
+    var netCollected = Math.Max(0m, summary.NetCollectedRevenue);
+
+    var collectionPercentage = bookingValue <= 0m
+        ? 0m
+        : Math.Round(Math.Min(100m, (totalCollected / bookingValue) * 100m), 1);
+
+    var collectionCss =
+        collectionPercentage.ToString("0.#", CultureInfo.InvariantCulture);
+
+    var lowBalanceCount = accounts.Count(account => account.IsLowBalance && !account.IsSuspended);
+    var suspendedCount = accounts.Count(account => account.IsSuspended);
+    var debtAccountsCount = accounts.Count(account => account.IsInDebt);
+
+    var attentionCount =
+        Math.Max(0, summary.PendingRefundsCount) +
+        Math.Max(0, summary.PendingTopUpsCount) +
+        lowBalanceCount +
+        suspendedCount +
+        debtAccountsCount;
+
+    string Money(decimal value)
+    {
+        var safeValue = Math.Max(0m, value);
+        var format = decimal.Truncate(safeValue) == safeValue ? "N0" : "N2";
+        return $"{safeValue.ToString(format, culture)} {currency}";
+    }
+
+    string DateText(DateTime value) =>
+        value.ToString("dd/MM/yyyy", culture);
+
+    string DateTimeText(DateTime? value) =>
+        value.HasValue
+            ? value.Value.ToString("dd/MM/yyyy - hh:mm tt", culture)
+            : "—";
+
+    string TransactionTone(CommissionTransactionItemDto item)
+    {
+        var direction = item.Direction?.Trim() ?? string.Empty;
+
+        if (string.Equals(direction, "Credit", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(direction, "DebtDecrease", StringComparison.OrdinalIgnoreCase))
+        {
+            return "is-positive";
+        }
+
+        if (string.Equals(direction, "Debit", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(direction, "DebtIncrease", StringComparison.OrdinalIgnoreCase))
+        {
+            return "is-negative";
+        }
+
+        return "is-neutral";
+    }
+
+    string TransactionSign(CommissionTransactionItemDto item)
+    {
+        var direction = item.Direction?.Trim() ?? string.Empty;
+
+        if (string.Equals(direction, "Credit", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(direction, "DebtDecrease", StringComparison.OrdinalIgnoreCase))
+        {
+            return "+";
+        }
+
+        if (string.Equals(direction, "Debit", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(direction, "DebtIncrease", StringComparison.OrdinalIgnoreCase))
+        {
+            return "−";
+        }
+
+        return string.Empty;
+    }
+
+    string AccountStatusLabel()
+    {
+        if (suspendedCount > 0)
+        {
+            return "يوجد حساب موقوف";
+        }
+
+        if (summary.TotalDebt > 0m)
+        {
+            return "يوجد دين مستحق";
+        }
+
+        if (lowBalanceCount > 0)
+        {
+            return "الرصيد منخفض";
+        }
+
+        return "الحساب مستقر";
+    }
+
+    string AccountStatusClass()
+    {
+        if (suspendedCount > 0)
+        {
+            return "is-danger";
+        }
+
+        if (summary.TotalDebt > 0m)
+        {
+            return "is-warning";
+        }
+
+        if (lowBalanceCount > 0)
+        {
+            return "is-soft-warning";
+        }
+
+        return "is-success";
+    }
+}
+
+<section class="owner-financial-overview"
+         dir="rtl"
+         data-owner-financial-partial="overview"
+         data-selected-place-id="@(pageModel.SelectedPlaceId?.ToString() ?? string.Empty)"
+         data-period-start="@pageModel.PeriodStart.ToString("yyyy-MM-dd", culture)"
+         data-period-end="@pageModel.PeriodEnd.ToString("yyyy-MM-dd", culture)"
+         aria-labelledby="ownerFinancialOverviewTitle">
+
+    <header class="owner-financial-overview__toolbar">
+
+        <div class="owner-financial-overview__toolbar-copy">
+            <span class="owner-financial-overview__toolbar-icon"
+                  aria-hidden="true">
+                <i class="bi bi-wallet2"></i>
+            </span>
+
+            <div>
+                <span class="owner-financial-overview__eyebrow">
+                    الملخص المالي
+                </span>
+
+                <h2 id="ownerFinancialOverviewTitle">
+                    أموالك في هذه الفترة
+                </h2>
+
+                <p>
+                    تحصيلك، المتبقي، العمولة وما يحتاج إجراء فقط.
+                </p>
+            </div>
+        </div>
+
+        <div class="owner-financial-overview__period-control"
+             data-overview-period-control>
+
+            <div class="owner-financial-overview__period-options"
+                 role="group"
+                 aria-label="الفترة المالية">
+
+                <button type="button"
+                        data-overview-period="today">
+                    اليوم
+                </button>
+
+                <button type="button"
+                        data-overview-period="week">
+                    أسبوع
+                </button>
+
+                <button type="button"
+                        class="is-active"
+                        data-overview-period="month">
+                    هذا الشهر
+                </button>
+
+                <button type="button"
+                        data-overview-period="custom">
+                    <i class="bi bi-calendar3"></i>
+                    مخصص
+                </button>
+
+            </div>
+
+            <form class="owner-financial-overview__custom-period"
+                  data-overview-custom-period
+                  hidden>
+
+                <label>
+                    <span>من</span>
+                    <input type="date"
+                           name="fromDate"
+                           value="@pageModel.PeriodStart.ToString("yyyy-MM-dd", culture)" />
+                </label>
+
+                <label>
+                    <span>إلى</span>
+                    <input type="date"
+                           name="toDate"
+                           value="@pageModel.PeriodEnd.ToString("yyyy-MM-dd", culture)" />
+                </label>
+
+                <button type="submit">
+                    تطبيق
+                </button>
+
+            </form>
+
+        </div>
+
+        <div class="owner-financial-overview__period-meta">
+            <span>
+                <i class="bi bi-building"></i>
+                @selectedPlaceName
+            </span>
+            <span>
+                <i class="bi bi-calendar-range"></i>
+                @DateText(pageModel.PeriodStart) — @DateText(pageModel.PeriodEnd)
+            </span>
+        </div>
+
+    </header>
+
+    <section class="owner-financial-overview__kpis"
+             aria-label="الملخص المالي الرئيسي">
+
+        <article class="owner-financial-overview__kpi is-booking"
+                 data-vip-tilt>
+            <div class="owner-financial-overview__kpi-head">
+                <span class="owner-financial-overview__kpi-icon">
+                    <i class="bi bi-receipt"></i>
+                </span>
+                <span class="owner-financial-overview__kpi-label">
+                    قيمة الحجوزات
+                </span>
+            </div>
+
+            <strong class="owner-financial-overview__kpi-value">
+                @Money(bookingValue)
+            </strong>
+
+            <div class="owner-financial-overview__kpi-footer">
+                <span>
+                    <i class="bi bi-calendar2-check"></i>
+                    @summary.TotalBookingsCount حجز
+                </span>
+                <em>@summary.CompletedBookingsCount مكتمل</em>
+            </div>
+
+            <span class="owner-financial-overview__kpi-accent"
+                  aria-hidden="true"></span>
+        </article>
+
+        <article class="owner-financial-overview__kpi is-collected"
+                 data-vip-tilt>
+            <div class="owner-financial-overview__kpi-head">
+                <span class="owner-financial-overview__kpi-icon">
+                    <i class="bi bi-check2-circle"></i>
+                </span>
+                <span class="owner-financial-overview__kpi-label">
+                    إجمالي المحصل
+                </span>
+            </div>
+
+            <strong class="owner-financial-overview__kpi-value">
+                @Money(totalCollected)
+            </strong>
+
+            <div class="owner-financial-overview__kpi-footer">
+                <span>
+                    إلكتروني @Money(summary.TotalPaidOnline)
+                </span>
+                <em>
+                    منشأة @Money(summary.TotalCollectedAtProperty)
+                </em>
+            </div>
+
+            <span class="owner-financial-overview__kpi-accent"
+                  aria-hidden="true"></span>
+        </article>
+
+        <article class="owner-financial-overview__kpi is-remaining"
+                 data-vip-tilt>
+            <div class="owner-financial-overview__kpi-head">
+                <span class="owner-financial-overview__kpi-icon">
+                    <i class="bi bi-hourglass-split"></i>
+                </span>
+                <span class="owner-financial-overview__kpi-label">
+                    المتبقي للتحصيل
+                </span>
+            </div>
+
+            <strong class="owner-financial-overview__kpi-value">
+                @Money(remaining)
+            </strong>
+
+            <div class="owner-financial-overview__kpi-footer">
+                <span>
+                    نسبة التحصيل @collectionPercentage.ToString("0.#", culture)%
+                </span>
+                <em>
+                    عربون @Money(summary.TotalDepositRequired)
+                </em>
+            </div>
+
+            <span class="owner-financial-overview__kpi-accent"
+                  aria-hidden="true"></span>
+        </article>
+
+        <article class="owner-financial-overview__kpi is-net"
+                 data-vip-tilt>
+            <div class="owner-financial-overview__kpi-head">
+                <span class="owner-financial-overview__kpi-icon">
+                    <i class="bi bi-gem"></i>
+                </span>
+                <span class="owner-financial-overview__kpi-label">
+                    صافي المحصل
+                </span>
+            </div>
+
+            <strong class="owner-financial-overview__kpi-value">
+                @Money(netCollected)
+            </strong>
+
+            <div class="owner-financial-overview__kpi-footer">
+                <span>
+                    عمولة محتسبة @Money(commissionCalculated)
+                </span>
+                <em>
+                    مخصومة @Money(commissionCharged)
+                </em>
+            </div>
+
+            <span class="owner-financial-overview__kpi-accent"
+                  aria-hidden="true"></span>
+        </article>
+
+    </section>
+
+    <div class="owner-financial-overview__primary-grid">
+
+        <section class="owner-financial-overview__panel owner-financial-overview__collection"
+                 aria-labelledby="ownerOverviewMoneyFlowTitle">
+
+            <header class="owner-financial-overview__panel-head">
+                <div>
+                    <span class="owner-financial-overview__panel-icon is-cyan">
+                        <i class="bi bi-signpost-split"></i>
+                    </span>
+                    <div>
+                        <small>حركة الأموال</small>
+                        <h3 id="ownerOverviewMoneyFlowTitle">
+                            مسار التحصيل
+                        </h3>
+                    </div>
+                </div>
+
+                <span class="owner-financial-overview__percentage">
+                    @collectionPercentage.ToString("0.#", culture)%
+                </span>
+            </header>
+
+            <div class="owner-financial-overview__flow-rail"
+                 aria-label="نسبة التحصيل">
+                <span style="--overview-collection:@collectionCss%"></span>
+            </div>
+
+            <div class="owner-financial-overview__collection-grid">
+
+                <article class="is-online">
+                    <span class="owner-financial-overview__collection-icon">
+                        <i class="bi bi-phone"></i>
+                    </span>
+                    <div>
+                        <small>مدفوع إلكترونيًا</small>
+                        <strong>@Money(summary.TotalPaidOnline)</strong>
+                        <em>دفعات معتمدة</em>
+                    </div>
+                </article>
+
+                <article class="is-property">
+                    <span class="owner-financial-overview__collection-icon">
+                        <i class="bi bi-building-check"></i>
+                    </span>
+                    <div>
+                        <small>محصل في المنشأة</small>
+                        <strong>@Money(summary.TotalCollectedAtProperty)</strong>
+                        <em>تحصيل مسجل</em>
+                    </div>
+                </article>
+
+                <article class="is-remaining">
+                    <span class="owner-financial-overview__collection-icon">
+                        <i class="bi bi-clock-history"></i>
+                    </span>
+                    <div>
+                        <small>متبقي</small>
+                        <strong>@Money(remaining)</strong>
+                        <em>بانتظار التحصيل</em>
+                    </div>
+                </article>
+
+            </div>
+
+            <footer class="owner-financial-overview__collection-footer">
+                <div>
+                    <small>إجمالي قيمة الحجوزات</small>
+                    <strong>@Money(bookingValue)</strong>
+                </div>
+
+                <span>
+                    <i class="bi bi-arrow-left"></i>
+                </span>
+
+                <div class="is-highlight">
+                    <small>إجمالي المحصل</small>
+                    <strong>@Money(totalCollected)</strong>
+                </div>
+            </footer>
+
+        </section>
+
+        <section class="owner-financial-overview__panel owner-financial-overview__commission"
+                 aria-labelledby="ownerOverviewCommissionTitle"
+                 data-vip-tilt>
+
+            <header class="owner-financial-overview__panel-head">
+                <div>
+                    <span class="owner-financial-overview__panel-icon is-orange">
+                        <i class="bi bi-shield-check"></i>
+                    </span>
+                    <div>
+                        <small>ضمان العمولات</small>
+                        <h3 id="ownerOverviewCommissionTitle">
+                            حساب العمولات
+                        </h3>
+                    </div>
+                </div>
+
+                <span class="owner-financial-overview__account-status @AccountStatusClass()">
+                    <i class="bi bi-circle-fill"></i>
+                    @AccountStatusLabel()
+                </span>
+            </header>
+
+            <div class="owner-financial-overview__commission-balance">
+                <span>الرصيد المتاح</span>
+                <strong>@Money(summary.AvailableGuaranteeBalance)</strong>
+                <small>المتاح لتغطية العمولات القادمة</small>
+            </div>
+
+            <div class="owner-financial-overview__commission-stats">
+                <div>
+                    <span class="is-held">
+                        <i class="bi bi-lock"></i>
+                    </span>
+                    <small>محجوز</small>
+                    <strong>@Money(summary.HeldGuaranteeBalance)</strong>
+                </div>
+
+                <div class="@(summary.TotalDebt > 0m ? "has-debt" : string.Empty)">
+                    <span class="is-debt">
+                        <i class="bi bi-exclamation-circle"></i>
+                    </span>
+                    <small>الدين</small>
+                    <strong>@Money(summary.TotalDebt)</strong>
+                </div>
+            </div>
+
+            <button type="button"
+                    class="owner-financial-overview__link-button"
+                    data-financial-nav="balance">
+                عرض الرصيد والعمولات
+                <i class="bi bi-arrow-left"></i>
+            </button>
+
+        </section>
+
+    </div>
+
+    <div class="owner-financial-overview__secondary-grid">
+
+        <section class="owner-financial-overview__panel owner-financial-overview__attention"
+                 aria-labelledby="ownerOverviewAttentionTitle">
+
+            <header class="owner-financial-overview__panel-head">
+                <div>
+                    <span class="owner-financial-overview__panel-icon is-coral">
+                        <i class="bi bi-bell"></i>
+                    </span>
+                    <div>
+                        <small>الإجراءات</small>
+                        <h3 id="ownerOverviewAttentionTitle">
+                            يحتاج انتباهك
+                        </h3>
+                    </div>
+                </div>
+
+                @if (attentionCount > 0)
+                {
+                    <span class="owner-financial-overview__attention-count">
+                        @attentionCount
+                    </span>
+                }
+            </header>
+
+            @if (attentionCount == 0)
+            {
+                <div class="owner-financial-overview__all-good">
+                    <span>
+                        <i class="bi bi-check2-circle"></i>
+                    </span>
+                    <div>
+                        <strong>وضعك المالي مستقر</strong>
+                        <p>لا توجد إجراءات عاجلة حاليًا.</p>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="owner-financial-overview__attention-list">
+
+                    @if (summary.PendingRefundsCount > 0)
+                    {
+                        <button type="button"
+                        class="owner-financial-overview__attention-item is-refund"
+                        data-financial-nav="refunds">
+                            <span class="owner-financial-overview__attention-icon">
+                                <i class="bi bi-arrow-counterclockwise"></i>
+                            </span>
+                            <span>
+                                <strong>@summary.PendingRefundsCount استرداد ينتظر المتابعة</strong>
+                                <small>راجع المبالغ المطلوب إرجاعها.</small>
+                            </span>
+                            <i class="bi bi-arrow-left"></i>
+                        </button>
+                    }
+
+                    @if (summary.PendingTopUpsCount > 0)
+                    {
+                        <button type="button"
+                        class="owner-financial-overview__attention-item is-topup"
+                        data-financial-nav="balance">
+                            <span class="owner-financial-overview__attention-icon">
+                                <i class="bi bi-wallet2"></i>
+                            </span>
+                            <span>
+                                <strong>@summary.PendingTopUpsCount طلب شحن قيد المراجعة</strong>
+                                <small>تابع حالته من الرصيد والعمولات.</small>
+                            </span>
+                            <i class="bi bi-arrow-left"></i>
+                        </button>
+                    }
+
+                    @if (lowBalanceCount > 0)
+                    {
+                        <button type="button"
+                        class="owner-financial-overview__attention-item is-low"
+                        data-financial-nav="balance">
+                            <span class="owner-financial-overview__attention-icon">
+                                <i class="bi bi-battery-half"></i>
+                            </span>
+                            <span>
+                                <strong>@lowBalanceCount حساب رصيده منخفض</strong>
+                                <small>يفضل الشحن قبل العمليات الجديدة.</small>
+                            </span>
+                            <i class="bi bi-arrow-left"></i>
+                        </button>
+                    }
+
+                    @if (debtAccountsCount > 0)
+                    {
+                        <button type="button"
+                        class="owner-financial-overview__attention-item is-debt"
+                        data-financial-nav="balance">
+                            <span class="owner-financial-overview__attention-icon">
+                                <i class="bi bi-exclamation-diamond"></i>
+                            </span>
+                            <span>
+                                <strong>@debtAccountsCount حساب عليه دين</strong>
+                                <small>إجمالي الدين @Money(summary.TotalDebt).</small>
+                            </span>
+                            <i class="bi bi-arrow-left"></i>
+                        </button>
+                    }
+
+                    @if (suspendedCount > 0)
+                    {
+                        <button type="button"
+                        class="owner-financial-overview__attention-item is-danger"
+                        data-financial-nav="balance">
+                            <span class="owner-financial-overview__attention-icon">
+                                <i class="bi bi-shield-x"></i>
+                            </span>
+                            <span>
+                                <strong>@suspendedCount حساب عمولة موقوف</strong>
+                                <small>راجع سبب الإيقاف والإجراء المطلوب.</small>
+                            </span>
+                            <i class="bi bi-arrow-left"></i>
+                        </button>
+                    }
+
+                </div>
+            }
+
+        </section>
+
+        <section class="owner-financial-overview__panel owner-financial-overview__recent"
+                 aria-labelledby="ownerOverviewRecentTitle">
+
+            <header class="owner-financial-overview__panel-head">
+                <div>
+                    <span class="owner-financial-overview__panel-icon is-mint">
+                        <i class="bi bi-clock-history"></i>
+                    </span>
+                    <div>
+                        <small>آخر النشاط</small>
+                        <h3 id="ownerOverviewRecentTitle">
+                            آخر الحركات المالية
+                        </h3>
+                    </div>
+                </div>
+
+                <button type="button"
+                        class="owner-financial-overview__text-action"
+                        data-financial-nav="balance">
+                    عرض الكل
+                    <i class="bi bi-arrow-left"></i>
+                </button>
+            </header>
+
+            @if (recentTransactions.Count == 0)
+            {
+                <div class="owner-financial-overview__empty-list">
+                    <span>
+                        <i class="bi bi-arrow-left-right"></i>
+                    </span>
+                    <strong>لا توجد حركات مالية حديثة</strong>
+                    <small>ستظهر آخر الحركات هنا تلقائيًا.</small>
+                </div>
+            }
+            else
+            {
+                <div class="owner-financial-overview__recent-list">
+                    @foreach (var item in recentTransactions)
+                    {
+                        var tone = TransactionTone(item);
+
+                        <article class="owner-financial-overview__recent-item @tone">
+                            <span class="owner-financial-overview__recent-icon">
+                                <i class="bi bi-arrow-left-right"></i>
+                            </span>
+
+                            <div class="owner-financial-overview__recent-copy">
+                                <strong>@item.TransactionTypeLabel</strong>
+                                <span>
+                                    @if (item.HasBooking)
+                                    {
+                                        <text>حجز #@item.BookingId</text>
+                                    }
+                                    else if (item.HasReference)
+                                    {
+                                        <text>مرجع @item.ReferenceNumber</text>
+                                    }
+                                    else
+                                    {
+                                        <text>@item.PlaceName</text>
+                                    }
+                                </span>
+                            </div>
+
+                            <div class="owner-financial-overview__recent-value">
+                                <strong>
+                                    @TransactionSign(item)@Money(item.Amount)
+                                </strong>
+                                <small>@DateTimeText(item.EffectiveDate)</small>
+                            </div>
+
+                            <span class="owner-financial-overview__recent-status">
+                                @item.StatusLabel
+                            </span>
+                        </article>
+                    }
+                </div>
+            }
+
+        </section>
+
+    </div>
+
+</section>

@@ -1,0 +1,161 @@
+﻿@{
+    var categories = ViewBag.Categories as List<YemenGuide.Core.Entities.Category>;
+    bool skipCategorySelection = ViewBag.SelectedCategoryId != null && ViewBag.SelectedCategoryId > 0;
+    int availableCategoriesCount = categories?.Count ?? 0;
+}
+
+<section class="card border-0 add-place-entry"
+         data-skip-category-selection="@(skipCategorySelection.ToString().ToLowerInvariant())"
+         aria-labelledby="addPlaceEntryTitle">
+
+    <div class="add-place-entry__glow add-place-entry__glow--primary" aria-hidden="true"></div>
+    <div class="add-place-entry__glow add-place-entry__glow--coral" aria-hidden="true"></div>
+
+    <header class="add-place-entry__header">
+        <div class="add-place-entry__heading">
+            <span class="add-place-entry__main-icon" aria-hidden="true">
+                <i class="bi bi-buildings"></i>
+            </span>
+
+            <div class="add-place-entry__copy">
+                <div class="add-place-entry__eyebrow">
+                    <span class="add-place-entry__eyebrow-dot" aria-hidden="true"></span>
+                    بداية إعداد منشأتك
+                </div>
+
+                <h2 class="add-place-entry__title" id="addPlaceEntryTitle">
+                    اختر نوع المنشأة التي تريد إضافتها
+                </h2>
+
+                <p class="add-place-entry__subtitle">
+                    سنجهّز لك نموذجًا مناسبًا حسب نوع المنشأة، مع الحفاظ على جميع بيانات الحجز والخدمات والإعدادات الخاصة بها.
+                </p>
+            </div>
+        </div>
+
+        <div class="add-place-entry__summary" aria-label="ملخص الفئات المتاحة">
+            <div class="add-place-entry__summary-item">
+                <span class="add-place-entry__summary-icon" aria-hidden="true">
+                    <i class="bi bi-grid-1x2-fill"></i>
+                </span>
+                <span class="add-place-entry__summary-copy">
+                    <strong>@availableCategoriesCount</strong>
+                    <small>فئة متاحة</small>
+                </span>
+            </div>
+
+            <div class="add-place-entry__summary-divider" aria-hidden="true"></div>
+
+            <div class="add-place-entry__summary-item">
+                <span class="add-place-entry__summary-icon add-place-entry__summary-icon--coral" aria-hidden="true">
+                    <i class="bi bi-stars"></i>
+                </span>
+                <span class="add-place-entry__summary-copy">
+                    <strong>خطوات ذكية</strong>
+                    <small>حسب نوع المنشأة</small>
+                </span>
+            </div>
+        </div>
+    </header>
+
+    <div class="add-place-entry__notice">
+        <span class="add-place-entry__notice-icon" aria-hidden="true">
+            <i class="bi bi-lightbulb-fill"></i>
+        </span>
+        <p>
+            اختر الفئة الأقرب لمنشأتك، وسيتم فتح خطوات الإضافة المناسبة لها تلقائيًا.
+        </p>
+    </div>
+
+    <div class="row g-3 add-place-categories" id="categorySelection">
+        @if (categories != null && categories.Any())
+        {
+            @foreach (var category in categories)
+            {
+                var categoryColor = string.IsNullOrWhiteSpace(category.ThemeColor)
+                ? "#00A6DA"
+                : category.ThemeColor;
+
+                var categoryIcon = string.IsNullOrWhiteSpace(category.IconClass)
+                ? "bi-buildings"
+                : category.IconClass;
+
+                <div class="col-12 col-sm-6 col-lg-4 col-xl-3 add-place-category-column">
+                    <div class="category-option add-place-category-card"
+                 data-category-id="@category.CategoryId"
+                 data-has-booking="@category.HasBookingSystem"
+                 style="--category-accent: @categoryColor;"
+                 aria-label="اختيار فئة @category.CategoryName">
+
+                        <span class="add-place-category-card__accent" aria-hidden="true"></span>
+
+                        <div class="add-place-category-card__top">
+                            <span class="add-place-category-card__icon" aria-hidden="true">
+                                <i class="bi @categoryIcon"></i>
+                            </span>
+
+                            <span class="add-place-category-card__status">
+                                @if (category.HasBookingSystem)
+                                {
+                                    <i class="bi bi-calendar2-check-fill" aria-hidden="true"></i>
+                                    <span>يدعم الحجز</span>
+                                }
+                                else
+                                {
+                                    <i class="bi bi-eye-fill" aria-hidden="true"></i>
+                                    <span>عرض ودليل</span>
+                                }
+                            </span>
+                        </div>
+
+                        <div class="add-place-category-card__body">
+                            <h3 class="add-place-category-card__title">
+                                @category.CategoryName
+                            </h3>
+
+                            <p class="add-place-category-card__description">
+                                @if (category.HasBookingSystem)
+                                {
+                                    <text>أضف بيانات المنشأة وإعدادات الحجز والوحدات والخدمات التابعة لها.</text>
+                                }
+                                else
+                                {
+                                    <text>أضف بيانات المنشأة وموقعها وصورها لتظهر بشكل احترافي في الدليل.</text>
+                                }
+                            </p>
+                        </div>
+
+                        <div class="add-place-category-card__footer">
+                            <span class="add-place-category-card__action-text">ابدأ الإضافة</span>
+                            <span class="add-place-category-card__action-icon" aria-hidden="true">
+                                <i class="bi bi-arrow-left"></i>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+        else
+        {
+            <div class="col-12">
+                <div class="add-place-entry__empty" role="status">
+                    <span class="add-place-entry__empty-icon" aria-hidden="true">
+                        <i class="bi bi-exclamation-triangle-fill"></i>
+                    </span>
+
+                    <div>
+                        <h3>لا توجد فئات متاحة حاليًا</h3>
+                        <p>يرجى التواصل مع الدعم الفني حتى يتم تفعيل الفئات وإتاحتها للإضافة.</p>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <footer class="add-place-entry__footer-note">
+        <i class="bi bi-shield-check" aria-hidden="true"></i>
+        <span>لن يتم نشر المنشأة للعملاء قبل استكمال البيانات ومراجعتها حسب إجراءات النظام.</span>
+    </footer>
+
+    <div id="templateContainer" class="mt-4" style="display: none;"></div>
+</section>

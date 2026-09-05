@@ -1,0 +1,175 @@
+@model YemenGuide.Core.DTOs.Admin.AdminEmployeeManagementPageDto
+@using System.Globalization
+@{
+    bool isArabic = string.Equals(CultureInfo.CurrentUICulture.TwoLetterISOLanguageName, "ar", StringComparison.OrdinalIgnoreCase);
+    string L(string ar, string en) => isArabic ? ar : en;
+    ViewData["Title"] = L("إدارة الموظفين", "Employees management");
+    Layout = "_AdminLayout";
+}
+
+@section Styles {
+    <link rel="stylesheet"
+      href="~/css/admin/employees.css"
+      asp-append-version="true" />
+}
+
+    <div class="employees-management-page"
+     data-employees-app
+     data-language="@(isArabic ? "ar" : "en")"
+     data-default-tab="@Model.DefaultTab"
+     data-employees-url="@Url.Action("EmployeesTab", "Employees", new { area = "Admin" })"
+     data-roles-url="@Url.Action("RolesTab", "Employees", new { area = "Admin" })"
+     data-audit-url="@Url.Action("AuditLogsTab", "Employees", new { area = "Admin" })"
+     data-employee-form-url="@Url.Action("EmployeeForm", "Employees", new { area = "Admin" })"
+     data-role-form-url="@Url.Action("RoleForm", "Employees", new { area = "Admin" })"
+     data-save-employee-url="@Url.Action("SaveEmployee", "Employees", new { area = "Admin" })"
+     data-save-role-url="@Url.Action("SaveRole", "Employees", new { area = "Admin" })"
+     data-status-employee-url="@Url.Action("ChangeEmployeeStatus", "Employees", new { area = "Admin" })"
+     data-role-status-url="@Url.Action("ChangeRoleStatus", "Employees", new { area = "Admin" })"
+     data-availability-url="@Url.Action("CheckAccountAvailability", "Employees", new { area = "Admin" })">
+
+        @Html.AntiForgeryToken()
+
+        <section class="employees-page-intro">
+            <div class="employees-page-intro__copy">
+                <span class="employees-page-intro__eyebrow">
+                    <i class="bi bi-shield-check"></i>
+                    @L("فريق الإدارة", "Administration team")
+                </span>
+                <h1>@L("الموظفون والصلاحيات", "Employees & permissions")</h1>
+                <p>@L("إدارة حسابات فريق المنصة، إنشاء الأدوار، وتوزيع الصلاحيات بطريقة واضحة وآمنة.", "Manage platform staff accounts, roles, and permissions clearly and securely.")</p>
+            </div>
+        </section>
+
+        <nav class="custom-tabs-container employees-unified-tabs"
+         role="tablist"
+         aria-label="@L("تبويبات إدارة الموظفين", "Employee management tabs")">
+        @if (Model.CanViewEmployees)
+        {
+            <button type="button"
+                class="tab-btn @(Model.DefaultTab == "employees" ? "active" : "")"
+                role="tab"
+                data-employee-tab="employees"
+                tabindex="@(Model.DefaultTab == "employees" ? "0" : "-1")"
+                aria-selected="@(Model.DefaultTab == "employees" ? "true" : "false")">
+                <span class="tab-icon"><i class="bi bi-people-fill"></i></span>
+                <span class="tab-label">@L("الموظفون", "Employees")</span>
+                <span class="tab-count" data-tab-count="employees">@Model.EmployeesCount</span>
+            </button>
+        }
+
+        @if (Model.CanViewRoles)
+        {
+            <button type="button"
+                class="tab-btn @(Model.DefaultTab == "roles" ? "active" : "")"
+                role="tab"
+                data-employee-tab="roles"
+                tabindex="@(Model.DefaultTab == "roles" ? "0" : "-1")"
+                aria-selected="@(Model.DefaultTab == "roles" ? "true" : "false")">
+                <span class="tab-icon"><i class="bi bi-person-badge-fill"></i></span>
+                <span class="tab-label">@L("الأدوار والصلاحيات", "Roles & permissions")</span>
+                <span class="tab-count" data-tab-count="roles">@Model.RolesCount</span>
+            </button>
+        }
+
+        @if (Model.CanViewAuditLogs)
+        {
+            <button type="button"
+                class="tab-btn @(Model.DefaultTab == "audit" ? "active" : "")"
+                role="tab"
+                data-employee-tab="audit"
+                tabindex="@(Model.DefaultTab == "audit" ? "0" : "-1")"
+                aria-selected="@(Model.DefaultTab == "audit" ? "true" : "false")">
+                <span class="tab-icon"><i class="bi bi-clock-history"></i></span>
+                <span class="tab-label">@L("سجل العمليات", "Audit log")</span>
+                <span class="tab-count" data-tab-count="audit">@Model.AuditLogsCount</span>
+            </button>
+        }
+    </nav>
+
+    <section class="employees-content-shell"
+             data-tab-content
+             aria-live="polite">
+        <div class="employees-loading-state">
+            <span class="employees-loading-state__spinner"></span>
+            <strong>@L("جاري تجهيز البيانات...", "Preparing data...")</strong>
+            <small>@L("لحظة واحدة فقط", "Just a moment")</small>
+        </div>
+    </section>
+
+    <div class="employees-drawer-layer" data-drawer-layer hidden>
+        <button type="button"
+                class="employees-drawer-backdrop"
+                data-close-drawer
+                aria-label="@L("إغلاق", "Close")"></button>
+
+        <aside class="employees-drawer"
+               data-drawer
+               role="dialog"
+               aria-modal="true"
+               aria-label="@L("نموذج الإدارة", "Administration form")">
+            <div class="employees-drawer__content" data-drawer-content></div>
+        </aside>
+    </div>
+
+    <div class="employees-confirm-layer" data-confirm-layer hidden>
+        <div class="employees-confirm-card" role="alertdialog" aria-modal="true">
+            <span class="employees-confirm-card__icon" data-confirm-icon>
+                <i class="bi bi-exclamation-lg"></i>
+            </span>
+            <h3 data-confirm-title>@L("تأكيد العملية", "Confirm action")</h3>
+            <p data-confirm-message>@L("هل تريد المتابعة؟", "Do you want to continue?")</p>
+            <div class="employees-confirm-card__actions">
+                <button type="button" class="employees-btn employees-btn--ghost" data-confirm-cancel>@L("إلغاء", "Cancel")</button>
+                <button type="button" class="employees-btn employees-btn--danger" data-confirm-accept>@L("تأكيد", "Confirm")</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="employees-secret-layer" data-secret-layer hidden>
+        <div class="employees-secret-card employees-secret-card--v7" role="dialog" aria-modal="true">
+            <span class="employees-secret-card__icon"><i class="bi bi-key-fill"></i></span>
+            <span class="employees-secret-card__eyebrow">@L("بيانات دخول مؤقتة", "Temporary credentials")</span>
+            <h3>@L("تم تجهيز حساب الموظف", "Employee account is ready")</h3>
+            <p>@L("هذه البيانات صالحة لأول دخول، وبعدها سيُطلب من الموظف تعيين كلمة مرور جديدة.", "These credentials are for the first sign-in only; the employee must then set a new password.")</p>
+
+            <div class="employees-secret-email-status" data-secret-email-status>
+                <i class="bi bi-envelope"></i>
+                <span><strong>@L("حالة إرسال البريد", "Email status")</strong><small>@L("سيظهر الوضع هنا بعد الحفظ.", "The status will appear here after saving.")</small></span>
+            </div>
+
+            <div class="employees-secret-meta">
+                <div>
+                    <span>@L("اسم المستخدم", "Username")</span>
+                    <strong dir="ltr" data-secret-username>—</strong>
+                </div>
+                <div>
+                    <span>@L("البريد", "Email")</span>
+                    <strong dir="ltr" data-secret-email>—</strong>
+                </div>
+            </div>
+
+            <span class="employees-secret-password-label">@L("كلمة المرور المؤقتة", "Temporary password")</span>
+            <div class="employees-secret-value" dir="ltr">
+                <code data-secret-value></code>
+                <button type="button" data-copy-secret aria-label="@L("نسخ كلمة المرور", "Copy password")">
+                    <i class="bi bi-copy"></i>
+                </button>
+            </div>
+
+            <div class="employees-secret-force-note">
+                <i class="bi bi-shield-lock-fill"></i>
+                <span>@L("سيُجبر الموظف على تغيير كلمة المرور عند أول تسجيل دخول.", "The employee must change the password on first sign-in.")</span>
+            </div>
+
+            <button type="button" class="employees-btn employees-btn--primary employees-secret-close" data-close-secret>@L("تم", "Done")</button>
+        </div>
+    </div>
+
+    <div class="employees-toast-stack" data-toast-stack aria-live="polite"></div>
+</div>
+
+@section Scripts {
+    <script src="~/js/admin/employees.js"
+        asp-append-version="true"></script>
+}

@@ -1,0 +1,395 @@
+﻿@model IEnumerable<YemenGuide.Core.Entities.Place>
+@inject YemenGuide.Data.AppDbContext _context
+
+@{
+    var places = Model?.ToList() ?? new List<YemenGuide.Core.Entities.Place>();
+    var activePlaceId = ViewBag.ActivePlaceId is int id ? id : 0;
+
+    var approvedCount = places.Count(place =>
+        string.Equals(place.Status, "Active", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(place.Status, "Approved", StringComparison.OrdinalIgnoreCase));
+
+    var pendingCount = places.Count(place =>
+        string.Equals(place.Status, "Pending", StringComparison.OrdinalIgnoreCase));
+
+    var waitingOwnerCount = places.Count(place =>
+        string.Equals(place.Status, "WaitOwner", StringComparison.OrdinalIgnoreCase));
+}
+
+<section class="owner-places-list animate-fade-in" dir="rtl" aria-labelledby="ownerPlacesTitle">
+    <header class="owner-places-hero owner-places-hero--compact">
+        <div class="owner-places-hero__copy">
+            <span class="owner-places-hero__icon" aria-hidden="true">
+                <i class="bi bi-buildings"></i>
+            </span>
+            <div>
+                <span class="owner-places-hero__eyebrow">إدارة منشآتك</span>
+                <h2 id="ownerPlacesTitle">قائمة منشآتي</h2>
+                <p>راجع الحالة، عدّل البيانات، أدر الصور، وافتح المنشأة المعتمدة كما يراها العميل.</p>
+            </div>
+        </div>
+
+        <button type="button"
+                class="owner-places-add-btn owner-places-add-btn--compact"
+                onclick="document.querySelector('.tab-btn[data-target=\'add-place-tab\']')?.click()">
+            <span><i class="bi bi-plus-lg"></i></span>
+            إضافة منشأة
+        </button>
+    </header>
+
+    <div class="owner-places-stats owner-places-stats--compact" aria-label="ملخص المنشآت">
+        <article class="owner-places-stat owner-places-stat--all">
+            <span class="owner-places-stat__icon"><i class="bi bi-grid-1x2"></i></span>
+            <div><strong>@places.Count</strong><span>الإجمالي</span></div>
+        </article>
+
+        <article class="owner-places-stat owner-places-stat--active">
+            <span class="owner-places-stat__icon"><i class="bi bi-check2-circle"></i></span>
+            <div><strong>@approvedCount</strong><span>المعتمدة</span></div>
+        </article>
+
+        <article class="owner-places-stat owner-places-stat--pending">
+            <span class="owner-places-stat__icon"><i class="bi bi-hourglass-split"></i></span>
+            <div><strong>@pendingCount</strong><span>قيد المراجعة</span></div>
+        </article>
+
+        <article class="owner-places-stat owner-places-stat--waiting">
+            <span class="owner-places-stat__icon"><i class="bi bi-person-check"></i></span>
+            <div><strong>@waitingOwnerCount</strong><span>بانتظارك</span></div>
+        </article>
+    </div>
+
+    @if (waitingOwnerCount > 0)
+    {
+        <div class="owner-places-notice owner-places-notice--warning owner-places-notice--compact" role="status">
+            <span class="owner-places-notice__icon"><i class="bi bi-bell-fill"></i></span>
+            <div>
+                <strong>هناك منشآت بانتظار موافقتك</strong>
+                <p>راجعها ثم وافق عليها أو اكتب سبب الرفض.</p>
+            </div>
+            <span class="owner-places-notice__count">@waitingOwnerCount</span>
+        </div>
+    }
+
+    @if (places.Any())
+    {
+        <div class="owner-places-grid owner-places-grid--compact">
+            @foreach (var place in places)
+            {
+                var cityName = _context.Cities
+                .Where(city => city.CityId == place.CityId)
+                .Select(city => city.CityName)
+                .FirstOrDefault() ?? "غير محدد";
+
+                var mainImage = !string.IsNullOrWhiteSpace(place.CoverImage)
+                ? place.CoverImage
+                : "/images/default-place.jpg";
+
+                var isWaitOwner = string.Equals(place.Status, "WaitOwner", StringComparison.OrdinalIgnoreCase);
+                var isActive = string.Equals(place.Status, "Active", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(place.Status, "Approved", StringComparison.OrdinalIgnoreCase);
+                var isRejected = string.Equals(place.Status, "Rejected", StringComparison.OrdinalIgnoreCase);
+                var isRejectedByOwner = string.Equals(place.Status, "RejectedByOwner", StringComparison.OrdinalIgnoreCase);
+                var isSuspended = string.Equals(place.Status, "Suspended", StringComparison.OrdinalIgnoreCase);
+                var isPending = string.Equals(place.Status, "Pending", StringComparison.OrdinalIgnoreCase);
+                var isCurrent = activePlaceId > 0 && place.PlaceId == activePlaceId;
+
+                var needsPolicies = place.Category != null &&
+                place.Category.BookingSystemId >= 1 &&
+                place.Category.BookingSystemId <= 4;
+
+                var hasPolicies = _context.PlacePolicies.Any(policy => policy.PlaceId == place.PlaceId);
+                var isHiddenFromAdmin = isPending && needsPolicies && !hasPolicies;
+                var isHiddenFromCustomers = isWaitOwner && needsPolicies && !hasPolicies;
+                var isActiveMissingPolicies = isActive && needsPolicies && !hasPolicies;
+
+                // المعاينة مرتبطة باعتماد الإدارة، وليست مرتبطة بالتوفر المؤقت.
+                var canPreviewAsCustomer = isActive;
+
+                var statusKey = isActiveMissingPolicies ? "incomplete" :
+                isActive ? "active" :
+                isWaitOwner ? "waiting" :
+                isRejected || isRejectedByOwner ? "rejected" :
+                isSuspended ? "suspended" :
+                isHiddenFromAdmin ? "incomplete" : "pending";
+
+                var statusText = isActiveMissingPolicies ? "نشطة والحجز غير جاهز" :
+                isActive ? "نشطة ومعتمدة" :
+                isWaitOwner ? "بانتظار موافقتك" :
+                isRejected ? "مرفوضة من الإدارة" :
+                isRejectedByOwner ? "مرفوضة من المالك" :
+                isSuspended ? "موقوفة مؤقتًا" :
+                isHiddenFromAdmin ? "تحتاج إكمال السياسات" : "قيد مراجعة الإدارة";
+
+                var statusIcon = isActiveMissingPolicies ? "bi-shield-exclamation" :
+                isActive ? "bi-check-circle-fill" :
+                isWaitOwner ? "bi-person-fill-exclamation" :
+                isRejected || isRejectedByOwner ? "bi-x-circle-fill" :
+                isSuspended ? "bi-pause-circle-fill" :
+                isHiddenFromAdmin ? "bi-shield-lock-fill" : "bi-hourglass-split";
+
+                <article class="owner-place-card owner-place-card--compact owner-place-card--uniform @(isCurrent ? "is-current" : string.Empty)"
+                 id="owner-place-card-@place.PlaceId"
+                 data-place-card="@place.PlaceId"
+                 data-owner-active-place="@(isCurrent ? "true" : "false")"
+                 data-place-name="@place.PlaceNameAndDesc">
+
+                    <div class="owner-place-card__media">
+                        <img id="card-img-@place.PlaceId"
+                     src="@mainImage"
+                     alt="صورة @place.PlaceNameAndDesc"
+                     loading="lazy" />
+
+                        <div class="owner-place-card__media-overlay"></div>
+
+                        <span class="owner-place-status owner-place-status--@statusKey">
+                            <i class="bi @statusIcon"></i>
+                            @statusText
+                        </span>
+
+                        @if (isCurrent)
+                        {
+                            <span class="owner-place-current-badge">
+                                <i class="bi bi-check-lg"></i>
+                                المنشأة الحالية
+                            </span>
+                        }
+
+                        <span class="owner-place-category">
+                            <i class="bi @(place.Category?.IconClass ?? "bi-building")"></i>
+                            @(place.Category?.CategoryName ?? "عام")
+                        </span>
+                    </div>
+
+                    <div class="owner-place-card__body">
+                        <div class="owner-place-card__heading">
+                            <div>
+                                <span class="owner-place-card__number">منشأة #@place.PlaceId</span>
+                                <h3 title="@place.PlaceNameAndDesc">@place.PlaceNameAndDesc</h3>
+                            </div>
+
+                            <span class="owner-place-availability @(place.IsAvailable == true ? "is-available" : "is-unavailable")"
+                          title="@(place.IsAvailable == true ? "متاحة للحجز أو العرض" : "غير متاحة حاليًا")">
+                                <span></span>
+                                @(place.IsAvailable == true ? "متاحة" : "غير متاحة")
+                            </span>
+                        </div>
+
+                        <div class="owner-place-meta owner-place-meta--compact">
+                            <span><i class="bi bi-geo-alt"></i>@cityName</span>
+                            <span><i class="bi bi-tag"></i>@(place.Category?.CategoryName ?? "عام")</span>
+                        </div>
+
+                        <div class="owner-place-card__state-slot">
+                            @if (isActiveMissingPolicies)
+                            {
+                                <div class="owner-place-state owner-place-state--warning">
+                                    <span class="owner-place-state__icon"><i class="bi bi-calendar2-x"></i></span>
+                                    <div class="owner-place-state__copy">
+                                        <strong>المنشأة ظاهرة، لكن الحجز متوقف</strong>
+                                        <span>أكمل السياسات لتصبح جاهزة لاستقبال الحجوزات.</span>
+                                    </div>
+                                    <button type="button"
+                                class="owner-place-state__action"
+                                onclick="window.showPolicyOptions(@place.PlaceId)">
+                                        إكمال السياسات
+                                    </button>
+                                </div>
+                            }
+                            else if (isHiddenFromAdmin)
+                            {
+                                <div class="owner-place-state owner-place-state--danger">
+                                    <span class="owner-place-state__icon"><i class="bi bi-shield-exclamation"></i></span>
+                                    <div class="owner-place-state__copy">
+                                        <strong>تحتاج إكمال السياسات</strong>
+                                        <span>أكملها ليتم إرسال المنشأة للإدارة.</span>
+                                    </div>
+                                    <button type="button"
+                                class="owner-place-state__action"
+                                onclick="window.showPolicyOptions(@place.PlaceId)">
+                                        إكمال
+                                    </button>
+                                </div>
+                            }
+                            else if (isHiddenFromCustomers)
+                            {
+                                <div class="owner-place-state owner-place-state--warning">
+                                    <span class="owner-place-state__icon"><i class="bi bi-eye-slash"></i></span>
+                                    <div class="owner-place-state__copy">
+                                        <strong>غير ظاهرة للعملاء</strong>
+                                        <span>وافق عليها وأكمل السياسات لتفعيلها.</span>
+                                    </div>
+                                </div>
+                            }
+                            else if ((isRejected || isRejectedByOwner) && !string.IsNullOrWhiteSpace(place.RejectionReason))
+                            {
+                                <div class="owner-place-state owner-place-state--danger">
+                                    <span class="owner-place-state__icon"><i class="bi bi-info-circle"></i></span>
+                                    <div class="owner-place-state__copy">
+                                        <strong>سبب الرفض</strong>
+                                        <span title="@place.RejectionReason">@place.RejectionReason</span>
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="owner-place-state owner-place-state--neutral" aria-hidden="true">
+                                    <span class="owner-place-state__icon"><i class="bi bi-check2"></i></span>
+                                    <div class="owner-place-state__copy">
+                                        <strong>البيانات الأساسية مكتملة</strong>
+                                        <span>يمكنك إدارة المنشأة من الأزرار أدناه.</span>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        <div class="owner-place-card__actions owner-place-card__actions--compact owner-place-card__actions--uniform">
+                            @if (isHiddenFromAdmin)
+                            {
+                                <button type="button"
+                            class="owner-place-btn owner-place-btn--primary"
+                            onclick="window.showPolicyOptions(@place.PlaceId)">
+                                    <i class="bi bi-shield-check"></i>
+                                    إكمال السياسات
+                                </button>
+
+                                <button type="button"
+                            class="owner-place-btn owner-place-btn--light"
+                            onclick="openEditPlaceModal(@place.PlaceId)">
+                                    <i class="bi bi-pencil-square"></i>
+                                    تعديل
+                                </button>
+                            }
+                            else if (isWaitOwner)
+                            {
+                                <button type="button"
+                            class="owner-place-btn @(isHiddenFromCustomers ? "owner-place-btn--primary" : "owner-place-btn--success")"
+                            onclick="activatePlace(@place.PlaceId)">
+                                    <i class="bi @(isHiddenFromCustomers ? "bi-shield-check" : "bi-check2-circle")"></i>
+                                    @(isHiddenFromCustomers ? "موافقة وإكمال" : "موافقة وتفعيل")
+                                </button>
+
+                                <button type="button"
+                            class="owner-place-btn owner-place-btn--outline-danger"
+                            onclick="rejectPlaceByOwner(@place.PlaceId)">
+                                    <i class="bi bi-x-circle"></i>
+                                    رفض
+                                </button>
+                            }
+                            else if (isRejected)
+                            {
+                                <button type="button"
+                            class="owner-place-btn owner-place-btn--primary"
+                            onclick="resubmitPlaceForReview(@place.PlaceId, @(hasPolicies ? "true" : "false"))">
+                                    <i class="bi bi-arrow-clockwise"></i>
+                                    إعادة الإرسال
+                                </button>
+
+                                <button type="button"
+                            class="owner-place-btn owner-place-btn--light"
+                            onclick="openEditPlaceModal(@place.PlaceId)">
+                                    <i class="bi bi-pencil-square"></i>
+                                    تعديل
+                                </button>
+                            }
+                            else
+                            {
+                                @if (canPreviewAsCustomer)
+                                {
+                                    <a class="owner-place-btn owner-place-btn--preview"
+                       href="@Url.Action("Details", "Places", new { area = "", id = place.PlaceId })"
+                       target="_blank"
+                       rel="noopener noreferrer">
+                                        <i class="bi bi-eye-fill"></i>
+                                        معاينة كعميل
+                                    </a>
+                                }
+                                else
+                                {
+                                    <button type="button"
+                            class="owner-place-btn owner-place-btn--muted"
+                            onclick="window.viewOnlyPlace(@place.PlaceId)">
+                                        <i class="bi bi-eye"></i>
+                                        عرض التفاصيل
+                                    </button>
+                                }
+
+                                <button type="button"
+                            class="owner-place-btn owner-place-btn--light"
+                            onclick="openEditPlaceModal(@place.PlaceId)">
+                                    <i class="bi bi-pencil-square"></i>
+                                    تعديل
+                                </button>
+                            }
+
+                            <details class="owner-place-more">
+                                <summary aria-label="المزيد من الإجراءات">
+                                    <i class="bi bi-three-dots"></i>
+                                    <span>المزيد</span>
+                                </summary>
+                                <div class="owner-place-more__menu">
+                                    @if (isWaitOwner)
+                                    {
+                                        <button type="button" onclick="window.viewOnlyImagesModal(@place.PlaceId)">
+                                            <i class="bi bi-images"></i>
+                                            مراجعة الصور
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" onclick="openManagePlaceImagesModal(@place.PlaceId)">
+                                            <i class="bi bi-images"></i>
+                                            إدارة الصور
+                                        </button>
+                                    }
+
+                                    @if (canPreviewAsCustomer)
+                                    {
+                                        <a href="@Url.Action("Details", "Places", new { area = "", id = place.PlaceId })"
+                               target="_blank"
+                               rel="noopener noreferrer">
+                                            <i class="bi bi-box-arrow-up-left"></i>
+                                            فتح صفحة العميل
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" onclick="window.viewOnlyPlace(@place.PlaceId)">
+                                            <i class="bi bi-eye"></i>
+                                            عرض التفاصيل
+                                        </button>
+                                    }
+
+                                    @if (!isWaitOwner)
+                                    {
+                                        <button type="button"
+                                    class="owner-place-more__danger"
+                                    onclick="deletePlace(@place.PlaceId)">
+                                            <i class="bi bi-trash3"></i>
+                                            حذف المنشأة
+                                        </button>
+                                    }
+                                </div>
+                            </details>
+                        </div>
+                    </div>
+                </article>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="owner-places-empty">
+            <span class="owner-places-empty__icon"><i class="bi bi-building-add"></i></span>
+            <span class="owner-places-empty__eyebrow">ابدأ رحلتك الآن</span>
+            <h3>لا توجد منشآت مضافة حتى الآن</h3>
+            <p>أضف منشأتك الأولى، ثم أكمل الغرف أو الباقات والخدمات قبل إرسالها للإدارة.</p>
+            <button type="button"
+                class="owner-places-add-btn"
+                onclick="document.querySelector('.tab-btn[data-target=\'add-place-tab\']')?.click()">
+                <span><i class="bi bi-plus-lg"></i></span>
+                إضافة المنشأة الأولى
+            </button>
+        </div>
+    }
+</section>

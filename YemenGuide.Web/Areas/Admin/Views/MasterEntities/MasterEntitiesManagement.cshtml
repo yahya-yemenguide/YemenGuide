@@ -1,0 +1,425 @@
+@model List<YemenGuide.Core.Entities.Category>
+@using YemenGuide.Core.Entities
+@using System.Linq
+@using System.Collections.Generic
+@using System.Security.Claims
+@using YemenGuide.Core.Constants
+@inject YemenGuide.Web.Services.Employees.IAdminPermissionService AdminPermissionService
+
+@{
+    ViewData["Title"] = "التصنيفات والمدن";
+    Layout = "~/Areas/Admin/Views/Shared/_AdminLayout.cshtml";
+
+    var categories = Model ?? new List<Category>();
+    var cities = ViewBag.Cities as IEnumerable<City> ?? Enumerable.Empty<City>();
+    var categoryCounts = ViewBag.CategoryPlaceCounts as IDictionary<int, int> ?? new Dictionary<int, int>();
+    var cityCounts = ViewBag.CityPlaceCounts as IDictionary<int, int> ?? new Dictionary<int, int>();
+
+    int categoryCount = categories.Count;
+    int cityCount = cities.Count();
+    int restrictedCategoryCount = categories.Count(c => c.OwnerCanAddPlaces != true);
+
+    var currentAdminUserId =
+        int.TryParse(
+            User.FindFirstValue(ClaimTypes.NameIdentifier),
+            out var parsedAdminUserId)
+            ? parsedAdminUserId
+            : 0;
+
+    var canManageCategories =
+        await AdminPermissionService.HasPermissionAsync(
+            currentAdminUserId,
+            AdminPermissionKeys.MasterData.ManageCategories);
+
+    var canManageCities =
+        await AdminPermissionService.HasPermissionAsync(
+            currentAdminUserId,
+            AdminPermissionKeys.MasterData.ManageCities);
+}
+
+@section Styles {
+    <link rel="stylesheet"
+      href="~/css/admin/master-entities.css"
+      asp-append-version="true" />
+}
+
+    <div class="master-entities-page" data-master-entities-root>
+
+        <section class="master-hero master-hero--compact" aria-labelledby="masterPageTitle">
+            <div class="master-hero__content">
+                <div class="master-hero__eyebrow">
+                    <span class="master-hero__eyebrow-icon" aria-hidden="true">
+                        <i class="bi bi-sliders2"></i>
+                    </span>
+                    <span>إعدادات المحتوى الأساسية</span>
+                </div>
+
+                <h1 id="masterPageTitle" class="master-hero__title">تهيئة النظام الأساسية</h1>
+                <p class="master-hero__description">
+                    نظّم فئات المنشآت والمدن المدعومة، وحدد صلاحية إضافة المنشآت داخل كل فئة.
+                </p>
+            </div>
+
+            <div class="master-hero__stats master-hero__stats--compact" aria-label="ملخص بيانات التهيئة">
+                <article class="master-stat-card master-stat-card--categories">
+                    <span class="master-stat-card__icon master-stat-card__icon--cyan" aria-hidden="true">
+                        <i class="bi bi-tags-fill"></i>
+                    </span>
+                    <span class="master-stat-card__body">
+                        <strong class="master-stat-card__value">@categoryCount</strong>
+                        <span class="master-stat-card__label">فئة</span>
+                    </span>
+                </article>
+
+                <article class="master-stat-card master-stat-card--restricted">
+                    <span class="master-stat-card__icon master-stat-card__icon--coral" aria-hidden="true">
+                        <i class="bi bi-lock-fill"></i>
+                    </span>
+                    <span class="master-stat-card__body">
+                        <strong class="master-stat-card__value">@restrictedCategoryCount</strong>
+                        <span class="master-stat-card__label">إدارة فقط</span>
+                    </span>
+                </article>
+
+                <article class="master-stat-card master-stat-card--cities">
+                    <span class="master-stat-card__icon master-stat-card__icon--blue" aria-hidden="true">
+                        <i class="bi bi-geo-alt-fill"></i>
+                    </span>
+                    <span class="master-stat-card__body">
+                        <strong class="master-stat-card__value">@cityCount</strong>
+                        <span class="master-stat-card__label">مدينة</span>
+                    </span>
+                </article>
+            </div>
+        </section>
+
+        <div class="master-tabs-band" aria-label="شريط أقسام التهيئة">
+            <div class="master-tabs-shell">
+                <div class="master-tabs-scroll" role="region" aria-label="أقسام إدارة الفئات والمدن">
+                    <div class="master-unified-tabs" role="tablist">
+                        <button type="button"
+                            class="master-unified-tab tab-btn active"
+                            data-target="categories-tab-content"
+                            role="tab"
+                            aria-selected="true"
+                            aria-controls="categories-tab-content">
+                            <span class="master-unified-tab__icon"><i class="bi bi-tags-fill"></i></span>
+                            <span class="master-unified-tab__label">إدارة الفئات</span>
+                            <span class="master-unified-tab__count">@categoryCount</span>
+                        </button>
+
+                        <button type="button"
+                            class="master-unified-tab tab-btn"
+                            data-target="cities-tab-content"
+                            role="tab"
+                            aria-selected="false"
+                            aria-controls="cities-tab-content">
+                            <span class="master-unified-tab__icon"><i class="bi bi-geo-alt-fill"></i></span>
+                            <span class="master-unified-tab__label">إدارة المدن</span>
+                            <span class="master-unified-tab__count">@cityCount</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <section class="master-content-card">
+
+            <div class="tab-pane-content categories-tab-content"
+             id="categories-tab-content"
+             role="tabpanel"
+             style="display:block;">
+
+                <header class="master-section-header">
+                    <div class="master-section-heading">
+                        <div class="master-section-heading__icon"><i class="bi bi-grid-fill"></i></div>
+                        <div>
+                            <h2>إدارة الفئات</h2>
+                            <p>أنشئ الفئات، اضبط نظام الحجز، وحدد ما إذا كانت متاحة للملاك أو للإدارة فقط.</p>
+                        </div>
+                    </div>
+
+                    <button type="button"
+                        class="master-primary-action btn-add-category @(!canManageCategories ? "d-none" : "")"
+                        onclick="openAddCategory()">
+                        <i class="bi bi-plus-lg"></i>
+                        <span>إضافة فئة جديدة</span>
+                    </button>
+                </header>
+
+                <div class="master-toolbar">
+                    <div class="master-search-box">
+                        <span class="master-search-box__icon"><i class="bi bi-search"></i></span>
+                        <input type="search"
+                           id="categorySearchInput"
+                           placeholder="ابحث عن فئة بالاسم..."
+                           autocomplete="off"
+                           aria-label="بحث في الفئات" />
+                        <button type="button"
+                            class="master-search-box__clear"
+                            data-clear-search="categorySearchInput"
+                            aria-label="مسح البحث"
+                            hidden>
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </div>
+
+                    <div class="master-toolbar__summary">
+                        <span><strong data-category-visible-count>@categoryCount</strong> ظاهرة</span>
+                        <span class="master-toolbar__dot"></span>
+                        <span><strong>@restrictedCategoryCount</strong> مقيدة</span>
+                    </div>
+                </div>
+
+                <div class="entity-cards-grid categories-grid" data-category-grid>
+                @if (categories.Any())
+                {
+                    foreach (var item in categories)
+                    {
+                        categoryCounts.TryGetValue(item.CategoryId, out var placesCount);
+                        var bookingLabel = item.BookingSystemId switch
+                        {
+                            1 => "غرف وأيام",
+                            2 => "باقات وفترات",
+                            3 => "قاعات ومناسبات",
+                            _ => "بدون حجز"
+                        };
+                        var bookingIcon = item.BookingSystemId switch
+                        {
+                            1 => "bi-door-open-fill",
+                            2 => "bi-calendar2-week-fill",
+                            3 => "bi-calendar-event-fill",
+                            _ => "bi-info-circle-fill"
+                        };
+
+                        <article class="master-entity-card category-card"
+                         data-category-card
+                         data-search-text="@item.CategoryName.ToLowerInvariant()"
+                         data-category-id="@item.CategoryId"
+                         style="--entity-accent:@(string.IsNullOrWhiteSpace(item.ThemeColor) ? "#00A6DA" : item.ThemeColor);">
+
+                            <div class="master-entity-card__topline">
+                                <span class="master-entity-card__type">فئة</span>
+
+                                @if (item.OwnerCanAddPlaces == true)
+                                {
+                                    <span class="master-access-badge master-access-badge--open">
+                                        <i class="bi bi-people-fill"></i>
+                                        المالك والإدارة
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="master-access-badge master-access-badge--locked">
+                                        <i class="bi bi-lock-fill"></i>
+                                        إدارة فقط
+                                    </span>
+                                }
+                            </div>
+
+                            <div class="master-entity-card__identity">
+                                <div class="master-entity-card__icon">
+                                    <i class="bi @(string.IsNullOrWhiteSpace(item.IconClass) ? "bi-star-fill" : item.IconClass)"></i>
+                                </div>
+                                <div class="master-entity-card__identity-copy">
+                                    <h3>@item.CategoryName</h3>
+                                    <span class="master-entity-card__subtitle">تصنيف منشآت</span>
+                                </div>
+                            </div>
+
+                            <div class="master-entity-card__meta-grid">
+                                <div class="master-meta-chip">
+                                    <span class="master-meta-chip__icon"><i class="bi @bookingIcon"></i></span>
+                                    <span class="master-meta-chip__copy">
+                                        <small>نظام الحجز</small>
+                                        <strong>@bookingLabel</strong>
+                                    </span>
+                                </div>
+
+                                <div class="master-meta-chip">
+                                    <span class="master-meta-chip__icon"><i class="bi bi-building-fill"></i></span>
+                                    <span class="master-meta-chip__copy">
+                                        <small>المنشآت</small>
+                                        <strong>@placesCount منشأة</strong>
+                                    </span>
+                                </div>
+                            </div>
+
+                            <footer class="master-entity-card__footer">
+                                <button type="button"
+                                class="master-card-action master-card-action--edit edit-category @(!canManageCategories ? "d-none" : "")"
+                                data-id="@item.CategoryId"
+                                aria-label="تعديل الفئة @item.CategoryName">
+                                    <i class="bi bi-pencil-square"></i>
+                                    <span>تعديل</span>
+                                </button>
+
+                                <button type="button"
+                                class="master-card-action master-card-action--delete delete-category @(!canManageCategories ? "d-none" : "")"
+                                data-id="@item.CategoryId"
+                                aria-label="حذف الفئة @item.CategoryName">
+                                    <i class="bi bi-trash3"></i>
+                                    <span>حذف</span>
+                                </button>
+                            </footer>
+                        </article>
+                    }
+                }
+            </div>
+
+            <div class="master-empty-state @(categories.Any() ? "d-none" : "")"
+                 data-category-empty>
+                <div class="master-empty-state__icon"><i class="bi bi-tags"></i></div>
+                <h3>لا توجد فئات</h3>
+                <p>أضف أول فئة لتبدأ بتنظيم أنواع المنشآت في المنصة.</p>
+                <button type="button" class="master-empty-state__action @(!canManageCategories ? "d-none" : "")" onclick="openAddCategory()">
+                    <i class="bi bi-plus-lg"></i> إضافة فئة
+                </button>
+            </div>
+
+            <div class="master-empty-state d-none" data-category-no-results>
+                <div class="master-empty-state__icon"><i class="bi bi-search"></i></div>
+                <h3>لا توجد نتائج مطابقة</h3>
+                <p>جرّب كتابة اسم آخر للفئة.</p>
+            </div>
+        </div>
+
+        <div class="tab-pane-content cities-tab-content"
+             id="cities-tab-content"
+             role="tabpanel"
+             style="display:none;">
+
+            <header class="master-section-header">
+                <div class="master-section-heading">
+                    <div class="master-section-heading__icon"><i class="bi bi-map-fill"></i></div>
+                    <div>
+                        <h2>إدارة المدن</h2>
+                        <p>تحكم بالمدن التي يمكن استخدامها عند إضافة المنشآت وتصفح المحتوى.</p>
+                    </div>
+                </div>
+
+                <button type="button"
+                        class="master-primary-action btn-add-city @(!canManageCities ? "d-none" : "")"
+                        onclick="openAddCity()">
+                    <i class="bi bi-plus-lg"></i>
+                    <span>إضافة مدينة جديدة</span>
+                </button>
+            </header>
+
+            <div class="master-toolbar">
+                <div class="master-search-box">
+                    <span class="master-search-box__icon"><i class="bi bi-search"></i></span>
+                    <input type="search"
+                           id="citySearchInput"
+                           placeholder="ابحث عن مدينة بالاسم..."
+                           autocomplete="off"
+                           aria-label="بحث في المدن" />
+                    <button type="button"
+                            class="master-search-box__clear"
+                            data-clear-search="citySearchInput"
+                            aria-label="مسح البحث"
+                            hidden>
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                </div>
+
+                <div class="master-toolbar__summary">
+                    <span><strong data-city-visible-count>@cityCount</strong> ظاهرة</span>
+                    <span class="master-toolbar__dot"></span>
+                    <span><strong>@cityCount</strong> إجمالي</span>
+                </div>
+            </div>
+
+            <div class="entity-cards-grid cities-grid" data-city-grid>
+                @foreach (var city in cities)
+                {
+                    cityCounts.TryGetValue(city.CityId, out var placesCount);
+
+                    <article class="master-entity-card city-card"
+                         data-city-card
+                         data-search-text="@city.CityName.ToLowerInvariant()"
+                         data-city-id="@city.CityId"
+                         style="--entity-accent:@(string.IsNullOrWhiteSpace(city.ThemeColor) ? "#00A6DA" : city.ThemeColor);">
+
+                        <div class="master-entity-card__topline">
+                            <span class="master-entity-card__type">مدينة</span>
+                            <span class="master-access-badge master-access-badge--city">
+                                <i class="bi bi-geo-alt-fill"></i>
+                                متاحة بالمنصة
+                            </span>
+                        </div>
+
+                        <div class="master-entity-card__identity">
+                            <div class="master-entity-card__icon">
+                                <i class="bi bi-geo-alt-fill"></i>
+                            </div>
+                            <div class="master-entity-card__identity-copy">
+                                <h3>@city.CityName</h3>
+                                <span class="master-entity-card__subtitle">مدينة مدعومة</span>
+                            </div>
+                        </div>
+
+                        <div class="master-entity-card__meta-grid master-entity-card__meta-grid--single">
+                            <div class="master-meta-chip">
+                                <span class="master-meta-chip__icon"><i class="bi bi-building-fill"></i></span>
+                                <span class="master-meta-chip__copy">
+                                    <small>المنشآت المرتبطة</small>
+                                    <strong>@placesCount منشأة</strong>
+                                </span>
+                            </div>
+                        </div>
+
+                        <footer class="master-entity-card__footer">
+                            <button type="button"
+                                class="master-card-action master-card-action--edit edit-city @(!canManageCities ? "d-none" : "")"
+                                data-id="@city.CityId"
+                                aria-label="تعديل المدينة @city.CityName">
+                                <i class="bi bi-pencil-square"></i>
+                                <span>تعديل</span>
+                            </button>
+
+                            <button type="button"
+                                class="master-card-action master-card-action--delete delete-city @(!canManageCities ? "d-none" : "")"
+                                data-id="@city.CityId"
+                                aria-label="حذف المدينة @city.CityName">
+                                <i class="bi bi-trash3"></i>
+                                <span>حذف</span>
+                            </button>
+                        </footer>
+                    </article>
+                }
+            </div>
+
+            <div class="master-empty-state @(cityCount > 0 ? "d-none" : "")"
+                 data-city-empty>
+                <div class="master-empty-state__icon"><i class="bi bi-map"></i></div>
+                <h3>لا توجد مدن</h3>
+                <p>أضف أول مدينة لتصبح متاحة في نماذج المنشآت.</p>
+                <button type="button" class="master-empty-state__action @(!canManageCities ? "d-none" : "")" onclick="openAddCity()">
+                    <i class="bi bi-plus-lg"></i> إضافة مدينة
+                </button>
+            </div>
+
+            <div class="master-empty-state d-none" data-city-no-results>
+                <div class="master-empty-state__icon"><i class="bi bi-search"></i></div>
+                <h3>لا توجد نتائج مطابقة</h3>
+                <p>جرّب كتابة اسم آخر للمدينة.</p>
+            </div>
+        </div>
+    </section>
+</div>
+
+@if (canManageCategories)
+{
+    @await Html.PartialAsync("_AddCategory", new YemenGuide.Core.Entities.Category())
+}
+
+@if (canManageCities)
+{
+    @await Html.PartialAsync("_AddCity", new YemenGuide.Core.Entities.City())
+}
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="~/js/admin/master-entities.js" asp-append-version="true"></script>
+}

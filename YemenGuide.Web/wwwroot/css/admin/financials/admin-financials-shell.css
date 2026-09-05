@@ -1,0 +1,1258 @@
+/* =========================================================
+   YemenGuide Admin Finance — Premium Editorial Shell
+   ========================================================= */
+:root {
+    --af-cyan: #00A6DA;
+    --af-cyan-strong: #008DB9;
+    --af-cyan-soft: #EAF9FE;
+    --af-mint: #19B88E;
+    --af-mint-soft: #EAFBF6;
+    --af-gold: #E7A324;
+    --af-gold-soft: #FFF7E7;
+    --af-rose: #DF5B67;
+    --af-rose-soft: #FFF0F2;
+    --af-navy: #0B2A45;
+    --af-ink: #172536;
+    --af-ink-2: #2D4053;
+    --af-muted: #718195;
+    --af-slate: #657689;
+    --af-slate-soft: #F2F5F8;
+    --af-line: #E5EDF3;
+    --af-line-strong: #D8E4EC;
+    --af-bg: #F4F8FB;
+    --af-surface: #FFF;
+    --af-surface-soft: #F9FBFD;
+    --af-success: #178F6B;
+    --af-danger: #D34D59;
+    --af-warning: #D18711;
+    --af-r-sm: 12px;
+    --af-r-md: 17px;
+    --af-r-lg: 23px;
+    --af-r-xl: 29px;
+    --af-shadow-xs: 0 2px 9px rgba(13,49,76,.055);
+    --af-shadow-sm: 0 9px 27px rgba(13,49,76,.075);
+    --af-shadow-md: 0 20px 54px rgba(13,49,76,.11);
+    --af-shadow-modal: 0 30px 85px rgba(11,42,69,.20);
+    --af-font: "Cairo","Tajawal","Noto Sans Arabic","Segoe UI",Tahoma,Arial,sans-serif;
+}
+
+.af-shell, .af-shell * {
+    box-sizing: border-box
+}
+
+.af-shell {
+    width: 100%;
+    min-width: 0;
+    color: var(--af-ink);
+    font-family: var(--af-font);
+    line-height: 1.65
+}
+
+    .af-shell button, .af-shell input, .af-shell select, .af-shell textarea {
+        font: inherit
+    }
+
+    .af-shell button, .af-shell a {
+        -webkit-tap-highlight-color: transparent
+    }
+
+        .af-shell button:focus-visible, .af-shell a:focus-visible, .af-shell input:focus-visible, .af-shell select:focus-visible, .af-shell textarea:focus-visible {
+            outline: 3px solid rgba(0,166,218,.18);
+            outline-offset: 2px
+        }
+
+    .af-shell [hidden] {
+        display: none !important
+    }
+
+    .af-shell .is-loading {
+        pointer-events: none;
+        opacity: .7
+    }
+
+/* HERO */
+.af-hero {
+    display: grid;
+    grid-template-columns: minmax(0,1.35fr) minmax(340px,.65fr);
+    gap: 20px;
+    margin: 0 0 22px
+}
+
+.af-hero__content {
+    position: relative;
+    overflow: hidden;
+    padding: 30px 32px;
+    border: 1px solid var(--af-line);
+    border-radius: var(--af-r-xl);
+    background: #fff;
+    box-shadow: var(--af-shadow-sm)
+}
+
+    .af-hero__content::before {
+        content: "";
+        position: absolute;
+        inset-inline-end: 34px;
+        top: 28px;
+        width: 74px;
+        height: 74px;
+        border: 15px solid rgba(0,166,218,.055);
+        border-radius: 50%;
+        pointer-events: none
+    }
+
+    .af-hero__content::after {
+        content: "";
+        position: absolute;
+        inset-inline-end: -50px;
+        bottom: -76px;
+        width: 190px;
+        height: 190px;
+        border: 28px solid rgba(23,184,142,.045);
+        border-radius: 50%;
+        pointer-events: none
+    }
+
+.af-hero__eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    margin-bottom: 10px;
+    color: var(--af-cyan-strong);
+    font-size: 13px;
+    font-weight: 850
+}
+
+.af-hero__eyebrow-mark {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--af-cyan);
+    box-shadow: 0 0 0 5px rgba(0,166,218,.09)
+}
+
+.af-hero__headline-row {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px
+}
+
+.af-hero__title {
+    margin: 0;
+    color: var(--af-navy);
+    font-size: clamp(28px,3vw,40px);
+    font-weight: 900;
+    line-height: 1.24;
+    letter-spacing: -.35px
+}
+
+.af-hero__subtitle {
+    max-width: 760px;
+    margin: 10px 0 0;
+    color: var(--af-muted);
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.95
+}
+
+.af-hero__actions {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    flex-shrink: 0
+}
+
+.af-btn {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border: 1px solid transparent;
+    border-radius: 13px;
+    cursor: pointer;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 850;
+    transition: .18s ease
+}
+
+    .af-btn:hover {
+        transform: translateY(-1px)
+    }
+
+.af-btn--primary {
+    color: #fff;
+    background: var(--af-cyan);
+    border-color: var(--af-cyan);
+    box-shadow: 0 8px 18px rgba(0,166,218,.18)
+}
+
+    .af-btn--primary:hover {
+        background: var(--af-cyan-strong);
+        border-color: var(--af-cyan-strong)
+    }
+
+.af-btn--ghost {
+    color: var(--af-ink-2);
+    background: #fff;
+    border-color: var(--af-line-strong)
+}
+
+    .af-btn--ghost:hover {
+        color: var(--af-cyan-strong);
+        border-color: rgba(0,166,218,.34);
+        background: var(--af-cyan-soft)
+    }
+
+.af-hero__meta {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 9px;
+    margin-top: 22px
+}
+
+.af-meta-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 35px;
+    padding: 7px 11px;
+    border: 1px solid var(--af-line);
+    border-radius: 999px;
+    background: var(--af-surface-soft);
+    color: var(--af-muted);
+    font-size: 12px;
+    font-weight: 700
+}
+
+    .af-meta-pill i {
+        color: var(--af-cyan);
+        font-size: 14px
+    }
+
+    .af-meta-pill strong {
+        color: var(--af-ink-2);
+        font-weight: 900
+    }
+
+/* ATTENTION CARDS */
+.af-attention-grid {
+    display: grid;
+    grid-template-columns: repeat(2,minmax(0,1fr));
+    gap: 12px
+}
+
+.af-attention-card {
+    width: 100%;
+    min-height: 96px;
+    display: grid;
+    grid-template-columns: 46px minmax(0,1fr) 20px;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+    border: 1px solid var(--af-line);
+    border-radius: var(--af-r-lg);
+    background: #fff;
+    box-shadow: var(--af-shadow-xs);
+    cursor: pointer;
+    text-align: right;
+    color: var(--af-ink);
+    transition: .18s ease
+}
+
+    .af-attention-card:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--af-shadow-sm)
+    }
+
+.af-attention-card__icon {
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+    border-radius: 14px;
+    font-size: 19px
+}
+
+.af-attention-card__body {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px
+}
+
+    .af-attention-card__body strong {
+        color: var(--af-navy);
+        font-size: 22px;
+        font-weight: 900;
+        line-height: 1.15
+    }
+
+    .af-attention-card__body small {
+        color: var(--af-muted);
+        font-size: 12px;
+        font-weight: 750;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis
+    }
+
+.af-attention-card__arrow {
+    color: #9AA9B6;
+    font-size: 22px
+}
+
+.af-attention-card--cyan .af-attention-card__icon {
+    color: var(--af-cyan-strong);
+    background: var(--af-cyan-soft)
+}
+
+.af-attention-card--gold .af-attention-card__icon {
+    color: var(--af-warning);
+    background: var(--af-gold-soft)
+}
+
+.af-attention-card--rose .af-attention-card__icon {
+    color: var(--af-danger);
+    background: var(--af-rose-soft)
+}
+
+.af-attention-card--slate .af-attention-card__icon {
+    color: var(--af-slate);
+    background: var(--af-slate-soft)
+}
+
+.af-attention-card--cyan:hover {
+    border-color: rgba(0,166,218,.30)
+}
+
+.af-attention-card--gold:hover {
+    border-color: rgba(231,163,36,.30)
+}
+
+.af-attention-card--rose:hover {
+    border-color: rgba(223,91,103,.30)
+}
+
+.af-attention-card--slate:hover {
+    border-color: rgba(101,118,137,.30)
+}
+
+/* WORKSPACE + TABS */
+.af-workspace {
+    overflow: hidden;
+    border: 1px solid var(--af-line);
+    border-radius: var(--af-r-xl);
+    background: #fff;
+    box-shadow: var(--af-shadow-sm)
+}
+
+.af-tabs {
+    display: flex;
+    align-items: stretch;
+    gap: 6px;
+    padding: 10px;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+    border-bottom: 1px solid var(--af-line);
+    background: #FBFDFE
+}
+
+    .af-tabs::-webkit-scrollbar {
+        height: 5px
+    }
+
+    .af-tabs::-webkit-scrollbar-thumb {
+        background: #D6E0E8;
+        border-radius: 999px
+    }
+
+.af-tab {
+    position: relative;
+    min-width: max-content;
+    min-height: 50px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    padding: 10px 15px;
+    border: 1px solid transparent;
+    border-radius: 14px;
+    background: transparent;
+    color: #5E7082;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 850;
+    transition: .18s ease
+}
+
+    .af-tab:hover {
+        color: var(--af-cyan-strong);
+        background: #F1FAFD
+    }
+
+    .af-tab.is-active {
+        color: var(--af-navy);
+        background: #fff;
+        border-color: #DCE8F0;
+        box-shadow: 0 5px 14px rgba(20,58,89,.065)
+    }
+
+        .af-tab.is-active::after {
+            content: "";
+            position: absolute;
+            inset-inline: 18px;
+            bottom: -11px;
+            height: 3px;
+            border-radius: 999px;
+            background: var(--af-cyan)
+        }
+
+.af-tab__icon {
+    width: 28px;
+    height: 28px;
+    display: grid;
+    place-items: center;
+    border-radius: 9px;
+    color: inherit;
+    background: rgba(100,116,139,.08);
+    font-size: 14px
+}
+
+.af-tab.is-active .af-tab__icon {
+    color: var(--af-cyan-strong);
+    background: var(--af-cyan-soft)
+}
+
+.af-tab__count {
+    min-width: 22px;
+    height: 22px;
+    display: inline-grid;
+    place-items: center;
+    padding-inline: 6px;
+    color: #fff;
+    background: var(--af-rose);
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 900
+}
+
+.af-tab-panel {
+    position: relative;
+    min-height: 420px;
+    padding: 24px;
+    background: #fff
+}
+
+/* LOADING */
+.af-loading-state {
+    min-height: 350px;
+    display: grid;
+    place-items: center;
+    align-content: center;
+    gap: 8px;
+    color: var(--af-muted);
+    text-align: center
+}
+
+.af-loading-state__mark {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    height: 30px
+}
+
+    .af-loading-state__mark span {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--af-cyan);
+        animation: afDot 1s ease-in-out infinite
+    }
+
+        .af-loading-state__mark span:nth-child(2) {
+            animation-delay: .12s
+        }
+
+        .af-loading-state__mark span:nth-child(3) {
+            animation-delay: .24s
+        }
+
+.af-loading-state strong {
+    color: var(--af-ink-2);
+    font-size: 15px;
+    font-weight: 900
+}
+
+.af-loading-state p {
+    margin: 0;
+    font-size: 12px
+}
+
+@keyframes afDot {
+    0%,100% {
+        transform: translateY(0);
+        opacity: .35
+    }
+
+    50% {
+        transform: translateY(-6px);
+        opacity: 1
+    }
+}
+
+.af-global-loader {
+    position: fixed;
+    inset: 0;
+    z-index: 9997;
+    display: grid;
+    place-items: center;
+    background: rgba(244,248,251,.6);
+    backdrop-filter: blur(2px)
+}
+
+    .af-global-loader[hidden] {
+        display: none !important
+    }
+
+.af-global-loader__spinner {
+    width: 42px;
+    height: 42px;
+    border: 4px solid #D8EEF6;
+    border-top-color: var(--af-cyan);
+    border-radius: 50%;
+    animation: afSpin .75s linear infinite;
+    box-shadow: 0 8px 24px rgba(0,166,218,.15)
+}
+
+@keyframes afSpin {
+    to {
+        transform: rotate(360deg)
+    }
+}
+
+/* TOAST */
+.af-toast-stack {
+    position: fixed;
+    inset-inline-start: 24px;
+    bottom: 24px;
+    z-index: 10020;
+    width: min(380px,calc(100vw - 32px));
+    display: grid;
+    gap: 10px;
+    pointer-events: none
+}
+
+.af-toast {
+    display: grid;
+    grid-template-columns: 38px minmax(0,1fr) auto;
+    gap: 11px;
+    align-items: center;
+    padding: 13px 14px;
+    border: 1px solid var(--af-line);
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: var(--af-shadow-md);
+    pointer-events: auto;
+    animation: afToastIn .22s ease both
+}
+
+.af-toast__icon {
+    width: 36px;
+    height: 36px;
+    display: grid;
+    place-items: center;
+    border-radius: 11px
+}
+
+.af-toast__body strong {
+    display: block;
+    color: var(--af-ink);
+    font-size: 13px;
+    font-weight: 900
+}
+
+.af-toast__body p {
+    margin: 2px 0 0;
+    color: var(--af-muted);
+    font-size: 12px;
+    font-weight: 600
+}
+
+.af-toast__close {
+    border: 0;
+    background: transparent;
+    color: #90A0AD;
+    cursor: pointer
+}
+
+.af-toast--success .af-toast__icon {
+    color: var(--af-success);
+    background: var(--af-mint-soft)
+}
+
+.af-toast--danger .af-toast__icon {
+    color: var(--af-danger);
+    background: var(--af-rose-soft)
+}
+
+.af-toast--warning .af-toast__icon {
+    color: var(--af-warning);
+    background: var(--af-gold-soft)
+}
+
+.af-toast--info .af-toast__icon {
+    color: var(--af-cyan-strong);
+    background: var(--af-cyan-soft)
+}
+
+@keyframes afToastIn {
+    from {
+        transform: translateY(8px);
+        opacity: 0
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1
+    }
+}
+
+/* DRAWER */
+.af-drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    background: rgba(11,42,69,.34);
+    backdrop-filter: blur(3px)
+}
+
+    .af-drawer-backdrop[hidden] {
+        display: none !important
+    }
+
+.af-management-drawer {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: auto;
+    z-index: 10010;
+    width: min(760px,96vw);
+    background: #fff;
+    box-shadow: var(--af-shadow-modal);
+    transform: translate3d(-104%,0,0);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: transform .28s cubic-bezier(.2,.8,.2,1),opacity .2s ease,visibility 0s linear .28s;
+    overflow: hidden
+}
+
+    .af-management-drawer[aria-hidden="true"] {
+        transform: translate3d(-104%,0,0);
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none
+    }
+
+    .af-management-drawer.is-open, .af-management-drawer[aria-hidden="false"] {
+        transform: translate3d(0,0,0);
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+        transition: transform .28s cubic-bezier(.2,.8,.2,1),opacity .2s ease,visibility 0s
+    }
+
+.af-management-drawer__host {
+    width: 100%;
+    height: 100%;
+    overflow: hidden
+}
+
+@media(max-width:1200px) {
+    .af-hero {
+        grid-template-columns: 1fr
+    }
+
+    .af-attention-grid {
+        grid-template-columns: repeat(4,minmax(0,1fr))
+    }
+}
+
+@media(max-width:900px) {
+    .af-hero__headline-row {
+        flex-direction: column
+    }
+
+    .af-hero__actions {
+        width: 100%
+    }
+
+        .af-hero__actions .af-btn {
+            flex: 1
+        }
+
+    .af-attention-grid {
+        grid-template-columns: repeat(2,minmax(0,1fr))
+    }
+
+    .af-tab-panel {
+        padding: 18px
+    }
+}
+
+@media(max-width:600px) {
+    .af-hero {
+        gap: 14px;
+        margin-bottom: 14px
+    }
+
+    .af-hero__content {
+        padding: 22px 18px;
+        border-radius: 22px
+    }
+
+    .af-hero__title {
+        font-size: 27px
+    }
+
+    .af-hero__subtitle {
+        font-size: 13px;
+        line-height: 1.85
+    }
+
+    .af-hero__actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr
+    }
+
+    .af-meta-pill {
+        width: 100%
+    }
+
+    .af-attention-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 8px
+    }
+
+    .af-attention-card {
+        min-height: 82px;
+        grid-template-columns: 38px minmax(0,1fr);
+        padding: 12px;
+        border-radius: 17px
+    }
+
+    .af-attention-card__icon {
+        width: 38px;
+        height: 38px;
+        border-radius: 11px;
+        font-size: 16px
+    }
+
+    .af-attention-card__body strong {
+        font-size: 19px
+    }
+
+    .af-attention-card__arrow {
+        display: none
+    }
+
+    .af-workspace {
+        border-radius: 22px
+    }
+
+    .af-tabs {
+        padding: 8px
+    }
+
+    .af-tab {
+        min-height: 46px;
+        padding: 8px 12px;
+        font-size: 12px
+    }
+
+    .af-tab-panel {
+        min-height: 340px;
+        padding: 14px
+    }
+
+    .af-management-drawer {
+        width: 100vw
+    }
+
+    .af-toast-stack {
+        inset-inline-start: 16px;
+        bottom: 16px
+    }
+}
+
+@media(prefers-reduced-motion:reduce) {
+    .af-shell *, .af-shell *::before, .af-shell *::after {
+        scroll-behavior: auto !important;
+        transition-duration: .001ms !important;
+        animation-duration: .001ms !important;
+        animation-iteration-count: 1 !important
+    }
+}
+
+.af-management-drawer[hidden] {
+    display: none !important
+}
+/* =====================================================================
+   FINANCE OVERLAY FINAL FIX — HEADER / STACKING / LEFT DRAWER
+   ---------------------------------------------------------------------
+   هدف هذا العقد:
+   1) كل Modals / Drawer المالية تكون فوق الهيدر والقائمة الجانبية.
+   2) الـ backdrop يغطي الشاشة كاملة بما فيها الهيدر.
+   3) Drawer "إدارة المالية" يفتح من الجهة اليسرى (عكس الـ Sidebar).
+   4) إزالة Stacking Context الخاص بمحتوى الأدمن في صفحة المالية فقط
+      لأن CSS هذا لا يُحمّل إلا داخل ManageAdminFinancials.
+   5) عدم استخدام transform على Drawer المفتوح، حتى تبقى الـ fixed modals
+      الموجودة داخله مرتبطة بالـ viewport وليس بحجم الـ Drawer.
+   ===================================================================== */
+
+/* --- فك حواجز الـ stacking الخاصة بالـ RenderBody في صفحة المالية --- */
+body.dashboard-body .dashboard-main,
+body.dashboard-body.yg-living-luxe-v4 .dashboard-main {
+    isolation: auto !important;
+    overflow: visible !important;
+    view-transition-name: none !important;
+    z-index: auto !important;
+}
+
+body.dashboard-body .breadcrumb-area,
+body.dashboard-body .dashboard-content,
+body.dashboard-body.yg-living-luxe-v4 .breadcrumb-area,
+body.dashboard-body.yg-living-luxe-v4 .dashboard-content,
+body.dashboard-body .dashboard-content > .container-fluid {
+    z-index: auto !important;
+}
+
+/* --- ترتيب الطبقات المالي النهائي --- */
+:root {
+    --af-overlay-backdrop-z: 65000;
+    --af-drawer-z: 65020;
+    --af-modal-z: 65100;
+}
+
+/* الخلفية المعتمة للـ Drawer: فوق الهيدر وتغطي الشاشة كلها */
+body.dashboard-body .af-drawer-backdrop {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    z-index: var(--af-overlay-backdrop-z) !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* Drawer إدارة المالية: الجهة اليسرى دائمًا */
+body.dashboard-body .af-management-drawer {
+    position: fixed !important;
+    top: 12px !important;
+    bottom: 12px !important;
+    left: -100vw !important;
+    right: auto !important;
+    width: min(760px, calc(100vw - 34px)) !important;
+    height: auto !important;
+    max-height: calc(100vh - 24px) !important;
+    max-height: calc(100dvh - 24px) !important;
+    z-index: var(--af-drawer-z) !important;
+    transform: none !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+    overflow: hidden !important;
+    border: 1px solid rgba(255,255,255,.88) !important;
+    border-radius: 26px !important;
+    background: #fff !important;
+    box-shadow: 0 34px 90px rgba(11,42,69,.28), 0 10px 30px rgba(11,42,69,.10) !important;
+    transition: left .28s cubic-bezier(.2,.8,.2,1), opacity .20s ease, visibility 0s linear .28s !important;
+}
+
+    /* hidden يبقى الحماية الأقوى أثناء الإغلاق */
+    body.dashboard-body .af-management-drawer[hidden] {
+        display: none !important;
+    }
+
+    /* عند الفتح: يدخل من اليسار بدون transform */
+    body.dashboard-body .af-management-drawer.is-open,
+    body.dashboard-body .af-management-drawer[aria-hidden="false"] {
+        left: 12px !important;
+        right: auto !important;
+        transform: none !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+        pointer-events: auto !important;
+        transition: left .28s cubic-bezier(.2,.8,.2,1), opacity .20s ease, visibility 0s !important;
+    }
+
+/* --- جميع مودالات المالية: Full Viewport وفوق الهيدر والـ Sidebar --- */
+body.dashboard-body .acg-modal,
+body.dashboard-body .atr-modal,
+body.dashboard-body .aft-modal,
+body.dashboard-body .afm-modal {
+    position: fixed !important;
+    inset: 0 !important;
+    top: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    max-width: none !important;
+    max-height: none !important;
+    z-index: var(--af-modal-z) !important;
+    margin: 0 !important;
+}
+
+/* الخلفية داخل كل Modal تغطي كل شيء بما فيه الهيدر */
+body.dashboard-body .acg-modal__backdrop,
+body.dashboard-body .atr-modal__backdrop,
+body.dashboard-body .aft-modal__backdrop,
+body.dashboard-body .afm-modal__backdrop {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    z-index: 0 !important;
+}
+
+/* صندوق المودال نفسه فوق الـ backdrop */
+body.dashboard-body .acg-modal__dialog,
+body.dashboard-body .atr-modal__dialog,
+body.dashboard-body .aft-modal__dialog,
+body.dashboard-body .afm-modal__dialog {
+    position: relative !important;
+    z-index: 1 !important;
+}
+
+/* عندما يوجد Modal مفتوح داخل Drawer، لا يُحبس داخل أبعاد الـ Drawer. */
+body.dashboard-body .af-management-drawer.is-open {
+    transform: none !important;
+}
+
+/* Desktop / Tablet: الـ Modal يبقى في منتصف الشاشة الحقيقي */
+body.dashboard-body .acg-modal.is-open,
+body.dashboard-body .atr-modal.is-open,
+body.dashboard-body .aft-modal.is-open,
+body.dashboard-body .afm-modal.is-open {
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+/* Mobile */
+@media (max-width: 700px) {
+    body.dashboard-body .af-management-drawer {
+        top: 8px !important;
+        bottom: 8px !important;
+        left: -100vw !important;
+        width: calc(100vw - 16px) !important;
+        max-height: calc(100dvh - 16px) !important;
+        border-radius: 22px !important;
+    }
+
+        body.dashboard-body .af-management-drawer.is-open,
+        body.dashboard-body .af-management-drawer[aria-hidden="false"] {
+            left: 8px !important;
+        }
+
+    body.dashboard-body .acg-modal,
+    body.dashboard-body .atr-modal,
+    body.dashboard-body .aft-modal,
+    body.dashboard-body .afm-modal {
+        padding: max(8px, env(safe-area-inset-top)) 8px max(8px, env(safe-area-inset-bottom)) !important;
+    }
+
+    body.dashboard-body .acg-modal__dialog,
+    body.dashboard-body .atr-modal__dialog,
+    body.dashboard-body .aft-modal__dialog,
+    body.dashboard-body .afm-modal__dialog {
+        max-height: calc(100dvh - 16px) !important;
+    }
+}
+/* =====================================================================
+   FINANCE BODY-PORTAL OVERLAY — ABSOLUTE FINAL CONTRACT
+   ---------------------------------------------------------------------
+   JavaScript ينقل Drawer/Modals المفتوحة مباشرة إلى <body>.
+   لذلك لا يمكن لـ dashboard-main أو container-fluid حبسها داخل Stacking Context.
+   ===================================================================== */
+
+html.af-finance-overlay-lock,
+body.af-finance-overlay-open {
+    overflow: hidden !important;
+}
+
+body > .af-finance-portaled.af-drawer-backdrop {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    margin: 0 !important;
+    z-index: 2000000000 !important;
+}
+
+body > .af-finance-portaled.af-management-drawer {
+    position: fixed !important;
+    top: 12px !important;
+    bottom: 12px !important;
+    left: 12px !important;
+    right: auto !important;
+    width: min(760px, calc(100vw - 34px)) !important;
+    height: auto !important;
+    max-height: calc(100dvh - 24px) !important;
+    margin: 0 !important;
+    transform: none !important;
+    z-index: 2000000001 !important;
+}
+
+/* كل مودال مالي يتم Portaling له إلى body ويغطي الهيدر والـSidebar كاملًا */
+body > .af-finance-portaled.acg-modal,
+body > .af-finance-portaled.atr-modal,
+body > .af-finance-portaled.aft-modal,
+body > .af-finance-portaled.afm-modal {
+    position: fixed !important;
+    inset: 0 !important;
+    top: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    max-width: none !important;
+    max-height: none !important;
+    margin: 0 !important;
+    z-index: 2000000005 !important;
+}
+
+    /* backdrop داخل الـModal */
+    body > .af-finance-portaled.acg-modal > .acg-modal__backdrop,
+    body > .af-finance-portaled.atr-modal > .atr-modal__backdrop,
+    body > .af-finance-portaled.aft-modal > .aft-modal__backdrop,
+    body > .af-finance-portaled.afm-modal > .afm-modal__backdrop {
+        position: absolute !important;
+        inset: 0 !important;
+        z-index: 0 !important;
+    }
+
+    /* الصندوق فوق الـBackdrop */
+    body > .af-finance-portaled.acg-modal > .acg-modal__dialog,
+    body > .af-finance-portaled.atr-modal > .atr-modal__dialog,
+    body > .af-finance-portaled.aft-modal > .aft-modal__dialog,
+    body > .af-finance-portaled.afm-modal > .afm-modal__dialog {
+        position: relative !important;
+        z-index: 1 !important;
+    }
+
+@media (max-width: 700px) {
+    body > .af-finance-portaled.af-management-drawer {
+        top: 8px !important;
+        bottom: 8px !important;
+        left: 8px !important;
+        width: calc(100vw - 16px) !important;
+        max-height: calc(100dvh - 16px) !important;
+    }
+}
+
+/* =====================================================================
+   FINANCE TABS — UNIFIED PILL STYLE
+   ===================================================================== */
+
+.af-workspace {
+    overflow: visible;
+}
+
+.af-tabs {
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(150px, 1fr)) !important;
+    align-items: center !important;
+    gap: 8px !important;
+    padding: 8px !important;
+    margin: 0 !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    border: 1px solid #DDEAF2 !important;
+    border-radius: 22px !important;
+    background: #FFFFFF !important;
+    box-shadow: 0 8px 24px rgba(20, 58, 89, .055) !important;
+    scrollbar-width: thin;
+    scrollbar-color: #D8E5EC transparent;
+}
+
+    .af-tabs::-webkit-scrollbar {
+        height: 5px;
+    }
+
+    .af-tabs::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .af-tabs::-webkit-scrollbar-thumb {
+        background: #D8E5EC;
+        border-radius: 999px;
+    }
+
+.af-tab {
+    position: relative !important;
+    width: 100% !important;
+    min-width: 150px !important;
+    min-height: 58px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 10px !important;
+    padding: 10px 16px !important;
+    border: 1px solid transparent !important;
+    border-radius: 15px !important;
+    background: transparent !important;
+    color: #617486 !important;
+    box-shadow: none !important;
+    cursor: pointer !important;
+    font-size: 14px !important;
+    font-weight: 800 !important;
+    line-height: 1.2 !important;
+    white-space: nowrap !important;
+    transition: background-color .18s ease, color .18s ease, border-color .18s ease, box-shadow .18s ease, transform .18s ease !important;
+}
+
+    .af-tab:hover {
+        transform: translateY(-1px) !important;
+        color: #0A8FBF !important;
+        background: #F3FBFE !important;
+        border-color: #E2F3F9 !important;
+    }
+
+    .af-tab::after,
+    .af-tab.is-active::after {
+        display: none !important;
+    }
+
+.af-tab__icon {
+    flex: 0 0 auto !important;
+    width: 38px !important;
+    height: 38px !important;
+    display: inline-grid !important;
+    place-items: center !important;
+    border: 1px solid #E2F2F8 !important;
+    border-radius: 12px !important;
+    background: #ECF9FD !important;
+    color: #0FA6D9 !important;
+    font-size: 17px !important;
+    line-height: 1 !important;
+    transition: background-color .18s ease, color .18s ease, border-color .18s ease, transform .18s ease !important;
+}
+
+.af-tab:hover .af-tab__icon {
+    transform: translateY(-1px);
+}
+
+.af-tab.is-active {
+    color: #FFFFFF !important;
+    background: #13A9DC !important;
+    border-color: #13A9DC !important;
+    box-shadow: 0 8px 20px rgba(19, 169, 220, .20) !important;
+}
+
+    .af-tab.is-active:hover {
+        color: #FFFFFF !important;
+        background: #0E9FCF !important;
+        border-color: #0E9FCF !important;
+    }
+
+    .af-tab.is-active .af-tab__icon {
+        color: #119CCB !important;
+        background: #FFFFFF !important;
+        border-color: #FFFFFF !important;
+        box-shadow: 0 3px 10px rgba(7, 79, 111, .10) !important;
+    }
+
+.af-tab__count {
+    flex: 0 0 auto !important;
+    min-width: 28px !important;
+    height: 28px !important;
+    display: inline-grid !important;
+    place-items: center !important;
+    padding: 0 7px !important;
+    border: 0 !important;
+    border-radius: 999px !important;
+    background: #EAF8FD !important;
+    color: #0A8FBF !important;
+    font-size: 12px !important;
+    font-weight: 900 !important;
+    line-height: 1 !important;
+}
+
+.af-tab.is-active .af-tab__count {
+    background: #FFFFFF !important;
+    color: #E14C5A !important;
+    box-shadow: 0 2px 8px rgba(7, 79, 111, .08) !important;
+}
+
+.af-tab-panel {
+    margin-top: 14px !important;
+    border: 1px solid #E5EDF3 !important;
+    border-radius: 24px !important;
+    background: #FFFFFF !important;
+    box-shadow: 0 10px 26px rgba(20, 58, 89, .045) !important;
+}
+
+@media (max-width: 1100px) {
+    .af-tabs {
+        grid-template-columns: repeat(5, minmax(145px, 1fr)) !important;
+    }
+
+    .af-tab {
+        min-width: 145px !important;
+        padding-inline: 13px !important;
+    }
+}
+
+@media (max-width: 700px) {
+    .af-tabs {
+        display: flex !important;
+        gap: 7px !important;
+        padding: 7px !important;
+        border-radius: 18px !important;
+        scroll-snap-type: x proximity;
+    }
+
+    .af-tab {
+        width: auto !important;
+        min-width: max-content !important;
+        min-height: 52px !important;
+        padding: 8px 12px !important;
+        border-radius: 13px !important;
+        scroll-snap-align: start;
+        font-size: 13px !important;
+    }
+
+    .af-tab__icon {
+        width: 34px !important;
+        height: 34px !important;
+        border-radius: 11px !important;
+        font-size: 15px !important;
+    }
+
+    .af-tab__count {
+        min-width: 25px !important;
+        height: 25px !important;
+        font-size: 11px !important;
+    }
+
+    .af-tab-panel {
+        margin-top: 10px !important;
+        border-radius: 20px !important;
+    }
+}

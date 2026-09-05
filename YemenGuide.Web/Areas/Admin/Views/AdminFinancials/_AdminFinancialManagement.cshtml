@@ -1,0 +1,622 @@
+@using YemenGuide.Core.DTOs.Admin
+@using System.Globalization
+@model AdminFinancialManagementPageDto
+
+@{
+    var canManageSettings =
+        ViewData["CanManageSettings"] is bool settingsAllowed &&
+        settingsAllowed;
+
+    var canManageWallets =
+        ViewData["CanManagePlatformWallets"] is bool walletsAllowed &&
+        walletsAllowed;
+
+    var settingsPage = Model?.Settings ?? new AdminFinancialSettingsPageDto();
+    var settings = settingsPage.Settings ?? new AdminFinancialSettingsDto();
+    var wallets = Model?.PlatformWallets ?? new AdminPlatformWalletPageDto();
+    var currency = string.IsNullOrWhiteSpace(Model?.Currency)
+        ? "ريال يمني"
+        : Model.Currency;
+}
+
+<div class="afm" data-financial-management-root>
+    <header class="afm-header">
+        <div class="afm-header__identity">
+            <span class="afm-header__mark"><i class="bi bi-sliders2"></i></span>
+            <div>
+                <span class="afm-header__eyebrow">إدارة النظام المالي</span>
+                <h2>إدارة المالية</h2>
+                <p>الإعدادات العامة وحسابات استقبال شحنات الضمان.</p>
+            </div>
+        </div>
+
+        <button type="button"
+                class="afm-close"
+                data-finance-management-close
+                aria-label="إغلاق">
+            <i class="bi bi-x-lg"></i>
+        </button>
+    </header>
+
+    <div class="afm-body">
+        @if (canManageSettings)
+        {
+            <section class="afm-section afm-section--settings">
+                <div class="afm-section__head">
+                    <div>
+                        <span class="afm-section__icon"><i class="bi bi-gear"></i></span>
+                        <div>
+                            <small>السياسات العامة</small>
+                            <h3>إعدادات المالية</h3>
+                            <p>هذه القيم تطبق كافتراضي على حسابات المنشآت.</p>
+                        </div>
+                    </div>
+
+                    <span class="afm-section__badge">صلاحية إعدادات</span>
+                </div>
+
+                <form method="post"
+                      action="@Url.Action("SaveSettings", "AdminFinancialManagement", new { area = "Admin" })"
+                      class="afm-settings-form"
+                      data-finance-settings-form>
+                    @Html.AntiForgeryToken()
+
+                    <div class="afm-settings-grid">
+                        <div class="afm-field afm-field--featured">
+                            <label for="globalCommissionPercentage">نسبة العمولة الافتراضية</label>
+                            <div class="afm-input-suffix">
+                                <input id="globalCommissionPercentage"
+                                       type="number"
+                                       name="CommissionPercentage"
+                                       min="0"
+                                       max="100"
+                                       step="0.01"
+                                       value="@(settings.CommissionPercentage.ToString("0.##", CultureInfo.InvariantCulture))"
+                                       required />
+                                <span>%</span>
+                            </div>
+                            <small>تطبق عندما لا توجد نسبة خاصة بالفئة.</small>
+                        </div>
+
+                        <div class="afm-field">
+                            <label for="defaultCurrency">العملة</label>
+                            <input id="defaultCurrency"
+                                   type="text"
+                                   name="DefaultCurrency"
+                                   maxlength="50"
+                                   value="@settings.DefaultCurrency"
+                                   required />
+                        </div>
+
+                        <div class="afm-field">
+                            <label for="minimumCommissionTopUp">الحد الأدنى للشحن</label>
+                            <div class="afm-input-suffix">
+                                <input id="minimumCommissionTopUp"
+                                       type="number"
+                                       name="MinimumCommissionTopUp"
+                                       min="0"
+                                       step="0.01"
+                                       value="@(settings.MinimumCommissionTopUp.ToString("0.##", CultureInfo.InvariantCulture))"
+                                       required />
+                                <span>@currency</span>
+                            </div>
+                        </div>
+
+                        <div class="afm-field">
+                            <label for="defaultLowBalanceThreshold">حد انخفاض الرصيد</label>
+                            <div class="afm-input-suffix">
+                                <input id="defaultLowBalanceThreshold"
+                                       type="number"
+                                       name="DefaultLowBalanceThreshold"
+                                       min="0"
+                                       step="0.01"
+                                       value="@(settings.DefaultLowBalanceThreshold.ToString("0.##", CultureInfo.InvariantCulture))"
+                                       required />
+                                <span>@currency</span>
+                            </div>
+                        </div>
+
+                        <div class="afm-field">
+                            <label for="defaultCommissionDebtLimit">حد الدين الافتراضي</label>
+                            <div class="afm-input-suffix">
+                                <input id="defaultCommissionDebtLimit"
+                                       type="number"
+                                       name="DefaultCommissionDebtLimit"
+                                       min="0"
+                                       step="0.01"
+                                       value="@(settings.DefaultCommissionDebtLimit.ToString("0.##", CultureInfo.InvariantCulture))"
+                                       required />
+                                <span>@currency</span>
+                            </div>
+                        </div>
+
+                        <div class="afm-field">
+                            <label for="commissionDebtGraceDays">مهلة الدين بالأيام</label>
+                            <input id="commissionDebtGraceDays"
+                                   type="number"
+                                   name="CommissionDebtGraceDays"
+                                   min="0"
+                                   value="@settings.CommissionDebtGraceDays"
+                                   required />
+                        </div>
+                    </div>
+
+                    <div class="afm-toggle-list">
+                        <label class="afm-toggle-card">
+                            <input type="checkbox"
+                                   name="AllowNegativeCommissionBalance"
+                                   value="true"
+                                   checked="@(settings.AllowNegativeCommissionBalance ? "checked" : null)" />
+                            <span class="afm-toggle-card__switch"></span>
+                            <span class="afm-toggle-card__body">
+                                <strong>السماح برصيد سالب / دين</strong>
+                                <small>يسمح باستمرار دورة العمولة حتى حد الدين المحدد.</small>
+                            </span>
+                        </label>
+
+                        <label class="afm-toggle-card">
+                            <input type="checkbox"
+                                   name="SuspendBookingWhenBalanceInsufficient"
+                                   value="true"
+                                   checked="@(settings.SuspendBookingWhenBalanceInsufficient ? "checked" : null)" />
+                            <span class="afm-toggle-card__switch"></span>
+                            <span class="afm-toggle-card__body">
+                                <strong>تعليق الحجوزات عند عدم كفاية الرصيد</strong>
+                                <small>يطبق وفق حالة حساب ضمان المنشأة.</small>
+                            </span>
+                        </label>
+
+                        <label class="afm-toggle-card">
+                            <input type="checkbox"
+                                   name="HidePlaceWhenCommissionSuspended"
+                                   value="true"
+                                   checked="@(settings.HidePlaceWhenCommissionSuspended ? "checked" : null)" />
+                            <span class="afm-toggle-card__switch"></span>
+                            <span class="afm-toggle-card__body">
+                                <strong>إخفاء المنشأة عند التعليق المالي</strong>
+                                <small>يخفي المنشأة عندما تكون السياسة المالية موقفة لها.</small>
+                            </span>
+                        </label>
+                    </div>
+
+                    <section class="afm-trial-policy @(settings.OwnerFreeTrialEnabled ? "is-enabled" : "is-disabled")"
+                             data-trial-policy-card>
+                        <div class="afm-trial-policy__glow" aria-hidden="true"></div>
+
+                        <div class="afm-trial-policy__head">
+                            <div class="afm-trial-policy__identity">
+                                <span class="afm-trial-policy__mark">
+                                    <i class="bi bi-gift"></i>
+                                </span>
+                                <div>
+                                    <span class="afm-trial-policy__eyebrow">سياسة انضمام الملاك</span>
+                                    <h4>التجربة المجانية وضمان التفعيل</h4>
+                                    <p>حدد فترة التشغيل المجانية والرصيد المطلوب لاستمرار استقبال الحجوزات بعدها.</p>
+                                </div>
+                            </div>
+
+                            <span class="afm-trial-policy__status" data-trial-policy-status>
+                                <i class="bi @(settings.OwnerFreeTrialEnabled ? "bi-check-circle-fill" : "bi-pause-circle-fill")"></i>
+                                <span>@(settings.OwnerFreeTrialEnabled ? "التجربة مفعّلة" : "التجربة متوقفة")</span>
+                            </span>
+                        </div>
+
+                        <div class="afm-trial-policy__body">
+                            <label class="afm-trial-switch">
+                                <input type="checkbox"
+                                       name="OwnerFreeTrialEnabled"
+                                       value="true"
+                                       data-trial-enabled
+                                       checked="@(settings.OwnerFreeTrialEnabled ? "checked" : null)" />
+                                <span class="afm-trial-switch__control" aria-hidden="true">
+                                    <span></span>
+                                </span>
+                                <span class="afm-trial-switch__copy">
+                                    <strong>تفعيل الفترة التجريبية للملاك الجدد</strong>
+                                    <small>تُمنح مرة واحدة للمالك عند بدء تشغيل أول منشأة مؤهلة للحجوزات.</small>
+                                </span>
+                            </label>
+
+                            <div class="afm-trial-policy__fields">
+                                <div class="afm-trial-field" data-trial-days-field>
+                                    <div class="afm-trial-field__label">
+                                        <span class="afm-trial-field__icon"><i class="bi bi-calendar2-week"></i></span>
+                                        <div>
+                                            <label for="ownerFreeTrialDays">مدة التجربة</label>
+                                            <small>عدد الأيام المجانية</small>
+                                        </div>
+                                    </div>
+                                    <div class="afm-trial-field__input">
+                                        <input id="ownerFreeTrialDays"
+                                               type="number"
+                                               name="OwnerFreeTrialDays"
+                                               min="0"
+                                               max="3650"
+                                               step="1"
+                                               value="@settings.OwnerFreeTrialDays"
+                                               data-trial-days
+                                               readonly="@(!settings.OwnerFreeTrialEnabled ? "readonly" : null)" />
+                                        <span>يوم</span>
+                                    </div>
+                                </div>
+
+                                <div class="afm-trial-field afm-trial-field--guarantee">
+                                    <div class="afm-trial-field__label">
+                                        <span class="afm-trial-field__icon"><i class="bi bi-shield-check"></i></span>
+                                        <div>
+                                            <label for="requiredCommissionGuaranteeBalance">رصيد ضمان التفعيل</label>
+                                            <small>المطلوب بعد انتهاء التجربة</small>
+                                        </div>
+                                    </div>
+                                    <div class="afm-trial-field__input">
+                                        <input id="requiredCommissionGuaranteeBalance"
+                                               type="number"
+                                               name="RequiredCommissionGuaranteeBalance"
+                                               min="0"
+                                               step="0.01"
+                                               value="@(settings.RequiredCommissionGuaranteeBalance.ToString("0.##", CultureInfo.InvariantCulture))"
+                                               required />
+                                        <span>@currency</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="afm-trial-policy__flow" aria-label="تسلسل سياسة التجربة والضمان">
+                                <div class="afm-trial-flow-step">
+                                    <span>1</span>
+                                    <div><strong>بدء التشغيل</strong><small>تبدأ التجربة عند أول منشأة مؤهلة</small></div>
+                                </div>
+                                <i class="bi bi-chevron-left" aria-hidden="true"></i>
+                                <div class="afm-trial-flow-step">
+                                    <span>2</span>
+                                    <div><strong>الفترة المجانية</strong><small>تشغيل دون إلزام برصيد الضمان</small></div>
+                                </div>
+                                <i class="bi bi-chevron-left" aria-hidden="true"></i>
+                                <div class="afm-trial-flow-step">
+                                    <span>3</span>
+                                    <div><strong>بعد الانتهاء</strong><small>يُشترط بلوغ رصيد ضمان التفعيل</small></div>
+                                </div>
+                            </div>
+
+                            <div class="afm-trial-policy__note">
+                                <i class="bi bi-info-circle"></i>
+                                <p>
+                                    <strong>رصيد ضمان التفعيل</strong> مختلف عن <strong>الحد الأدنى للشحن</strong> أعلاه؛
+                                    الأول يحدد الرصيد المطلوب لاستمرار الحجوزات، والثاني يحدد أقل مبلغ لطلب شحن واحد.
+                                </p>
+                            </div>
+                        </div>
+                    </section>
+
+                    @if (settingsPage.CategoryCommissions.Count > 0)
+                    {
+                        <section class="afm-category-commissions">
+                            <div class="afm-subsection-head">
+                                <div>
+                                    <span>استثناءات حسب الفئة</span>
+                                    <h4>نسب عمولة الفئات</h4>
+                                </div>
+                                <small>اترك الحقل فارغًا لاستخدام النسبة العامة.</small>
+                            </div>
+
+                            <div class="afm-category-grid">
+                                @for (var categoryIndex = 0;
+                                      categoryIndex < settingsPage.CategoryCommissions.Count;
+                                      categoryIndex++)
+                                {
+                                    var category = settingsPage.CategoryCommissions[categoryIndex];
+
+                                    <div class="afm-category-card">
+                                        <div class="afm-category-card__identity">
+                                            <span class="afm-category-card__icon">
+                                                <i class="@(string.IsNullOrWhiteSpace(category.IconClass) ? "bi bi-grid" : category.IconClass)"></i>
+                                            </span>
+                                            <div>
+                                                <strong>@category.CategoryName</strong>
+                                                <small>@category.PlacesCount منشأة</small>
+                                            </div>
+                                        </div>
+
+                                        <input type="hidden"
+                                               name="CategoryCommissions[@categoryIndex].CategoryId"
+                                               value="@category.CategoryId" />
+
+                                        <div class="afm-category-card__rate">
+                                            <input type="number"
+                                                   name="CategoryCommissions[@categoryIndex].CommissionPercentage"
+                                                   min="0"
+                                                   max="100"
+                                                   step="0.01"
+                                                   value="@(category.CommissionPercentage?.ToString("0.##", CultureInfo.InvariantCulture))"
+                                                   placeholder="@(category.EffectiveCommissionPercentage.ToString("0.##", CultureInfo.InvariantCulture))" />
+                                            <span>%</span>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </section>
+                    }
+
+                    <div class="afm-field afm-field--reason">
+                        <label for="financialSettingsReason">سبب التعديل</label>
+                        <textarea id="financialSettingsReason"
+                                  name="ChangeReason"
+                                  rows="3"
+                                  maxlength="500"
+                                  required
+                                  placeholder="اكتب سببًا مختصرًا لتوثيق تغيير الإعدادات..."></textarea>
+                    </div>
+
+                    <div class="afm-form-actions">
+                        <button type="submit" class="afm-btn afm-btn--primary">
+                            <i class="bi bi-check2"></i>
+                            حفظ الإعدادات
+                        </button>
+                    </div>
+                </form>
+            </section>
+        }
+
+        @if (canManageWallets)
+        {
+            <section class="afm-section afm-section--wallets">
+                <div class="afm-section__head">
+                    <div>
+                        <span class="afm-section__icon"><i class="bi bi-wallet2"></i></span>
+                        <div>
+                            <small>حسابات الاستلام</small>
+                            <h3>حسابات المنصة</h3>
+                            <p>الحسابات التي يحول إليها الملاك طلبات شحن رصيد الضمان.</p>
+                        </div>
+                    </div>
+
+                    <button type="button"
+                            class="afm-btn afm-btn--primary"
+                            data-platform-wallet-new>
+                        <i class="bi bi-plus-lg"></i>
+                        إضافة حساب
+                    </button>
+                </div>
+
+                <div class="afm-wallet-summary">
+                    <div><small>الإجمالي</small><strong>@wallets.Summary.TotalCount</strong></div>
+                    <div><small>نشطة</small><strong>@wallets.Summary.ActiveCount</strong></div>
+                    <div><small>طلبات معلقة</small><strong>@wallets.Summary.PendingTopUpsCount</strong></div>
+                    <div><small>مبلغ الشحنات المعتمدة</small><strong>@wallets.Summary.CompletedTopUpsAmount.ToString("N0") @currency</strong></div>
+                </div>
+
+                @if (wallets.Wallets.Count == 0)
+                {
+                    <div class="afm-empty">
+                        <span class="afm-empty__icon"><i class="bi bi-wallet"></i></span>
+                        <h4>لا توجد حسابات منصة</h4>
+                        <p>أضف أول حساب ليظهر للملاك عند إنشاء طلب شحن.</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="afm-wallet-list">
+                        @foreach (var wallet in wallets.Wallets)
+                        {
+                            <article class="afm-wallet-card"
+                                     data-platform-wallet-id="@wallet.PlatformWalletId"
+                                     data-wallet-wallet-id="@wallet.WalletId"
+                                     data-wallet-account-number="@wallet.AccountNumber"
+                                     data-wallet-beneficiary="@wallet.BeneficiaryName"
+                                     data-wallet-instructions="@wallet.Instructions"
+                                     data-wallet-active="@wallet.IsActive.ToString().ToLowerInvariant()"
+                                     data-wallet-primary="@wallet.IsPrimary.ToString().ToLowerInvariant()">
+
+                                <div class="afm-wallet-card__brand">
+                                    <span class="afm-wallet-card__logo">
+                                        @if (!string.IsNullOrWhiteSpace(wallet.LogoPath))
+                                        {
+                                            <img src="@wallet.LogoPath" alt="" />
+                                        }
+                                        else
+                                        {
+                                            <i class="bi bi-wallet2"></i>
+                                        }
+                                    </span>
+                                    <div>
+                                        <div class="afm-wallet-card__title">
+                                            <strong>@wallet.WalletName</strong>
+                                            @if (wallet.IsPrimary)
+                                            {
+                                                <span class="afm-primary-badge">
+                                                    <i class="bi bi-star-fill"></i>
+                                                    الرئيسي
+                                                </span>
+                                            }
+                                        </div>
+                                        <small>@wallet.BeneficiaryName</small>
+                                    </div>
+                                </div>
+
+                                <div class="afm-wallet-card__number">
+                                    <small>رقم الحساب</small>
+                                    <strong>@wallet.AccountNumber</strong>
+                                </div>
+
+                                <div class="afm-wallet-card__usage">
+                                    <div>
+                                        <small>طلبات الشحن</small>
+                                        <strong>@wallet.TotalTopUpRequestsCount</strong>
+                                    </div>
+                                    <div>
+                                        <small>آخر استخدام</small>
+                                        <strong>@(wallet.LastUsedAt?.ToString("yyyy/MM/dd") ?? "—")</strong>
+                                    </div>
+                                </div>
+
+                                <div class="afm-wallet-card__footer">
+                                    <span class="afm-wallet-status @(wallet.IsActive ? "is-active" : "is-inactive")">
+                                        <i></i>
+                                        @(wallet.IsActive ? "نشط" : "موقوف")
+                                    </span>
+
+                                    <div class="afm-wallet-card__actions">
+                                        @if (wallet.CanSetPrimary)
+                                        {
+                                            <form method="post"
+                                                  action="@Url.Action("SetPrimaryWallet", "AdminFinancialManagement", new { area = "Admin" })"
+                                                  data-platform-wallet-primary-form>
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden"
+                                                       name="PlatformWalletId"
+                                                       value="@wallet.PlatformWalletId" />
+                                                <button type="submit" title="تعيين رئيسي">
+                                                    <i class="bi bi-star"></i>
+                                                </button>
+                                            </form>
+                                        }
+
+                                        <button type="button"
+                                                data-platform-wallet-edit
+                                                data-wallet-id="@wallet.PlatformWalletId"
+                                                title="تعديل">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+
+                                        <form method="post"
+                                              action="@Url.Action("ChangeWalletStatus", "AdminFinancialManagement", new { area = "Admin" })"
+                                              data-platform-wallet-status-form>
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden"
+                                                   name="PlatformWalletId"
+                                                   value="@wallet.PlatformWalletId" />
+                                            <input type="hidden"
+                                                   name="IsActive"
+                                                   value="@(!wallet.IsActive)" />
+                                            <button type="submit"
+                                                    disabled="@(!wallet.CanDisable && wallet.IsActive ? "disabled" : null)"
+                                                    title="@(wallet.IsActive ? "إيقاف" : "تفعيل")">
+                                                <i class="bi @(wallet.IsActive ? "bi-pause-circle" : "bi-play-circle")"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </article>
+                        }
+                    </div>
+                }
+            </section>
+
+            <div class="afm-modal" data-platform-wallet-modal aria-hidden="true">
+                <div class="afm-modal__backdrop" data-platform-wallet-modal-close></div>
+
+                <div class="afm-modal__dialog" role="dialog" aria-modal="true">
+                    <form method="post"
+                          action="@Url.Action("SaveWallet", "AdminFinancialManagement", new { area = "Admin" })"
+                          data-platform-wallet-form>
+                        @Html.AntiForgeryToken()
+
+                        <header class="afm-modal__header">
+                            <div>
+                                <span class="afm-modal__eyebrow">حساب استلام</span>
+                                <h3 data-platform-wallet-modal-title>إضافة حساب منصة</h3>
+                                <p>أدخل بيانات الحساب كما يجب أن تظهر للمالك عند التحويل.</p>
+                            </div>
+
+                            <button type="button"
+                                    class="afm-modal__close"
+                                    data-platform-wallet-modal-close>
+                                <i class="bi bi-x-lg"></i>
+                            </button>
+                        </header>
+
+                        <div class="afm-modal__body">
+                            <input type="hidden"
+                                   name="PlatformWalletId"
+                                   data-platform-wallet-id-input />
+
+                            <div class="afm-field">
+                                <label for="platformWalletType">نوع المحفظة / الحساب</label>
+                                <select id="platformWalletType"
+                                        name="WalletId"
+                                        required
+                                        data-platform-wallet-type>
+                                    <option value="">اختر الحساب المدعوم</option>
+                                    @foreach (var supported in wallets.SupportedWallets.Where(x => x.IsActive))
+                                    {
+                                        <option value="@supported.WalletId">
+                                            @supported.WalletName
+                                        </option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="afm-field">
+                                <label for="platformAccountNumber">رقم الحساب</label>
+                                <input id="platformAccountNumber"
+                                       type="text"
+                                       name="AccountNumber"
+                                       maxlength="120"
+                                       required
+                                       data-platform-wallet-number />
+                            </div>
+
+                            <div class="afm-field">
+                                <label for="platformBeneficiaryName">اسم المستفيد</label>
+                                <input id="platformBeneficiaryName"
+                                       type="text"
+                                       name="BeneficiaryName"
+                                       maxlength="160"
+                                       required
+                                       data-platform-wallet-beneficiary />
+                            </div>
+
+                            <div class="afm-field">
+                                <label for="platformWalletInstructions">تعليمات التحويل</label>
+                                <textarea id="platformWalletInstructions"
+                                          name="Instructions"
+                                          rows="4"
+                                          maxlength="2000"
+                                          data-platform-wallet-instructions></textarea>
+                            </div>
+
+                            <div class="afm-modal__toggles">
+                                <label class="afm-toggle-card">
+                                    <input type="checkbox"
+                                           name="IsActive"
+                                           value="true"
+                                           checked="checked"
+                                           data-platform-wallet-active />
+                                    <span class="afm-toggle-card__switch"></span>
+                                    <span class="afm-toggle-card__body">
+                                        <strong>الحساب نشط</strong>
+                                        <small>يمكن استخدامه لاستقبال الشحنات.</small>
+                                    </span>
+                                </label>
+
+                                <label class="afm-toggle-card">
+                                    <input type="checkbox"
+                                           name="IsPrimary"
+                                           value="true"
+                                           data-platform-wallet-primary />
+                                    <span class="afm-toggle-card__switch"></span>
+                                    <span class="afm-toggle-card__body">
+                                        <strong>الحساب الرئيسي</strong>
+                                        <small>يعرض كخيار أساسي للمستخدم.</small>
+                                    </span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <footer class="afm-modal__footer">
+                            <button type="button"
+                                    class="afm-btn afm-btn--ghost"
+                                    data-platform-wallet-modal-close>
+                                إلغاء
+                            </button>
+                            <button type="submit"
+                                    class="afm-btn afm-btn--primary">
+                                حفظ الحساب
+                            </button>
+                        </footer>
+                    </form>
+                </div>
+            </div>
+        }
+    </div>
+</div>

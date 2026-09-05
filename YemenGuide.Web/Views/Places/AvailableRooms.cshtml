@@ -1,0 +1,993 @@
+@using System
+@using System.Collections.Generic
+@using System.Globalization
+@using System.Linq
+@using System.Text.Json
+@model YemenGuide.Core.DTOs.Customer.AvailableRoomsViewModel
+
+@{
+    ViewData["Title"] = "الغرف المتاحة";
+    ViewData["HideFooter"] = true;
+
+    var rooms = Model?.Rooms ?? new List<YemenGuide.Core.DTOs.Customer.AvailableRoomItemDto>();
+    var selectedServiceIds = Model?.SelectedServiceIds ?? new List<int>();
+
+    string SafeText(string? value, string fallback) =>
+        string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+
+    string NightsLabel(int nights) =>
+        nights == 1 ? "ليلة واحدة" : $"{nights} ليالٍ";
+
+    string UnitsLabel(int count, bool isSuite) =>
+        isSuite
+            ? (count == 1 ? "جناح واحد" : $"{count} أجنحة")
+            : (count == 1 ? "غرفة واحدة" : $"{count} غرف");
+
+    string Money(decimal value) =>
+        value.ToString("N0", CultureInfo.InvariantCulture);
+
+    var promotedRooms = rooms.Where(room => room.HasPromotionOffer).ToList();
+    var hasPromotionContext = Model?.HasRequestedPromotion == true;
+}
+
+@section Styles {
+    <link rel="stylesheet"
+      href="~/css/customer/AvailableRooms.css"
+      asp-append-version="true" />
+}
+
+    <main class="available-rooms-page"
+          dir="rtl"
+          data-currency-code="@Model.CurrencyCode"
+          data-currency-symbol="@Model.CurrencySymbol">
+
+        <input type="hidden" id="placeIdInput" value="@Model.PlaceId" />
+        <input type="hidden" id="startDateInput" value="@Model.StartDate.ToString("yyyy-MM-dd")" />
+        <input type="hidden" id="endDateInput" value="@Model.EndDate.ToString("yyyy-MM-dd")" />
+        <input type="hidden" id="selectedPromotionIdInput" value="@(Model.SelectedPromotionId?.ToString() ?? "0")" />
+
+    @foreach (var serviceId in selectedServiceIds)
+    {
+        <input type="hidden"
+           class="selected-service-id"
+           value="@serviceId" />
+    }
+
+    <div class="available-rooms-shell">
+
+        <header class="rooms-page-hero rooms-luxury-hero yg-reveal-3d">
+            <div class="rooms-hero-ambient" aria-hidden="true">
+                <span class="rooms-hero-orb orb-one"></span>
+                <span class="rooms-hero-orb orb-two"></span>
+                <span class="rooms-hero-grid"></span>
+            </div>
+
+            <div class="rooms-page-hero-copy">
+                <nav class="rooms-breadcrumb" aria-label="مسار التنقل">
+                    <a asp-controller="Home" asp-action="Index">الرئيسية</a>
+                    <i class="bi bi-chevron-left" aria-hidden="true"></i>
+                    <a asp-controller="Places"
+                       asp-action="Details"
+                       asp-route-id="@Model.PlaceId"
+                       asp-route-promotionId="@Model.SelectedPromotionId">
+                        @SafeText(Model.PlaceName, "المنشأة")
+                    </a>
+                    <i class="bi bi-chevron-left" aria-hidden="true"></i>
+                    <span>الغرف المتاحة</span>
+                </nav>
+
+                <div class="rooms-page-title-row">
+                    <span class="rooms-page-title-icon" aria-hidden="true">
+                        <i class="bi bi-stars"></i>
+                    </span>
+
+                    <div>
+                        <span class="rooms-page-kicker">
+                            @SafeText(Model.CategoryName, "إقامة مختارة بعناية")
+                        </span>
+                        <h1>اختر إقامتك <span>المثالية</span></h1>
+                        <p>
+                            وحدات متاحة فعلًا للفترة التي اخترتها، مع أسعار واضحة
+                            وعروض ذكية تُراجع مرة أخرى قبل التأكيد النهائي.
+                        </p>
+                    </div>
+                </div>
+
+                @if (Model.HasSelectedPromotion)
+                {
+                    <div class="rooms-hero-promotion-chip">
+                        <span class="promo-fire"><i class="bi bi-fire"></i></span>
+                        <div>
+                            <small>عرضك المختار</small>
+                            <strong>@SafeText(Model.SelectedPromotionTitle, "عرض خاص")</strong>
+                        </div>
+                        <b>@SafeText(Model.PromotionOfferSummary, Model.PromotionDiscountDisplay)</b>
+                    </div>
+                }
+            </div>
+
+            <div class="rooms-hero-stats" aria-label="ملخص النتائج">
+                <article class="rooms-hero-stat-card is-primary">
+                    <span><i class="bi bi-door-open-fill"></i></span>
+                    <div>
+                        <small>المتاح الآن</small>
+                        <strong>@Model.AvailableUnitsCount</strong>
+                        <em>@(Model.AvailableUnitsCount == 1 ? "وحدة" : "وحدات")</em>
+                    </div>
+                </article>
+
+                <article class="rooms-hero-stat-card">
+                    <span><i class="bi bi-moon-stars-fill"></i></span>
+                    <div>
+                        <small>مدة الإقامة</small>
+                        <strong>@Model.Nights</strong>
+                        <em>@(Model.Nights == 1 ? "ليلة" : "ليالٍ")</em>
+                    </div>
+                </article>
+
+                @if (promotedRooms.Any())
+                {
+                    <article class="rooms-hero-stat-card is-promo">
+                        <span><i class="bi bi-lightning-charge-fill"></i></span>
+                        <div>
+                            <small>يشمل العرض</small>
+                            <strong>@promotedRooms.Count</strong>
+                            <em>@(promotedRooms.Count == 1 ? "خيار" : "خيارات")</em>
+                        </div>
+                    </article>
+                }
+            </div>
+        </header>
+
+        <section class="stay-strip" aria-label="تفاصيل الإقامة">
+            <div class="stay-strip-place">
+                <span class="stay-strip-place-icon" aria-hidden="true">
+                    <i class="bi bi-building"></i>
+                </span>
+
+                <div>
+                    <small>المنشأة</small>
+                    <strong>@SafeText(Model.PlaceName, "المنشأة")</strong>
+
+                    @if (!string.IsNullOrWhiteSpace(Model.CityName) ||
+                    !string.IsNullOrWhiteSpace(Model.AddressDetail))
+                    {
+                        <span>
+                            <i class="bi bi-geo-alt-fill" aria-hidden="true"></i>
+                            @string.Join("، ", new[] { Model.CityName, Model.AddressDetail }
+                        .Where(value => !string.IsNullOrWhiteSpace(value)))
+                        </span>
+                    }
+                </div>
+            </div>
+
+            <div class="stay-strip-dates">
+                <div class="stay-date-block">
+                    <span aria-hidden="true"><i class="bi bi-box-arrow-in-left"></i></span>
+                    <div>
+                        <small>الدخول</small>
+                        <time datetime="@Model.StartDate.ToString("yyyy-MM-dd")" dir="ltr">
+                            @Model.StartDate.ToString("yyyy-MM-dd")
+                        </time>
+                    </div>
+                </div>
+
+                <i class="stay-date-arrow bi bi-arrow-left" aria-hidden="true"></i>
+
+                <div class="stay-date-block checkout">
+                    <span aria-hidden="true"><i class="bi bi-box-arrow-right"></i></span>
+                    <div>
+                        <small>الخروج</small>
+                        <time datetime="@Model.EndDate.ToString("yyyy-MM-dd")" dir="ltr">
+                            @Model.EndDate.ToString("yyyy-MM-dd")
+                        </time>
+                    </div>
+                </div>
+
+                <span class="stay-nights-pill">
+                    <i class="bi bi-moon-stars-fill" aria-hidden="true"></i>
+                    @NightsLabel(Model.Nights)
+                </span>
+            </div>
+
+            <button type="button"
+                    id="btnBackToDates"
+                    class="edit-stay-button">
+                <i class="bi bi-calendar2-week" aria-hidden="true"></i>
+                <span>تعديل الفترة</span>
+            </button>
+        </section>
+
+        @if (hasPromotionContext)
+        {
+            <section class="rooms-promotion-context yg-reveal-3d @(Model.IsSelectedPromotionRoomUnavailable ? "is-unavailable" : Model.HasSelectedPromotion ? "is-active" : "is-invalid")"
+                 aria-label="حالة العرض المختار">
+                <div class="rooms-promotion-context-icon">
+                    <i class="bi @(Model.IsSelectedPromotionRoomUnavailable ? "bi-calendar2-x-fill" : Model.HasSelectedPromotion ? "bi-fire" : "bi-info-circle-fill")"></i>
+                </div>
+
+                <div class="rooms-promotion-context-copy">
+                    <small>@(Model.HasSelectedPromotion ? "العرض وصل معك لهذه الخطوة" : "مراجعة العرض")</small>
+                    <h2>
+                        @(Model.HasSelectedPromotion
+                            ? SafeText(Model.SelectedPromotionTitle, "عرض خاص")
+                            : "تعذر تفعيل العرض لهذه الفترة")
+                    </h2>
+                    <p>@SafeText(Model.PromotionStateMessage, "سنراجع أهلية العرض مرة أخرى عند تأكيد الحجز.")</p>
+
+                    @if (Model.PromotionRequiresPeopleConfirmation && Model.PromotionMinimumPeople.HasValue)
+                    {
+                        <span class="rooms-promo-condition-chip">
+                            <i class="bi bi-people-fill"></i>
+                            يحتاج @Model.PromotionMinimumPeople.Value أشخاص على الأقل
+                        </span>
+                    }
+
+                    @if (Model.PromotionRequiresCode && !string.IsNullOrWhiteSpace(Model.PromotionCode))
+                    {
+                        <span class="rooms-promo-condition-chip code" data-copy-code="@Model.PromotionCode">
+                            <i class="bi bi-ticket-perforated-fill"></i>
+                            الكود @Model.PromotionCode
+                        </span>
+                    }
+                </div>
+
+                @if (Model.IsSelectedPromotionRoomUnavailable)
+                {
+                    <button type="button" id="btnBackToDates" class="rooms-promotion-context-action">
+                        <i class="bi bi-calendar2-week"></i>
+                        <span>غيّر التواريخ</span>
+                    </button>
+                }
+                else if (Model.HasSelectedPromotion)
+                {
+                    <span class="rooms-promotion-context-discount">
+                        <small>الخصم</small>
+                        <strong>@Model.PromotionDiscountDisplay</strong>
+                    </span>
+                }
+            </section>
+        }
+
+        @if (Model.HasAvailableRooms)
+        {
+            <section class="available-units-section" aria-labelledby="availableUnitsTitle">
+                <div class="available-units-heading">
+                    <div>
+                        <span class="rooms-section-kicker">نتائج البحث</span>
+                        <h2 id="availableUnitsTitle">الغرف المتاحة</h2>
+                        <p>اعرض التفاصيل عند الحاجة، ثم حدد عدد الوحدات وأكمل الحجز.</p>
+                    </div>
+
+                    <span class="available-types-pill">
+                        <i class="bi bi-grid-3x3-gap-fill" aria-hidden="true"></i>
+                        @Model.AvailableRoomTypesCount
+                        @(Model.AvailableRoomTypesCount == 1 ? "نوع" : "أنواع")
+                    </span>
+                </div>
+
+                <div class="available-units-list">
+                    @foreach (var room in rooms)
+                    {
+                        var roomType = SafeText(room.RoomType, "وحدة إقامة");
+                        var roomDescription = room.Description?.Trim() ?? string.Empty;
+                        var countId = $"count_{room.RoomId}";
+                        var totalId = $"total_{room.RoomId}";
+                        var collapseId = $"roomDetails_{room.RoomId}";
+                        var availabilityPercent = room.TotalQuantity > 0
+                        ? Math.Clamp((room.RemainingQuantity * 100) / room.TotalQuantity, 0, 100)
+                        : 0;
+                        var promotionValueForDisplay =
+                            string.Equals(
+                                room.PromotionDiscountType,
+                                "Percentage",
+                                StringComparison.OrdinalIgnoreCase)
+                                ? room.PromotionDiscountValue
+                                : room.PromotionDiscountValueDisplay;
+
+                        var promotionMaximumForDisplay =
+                            room.PromotionMaximumDiscountAmountDisplay ?? 0m;
+
+                        var promotionMinimumForDisplay =
+                            room.PromotionMinimumBookingAmountDisplay ?? 0m;
+
+                        var galleryImages = room.Images?
+                        .Where(image => !string.IsNullOrWhiteSpace(image))
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList() ?? new List<string>();
+
+                        if (galleryImages.Count == 0 && !string.IsNullOrWhiteSpace(room.MainImageUrl))
+                        {
+                            galleryImages.Add(room.MainImageUrl);
+                        }
+
+                        if (galleryImages.Count == 0)
+                        {
+                            galleryImages.Add("/images/bg1.jpg");
+                        }
+
+                        var galleryJson = JsonSerializer.Serialize(galleryImages);
+                        var mainImage = galleryImages.First();
+
+                        <article class="room-card luxury-room-card yg-reveal-3d @(room.HasPromotionOffer ? "has-room-promotion" : string.Empty)"
+                         data-room-card
+                         data-room-id="@room.RoomId"
+                         data-has-promotion="@(room.HasPromotionOffer ? "true" : "false")"
+                         data-promotion-id="@(room.PromotionId?.ToString() ?? "0")"
+                         data-promotion-offer-mode="@room.PromotionOfferMode"
+                         data-promotion-reward-type="@room.PromotionRewardType"
+                         data-promotion-required-quantity="@(room.PromotionRequiredQuantity?.ToString() ?? "0")"
+                         data-promotion-reward-quantity="@(room.PromotionRewardQuantity?.ToString() ?? "0")"
+                         data-promotion-repeatable="@(room.PromotionIsRewardRepeatable ? "true" : "false")"
+                         data-promotion-applied-free="@room.PromotionAppliedFreeQuantity"
+                         data-promotion-special-price="@(room.PromotionSpecialPriceDisplay?.ToString(CultureInfo.InvariantCulture) ?? "0")"
+                         data-promotion-summary="@room.PromotionOfferSummary"
+                         data-base-stay-price="@room.StayPriceDisplay.ToString(CultureInfo.InvariantCulture)"
+                         data-promotion-type="@room.PromotionDiscountType"
+                         data-promotion-value="@promotionValueForDisplay.ToString(CultureInfo.InvariantCulture)"
+                         data-promotion-max="@promotionMaximumForDisplay.ToString(CultureInfo.InvariantCulture)"
+                         data-promotion-min-booking="@promotionMinimumForDisplay.ToString(CultureInfo.InvariantCulture)"
+                         aria-selected="false">
+
+                            <a class="room-card-media open-room-gallery-btn"
+                       href="@mainImage"
+                       target="_blank"
+                       rel="noopener"
+                       data-room-title="@roomType"
+                       data-room-images="@galleryJson"
+                       aria-label="عرض صور @roomType">
+
+                                <img src="@mainImage"
+                             alt="@roomType"
+                             loading="lazy"
+                             onerror="this.onerror=null;this.src='/images/bg1.jpg';" />
+
+                                <span class="room-card-media-shade" aria-hidden="true"></span>
+
+                                <span class="room-card-media-badge">
+                                    <i class="bi @(room.IsSuite ? "bi-gem" : "bi-door-open")"
+                               aria-hidden="true"></i>
+                                    @roomType
+                                </span>
+
+                                @if (room.HasPromotionOffer)
+                                {
+                                    <span class="room-card-promotion-badge">
+                                        <i class="bi bi-fire"></i>
+                                        <b>@SafeText(room.PromotionOfferSummary, room.PromotionDiscountDisplay)</b>
+                                        <small>عرض مختار</small>
+                                    </span>
+                                }
+
+                                <span class="room-card-media-gallery">
+                                    <i class="bi bi-images" aria-hidden="true"></i>
+                                    @galleryImages.Count
+                                    @(galleryImages.Count == 1 ? "صورة" : "صور")
+                                </span>
+                            </a>
+
+                            <div class="room-card-summary room-card-content">
+                                <div class="room-card-summary-main room-card-main">
+                                    <div class="room-card-heading">
+                                        <div>
+                                            <span class="room-card-eyebrow">نوع إقامة متاح</span>
+                                            <h3>@roomType</h3>
+                                        </div>
+
+                                        <span class="room-card-availability-badge">
+                                            <i class="bi bi-check2-circle" aria-hidden="true"></i>
+                                            @room.RemainingQuantity متاحة
+                                        </span>
+                                    </div>
+
+                                    <div class="room-card-facts">
+                                        <span class="room-card-fact inventory">
+                                            <i class="bi bi-houses-fill" aria-hidden="true"></i>
+                                            @room.RemainingQuantity متبقية من أصل @room.TotalQuantity
+                                        </span>
+
+                                        @if (room.ReservedQuantity > 0)
+                                        {
+                                            <span class="room-card-fact reserved">
+                                                <i class="bi bi-calendar2-check-fill" aria-hidden="true"></i>
+                                                @room.ReservedQuantity محجوزة في هذه الفترة
+                                            </span>
+                                        }
+
+                                        @if (room.HasCapacity)
+                                        {
+                                            <span class="room-card-fact">
+                                                <i class="bi bi-people-fill" aria-hidden="true"></i>
+                                                حتى @room.Capacity أشخاص للوحدة
+                                            </span>
+                                        }
+
+                                        @if (room.HasArea)
+                                        {
+                                            <span class="room-card-fact">
+                                                <i class="bi bi-aspect-ratio-fill" aria-hidden="true"></i>
+                                                @room.AreaSquareMeters!.Value.ToString("0.##") م²
+                                            </span>
+                                        }
+
+                                        @if (room.HasBeds)
+                                        {
+                                            <span class="room-card-fact">
+                                                <i class="bi bi-lamp-fill" aria-hidden="true"></i>
+                                                @room.BedsCount سرير
+                                            </span>
+                                        }
+
+                                        @if (room.HasFloorDistribution)
+                                        {
+                                            <span class="room-card-fact">
+                                                <i class="bi bi-building" aria-hidden="true"></i>
+                                                موزعة على @room.FloorsCount @(room.FloorsCount == 1 ? "طابق" : "طوابق")
+                                            </span>
+                                        }
+                                    </div>
+
+                                    <div class="room-availability-meter"
+                                 style="--availability-percent: @availabilityPercent%;"
+                                 aria-label="نسبة الوحدات المتاحة">
+                                        <span></span>
+                                    </div>
+
+                                    <p class="room-card-teaser @(string.IsNullOrWhiteSpace(roomDescription) ? "is-placeholder" : string.Empty)">
+                                        @if (!string.IsNullOrWhiteSpace(roomDescription))
+                                        {
+                                            @roomDescription
+                                        }
+                                        else
+                                        {
+                                            <span>الوحدة متاحة خلال الفترة المحددة. افتح التفاصيل لاختيار العدد وإكمال بيانات الحجز.</span>
+                                        }
+                                    </p>
+
+                                    <div class="room-card-meta-line" aria-label="ملخص سريع للوحدة">
+                                        <span>
+                                            <i class="bi bi-moon-stars-fill" aria-hidden="true"></i>
+                                            @NightsLabel(Model.Nights)
+                                        </span>
+
+                                        <span>
+                                            <i class="bi bi-images" aria-hidden="true"></i>
+                                            @galleryImages.Count @(galleryImages.Count == 1 ? "صورة" : "صور")
+                                        </span>
+
+                                        <span>
+                                            <i class="bi bi-shield-check" aria-hidden="true"></i>
+                                            متاحة للفترة المختارة
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <aside class="room-card-offer" aria-label="سعر الوحدة وخياراتها">
+                                    <div class="room-card-price @(room.HasPromotionPreview ? "is-discounted" : string.Empty)">
+                                        <span class="room-price-kicker">
+                                            <i class="bi @(room.HasPromotionPreview ? "bi-lightning-charge-fill" : "bi-tag-fill")" aria-hidden="true"></i>
+                                            @(room.HasPromotionPreview ? "سعر خاص لفترتك" : "سعر الليلة")
+                                        </span>
+
+                                        @if (room.HasPromotionPreview)
+                                        {
+                                            <div class="room-price-old-line">
+                                                <span>قبل العرض</span>
+                                                <del>@room.OriginalStayPriceText</del>
+                                            </div>
+
+                                            <div class="room-price-new-line">
+                                                <strong>@room.DiscountedStayPriceText</strong>
+                                            </div>
+
+                                            <em>
+                                                وفّرت @room.PromotionDiscountAmountText
+                                                خلال @NightsLabel(Model.Nights)
+                                            </em>
+                                        }
+                                        else
+                                        {
+                                            <div>
+                                                <strong>@room.NightlyPriceText</strong>
+                                            </div>
+                                            <em>إجمالي @NightsLabel(Model.Nights): @room.StayPriceText</em>
+                                        }
+                                    </div>
+
+                                    <button type="button"
+                                    class="room-details-toggle"
+                                    data-bs-toggle="collapse"
+                                    data-bs-target="#@collapseId"
+                                    aria-expanded="false"
+                                    aria-controls="@collapseId">
+                                        <span>عرض التفاصيل والحجز</span>
+                                        <i class="bi bi-chevron-down" aria-hidden="true"></i>
+                                    </button>
+                                </aside>
+                            </div>
+
+                            <div id="@collapseId"
+                         class="collapse room-details-collapse">
+                                <div class="room-details-panel">
+
+                                    @if (!string.IsNullOrWhiteSpace(roomDescription))
+                                    {
+                                        <section class="room-details-description">
+                                            <span aria-hidden="true"><i class="bi bi-card-text"></i></span>
+                                            <div>
+                                                <small>وصف الوحدة</small>
+                                                <p>@roomDescription</p>
+                                            </div>
+                                        </section>
+                                    }
+
+                                    @if (room.HasSpecifications)
+                                    {
+                                        <section class="room-specifications" aria-label="مواصفات @roomType">
+                                            <div class="room-specifications-title">
+                                                <span><i class="bi bi-stars" aria-hidden="true"></i></span>
+                                                <div>
+                                                    <small>مواصفات النوع</small>
+                                                    <strong>تفاصيل الإقامة لكل وحدة</strong>
+                                                </div>
+                                            </div>
+
+                                            <div class="room-specifications-grid">
+                                                @if (room.HasArea)
+                                                {
+                                                    <div class="room-specification-item">
+                                                        <i class="bi bi-aspect-ratio" aria-hidden="true"></i>
+                                                        <span>المساحة</span>
+                                                        <strong>@room.AreaSquareMeters!.Value.ToString("0.##") م²</strong>
+                                                    </div>
+                                                }
+
+                                                @if (room.HasAdultsCapacity)
+                                                {
+                                                    <div class="room-specification-item">
+                                                        <i class="bi bi-person-fill" aria-hidden="true"></i>
+                                                        <span>البالغون</span>
+                                                        <strong>@room.MaxAdults</strong>
+                                                    </div>
+                                                }
+
+                                                @if (room.HasChildrenCapacity)
+                                                {
+                                                    <div class="room-specification-item">
+                                                        <i class="bi bi-person-hearts" aria-hidden="true"></i>
+                                                        <span>الأطفال</span>
+                                                        <strong>@room.MaxChildren</strong>
+                                                    </div>
+                                                }
+
+                                                @if (room.HasBeds)
+                                                {
+                                                    <div class="room-specification-item">
+                                                        <i class="bi bi-lamp" aria-hidden="true"></i>
+                                                        <span>عدد الأسرة</span>
+                                                        <strong>@room.BedsCount</strong>
+                                                    </div>
+                                                }
+
+                                                @if (room.HasBedType)
+                                                {
+                                                    <div class="room-specification-item">
+                                                        <i class="bi bi-moon-stars" aria-hidden="true"></i>
+                                                        <span>نوع السرير</span>
+                                                        <strong>@room.BedType</strong>
+                                                    </div>
+                                                }
+
+                                                @if (room.HasFloorDistribution)
+                                                {
+                                                    <div class="room-specification-item">
+                                                        <i class="bi bi-building" aria-hidden="true"></i>
+                                                        <span>توزيع الوحدات</span>
+                                                        <strong>@room.FloorsCount @(room.FloorsCount == 1 ? "طابق" : "طوابق")</strong>
+                                                    </div>
+                                                }
+                                            </div>
+
+                                            <p class="room-assignment-note">
+                                                <i class="bi bi-shield-check" aria-hidden="true"></i>
+                                                يحدد النظام رقم الغرفة والطابق تلقائيًا بعد إنشاء الحجز، حسب المتاح في الفترة المختارة.
+                                            </p>
+                                        </section>
+                                    }
+
+                                    @if (room.PromotionId.HasValue)
+                                    {
+                                        <section class="room-inline-promotion @(room.HasPromotionPreview ? "is-ready" : "is-pending")">
+                                            <span class="room-inline-promotion-icon"><i class="bi bi-fire"></i></span>
+                                            <div>
+                                                <small>@(room.HasPromotionPreview ? "عرضك جاهز مبدئيًا" : "شرط العرض")</small>
+                                                <strong>@SafeText(room.PromotionTitle, "عرض خاص")</strong>
+                                                <p>@SafeText(room.PromotionNote, "يعاد التحقق من العرض عند تأكيد الحجز.")</p>
+                                            </div>
+
+                                            @if (room.HasPromotionOffer)
+                                            {
+                                                <b>@SafeText(room.PromotionOfferSummary, room.PromotionDiscountDisplay)</b>
+                                            }
+                                        </section>
+                                    }
+
+                                    <div class="room-booking-grid">
+                                        <section class="room-unit-selector">
+                                            <div class="room-unit-selector-copy">
+                                                <span aria-hidden="true"><i class="bi bi-houses-fill"></i></span>
+                                                <div>
+                                                    <small>عدد الوحدات المطلوبة</small>
+                                                    <strong>يمكنك اختيار حتى @room.RemainingQuantity</strong>
+                                                </div>
+                                            </div>
+
+                                            <div class="room-quantity-control" dir="ltr">
+                                                <button type="button"
+                                                class="quantity-button decrease"
+                                                onclick="updateUnitCount('@countId', -1, @room.StayPriceDisplay.ToString(CultureInfo.InvariantCulture), '@totalId', @room.RemainingQuantity)"
+                                                aria-label="تقليل عدد الوحدات">
+                                                    <i class="bi bi-dash-lg" aria-hidden="true"></i>
+                                                </button>
+
+                                                <input type="text"
+                                               inputmode="numeric"
+                                               id="@countId"
+                                               class="room-quantity-input no-arrows"
+                                               value="1"
+                                               aria-label="عدد الوحدات المطلوبة"
+                                               onfocus="this.select();"
+                                               onblur="if(this.value===''){this.value='1';syncUnitCount('@countId', @room.StayPriceDisplay.ToString(CultureInfo.InvariantCulture), '@totalId', @room.RemainingQuantity);}"
+                                               oninput="this.value=this.value.replace(/[^0-9]/g,'');syncUnitCount('@countId', @room.StayPriceDisplay.ToString(CultureInfo.InvariantCulture), '@totalId', @room.RemainingQuantity);" />
+
+                                                <button type="button"
+                                                class="quantity-button increase"
+                                                onclick="updateUnitCount('@countId', 1, @room.StayPriceDisplay.ToString(CultureInfo.InvariantCulture), '@totalId', @room.RemainingQuantity)"
+                                                aria-label="زيادة عدد الوحدات">
+                                                    <i class="bi bi-plus-lg" aria-hidden="true"></i>
+                                                </button>
+                                            </div>
+                                        </section>
+
+                                        <section class="room-total-card">
+                                            <div>
+                                                <small>إجمالي الإقامة الحالي</small>
+                                                <p>@room.NightlyPriceText × @Model.Nights</p>
+                                            </div>
+
+                                            <div class="room-total-value">
+                                                <strong id="@totalId">@room.EffectiveStayPriceDisplay.ToString(
+                                                    Model.CurrencyCode == "YER" ? "N0" : "N2",
+                                                    CultureInfo.InvariantCulture)</strong>
+                                                <span>@Model.CurrencySymbol</span>
+                                            </div>
+                                        </section>
+
+                                        <button type="button"
+                                        class="select-room-button open-guest-modal-btn"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#guestDetailsModal"
+                                        data-capacity="@(room.Capacity ?? 0)"
+                                        data-room-id="@room.RoomId"
+                                        data-room-price="@room.StayPriceDisplay.ToString(CultureInfo.InvariantCulture)"
+                                        data-room-original-price="@room.StayPriceDisplay.ToString(CultureInfo.InvariantCulture)"
+                                        data-promotion-id="@(room.PromotionId?.ToString() ?? "0")"
+                                        data-promotion-offer-mode="@room.PromotionOfferMode"
+                                        data-promotion-reward-type="@room.PromotionRewardType"
+                                        data-promotion-required-quantity="@(room.PromotionRequiredQuantity?.ToString() ?? "0")"
+                                        data-promotion-reward-quantity="@(room.PromotionRewardQuantity?.ToString() ?? "0")"
+                                        data-promotion-repeatable="@(room.PromotionIsRewardRepeatable ? "true" : "false")"
+                                        data-promotion-applied-free="@room.PromotionAppliedFreeQuantity"
+                                        data-promotion-special-price="@(room.PromotionSpecialPriceDisplay?.ToString(CultureInfo.InvariantCulture) ?? "0")"
+                                        data-promotion-summary="@room.PromotionOfferSummary"
+                                        data-promotion-title="@room.PromotionTitle"
+                                        data-promotion-discount="@room.PromotionDiscountDisplay"
+                                        data-promotion-active="@(room.HasPromotionOffer ? "true" : "false")"
+                                        data-promotion-min-people="@(room.PromotionMinimumPeople?.ToString() ?? "0")"
+                                        data-promotion-code-required="@(room.PromotionRequiresCode ? "true" : "false")"
+                                        data-promotion-type="@room.PromotionDiscountType"
+                                        data-promotion-value="@promotionValueForDisplay.ToString(CultureInfo.InvariantCulture)"
+                                        data-promotion-max="@promotionMaximumForDisplay.ToString(CultureInfo.InvariantCulture)"
+                                        data-promotion-min-booking="@promotionMinimumForDisplay.ToString(CultureInfo.InvariantCulture)"
+                                        data-promotion-min-booking-text="@room.PromotionMinimumBookingAmountText"
+                                        data-room-name="@roomType"
+                                        data-room-desc="@roomDescription">
+                                            <span>اختيار هذه الوحدة</span>
+                                            <i class="bi bi-arrow-left" aria-hidden="true"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </article>
+                    }
+                </div>
+
+            </section>
+        }
+        else
+        {
+            <section class="no-rooms-state">
+                <span class="no-rooms-icon" aria-hidden="true">
+                    <i class="bi bi-door-closed-fill"></i>
+                </span>
+
+                <span class="rooms-section-kicker">لا توجد نتائج</span>
+                <h2>لا توجد غرف متاحة لهذه الفترة</h2>
+                <p>
+                    كل الوحدات ممتلئة أو غير متاحة خلال التواريخ المختارة.
+                    عدّل الفترة للبحث عن خيارات أخرى.
+                </p>
+
+                <button type="button"
+                    id="btnBackToDates"
+                    class="no-rooms-action">
+                    <i class="bi bi-calendar2-week" aria-hidden="true"></i>
+                    <span>تعديل فترة الإقامة</span>
+                </button>
+            </section>
+        }
+    </div>
+</main>
+
+<!-- معرض واحد فقط؛ سيتم تشغيله في تحديث JavaScript القادم -->
+<div class="modal fade room-gallery-modal"
+     id="roomGalleryModal"
+     tabindex="-1"
+     aria-labelledby="roomGalleryTitle"
+     aria-hidden="true"
+     dir="rtl">
+    <div class="modal-dialog modal-dialog-centered room-gallery-dialog">
+        <div class="modal-content room-gallery-content">
+            <header class="room-gallery-header">
+                <div>
+                    <small>ألبوم الوحدة</small>
+                    <h2 id="roomGalleryTitle">صور الغرفة</h2>
+                </div>
+
+                <button type="button"
+                        class="room-gallery-close"
+                        data-bs-dismiss="modal"
+                        aria-label="إغلاق المعرض">
+                    <i class="bi bi-x-lg" aria-hidden="true"></i>
+                </button>
+            </header>
+
+            <div class="room-gallery-body">
+                <button type="button"
+                        class="room-gallery-nav previous"
+                        id="roomGalleryPrev"
+                        aria-label="الصورة السابقة">
+                    <i class="bi bi-chevron-right" aria-hidden="true"></i>
+                </button>
+
+                <div class="room-gallery-stage">
+                    <img id="roomGalleryMainImage"
+                         src="/images/bg1.jpg"
+                         alt="صورة الغرفة" />
+
+                    <span id="roomGalleryCounter" class="room-gallery-counter">1 / 1</span>
+                </div>
+
+                <button type="button"
+                        class="room-gallery-nav next"
+                        id="roomGalleryNext"
+                        aria-label="الصورة التالية">
+                    <i class="bi bi-chevron-left" aria-hidden="true"></i>
+                </button>
+            </div>
+
+            <div id="roomGalleryThumbnails"
+                 class="room-gallery-thumbnails"
+                 aria-label="الصور المصغرة"></div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade guest-details-modal"
+     id="guestDetailsModal"
+     tabindex="-1"
+     aria-labelledby="guestDetailsModalLabel"
+     aria-hidden="true"
+     dir="rtl">
+    <div class="modal-dialog modal-dialog-centered guest-details-dialog">
+        <div class="modal-content guest-details-content">
+            <div class="guest-sheet-handle" aria-hidden="true"></div>
+
+            <header class="guest-details-header">
+                <div class="guest-modal-heading">
+                    <span class="guest-modal-heading-icon" aria-hidden="true">
+                        <i class="bi bi-people-fill"></i>
+                    </span>
+
+                    <div>
+                        <small>الخطوة التالية</small>
+                        <h2 id="guestDetailsModalLabel">بيانات الأشخاص</h2>
+                        <p>حدد نوع الحجز وعدد الأشخاص للوحدات المختارة.</p>
+                    </div>
+                </div>
+
+                <button type="button"
+                        class="guest-modal-close custom-close-btn"
+                        data-bs-dismiss="modal"
+                        aria-label="إغلاق النافذة">
+                    <i class="bi bi-x-lg" aria-hidden="true"></i>
+                </button>
+            </header>
+
+            <div class="guest-details-body">
+                <section class="selected-room-preview">
+                    <span class="selected-room-preview-icon" aria-hidden="true">
+                        <i class="bi bi-door-open-fill"></i>
+                    </span>
+
+                    <div class="selected-room-preview-copy">
+                        <small>الوحدة المختارة</small>
+                        <strong id="guestSelectedRoomName">—</strong>
+                    </div>
+
+                    <div class="selected-room-preview-price">
+                        <small>إجمالي الإقامة</small>
+                        <strong id="guestSelectedRoomPrice">—</strong>
+                        <span>@Model.CurrencySymbol</span>
+                    </div>
+                </section>
+
+                <section id="guestPromotionPreview" class="guest-promotion-preview d-none" aria-live="polite">
+                    <span><i class="bi bi-fire"></i></span>
+                    <div>
+                        <small>العرض على اختيارك</small>
+                        <strong id="guestPromotionTitle">عرض خاص</strong>
+                        <p id="guestPromotionNote">سيتم التحقق من شروط العرض قبل التأكيد.</p>
+                    </div>
+                    <b id="guestPromotionDiscount"></b>
+                </section>
+
+                <section class="guest-form-section">
+                    <label for="bookingType" class="guest-field-label">
+                        <span class="guest-field-icon" aria-hidden="true">
+                            <i class="bi bi-person-badge-fill"></i>
+                        </span>
+                        <span>نوع الحجز</span>
+                    </label>
+
+                    <div class="guest-select-shell">
+                        <select id="bookingType" class="guest-booking-select">
+                            <option value="family">عائلة</option>
+                            <option value="women">نساء</option>
+                            <option value="men">رجال</option>
+                            <option value="company">شركة أو جهة</option>
+                            <option value="other">أخرى — اكتب نوع الحجز</option>
+                        </select>
+                        <i class="bi bi-chevron-down" aria-hidden="true"></i>
+                    </div>
+
+                    <div id="bookingTypeOtherWrap"
+                         class="guest-other-booking-wrap d-none">
+                        <label for="bookingTypeOtherInput"
+                               class="guest-field-label mt-3">
+                            <span class="guest-field-icon">
+                                <i class="bi bi-pencil-square"></i>
+                            </span>
+                            <span>اكتب نوع الحجز</span>
+                        </label>
+
+                        <input type="text"
+                               id="bookingTypeOtherInput"
+                               class="form-control guest-booking-other-input"
+                               maxlength="50"
+                               autocomplete="off"
+                               placeholder="مثال: وفد جامعي، مجموعة أصدقاء، مناسبة خاصة..." />
+
+                        <small class="guest-other-booking-hint">
+                            هذا الوصف سيُحفظ في الحجز بدل كلمة «أخرى».
+                        </small>
+                    </div>
+                </section>
+
+                <section class="guest-counters-section">
+                    <div class="guest-counter-row">
+                        <div class="guest-counter-label">
+                            <span class="guest-counter-icon" aria-hidden="true">
+                                <i class="bi bi-person-fill"></i>
+                            </span>
+                            <div>
+                                <strong>الكبار</strong>
+                                <small>الأشخاص البالغون</small>
+                            </div>
+                        </div>
+
+                        <div class="guest-counter-control" dir="ltr">
+                            <button type="button"
+                                    class="guest-counter-button decrease"
+                                    onclick="smartUpdateModalCount('adultsCount', -1)"
+                                    aria-label="تقليل عدد الكبار">
+                                <i class="bi bi-dash-lg" aria-hidden="true"></i>
+                            </button>
+
+                            <input type="text"
+                                   inputmode="numeric"
+                                   id="adultsCount"
+                                   class="guest-counter-input no-arrows"
+                                   value="0"
+                                   aria-label="عدد الكبار"
+                                   onfocus="if(this.value==='0'){this.value='';}"
+                                   onblur="if(this.value===''){this.value='0';syncModalBookingNumbers('adults');}"
+                                   oninput="this.value=this.value.replace(/[^0-9]/g,'');syncModalBookingNumbers('adults');" />
+
+                            <button type="button"
+                                    class="guest-counter-button increase"
+                                    onclick="smartUpdateModalCount('adultsCount', 1)"
+                                    aria-label="زيادة عدد الكبار">
+                                <i class="bi bi-plus-lg" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="guest-counter-row">
+                        <div class="guest-counter-label">
+                            <span class="guest-counter-icon child" aria-hidden="true">
+                                <i class="bi bi-person-hearts"></i>
+                            </span>
+                            <div>
+                                <strong>الأطفال</strong>
+                                <small>الأطفال ضمن الحجز</small>
+                            </div>
+                        </div>
+
+                        <div class="guest-counter-control" dir="ltr">
+                            <button type="button"
+                                    class="guest-counter-button decrease"
+                                    onclick="smartUpdateModalCount('childrenCount', -1)"
+                                    aria-label="تقليل عدد الأطفال">
+                                <i class="bi bi-dash-lg" aria-hidden="true"></i>
+                            </button>
+
+                            <input type="text"
+                                   inputmode="numeric"
+                                   id="childrenCount"
+                                   class="guest-counter-input no-arrows"
+                                   value="0"
+                                   aria-label="عدد الأطفال"
+                                   onfocus="if(this.value==='0'){this.value='';}"
+                                   onblur="if(this.value===''){this.value='0';syncModalBookingNumbers('children');}"
+                                   oninput="this.value=this.value.replace(/[^0-9]/g,'');syncModalBookingNumbers('children');" />
+
+                            <button type="button"
+                                    class="guest-counter-button increase"
+                                    onclick="smartUpdateModalCount('childrenCount', 1)"
+                                    aria-label="زيادة عدد الأطفال">
+                                <i class="bi bi-plus-lg" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
+                <div id="capacityWarning"
+                     class="guest-capacity-warning alert alert-danger d-none">
+                    <i class="bi bi-exclamation-circle-fill" aria-hidden="true"></i>
+                    <span id="warningText"></span>
+                </div>
+
+                <div class="guest-capacity-note">
+                    <i class="bi bi-info-circle-fill" aria-hidden="true"></i>
+                    <span>تأكد أن عدد الأشخاص يناسب الوحدات المختارة قبل المتابعة.</span>
+                </div>
+            </div>
+
+            <footer class="guest-details-footer">
+                <button type="button"
+                        class="guest-continue-button"
+                        onclick="proceedToCheckout()">
+                    <span>متابعة الحجز</span>
+                    <i class="bi bi-arrow-left" aria-hidden="true"></i>
+                </button>
+            </footer>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/lib/sweetalert2/sweetalert2.js"></script>
+    <script src="~/js/customer/AvailableRooms.js"
+        asp-append-version="true"></script>
+}

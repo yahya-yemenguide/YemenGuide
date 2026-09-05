@@ -1,0 +1,813 @@
+@using System
+@using System.Collections.Generic
+@using System.Globalization
+@using System.Linq
+@using YemenGuide.Core.Constants
+@using YemenGuide.Core.DTOs.Owner
+
+@model BookingAccountsTabDto
+
+@{
+    var pageModel = Model ?? new BookingAccountsTabDto();
+    var filter = pageModel.Filter ?? new BookingFinancialFilterDto();
+    var summary = pageModel.Summary ?? new BookingAccountsSummaryDto();
+    var bookings = pageModel.Bookings ?? new List<BookingFinancialItemDto>();
+
+    var currency = string.IsNullOrWhiteSpace(pageModel.Currency)
+        ? "ريال يمني"
+        : pageModel.Currency.Trim();
+
+    var fromDateValue = filter.FromDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty;
+    var toDateValue = filter.ToDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty;
+    var searchValue = filter.Search?.Trim() ?? string.Empty;
+
+    var hasAdvancedFilters =
+        !string.IsNullOrWhiteSpace(filter.BookingState) ||
+        filter.FromDate.HasValue ||
+        filter.ToDate.HasValue ||
+        pageModel.PageSize != 20;
+
+    var hasActiveFilters =
+        !string.IsNullOrWhiteSpace(searchValue) ||
+        !string.IsNullOrWhiteSpace(filter.BookingState) ||
+        !string.IsNullOrWhiteSpace(filter.PaymentStatus) ||
+        !string.IsNullOrWhiteSpace(filter.CommissionStatus) ||
+        filter.FromDate.HasValue ||
+        filter.ToDate.HasValue;
+
+    var firstVisibleRecord = pageModel.TotalCount <= 0
+        ? 0
+        : ((pageModel.PageNumber - 1) * pageModel.PageSize) + 1;
+
+    var lastVisibleRecord = pageModel.TotalCount <= 0
+        ? 0
+        : Math.Min(pageModel.TotalCount, pageModel.PageNumber * pageModel.PageSize);
+
+    var totalCollectionBase = Math.Max(0m, summary.TotalBookingValue);
+    var summaryCollectionRate = totalCollectionBase <= 0m
+        ? 0m
+        : Math.Round(Math.Min(100m, (summary.TotalCollected / totalCollectionBase) * 100m), 1);
+
+    string Money(decimal value)
+    {
+        var safe = Math.Max(0m, value);
+        var format = decimal.Truncate(safe) == safe ? "N0" : "N2";
+        return $"{safe.ToString(format, CultureInfo.InvariantCulture)} {currency}";
+    }
+
+    string MoneySigned(decimal value)
+    {
+        var safe = Math.Abs(value);
+        var format = decimal.Truncate(safe) == safe ? "N0" : "N2";
+        return $"{safe.ToString(format, CultureInfo.InvariantCulture)} {currency}";
+    }
+
+    string DateText(DateTime? value) =>
+        value.HasValue
+            ? value.Value.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)
+            : "—";
+
+    string DateTimeText(DateTime? value) =>
+        value.HasValue
+            ? value.Value.ToString("dd/MM/yyyy - hh:mm tt", CultureInfo.InvariantCulture)
+            : "—";
+
+    string BookingStateLabel(string? value) => value?.Trim() switch
+    {
+        "Pending" => "بانتظار القرار",
+        "AwaitingPayment" => "بانتظار الدفع",
+        "PaymentReview" => "الدفع قيد المراجعة",
+        "UnderReview" => "قيد المراجعة",
+        "Confirmed" => "حجز مؤكد",
+        "Completed" => "حجز مكتمل",
+        "Cancelled" => "حجز ملغي",
+        "Rejected" => "حجز مرفوض",
+        "Expired" => "انتهت المهلة",
+        "NoShow" => "عدم حضور",
+        _ => string.IsNullOrWhiteSpace(value) ? "غير محدد" : value.Trim()
+    };
+
+    string BookingStateClass(string? value) => value?.Trim() switch
+    {
+        "Confirmed" or "Completed" => "is-success",
+        "Pending" or "AwaitingPayment" => "is-warning",
+        "PaymentReview" or "UnderReview" => "is-info",
+        "Cancelled" or "Rejected" or "Expired" or "NoShow" => "is-danger",
+        _ => "is-muted"
+    };
+
+    string PaymentStatusLabel(string? value) => value?.Trim() switch
+    {
+        "FullyPaid" or "Paid" => "مدفوع بالكامل",
+        "PartiallyPaid" or "Partial" => "مدفوع جزئيًا",
+        "UnderReview" or "PaymentReview" or "Pending" => "الدفع قيد المراجعة",
+        "Unpaid" => "غير مدفوع",
+        "Refunded" => "تم الاسترداد",
+        "Rejected" => "الدفع مرفوض",
+        "Failed" => "فشل الدفع",
+        "Expired" => "انتهت المهلة",
+        _ => string.IsNullOrWhiteSpace(value) ? "غير محدد" : value.Trim()
+    };
+
+    string PaymentStatusClass(string? value) => value?.Trim() switch
+    {
+        "FullyPaid" or "Paid" => "is-success",
+        "PartiallyPaid" or "Partial" => "is-warning",
+        "UnderReview" or "PaymentReview" or "Pending" => "is-info",
+        "Refunded" => "is-info",
+        "Unpaid" or "Rejected" or "Failed" or "Expired" => "is-danger",
+        _ => "is-muted"
+    };
+
+    string CommissionStatusLabel(string? value) => value?.Trim() switch
+    {
+        OwnerBookingCommissionStatuses.Calculated => "محسوبة",
+        OwnerBookingCommissionStatuses.Held => "محجوزة",
+        OwnerBookingCommissionStatuses.Charged => "مخصومة",
+        OwnerBookingCommissionStatuses.Released => "محررة",
+        OwnerBookingCommissionStatuses.Debt => "مسجلة كدين",
+        OwnerBookingCommissionStatuses.NotApplicable => "غير مطبقة",
+        _ => string.IsNullOrWhiteSpace(value) ? "غير محددة" : value.Trim()
+    };
+
+    string CommissionStatusClass(string? value) => value?.Trim() switch
+    {
+        OwnerBookingCommissionStatuses.Charged => "is-success",
+        OwnerBookingCommissionStatuses.Held => "is-info",
+        OwnerBookingCommissionStatuses.Calculated => "is-warning",
+        OwnerBookingCommissionStatuses.Debt => "is-danger",
+        OwnerBookingCommissionStatuses.Released or OwnerBookingCommissionStatuses.NotApplicable => "is-muted",
+        _ => "is-muted"
+    };
+
+    string PaymentMethodLabel(string? value) => value?.Trim() switch
+    {
+        "Cash" => "نقدًا",
+        "Wallet" => "محفظة إلكترونية",
+        "BankTransfer" => "تحويل بنكي",
+        "Online" => "دفع إلكتروني",
+        _ => string.IsNullOrWhiteSpace(value) ? "غير محددة" : value.Trim()
+    };
+
+    string OnlinePaymentTypeLabel(BookingFinancialItemDto item)
+    {
+        if (string.Equals(item.OnlinePaymentType, FinancialOnlinePaymentTypes.Full, StringComparison.OrdinalIgnoreCase))
+        {
+            return "دفع كامل";
+        }
+
+        if (string.Equals(item.OnlinePaymentType, FinancialOnlinePaymentTypes.Deposit, StringComparison.OrdinalIgnoreCase))
+        {
+            return "دفع عربون";
+        }
+
+        if (item.AmountPaidOnline > 0m)
+        {
+            return "دفعة سابقة";
+        }
+
+        return "لم يحدد بعد";
+    }
+
+    string OnlinePaymentTypeClass(BookingFinancialItemDto item)
+    {
+        if (string.Equals(item.OnlinePaymentType, FinancialOnlinePaymentTypes.Full, StringComparison.OrdinalIgnoreCase))
+        {
+            return "is-full";
+        }
+
+        if (string.Equals(item.OnlinePaymentType, FinancialOnlinePaymentTypes.Deposit, StringComparison.OrdinalIgnoreCase))
+        {
+            return "is-deposit";
+        }
+
+        return "is-legacy";
+    }
+
+    decimal CollectionRate(BookingFinancialItemDto item)
+    {
+        var total = Math.Max(0m, item.TotalPrice);
+        if (total <= 0m)
+        {
+            return 0m;
+        }
+
+        return Math.Round(
+            Math.Min(100m, (Math.Max(0m, item.TotalCollectedAmount) / total) * 100m),
+            1);
+    }
+
+    string SafeImage(string? value)
+    {
+        var image = value?.Trim();
+        return string.IsNullOrWhiteSpace(image)
+            ? "/images/bg1.jpg"
+            : image;
+    }
+}
+
+<link rel="stylesheet"
+      href="~/css/owner/financials/owner-financial-booking-accounts.css"
+      asp-append-version="true" />
+
+<section class="owner-booking-accounts owner-booking-dossier"
+         data-owner-financial-partial="bookings"
+         data-booking-ui-version="dossier-v3-readable-modal-20260824"
+         data-load-url="@Url.Content("~/Owner/Financials/BookingAccounts")"
+         data-current-page="@pageModel.PageNumber"
+         data-total-pages="@pageModel.TotalPages"
+         data-total-count="@pageModel.TotalCount"
+         dir="rtl"
+         aria-labelledby="ownerBookingAccountsTitle">
+
+    <header class="owner-booking-dossier__intro">
+        <div class="owner-booking-dossier__intro-main">
+            <span class="owner-booking-dossier__intro-icon" aria-hidden="true">
+                <i class="bi bi-receipt-cutoff"></i>
+            </span>
+
+            <div>
+                <span class="owner-booking-dossier__eyebrow">
+                    <i class="bi bi-stars"></i>
+                    دفتر الحسابات المالي
+                </span>
+                <h2 id="ownerBookingAccountsTitle">حسابات الحجوزات</h2>
+                <p>كل حجز كملف مالي واضح: السعر، الخصم، التحصيل، المتبقي، العمولة وصافي مستحقاتك.</p>
+            </div>
+        </div>
+
+        <div class="owner-booking-dossier__intro-side">
+            <span>النتائج المطابقة</span>
+            <strong>@pageModel.TotalCount.ToString("N0", CultureInfo.InvariantCulture)</strong>
+            <small>حجز مالي</small>
+        </div>
+    </header>
+
+    <section class="owner-booking-dossier__summary-strip" aria-label="ملخص حسابات الحجوزات">
+        <article class="is-count">
+            <span class="owner-booking-dossier__metric-icon"><i class="bi bi-journal-check"></i></span>
+            <div><small>الحجوزات</small><strong>@summary.BookingsCount.ToString("N0", CultureInfo.InvariantCulture)</strong></div>
+        </article>
+
+        <article class="is-value">
+            <span class="owner-booking-dossier__metric-icon"><i class="bi bi-cash-stack"></i></span>
+            <div><small>القيمة النهائية</small><strong>@Money(summary.TotalBookingValue)</strong></div>
+        </article>
+
+        <article class="is-collected">
+            <span class="owner-booking-dossier__metric-icon"><i class="bi bi-check2-circle"></i></span>
+            <div><small>المحصل</small><strong>@Money(summary.TotalCollected)</strong></div>
+        </article>
+
+        <article class="is-remaining">
+            <span class="owner-booking-dossier__metric-icon"><i class="bi bi-hourglass-split"></i></span>
+            <div><small>المتبقي</small><strong>@Money(summary.TotalRemainingAtProperty)</strong></div>
+        </article>
+
+        <article class="is-commission">
+            <span class="owner-booking-dossier__metric-icon"><i class="bi bi-percent"></i></span>
+            <div><small>العمولة</small><strong>@Money(summary.TotalCommission)</strong></div>
+        </article>
+
+        <article class="is-net">
+            <span class="owner-booking-dossier__metric-icon"><i class="bi bi-gem"></i></span>
+            <div><small>صافي المالك</small><strong>@Money(summary.OwnerNetAmount)</strong></div>
+        </article>
+
+        <span class="owner-booking-dossier__summary-progress" aria-hidden="true">
+            <i style="--booking-summary-rate:@summaryCollectionRate.ToString("0.#", CultureInfo.InvariantCulture)%"></i>
+        </span>
+    </section>
+
+    <section class="owner-booking-dossier__filter-dock" aria-label="بحث وتصفية حسابات الحجوزات">
+        <form id="ownerBookingAccountsFilterForm"
+              action="@Url.Content("~/Owner/Financials/BookingAccounts")"
+              method="get"
+              autocomplete="off">
+
+            <input type="hidden" name="PlaceId" value="@(filter.PlaceId?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)" />
+            <input type="hidden" name="PageNumber" value="@pageModel.PageNumber" data-booking-accounts-page-input />
+
+            <label class="owner-booking-dossier__search">
+                <i class="bi bi-search"></i>
+                <input type="search"
+                       name="Search"
+                       value="@searchValue"
+                       maxlength="100"
+                       placeholder="ابحث برقم الحجز، العميل أو الهاتف..." />
+                @if (!string.IsNullOrWhiteSpace(searchValue))
+                {
+                    <button type="button" data-booking-clear-search aria-label="مسح البحث">
+                        <i class="bi bi-x"></i>
+                    </button>
+                }
+            </label>
+
+            <label class="owner-booking-dossier__select">
+                <i class="bi bi-credit-card-2-front"></i>
+                <select name="PaymentStatus" aria-label="حالة الدفع">
+                    <option value="">كل حالات الدفع</option>
+                    <option value="FullyPaid" selected="@(filter.PaymentStatus == "FullyPaid" ? "selected" : null)">مدفوع بالكامل</option>
+                    <option value="PartiallyPaid" selected="@(filter.PaymentStatus == "PartiallyPaid" ? "selected" : null)">مدفوع جزئيًا</option>
+                    <option value="Unpaid" selected="@(filter.PaymentStatus == "Unpaid" ? "selected" : null)">غير مدفوع</option>
+                    <option value="UnderReview" selected="@(filter.PaymentStatus == "UnderReview" ? "selected" : null)">قيد المراجعة</option>
+                    <option value="Refunded" selected="@(filter.PaymentStatus == "Refunded" ? "selected" : null)">مسترد</option>
+                </select>
+            </label>
+
+            <label class="owner-booking-dossier__select">
+                <i class="bi bi-percent"></i>
+                <select name="CommissionStatus" aria-label="حالة العمولة">
+                    <option value="">كل حالات العمولة</option>
+                    <option value="Calculated" selected="@(filter.CommissionStatus == "Calculated" ? "selected" : null)">محسوبة</option>
+                    <option value="Held" selected="@(filter.CommissionStatus == "Held" ? "selected" : null)">محجوزة</option>
+                    <option value="Charged" selected="@(filter.CommissionStatus == "Charged" ? "selected" : null)">مخصومة</option>
+                    <option value="Released" selected="@(filter.CommissionStatus == "Released" ? "selected" : null)">محررة</option>
+                    <option value="Debt" selected="@(filter.CommissionStatus == "Debt" ? "selected" : null)">دين</option>
+                </select>
+            </label>
+
+            <button type="button"
+                    class="owner-booking-dossier__advanced-toggle @(hasAdvancedFilters ? "has-value" : string.Empty)"
+                    data-booking-advanced-toggle
+                    aria-expanded="@(hasAdvancedFilters ? "true" : "false")"
+                    aria-controls="ownerBookingAdvancedFilters">
+                <i class="bi bi-sliders2"></i>
+                <span>فلاتر أكثر</span>
+                @if (hasAdvancedFilters)
+                {
+                    <b></b>
+                }
+            </button>
+
+            <button type="submit" class="owner-booking-dossier__apply">
+                <i class="bi bi-arrow-repeat"></i>
+                <span>تطبيق</span>
+            </button>
+
+            @if (hasActiveFilters)
+            {
+                <button type="button" class="owner-booking-dossier__reset" data-booking-accounts-reset>
+                    <i class="bi bi-eraser"></i>
+                    <span>مسح</span>
+                </button>
+            }
+
+            <div class="owner-booking-dossier__advanced"
+                 id="ownerBookingAdvancedFilters"
+                 data-booking-advanced-panel
+                 hidden="@(!hasAdvancedFilters)">
+
+                <label>
+                    <span>حالة الحجز</span>
+                    <select name="BookingState">
+                        <option value="">كل الحالات</option>
+                        <option value="Pending" selected="@(filter.BookingState == "Pending" ? "selected" : null)">بانتظار القرار</option>
+                        <option value="AwaitingPayment" selected="@(filter.BookingState == "AwaitingPayment" ? "selected" : null)">بانتظار الدفع</option>
+                        <option value="PaymentReview" selected="@(filter.BookingState == "PaymentReview" ? "selected" : null)">الدفع قيد المراجعة</option>
+                        <option value="Confirmed" selected="@(filter.BookingState == "Confirmed" ? "selected" : null)">مؤكد</option>
+                        <option value="Completed" selected="@(filter.BookingState == "Completed" ? "selected" : null)">مكتمل</option>
+                        <option value="Cancelled" selected="@(filter.BookingState == "Cancelled" ? "selected" : null)">ملغي</option>
+                        <option value="NoShow" selected="@(filter.BookingState == "NoShow" ? "selected" : null)">عدم حضور</option>
+                    </select>
+                </label>
+
+                <label>
+                    <span>من تاريخ</span>
+                    <input type="date" name="FromDate" value="@fromDateValue" />
+                </label>
+
+                <label>
+                    <span>إلى تاريخ</span>
+                    <input type="date" name="ToDate" value="@toDateValue" />
+                </label>
+
+                <label>
+                    <span>عدد النتائج</span>
+                    <select name="PageSize">
+                        <option value="10" selected="@(pageModel.PageSize == 10 ? "selected" : null)">10</option>
+                        <option value="20" selected="@(pageModel.PageSize == 20 ? "selected" : null)">20</option>
+                        <option value="30" selected="@(pageModel.PageSize == 30 ? "selected" : null)">30</option>
+                        <option value="50" selected="@(pageModel.PageSize == 50 ? "selected" : null)">50</option>
+                    </select>
+                </label>
+            </div>
+        </form>
+    </section>
+
+    <section class="owner-booking-dossier__results" aria-labelledby="ownerBookingResultsTitle">
+        <header class="owner-booking-dossier__results-head">
+            <div>
+                <span class="owner-booking-dossier__results-icon"><i class="bi bi-journal-text"></i></span>
+                <div>
+                    <small>السجل المالي</small>
+                    <h3 id="ownerBookingResultsTitle">ملفات الحجوزات المالية</h3>
+                </div>
+            </div>
+
+            <span class="owner-booking-dossier__range">
+                @if (pageModel.TotalCount > 0)
+                {
+                    <text>@firstVisibleRecord–@lastVisibleRecord من @pageModel.TotalCount</text>
+                }
+                else
+                {
+                    <text>لا توجد نتائج</text>
+                }
+            </span>
+        </header>
+
+        @if (bookings.Count == 0)
+        {
+            <div class="owner-booking-dossier__empty">
+                <span><i class="bi bi-receipt"></i></span>
+                <strong>لا توجد حسابات حجوزات مطابقة</strong>
+                <p>جرّب تغيير الفلاتر أو البحث بكلمة أخرى.</p>
+                @if (hasActiveFilters)
+                {
+                    <button type="button" data-booking-accounts-reset>
+                        <i class="bi bi-arrow-counterclockwise"></i>
+                        إعادة ضبط الفلاتر
+                    </button>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="owner-booking-dossier__list">
+                @foreach (var item in bookings)
+                {
+                    var collectionRate = CollectionRate(item);
+                    var hasDiscount = item.FinalSavingsAmount > 0m;
+                    var paymentTypeLabel = OnlinePaymentTypeLabel(item);
+                    var paymentTypeClass = OnlinePaymentTypeClass(item);
+                    var finalPrice = Math.Max(0m, item.TotalPrice);
+                    var remaining = Math.Max(0m, item.AmountToPayAtProperty);
+                    var collected = Math.Max(0m, item.TotalCollectedAmount);
+                    var commission = Math.Max(0m, item.PlatformCommission);
+                    var ownerNet = Math.Max(0m, item.OwnerNetAmount);
+                    var image = SafeImage(item.PlaceImageUrl);
+
+                    <article class="owner-booking-dossier__card"
+                     data-booking-card
+                     data-vip-tilt
+                     data-booking-id="@item.BookingId">
+
+                        <span class="owner-booking-dossier__card-shine" aria-hidden="true"></span>
+
+                        <div class="owner-booking-dossier__identity">
+                            <div class="owner-booking-dossier__thumb">
+                                <img src="@image" alt="@item.PlaceName" loading="lazy" />
+                                <span>#@item.BookingId</span>
+                            </div>
+
+                            <div class="owner-booking-dossier__identity-copy">
+                                <div class="owner-booking-dossier__identity-top">
+                                    <span class="owner-booking-dossier__booking-state @BookingStateClass(item.BookingState)">
+                                        <i class="bi bi-circle-fill"></i>
+                                        @BookingStateLabel(item.BookingState)
+                                    </span>
+                                    <span class="owner-booking-dossier__payment-type @paymentTypeClass">
+                                        <i class="bi @(paymentTypeClass == "is-full" ? "bi-check2-all" : paymentTypeClass == "is-deposit" ? "bi-wallet2" : "bi-clock-history")"></i>
+                                        @paymentTypeLabel
+                                    </span>
+                                </div>
+
+                                <h4>@item.CustomerName</h4>
+                                <p>
+                                    <span><i class="bi bi-building"></i>@item.PlaceName</span>
+                                    <span><i class="bi bi-door-open"></i>@item.ReservationUnitName</span>
+                                </p>
+                                <small>
+                                    <i class="bi bi-calendar-range"></i>
+                                    @DateText(item.StartDate) — @DateText(item.EndDate)
+                                </small>
+                            </div>
+                        </div>
+
+                        <div class="owner-booking-dossier__price-flow">
+                            <span class="owner-booking-dossier__flow-label">رحلة السعر</span>
+
+                            @if (hasDiscount)
+                            {
+                                <div class="owner-booking-dossier__price-node is-original">
+                                    <small>الأصلي</small>
+                                    <strong>@Money(item.DisplayOriginalTotalPrice)</strong>
+                                </div>
+                                <i class="bi bi-arrow-left"></i>
+                                <div class="owner-booking-dossier__price-node is-discount">
+                                    <small>التوفير</small>
+                                    <strong>− @MoneySigned(item.FinalSavingsAmount)</strong>
+                                    <em>@item.PromotionTitleDisplay</em>
+                                </div>
+                                <i class="bi bi-arrow-left"></i>
+                            }
+
+                            <div class="owner-booking-dossier__price-node is-final">
+                                <small>السعر النهائي</small>
+                                <strong>@Money(finalPrice)</strong>
+                                @if (!hasDiscount)
+                                {
+                                    <em>بدون خصم</em>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="owner-booking-dossier__collection">
+                            <div class="owner-booking-dossier__collection-head">
+                                <span>مسار التحصيل</span>
+                                <strong class="@(item.IsFullyCollected ? "is-complete" : remaining > 0m ? "is-pending" : string.Empty)">
+                                    @collectionRate.ToString("0.#", CultureInfo.InvariantCulture)%
+                                </strong>
+                            </div>
+
+                            <div class="owner-booking-dossier__collection-rail" aria-hidden="true">
+                                <span style="--booking-rate:@collectionRate.ToString("0.#", CultureInfo.InvariantCulture)%"></span>
+                            </div>
+
+                            <div class="owner-booking-dossier__collection-values">
+                                <span class="is-online">
+                                    <i class="bi bi-phone"></i>
+                                    <small>إلكتروني</small>
+                                    <strong>@Money(item.AmountPaidOnline)</strong>
+                                </span>
+                                <b>+</b>
+                                <span class="is-property">
+                                    <i class="bi bi-building-check"></i>
+                                    <small>المنشأة</small>
+                                    <strong>@Money(item.AmountCollectedAtProperty)</strong>
+                                </span>
+                                <b>=</b>
+                                <span class="is-total">
+                                    <i class="bi bi-check2-circle"></i>
+                                    <small>المحصل</small>
+                                    <strong>@Money(collected)</strong>
+                                </span>
+                            </div>
+
+                            <div class="owner-booking-dossier__remaining @(remaining <= 0m ? "is-zero" : string.Empty)">
+                                <span><i class="bi @(remaining <= 0m ? "bi-check-circle-fill" : "bi-hourglass-split")"></i> المتبقي</span>
+                                <strong>@Money(remaining)</strong>
+                            </div>
+                        </div>
+
+                        <div class="owner-booking-dossier__settlement">
+                            <div class="owner-booking-dossier__commission-chip @CommissionStatusClass(item.CommissionStatus)">
+                                <span>
+                                    <small>عمولة المنصة</small>
+                                    <strong>@Money(commission)</strong>
+                                </span>
+                                <em>@CommissionStatusLabel(item.CommissionStatus)</em>
+                            </div>
+
+                            <div class="owner-booking-dossier__net">
+                                <span><i class="bi bi-gem"></i> صافي مستحقاتك</span>
+                                <strong>@Money(ownerNet)</strong>
+                            </div>
+
+                            <button type="button"
+                            class="owner-booking-dossier__details-btn"
+                            data-booking-account-details
+                            data-booking-id="@item.BookingId">
+                                <span>عرض الحساب</span>
+                                <i class="bi bi-arrow-left"></i>
+                            </button>
+                        </div>
+                    </article>
+
+                    <template data-booking-details-template data-booking-id="@item.BookingId">
+                        <div class="owner-booking-dossier-modal__content">
+                            <section class="owner-booking-dossier-modal__hero">
+                                <div class="owner-booking-dossier-modal__identity">
+                                    <img src="@image" alt="@item.PlaceName" />
+                                    <div>
+                                        <span class="owner-booking-dossier-modal__booking-no">حجز #@item.BookingId</span>
+                                        <h3>@item.CustomerName</h3>
+                                        <p>@item.PlaceName · @item.ReservationUnitName</p>
+                                        <small>@DateText(item.StartDate) — @DateText(item.EndDate)</small>
+                                    </div>
+                                </div>
+
+                                <div class="owner-booking-dossier-modal__hero-statuses">
+                                    <span class="@BookingStateClass(item.BookingState)">@BookingStateLabel(item.BookingState)</span>
+                                    <span class="@PaymentStatusClass(item.PaymentStatus)">@PaymentStatusLabel(item.PaymentStatus)</span>
+                                    <span class="@CommissionStatusClass(item.CommissionStatus)">@CommissionStatusLabel(item.CommissionStatus)</span>
+                                </div>
+                            </section>
+
+                            <section class="owner-booking-dossier-modal__headline">
+                                <div>
+                                    <small>السعر النهائي للحجز</small>
+                                    <strong>@Money(finalPrice)</strong>
+                                </div>
+                                <div class="is-net">
+                                    <small>صافي مستحقات المالك</small>
+                                    <strong>@Money(ownerNet)</strong>
+                                </div>
+                            </section>
+
+                            <section class="owner-booking-dossier-modal__grid">
+                                <article class="owner-booking-dossier-modal__panel is-price">
+                                    <header><span><i class="bi bi-tags"></i></span><div><small>تفاصيل السعر</small><h4>من السعر الأصلي إلى النهائي</h4></div></header>
+                                    <dl>
+                                        <div><dt>السعر الأصلي</dt><dd>@Money(item.DisplayOriginalTotalPrice)</dd></div>
+                                        <div><dt>الخصم / التوفير</dt><dd class="is-discount">− @MoneySigned(item.FinalSavingsAmount)</dd></div>
+                                        <div class="is-total"><dt>السعر النهائي</dt><dd>@Money(finalPrice)</dd></div>
+                                    </dl>
+
+                                    @if (item.HasPromotion)
+                                    {
+                                        <div class="owner-booking-dossier-modal__promotion">
+                                            <span><i class="bi bi-stars"></i></span>
+                                            <div>
+                                                <small>العرض المطبق</small>
+                                                <strong>@item.PromotionTitleDisplay</strong>
+                                                <p>
+                                                    @item.PromotionDiscountLabel
+                                                    @if (!string.IsNullOrWhiteSpace(item.PromotionCodeSnapshot))
+                                                    {
+                                                        <text> · الكود: <b dir="ltr">@item.PromotionCodeSnapshot</b></text>
+                                                    }
+                                                </p>
+                                            </div>
+                                        </div>
+                                    }
+                                </article>
+
+                                <article class="owner-booking-dossier-modal__panel is-payment">
+                                    <header><span><i class="bi bi-wallet2"></i></span><div><small>الدفع والتحصيل</small><h4>أين وصلت أموال الحجز؟</h4></div></header>
+                                    <div class="owner-booking-dossier-modal__payment-type @paymentTypeClass">
+                                        <span>نوع الدفع الإلكتروني</span>
+                                        <strong>@paymentTypeLabel</strong>
+                                    </div>
+                                    <dl>
+                                        <div><dt>العربون المطلوب</dt><dd>@Money(item.DepositAmount)</dd></div>
+                                        <div><dt>مدفوع إلكترونيًا</dt><dd>@Money(item.AmountPaidOnline)</dd></div>
+                                        <div><dt>محصل في المنشأة</dt><dd>@Money(item.AmountCollectedAtProperty)</dd></div>
+                                        <div><dt>إجمالي المحصل</dt><dd>@Money(collected)</dd></div>
+                                        <div class="@(remaining <= 0m ? "is-total" : "is-warning")"><dt>المتبقي</dt><dd>@Money(remaining)</dd></div>
+                                    </dl>
+                                </article>
+
+                                <article class="owner-booking-dossier-modal__panel is-commission">
+                                    <header><span><i class="bi bi-percent"></i></span><div><small>العمولة والتسوية</small><h4>حساب عمولة المنصة</h4></div></header>
+                                    <dl>
+                                        <div><dt>أساس احتساب العمولة</dt><dd>@Money(item.CommissionBaseAmount)</dd></div>
+                                        <div><dt>نسبة العمولة</dt><dd>@item.CommissionRateSnapshot.ToString("0.##", CultureInfo.InvariantCulture)%</dd></div>
+                                        <div><dt>عمولة المنصة</dt><dd>@Money(commission)</dd></div>
+                                        <div><dt>الحالة</dt><dd><span class="owner-booking-dossier-modal__status @CommissionStatusClass(item.CommissionStatus)">@CommissionStatusLabel(item.CommissionStatus)</span></dd></div>
+                                        <div class="is-total"><dt>صافي المالك</dt><dd>@Money(ownerNet)</dd></div>
+                                    </dl>
+                                </article>
+
+                                <article class="owner-booking-dossier-modal__panel is-transfer">
+                                    <header><span><i class="bi bi-arrow-left-right"></i></span><div><small>بيانات التحويل</small><h4>مرجع وإثبات الدفع</h4></div></header>
+                                    <dl>
+                                        <div><dt>طريقة الدفع</dt><dd>@PaymentMethodLabel(item.PaymentMethod)</dd></div>
+                                        <div><dt>حالة الدفع</dt><dd><span class="owner-booking-dossier-modal__status @PaymentStatusClass(item.PaymentStatus)">@PaymentStatusLabel(item.PaymentStatus)</span></dd></div>
+                                        <div><dt>رقم الحوالة</dt><dd dir="ltr">@(string.IsNullOrWhiteSpace(item.TransferReferenceNumber) ? "—" : item.TransferReferenceNumber)</dd></div>
+                                        <div><dt>إثبات الدفع</dt><dd>@(item.HasPaymentProof ? "متوفر" : "غير متوفر")</dd></div>
+                                    </dl>
+
+                                    @if (item.HasPaymentProof)
+                                    {
+                                        <a class="owner-booking-dossier-modal__proof"
+                               href="@item.PaymentNotificationImage"
+                               target="_blank"
+                               rel="noopener">
+                                            <i class="bi bi-image"></i>
+                                            فتح إثبات الدفع
+                                        </a>
+                                    }
+                                </article>
+                            </section>
+
+                            <section class="owner-booking-dossier-modal__timeline">
+                                <header>
+                                    <span><i class="bi bi-clock-history"></i></span>
+                                    <div><small>الأثر الزمني</small><h4>مسار الحساب المالي</h4></div>
+                                </header>
+
+                                <div class="owner-booking-dossier-modal__timeline-list">
+                                    <article class="is-done">
+                                        <i class="bi bi-receipt"></i>
+                                        <div><strong>إنشاء الحجز</strong><small>@DateTimeText(item.CreatedAt)</small></div>
+                                    </article>
+
+                                    <article class="@(item.IsPaymentConfirmed ? "is-done" : "is-pending")">
+                                        <i class="bi bi-credit-card-2-front"></i>
+                                        <div><strong>الدفع الإلكتروني</strong><small>@PaymentStatusLabel(item.PaymentStatus)</small></div>
+                                    </article>
+
+                                    <article class="@(item.CommissionHeldAt.HasValue ? "is-done" : "is-pending")">
+                                        <i class="bi bi-lock"></i>
+                                        <div><strong>حجز العمولة</strong><small>@DateTimeText(item.CommissionHeldAt)</small></div>
+                                    </article>
+
+                                    <article class="@(item.CollectedAt.HasValue ? "is-done" : "is-pending")">
+                                        <i class="bi bi-building-check"></i>
+                                        <div><strong>تحصيل المنشأة</strong><small>@DateTimeText(item.CollectedAt)</small></div>
+                                    </article>
+
+                                    @if (item.CommissionChargedAt.HasValue)
+                                    {
+                                        <article class="is-done">
+                                            <i class="bi bi-dash-circle"></i>
+                                            <div><strong>خصم العمولة</strong><small>@DateTimeText(item.CommissionChargedAt)</small></div>
+                                        </article>
+                                    }
+                                    else if (item.CommissionReleasedAt.HasValue)
+                                    {
+                                        <article class="is-done">
+                                            <i class="bi bi-unlock"></i>
+                                            <div><strong>تحرير العمولة</strong><small>@DateTimeText(item.CommissionReleasedAt)</small></div>
+                                        </article>
+                                    }
+
+                                    <article class="@(item.SettledAt.HasValue ? "is-done" : "is-pending")">
+                                        <i class="bi bi-check2-all"></i>
+                                        <div><strong>التسوية المالية</strong><small>@DateTimeText(item.SettledAt)</small></div>
+                                    </article>
+                                </div>
+                            </section>
+
+                            <footer class="owner-booking-dossier-modal__footer-note">
+                                <i class="bi bi-info-circle"></i>
+                                <span>هذه النافذة للعرض المالي فقط. إدارة حالة الحجز نفسها تتم من قسم الحجوزات.</span>
+                            </footer>
+                        </div>
+                    </template>
+                }
+            </div>
+        }
+
+        @if (pageModel.TotalPages > 1)
+        {
+            <nav class="owner-booking-dossier__pagination" aria-label="صفحات حسابات الحجوزات">
+                <button type="button"
+                    data-booking-accounts-page="@(pageModel.PageNumber - 1)"
+                    disabled="@(pageModel.PageNumber <= 1)">
+                    <i class="bi bi-chevron-right"></i>
+                    السابق
+                </button>
+
+                <span>
+                    صفحة <strong>@pageModel.PageNumber</strong> من <strong>@pageModel.TotalPages</strong>
+                </span>
+
+                <button type="button"
+                    data-booking-accounts-page="@(pageModel.PageNumber + 1)"
+                    disabled="@(pageModel.PageNumber >= pageModel.TotalPages)">
+                    التالي
+                    <i class="bi bi-chevron-left"></i>
+                </button>
+            </nav>
+        }
+    </section>
+
+    <dialog class="owner-booking-dossier-modal"
+            id="ownerBookingAccountDetailsDialog"
+            aria-labelledby="ownerBookingAccountDialogTitle">
+        <div class="owner-booking-dossier-modal__shell">
+            <header class="owner-booking-dossier-modal__header">
+                <div class="owner-booking-dossier-modal__header-main">
+                    <span class="owner-booking-dossier-modal__header-icon">
+                        <i class="bi bi-receipt-cutoff"></i>
+                    </span>
+
+                    <div class="owner-booking-dossier-modal__header-copy">
+                        <span class="owner-booking-dossier-modal__header-kicker">
+                            <i class="bi bi-stars"></i>
+                            كشف مالي موحّد
+                        </span>
+
+                        <h2 id="ownerBookingAccountDialogTitle">
+                            الملف المالي للحجز
+                        </h2>
+
+                        <p>
+                            السعر والتحصيل والعمولة والتسوية في مكان واحد.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="owner-booking-dossier-modal__header-actions">
+                    <span class="owner-booking-dossier-modal__header-chip">
+                        <i class="bi bi-shield-check"></i>
+                        عرض مالي
+                    </span>
+
+                    <button type="button"
+                            data-booking-account-dialog-close
+                            aria-label="إغلاق">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                </div>
+            </header>
+
+            <div class="owner-booking-dossier-modal__body"
+                 data-booking-dialog-content
+                 data-booking-dialog-scroll></div>
+        </div>
+    </dialog>
+</section>

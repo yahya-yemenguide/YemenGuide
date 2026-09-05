@@ -1,0 +1,2761 @@
+﻿@using System
+@using System.Globalization
+@using System.Linq
+@using System.Collections.Generic
+@using YemenGuide.Core.Entities
+
+@model YemenGuide.Core.Entities.Booking
+
+@{
+    ViewData["Title"] = "تفاصيل الحجز";
+    ViewData["HideFooter"] = true;
+
+    var arabicCulture =
+        new CultureInfo("ar-YE");
+
+    /*
+     * السجل المالي المرتبط بالحجز بعلاقة واحد إلى واحد.
+     */
+    var financialRecord =
+        Model.FinancialRecord;
+
+    var additionalServices =
+        Model.BookingAdditionalServices?
+            .OrderBy(service =>
+                service.BookingAdditionalServiceId)
+            .ToList()
+        ?? new List<BookingAdditionalService>();
+
+
+    /* ================================================================
+       بيانات المنشأة
+       ================================================================ */
+
+    var categoryName =
+        Model.Place?
+            .Category?
+            .CategoryName?
+            .Trim();
+
+    if (string.IsNullOrWhiteSpace(categoryName))
+    {
+        categoryName = "منشأة";
+    }
+
+    var placeName =
+        Model.Place?
+            .PlaceNameAndDesc?
+            .Trim();
+
+    if (string.IsNullOrWhiteSpace(placeName))
+    {
+        placeName =
+            "منشأة دليلك اليمني";
+    }
+
+    var coverImage =
+        !string.IsNullOrWhiteSpace(
+            Model.Place?.CoverImage)
+            ? Model.Place.CoverImage
+            : "/images/bg1.jpg";
+
+
+    /*
+     * بيانات التواصل مع المنشأة.
+     * يتم تحميل Owner داخل PlacesController حتى لا يعتمد الرابط على بيانات ناقصة.
+     */
+    var placeOwnerId =
+        Model.Place?.OwnerId ?? 0;
+
+    var placeOwnerName =
+        !string.IsNullOrWhiteSpace(
+            Model.Place?.Owner?.FullName)
+            ? Model.Place.Owner.FullName.Trim()
+            : !string.IsNullOrWhiteSpace(
+                Model.Place?.Owner?.Username)
+                ? Model.Place.Owner.Username.Trim()
+                : "مالك المنشأة";
+
+    var ownerAccountState =
+        Model.Place?.Owner?.AccountState?
+            .Trim() ??
+        string.Empty;
+
+    var ownerAccountUnavailable =
+        string.Equals(
+            ownerAccountState,
+            "Blocked",
+            StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(
+            ownerAccountState,
+            "Suspended",
+            StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(
+            ownerAccountState,
+            "Inactive",
+            StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(
+            ownerAccountState,
+            "Disabled",
+            StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(
+            ownerAccountState,
+            "Deleted",
+            StringComparison.OrdinalIgnoreCase);
+
+    var bookingPlaceIsActive =
+        string.Equals(
+            Model.Place?.Status?.Trim(),
+            "Active",
+            StringComparison.OrdinalIgnoreCase);
+
+    var bookingPlaceChatEnabled =
+        Model.Place?.PlacePolicy?
+            .IsChatEnabled != false;
+
+    /*
+     * وجود حجز فعلي يسمح للعميل بمراسلة المنشأة حتى عندما تكون
+     * متوقفة مؤقتًا عن استقبال حجوزات جديدة؛ الشرط هنا يخص نشاط
+     * المنشأة والحساب وإعداد الدردشة فقط.
+     */
+    var canContactBookingPlace =
+        placeOwnerId > 0 &&
+        bookingPlaceIsActive &&
+        bookingPlaceChatEnabled &&
+        !ownerAccountUnavailable;
+
+    var bookingChatUnavailableMessage =
+        placeOwnerId <= 0
+            ? "لا يوجد مالك مرتبط بهذه المنشأة حاليًا."
+            : !bookingPlaceIsActive
+                ? "المنشأة غير مفعلة حاليًا."
+                : ownerAccountUnavailable
+                    ? "حساب مالك المنشأة غير متاح حاليًا."
+                    : !bookingPlaceChatEnabled
+                        ? "الدردشة متوقفة حاليًا من إعدادات المنشأة."
+                        : string.Empty;
+
+
+    /* ================================================================
+       نوع الحجز
+       ================================================================ */
+
+    var isRoomBooking =
+        Model.RoomId.HasValue &&
+        Model.Room != null;
+
+    var isPackageBooking =
+        Model.PackageId.HasValue &&
+        Model.Package != null;
+
+    var bookingNumber =
+        Model.BookingId.ToString("D6");
+
+
+    /* ================================================================
+       التواريخ
+       ================================================================ */
+
+    var startDate =
+        Model.StartDate.Date;
+
+    var endDate =
+        Model.EndDate?.Date;
+
+    var startDateText =
+        startDate.ToString(
+            "dddd، dd MMMM yyyy",
+            arabicCulture);
+
+    var endDateText =
+        endDate.HasValue
+            ? endDate.Value.ToString(
+                "dddd، dd MMMM yyyy",
+                arabicCulture)
+            : startDateText;
+
+    var bookingPeriodText =
+        endDate.HasValue &&
+        endDate.Value != startDate
+            ? $"{startDateText} — {endDateText}"
+            : startDateText;
+
+    var createdAtText =
+        Model.CreatedAt.HasValue
+            ? Model.CreatedAt.Value.ToString(
+                "dd MMMM yyyy، hh:mm tt",
+                arabicCulture)
+            : "غير محدد";
+
+    var nightsCount = 1;
+
+    if (isRoomBooking &&
+        endDate.HasValue)
+    {
+        nightsCount =
+            Math.Max(
+                1,
+                (endDate.Value -
+                 startDate).Days);
+    }
+
+
+    /* ================================================================
+       الضيوف
+       ================================================================ */
+
+    var adultsCount =
+        Math.Max(
+            0,
+            Model.AdultsCount);
+
+    var childrenCount =
+        Math.Max(
+            0,
+            Model.ChildrenCount);
+
+    var guestsCount =
+        adultsCount +
+        childrenCount;
+
+    var guestsText =
+        guestsCount > 0
+            ? $"{guestsCount} أشخاص"
+            : "غير محدد";
+
+
+    /* ================================================================
+       نوع الحجز والجلسة
+       ================================================================ */
+
+    var bookingTypeCode =
+        Model.BookingType?
+            .Trim()
+            .ToLowerInvariant()
+        ?? string.Empty;
+
+    var bookingTypeText =
+        bookingTypeCode switch
+        {
+            "family" => "عائلة",
+            "men" => "شباب فقط",
+            "women" => "نساء فقط",
+            "company" => "جهة أو شركة",
+            "عائلة" => "عائلة",
+            "شباب فقط" => "شباب فقط",
+            "نساء فقط" => "نساء فقط",
+
+            _ => string.IsNullOrWhiteSpace(
+                    Model.BookingType)
+                ? "غير محدد"
+                : Model.BookingType
+        };
+
+    var seatingSetup =
+        string.IsNullOrWhiteSpace(
+            Model.SeatingSetup)
+            ? "غير محدد"
+            : Model.SeatingSetup.Trim();
+
+    var assignedRoomUnits =
+        Model.BookingRoomUnits?
+            .Where(assignment =>
+                assignment.RoomUnit != null)
+            .OrderBy(assignment =>
+                assignment.RoomUnit.FloorNumber)
+            .ThenBy(assignment =>
+                assignment.RoomUnit.RoomNumber)
+            .ToList()
+        ?? new List<BookingRoomUnit>();
+
+    var assignedRoomLabels =
+        assignedRoomUnits
+            .Select(assignment =>
+            {
+                var floorLabel =
+                    !string.IsNullOrWhiteSpace(
+                        assignment.RoomUnit.FloorLabel)
+                        ? assignment.RoomUnit.FloorLabel!.Trim()
+                        : assignment.RoomUnit.FloorNumber == 0
+                            ? "الدور الأرضي"
+                            : assignment.RoomUnit.FloorNumber < 0
+                                ? $"القبو {Math.Abs(assignment.RoomUnit.FloorNumber)}"
+                                : $"الطابق {assignment.RoomUnit.FloorNumber}";
+
+                return $"غرفة {assignment.RoomUnit.RoomNumber} — {floorLabel}";
+            })
+            .ToList();
+
+    var assignedRoomsText =
+        string.Join("، ", assignedRoomLabels);
+
+
+    /* ================================================================
+       الغرفة أو الباقة
+       ================================================================ */
+
+    var itemTitle =
+        isRoomBooking
+            ? Model.Room?.RoomType
+            : Model.Package?.PackageName;
+
+    if (string.IsNullOrWhiteSpace(itemTitle))
+    {
+        itemTitle =
+            isRoomBooking
+                ? "الغرفة المحجوزة"
+                : "الباقة المحجوزة";
+    }
+
+    var itemSubtitle =
+        isRoomBooking
+            ? !string.IsNullOrWhiteSpace(assignedRoomsText)
+                ? assignedRoomsText
+                : Model.Room?.RoomNumber
+            : Model.Package?.TimeFrame;
+
+    if (string.IsNullOrWhiteSpace(itemSubtitle))
+    {
+        itemSubtitle =
+            isRoomBooking
+                ? "رقم الغرفة غير محدد"
+                : "الفترة غير محددة";
+    }
+
+    var itemDescription =
+        isRoomBooking
+            ? Model.Room?.Description
+            : null;
+
+    if (string.IsNullOrWhiteSpace(itemDescription))
+    {
+        itemDescription =
+            isRoomBooking
+                ? "الوحدة الفندقية المرتبطة بهذا الحجز."
+                : "الباقة أو الفترة التي اختارها العميل لهذا الحجز.";
+    }
+
+    var itemPrice =
+        isRoomBooking
+            ? Model.Room?.Price ?? 0m
+            : Model.Package?.Price ?? 0m;
+
+    var packageCapacity =
+        Model.Package?.Capacity ?? 0;
+
+
+    /* ================================================================
+       الخدمات والمبالغ
+       ================================================================ */
+
+    var servicesTotal =
+        additionalServices.Sum(service =>
+            service.UnitPrice *
+            service.Quantity);
+
+    var totalPrice =
+        Math.Max(
+            0m,
+            Model.TotalPrice);
+
+    /* ================================================================
+       العرض المحفوظ مع الحجز
+       نقرأ Snapshot الحجز نفسه حتى لا تتغير تفاصيل الحجز إذا عدّل المالك العرض لاحقًا.
+       ================================================================ */
+
+    var discountAmount =
+        Math.Max(
+            0m,
+            Model.DiscountAmount);
+
+    var originalTotalPrice =
+        Model.OriginalTotalPrice > 0m
+            ? Model.OriginalTotalPrice
+            : totalPrice + discountAmount;
+
+    var hasPromotion =
+        Model.PromotionId.HasValue &&
+        Model.PromotionId.Value > 0 &&
+        discountAmount > 0m;
+
+    var promotionTitle =
+        !string.IsNullOrWhiteSpace(Model.PromotionTitleSnapshot)
+            ? Model.PromotionTitleSnapshot!.Trim()
+            : "عرض خاص";
+
+    var promotionCode =
+        Model.PromotionCodeSnapshot?.Trim() ?? string.Empty;
+
+    var promotionDiscountType =
+        Model.DiscountTypeSnapshot?.Trim() ?? string.Empty;
+
+    var promotionDiscountValue =
+        Model.DiscountValueSnapshot ?? 0m;
+
+    var fixedPromotionDiscountValueText =
+        ViewBag.PromotionDiscountValueText as string ??
+        $"{promotionDiscountValue:N0} ر.ي";
+
+    var promotionDiscountLabel =
+        promotionDiscountType.Equals(
+            "Percentage",
+            StringComparison.OrdinalIgnoreCase) ||
+        promotionDiscountType.Equals(
+            "Percent",
+            StringComparison.OrdinalIgnoreCase)
+            ? $"خصم {promotionDiscountValue:N0}%"
+            : promotionDiscountValue > 0m
+                ? $"خصم {fixedPromotionDiscountValueText}"
+                : "خصم خاص";
+
+    var depositAmount =
+        Math.Max(
+            0m,
+            financialRecord?
+                .DepositAmount ?? 0m);
+
+    var approvedPaidAmount =
+        Math.Max(
+            0m,
+            financialRecord?
+                .AmountPaidOnline ?? 0m);
+
+    var remainingAmount =
+        financialRecord != null
+            ? Math.Max(
+                0m,
+                financialRecord
+                    .AmountToPayAtProperty)
+            : Math.Max(
+                0m,
+                totalPrice -
+                depositAmount);
+
+    var isPaymentConfirmed =
+        string.Equals(
+            Model.PaymentStatus,
+            "Paid",
+            StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(
+            Model.PaymentStatus,
+            "PartiallyPaid",
+            StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(
+            Model.PaymentStatus,
+            "FullyPaid",
+            StringComparison.OrdinalIgnoreCase);
+
+    var hasDeposit =
+        depositAmount > 0m;
+
+    var proofUploaded =
+        !string.IsNullOrWhiteSpace(
+            Model.PaymentNotificationImage);
+
+    var displayCurrency =
+        ViewBag.DisplayCurrency as string ??
+        "ريال يمني";
+
+    var displayCurrencyCode =
+        ViewBag.DisplayCurrencyCode as string ??
+        "YER";
+
+    var displayCurrencySymbol =
+        ViewBag.DisplayCurrencySymbol as string ??
+        "ر.ي";
+
+    var totalPriceText =
+        ViewBag.TotalPriceText as string ??
+        $"{totalPrice:N0} ر.ي";
+
+    var originalTotalPriceText =
+        ViewBag.OriginalTotalPriceText as string ??
+        $"{originalTotalPrice:N0} ر.ي";
+
+    var discountAmountText =
+        ViewBag.DiscountAmountText as string ??
+        $"{discountAmount:N0} ر.ي";
+
+    var itemPriceText =
+        ViewBag.ItemPriceText as string ??
+        $"{itemPrice:N0} ر.ي";
+
+    var depositAmountText =
+        ViewBag.DepositAmountText as string ??
+        $"{depositAmount:N0} ر.ي";
+
+    var approvedPaidAmountText =
+        ViewBag.AmountPaidOnlineText as string ??
+        $"{approvedPaidAmount:N0} ر.ي";
+
+    var remainingAmountText =
+        ViewBag.AmountToPayAtPropertyText as string ??
+        $"{remainingAmount:N0} ر.ي";
+
+    var servicesTotalText =
+        ViewBag.ServicesTotalText as string ??
+        $"{servicesTotal:N0} ر.ي";
+
+    var serviceUnitPriceTexts =
+        ViewBag.BookingServiceUnitPriceText as Dictionary<int, string> ??
+        new Dictionary<int, string>();
+
+    var serviceTotalPriceTexts =
+        ViewBag.BookingServiceTotalPriceText as Dictionary<int, string> ??
+        new Dictionary<int, string>();
+
+    var refundDepositPaidTexts =
+        ViewBag.RefundDepositPaidText as Dictionary<int, string> ??
+        new Dictionary<int, string>();
+
+    var refundCancellationFeeTexts =
+        ViewBag.RefundCancellationFeeText as Dictionary<int, string> ??
+        new Dictionary<int, string>();
+
+    var refundAmountTexts =
+        ViewBag.RefundAmountText as Dictionary<int, string> ??
+        new Dictionary<int, string>();
+
+    string ServiceUnitPriceText(BookingAdditionalService service) =>
+        serviceUnitPriceTexts.TryGetValue(service.ServiceId, out var text) &&
+        !string.IsNullOrWhiteSpace(text)
+            ? text
+            : $"{service.UnitPrice:N0} ر.ي";
+
+    string ServiceTotalPriceText(BookingAdditionalService service) =>
+        serviceTotalPriceTexts.TryGetValue(service.ServiceId, out var text) &&
+        !string.IsNullOrWhiteSpace(text)
+            ? text
+            : $"{service.UnitPrice * Math.Max(1, service.Quantity):N0} ر.ي";
+
+
+    /* ================================================================
+       أكواد الحالات
+       ================================================================ */
+
+    var bookingStateCode =
+        Model.BookingState?
+            .Trim()
+            .ToLowerInvariant()
+        ?? "pending";
+
+    var paymentStatusCode =
+        Model.PaymentStatus?
+            .Trim()
+            .ToLowerInvariant()
+        ?? "unpaid";
+
+
+    /* ================================================================
+       بيانات دورة الحجز والإغلاق والاسترداد
+       ================================================================ */
+
+    var latestRefundRequest =
+        Model.RefundRequests?
+            .OrderByDescending(request =>
+                request.RequestedAt ?? DateTime.MinValue)
+            .ThenByDescending(request =>
+                request.RefundRequestId)
+            .FirstOrDefault();
+
+    var hasPaymentProofRejection =
+        !string.IsNullOrWhiteSpace(
+            Model.PaymentProofRejectionReason);
+
+    var paymentProofRejectedAtText =
+        Model.PaymentProofRejectedAt.HasValue
+            ? Model.PaymentProofRejectedAt.Value.ToString(
+                "dd MMMM yyyy، hh:mm tt",
+                arabicCulture)
+            : string.Empty;
+
+    var closedByCode =
+        Model.ClosedByType?
+            .Trim()
+            .ToLowerInvariant()
+        ?? string.Empty;
+
+    var isCancelledByOwner =
+        bookingStateCode == "cancelled" &&
+        closedByCode == "owner";
+
+    var isCancelledByCustomer =
+        bookingStateCode == "cancelled" &&
+        closedByCode == "customer";
+
+    var closureSourceText =
+        closedByCode switch
+        {
+            "owner" => "المنشأة",
+            "customer" => "العميل",
+            "admin" => "إدارة المنصة",
+            "system" => "النظام تلقائيًا",
+            _ => "غير محدد"
+        };
+
+    var closureReason =
+        isCancelledByOwner
+            ? Model.OwnerCancellationReason
+            : isCancelledByCustomer
+                ? Model.CancellationReason
+                : bookingStateCode == "rejected"
+                    ? Model.RejectionReason
+                    : null;
+
+    var closedAtText =
+        Model.ClosedAt.HasValue
+            ? Model.ClosedAt.Value.ToString(
+                "dd MMMM yyyy، hh:mm tt",
+                arabicCulture)
+            : string.Empty;
+
+    var lastStatusChangedAtText =
+        Model.LastStatusChangedAt.HasValue
+            ? Model.LastStatusChangedAt.Value.ToString(
+                "dd MMMM yyyy، hh:mm tt",
+                arabicCulture)
+            : string.Empty;
+
+    var refundStatusCode =
+        latestRefundRequest?.Status?
+            .Trim()
+            .ToLowerInvariant()
+        ?? Model.RefundStatus?
+            .Trim()
+            .ToLowerInvariant()
+        ?? "notapplicable";
+
+    var refundHasDestination =
+        latestRefundRequest?.RefundWalletId is int refundWalletId &&
+        refundWalletId > 0 &&
+        !string.IsNullOrWhiteSpace(
+            latestRefundRequest.RefundAccountNumber) &&
+        !string.IsNullOrWhiteSpace(
+            latestRefundRequest.RefundBeneficiaryName);
+
+    var refundTransferred =
+        latestRefundRequest?.TransferredAt.HasValue == true &&
+        !string.IsNullOrWhiteSpace(
+            latestRefundRequest.ReferenceNumber);
+
+    var refundCompleted =
+        refundStatusCode == "completed" ||
+        latestRefundRequest?.CustomerConfirmedAt.HasValue == true;
+
+    var refundTerminal =
+        refundCompleted ||
+        refundStatusCode == "rejected" ||
+        refundStatusCode == "failed" ||
+        refundStatusCode == "cancelled";
+
+    var refundCanSetDestination =
+        latestRefundRequest != null &&
+        latestRefundRequest.RefundAmount > 0m &&
+        !refundTransferred &&
+        !refundTerminal;
+
+    var refundCanConfirmReceived =
+        latestRefundRequest != null &&
+        latestRefundRequest.RefundAmount > 0m &&
+        refundTransferred &&
+        !refundCompleted &&
+        refundStatusCode == "processing";
+
+    string MaskRefundAccount(string? value)
+    {
+        var account =
+            value?.Trim() ??
+            string.Empty;
+
+        if (account.Length <= 5)
+        {
+            return account;
+        }
+
+        return $"{new string('•', Math.Min(8, account.Length - 4))}{account[^4..]}";
+    }
+
+    var refundMaskedAccount =
+        latestRefundRequest != null
+            ? MaskRefundAccount(
+                latestRefundRequest.RefundAccountNumber)
+            : string.Empty;
+
+    var refundTransferredAtText =
+        latestRefundRequest?.TransferredAt.HasValue == true
+            ? latestRefundRequest.TransferredAt.Value.ToString(
+                "dd MMMM yyyy، hh:mm tt",
+                arabicCulture)
+            : string.Empty;
+
+    var refundProofUrl =
+        latestRefundRequest != null &&
+        !string.IsNullOrWhiteSpace(
+            latestRefundRequest.ProofImage)
+            ? Url.Action(
+                "RefundProof",
+                "Bookings",
+                new
+                {
+                    id = latestRefundRequest.RefundRequestId
+                })
+            : string.Empty;
+
+    var refundStatusText =
+        refundCompleted
+            ? "تم تأكيد استلام الاسترداد"
+            : refundCanConfirmReceived
+                ? "تم تحويل الاسترداد — بانتظار تأكيدك"
+                : refundStatusCode switch
+                {
+                    "pending" =>
+                        refundCanSetDestination &&
+                        !refundHasDestination
+                            ? "حدد حساب استلام الاسترداد"
+                            : "طلب الاسترداد قيد المراجعة",
+                    "processing" => "تم تسجيل تحويل الاسترداد",
+                    "rejected" => "تم رفض طلب الاسترداد",
+                    "failed" => "تعذر تنفيذ الاسترداد",
+                    "cancelled" => "تم إلغاء طلب الاسترداد",
+                    _ => "لا يوجد طلب استرداد"
+                };
+
+
+    /* ================================================================
+       حالة الحجز
+       ================================================================ */
+
+    string bookingStateText;
+    string bookingStateClass;
+    string bookingStateIcon;
+    string bookingStateDescription;
+
+    switch (bookingStateCode)
+    {
+        case "confirmed":
+
+            bookingStateText =
+                "الحجز مؤكد";
+
+            bookingStateClass =
+                "is-success";
+
+            bookingStateIcon =
+                "bi-patch-check-fill";
+
+            bookingStateDescription =
+                "تم تأكيد حجزك، وبياناته محفوظة لدى المنشأة.";
+
+            break;
+
+
+        case "paymentreview":
+
+            bookingStateText =
+                "الحوالة قيد المراجعة";
+
+            bookingStateClass =
+                "is-review";
+
+            bookingStateIcon =
+                "bi-hourglass-split";
+
+            bookingStateDescription =
+                "استلمنا إثبات الحوالة، وينتظر الآن اعتماد المالك.";
+
+            break;
+
+
+        case "awaitingpayment":
+
+            bookingStateText =
+                "بانتظار دفع العربون";
+
+            bookingStateClass =
+                "is-warning";
+
+            bookingStateIcon =
+                "bi-wallet2";
+
+            bookingStateDescription =
+                "أكمل دفع العربون خلال المهلة حتى يتم تثبيت الحجز.";
+
+            break;
+
+
+        case "completed":
+
+            bookingStateText =
+                "الحجز مكتمل";
+
+            bookingStateClass =
+                "is-success";
+
+            bookingStateIcon =
+                "bi-check2-circle";
+
+            bookingStateDescription =
+                "تم تنفيذ الحجز وإنهاؤه بنجاح.";
+
+            break;
+
+
+        case "rejected":
+
+            bookingStateText =
+                "الحجز مرفوض";
+
+            bookingStateClass =
+                "is-danger";
+
+            bookingStateIcon =
+                "bi-x-circle-fill";
+
+            bookingStateDescription =
+                "تعذر قبول هذا الحجز من قبل المنشأة.";
+
+            break;
+
+
+        case "cancelled":
+        case "canceled":
+
+            bookingStateText =
+                "الحجز ملغي";
+
+            bookingStateClass =
+                "is-danger";
+
+            bookingStateIcon =
+                "bi-calendar-x-fill";
+
+            bookingStateDescription =
+                isCancelledByOwner
+                    ? "تم إلغاء الحجز من جهة المنشأة، وجرى تسجيل سبب الإلغاء والاسترداد عند الحاجة."
+                    : isCancelledByCustomer
+                        ? "تم إلغاء الحجز من حسابك حسب سياسة المنشأة."
+                        : "تم إلغاء هذا الحجز ولن تتم متابعته.";
+
+            break;
+
+
+        case "expired":
+
+            bookingStateText =
+                "انتهت مهلة الحجز";
+
+            bookingStateClass =
+                "is-danger";
+
+            bookingStateIcon =
+                "bi-hourglass-bottom";
+
+            bookingStateDescription =
+                "انتهت مهلة الدفع قبل إرسال أو اعتماد العربون.";
+
+            break;
+
+
+        case "noshow":
+
+            bookingStateText =
+                "عدم حضور";
+
+            bookingStateClass =
+                "is-danger";
+
+            bookingStateIcon =
+                "bi-person-x-fill";
+
+            bookingStateDescription =
+                "تم تسجيل عدم حضور العميل في موعد الحجز.";
+
+            break;
+
+
+        default:
+
+            bookingStateText =
+                "بانتظار المعالجة";
+
+            bookingStateClass =
+                "is-neutral";
+
+            bookingStateIcon =
+                "bi-clock-history";
+
+            bookingStateDescription =
+                "تم إنشاء الطلب ويجري الآن استكمال خطواته.";
+
+            break;
+    }
+
+
+    /* ================================================================
+       حالة الدفع
+
+       الأولوية:
+       1. السجل المالي معتمد.
+       2. حالة الدفع الكاملة أو الجزئية.
+       3. الحوالة قيد المراجعة.
+       4. انتظار الدفع.
+       5. لا يوجد عربون.
+       ================================================================ */
+
+    string paymentStatusText;
+    string paymentStatusDescription;
+    string paymentStatusClass;
+    string paymentStatusIcon;
+
+    var hasApprovedPaymentStatus =
+        paymentStatusCode == "paid" ||
+        paymentStatusCode == "partiallypaid" ||
+        paymentStatusCode == "fullypaid";
+
+    var isPaymentUnderReview =
+        bookingStateCode == "paymentreview" ||
+        paymentStatusCode == "underreview" ||
+        paymentStatusCode == "paymentreview";
+
+    var isAwaitingDepositPayment =
+        bookingStateCode == "awaitingpayment" &&
+        hasDeposit;
+
+    if (isPaymentConfirmed ||
+        hasApprovedPaymentStatus)
+    {
+        paymentStatusText =
+            hasDeposit
+                ? "تم اعتماد العربون"
+                : "تم اعتماد الدفع";
+
+        paymentStatusDescription =
+            remainingAmount > 0m
+                ? $"تم اعتماد {approvedPaidAmountText}، والمتبقي {remainingAmountText} عند المنشأة."
+                : $"تم اعتماد مبلغ {approvedPaidAmountText} بالكامل.";
+
+        paymentStatusClass =
+            "is-success";
+
+        paymentStatusIcon =
+            "bi-shield-check-fill";
+    }
+    else if (bookingStateCode == "awaitingpayment" &&
+             hasPaymentProofRejection)
+    {
+        paymentStatusText =
+            "مطلوب إثبات دفع جديد";
+
+        paymentStatusDescription =
+            "رفض المالك الإثبات السابق. راجع السبب وارفع صورة جديدة قبل انتهاء المهلة.";
+
+        paymentStatusClass =
+            "is-danger";
+
+        paymentStatusIcon =
+            "bi-file-earmark-x-fill";
+    }
+    else if (isPaymentUnderReview)
+    {
+        paymentStatusText =
+            "العربون قيد المراجعة";
+
+        paymentStatusDescription =
+            "تم رفع إشعار الحوالة وينتظر مراجعة المالك.";
+
+        paymentStatusClass =
+            "is-review";
+
+        paymentStatusIcon =
+            "bi-search";
+    }
+    else if (paymentStatusCode == "rejected")
+    {
+        paymentStatusText =
+            "الحوالة مرفوضة";
+
+        paymentStatusDescription =
+            "لم يتم اعتماد إشعار الحوالة المرسل.";
+
+        paymentStatusClass =
+            "is-danger";
+
+        paymentStatusIcon =
+            "bi-x-octagon-fill";
+    }
+    else if (paymentStatusCode == "expired" ||
+             bookingStateCode == "expired")
+    {
+        paymentStatusText =
+            "انتهت مهلة الدفع";
+
+        paymentStatusDescription =
+            "انتهت المهلة قبل اعتماد دفع العربون.";
+
+        paymentStatusClass =
+            "is-danger";
+
+        paymentStatusIcon =
+            "bi-hourglass-bottom";
+    }
+    else if (isAwaitingDepositPayment)
+    {
+        paymentStatusText =
+            "بانتظار دفع العربون";
+
+        paymentStatusDescription =
+            $"العربون المطلوب لتثبيت الحجز هو {depositAmountText}.";
+
+        paymentStatusClass =
+            "is-warning";
+
+        paymentStatusIcon =
+            "bi-wallet2";
+    }
+    else if (!hasDeposit)
+    {
+        paymentStatusText =
+            "لا يوجد عربون مطلوب";
+
+        paymentStatusDescription =
+            remainingAmount > 0m
+                ? "يتم دفع قيمة الحجز حسب سياسة المنشأة."
+                : "لا توجد مبالغ إضافية مطلوبة.";
+
+        paymentStatusClass =
+            "is-neutral";
+
+        paymentStatusIcon =
+            "bi-dash-circle-fill";
+    }
+    else
+    {
+        paymentStatusText =
+            "العربون غير مدفوع";
+
+        paymentStatusDescription =
+            "لم يتم دفع أو اعتماد العربون لهذا الحجز.";
+
+        paymentStatusClass =
+            "is-warning";
+
+        paymentStatusIcon =
+            "bi-wallet2";
+    }
+
+
+    /* ================================================================
+       هل يحتاج العميل للانتقال إلى الدفع؟
+       ================================================================ */
+
+    var requiresPayment =
+        bookingStateCode == "awaitingpayment" &&
+        hasDeposit &&
+        !isPaymentConfirmed &&
+        !hasApprovedPaymentStatus &&
+        !isPaymentUnderReview;
+
+    var paymentDeadlineText =
+        Model.TimerExpiredAt.HasValue
+            ? Model.TimerExpiredAt.Value.ToString(
+                "dd MMMM yyyy، hh:mm tt",
+                arabicCulture)
+            : string.Empty;
+
+
+    /* ================================================================
+       الإجراء التالي
+       ================================================================ */
+
+    var actionTitle =
+        requiresPayment && hasPaymentProofRejection
+            ? "ارفع إثبات دفع جديد"
+
+            : requiresPayment
+                ? "أكمل دفع العربون الآن"
+
+            : bookingStateCode == "paymentreview"
+                ? "الحوالة وصلت للمراجعة"
+
+            : bookingStateCode == "confirmed"
+                ? "حجزك جاهز ومؤكد"
+
+            : bookingStateCode == "completed"
+                ? "تم إكمال الحجز"
+
+            : bookingStateText;
+
+    var actionDescription =
+        requiresPayment && hasPaymentProofRejection
+            ? "راجع سبب رفض الإثبات السابق، ثم ارفع صورة جديدة وواضحة قبل انتهاء المهلة."
+
+            : requiresPayment
+                ? "اختر محفظة الاستقبال وارفع إشعار الحوالة قبل انتهاء المهلة."
+
+            : bookingStateCode == "paymentreview"
+                ? "لا تحتاج لإعادة إرسال الحوالة. سيتم تحديث الحالة بعد مراجعة المالك."
+
+            : bookingStateCode == "confirmed"
+                ? isPaymentConfirmed || hasApprovedPaymentStatus
+                    ? remainingAmount > 0m
+                        ? $"تم اعتماد العربون، والمتبقي {remainingAmountText} يُدفع عند المنشأة."
+                        : "تم اعتماد الدفع بالكامل، واحتفظ برقم الحجز عند الوصول."
+                    : "احتفظ برقم الحجز والفاتورة عند الوصول إلى المنشأة."
+
+            : bookingStateCode == "completed"
+                ? "تم تنفيذ الحجز وإنهاء تسويته."
+
+            : bookingStateDescription;
+
+
+    /* ================================================================
+       الخط الزمني للحجز
+       ================================================================ */
+
+    var acceptedAtText =
+        Model.AcceptedAt.HasValue
+            ? Model.AcceptedAt.Value.ToString(
+                "dd MMMM yyyy، hh:mm tt",
+                arabicCulture)
+            : string.Empty;
+
+    var paymentApprovedAtText =
+        Model.PaymentApprovedAt.HasValue
+            ? Model.PaymentApprovedAt.Value.ToString(
+                "dd MMMM yyyy، hh:mm tt",
+                arabicCulture)
+            : string.Empty;
+
+    var completedAtText =
+        Model.CompletedAt.HasValue
+            ? Model.CompletedAt.Value.ToString(
+                "dd MMMM yyyy، hh:mm tt",
+                arabicCulture)
+            : string.Empty;
+
+    var timelineAccepted =
+        Model.AcceptedAt.HasValue ||
+        bookingStateCode == "awaitingpayment" ||
+        bookingStateCode == "paymentreview" ||
+        bookingStateCode == "confirmed" ||
+        bookingStateCode == "completed";
+
+    var timelinePayment =
+        Model.PaymentApprovedAt.HasValue ||
+        isPaymentConfirmed ||
+        hasApprovedPaymentStatus ||
+        bookingStateCode == "confirmed" ||
+        bookingStateCode == "completed";
+
+    var timelineConfirmed =
+        bookingStateCode == "confirmed" ||
+        bookingStateCode == "completed";
+
+    var timelineCompleted =
+        bookingStateCode == "completed";
+
+    var timelineStopped =
+        bookingStateCode == "cancelled" ||
+        bookingStateCode == "canceled" ||
+        bookingStateCode == "rejected" ||
+        bookingStateCode == "expired" ||
+        bookingStateCode == "noshow";
+
+    /* ================================================================
+       إتاحة الإلغاء من صفحة التفاصيل
+       ================================================================ */
+
+    var cancellableBookingStates =
+        new[]
+        {
+            "pending",
+            "awaitingpayment",
+            "confirmed"
+        };
+
+    var canCancelBooking =
+        cancellableBookingStates.Contains(
+            bookingStateCode) &&
+        Model.StartDate.Date >= DateTime.Today;
+
+    var cancellationQuoteUrl =
+        Url.Action(
+            "GetCancellationQuote",
+            "Bookings",
+            new
+            {
+                id = Model.BookingId
+            })
+        ?? $"/Bookings/CancellationQuote?id={Model.BookingId}";
+
+    var cancelBookingUrl =
+        Url.Action(
+            "CancelBooking",
+            "Bookings")
+        ?? "/Bookings/Cancel";
+
+    var cancellationHint =
+        isPaymentUnderReview
+            ? "إثبات الدفع قيد المراجعة. لا يمكن إلغاء الحجز حتى يتم اعتماد أو رفض الدفع أولًا."
+            : isPaymentConfirmed ||
+              hasApprovedPaymentStatus
+                ? "سيحسب النظام مبلغ الاسترداد والغرامة تلقائيًا من المبلغ الإلكتروني المعتمد وفق سياسة المنشأة."
+                : "يمكنك إلغاء الحجز الآن، ولا يوجد مبلغ إلكتروني معتمد يحتاج إلى استرداد.";
+}
+
+
+@section Styles {
+
+    <link rel="stylesheet"
+      href="~/css/customer/BookingDetails.css"
+      asp-append-version="true" />
+
+    <link rel="stylesheet"
+      href="~/css/customer/BookingInvoice.css"
+      asp-append-version="true" />
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/intl-tel-input@23.0.4/build/css/intlTelInput.css" />
+}
+
+
+    <main class="bd2-page"
+      dir="rtl">
+
+        <div class="bd2-shell">
+
+            <!-- =========================================================
+                 رأس الصفحة
+                 ========================================================= -->
+
+            <header class="bd2-topbar">
+
+                <a asp-controller="Places"
+               asp-action="Details"
+               asp-route-id="@Model.PlaceId"
+               class="bd2-round-button"
+               aria-label="العودة إلى المنشأة">
+
+                    <i class="bi bi-arrow-right"></i>
+
+                </a>
+
+                <div class="bd2-topbar-title">
+
+                    <strong>
+                        تفاصيل الحجز
+                    </strong>
+
+                </div>
+
+                <button type="button"
+                    id="openBookingInvoiceButton"
+                    class="bd2-invoice-icon-button"
+                    aria-label="فتح فاتورة الحجز"
+                    title="فاتورة الحجز">
+
+                    <i class="bi bi-printer-fill"></i>
+
+                    <span class="visually-hidden">
+                        فتح فاتورة الحجز
+                    </span>
+
+                </button>
+
+            </header>
+
+
+            <!-- =========================================================
+                 بيانات المنشأة
+                 ========================================================= -->
+
+            <section class="bd2-place-card">
+
+                <div class="bd2-place-image">
+
+                    <img src="@coverImage"
+                     alt="@placeName"
+                     onerror="this.onerror=null;this.src='/images/bg1.jpg';" />
+
+                </div>
+
+                <div class="bd2-place-copy">
+
+                    <small>
+
+                        <i class="bi bi-building-check"></i>
+
+                        @categoryName
+
+                    </small>
+
+                    <h1>
+                        @placeName
+                    </h1>
+
+                    <p>
+                        @(isRoomBooking
+                        ? "حجز غرفة أو وحدة فندقية"
+                        : "حجز باقة أو مناسبة")
+                </p>
+
+            </div>
+
+            <div class="bd2-booking-number">
+
+                <span>
+                    رقم الحجز
+                </span>
+
+                <strong>
+                    #@bookingNumber
+                </strong>
+
+                @if (hasPromotion)
+                {
+                    <small class="bd3-hero-offer-chip">
+                        <i class="bi bi-fire"></i>
+                        عرض مطبّق
+                    </small>
+                }
+
+            </div>
+
+        </section>
+
+
+        <!-- =========================================================
+             التواصل مع المنشأة
+             ========================================================= -->
+
+        <section class="bd2-chat-card @(canContactBookingPlace
+                     ? "is-available"
+                     : "is-unavailable")"
+                 aria-label="التواصل مع المنشأة">
+
+            <span class="bd2-chat-card-icon"
+                  aria-hidden="true">
+                <i class="bi bi-chat-heart-fill"></i>
+            </span>
+
+            <div class="bd2-chat-card-copy">
+                <small>
+                    قناة التواصل الخاصة بهذا الحجز
+                </small>
+
+                <h2>
+                    راسل @placeName مباشرة
+                </h2>
+
+                <p>
+                    @if (canContactBookingPlace)
+                    {
+                        <text>
+                            تواصل مع @placeOwnerName بشأن موعد الوصول،
+                            الخدمات، أو أي تفاصيل مرتبطة بالحجز رقم
+                            #@bookingNumber.
+                        </text>
+                    }
+                    else
+                    {
+                        @bookingChatUnavailableMessage
+                    }
+                </p>
+            </div>
+
+            @if (canContactBookingPlace)
+            {
+                <a asp-controller="Messages"
+               asp-action="MyMessages"
+               asp-route-placeId="@Model.PlaceId"
+               asp-route-withOwnerId="@placeOwnerId"
+               class="bd2-chat-card-action">
+
+                    <span>
+                        <small>فتح المحادثة</small>
+                        <strong>مراسلة المنشأة</strong>
+                    </span>
+
+                    <i class="bi bi-arrow-left"></i>
+                </a>
+            }
+            else
+            {
+                <button type="button"
+                    class="bd2-chat-card-action is-disabled"
+                    title="@bookingChatUnavailableMessage"
+                    disabled>
+
+                    <span>
+                        <small>غير متاح حاليًا</small>
+                        <strong>مراسلة المنشأة</strong>
+                    </span>
+
+                    <i class="bi bi-chat-dots"></i>
+                </button>
+            }
+
+        </section>
+
+
+        <!-- =========================================================
+             حالة الحجز والدفع
+             ========================================================= -->
+
+        <section class="bd2-status-card"
+                 aria-label="حالة الحجز والدفع">
+
+            <div class="bd2-status-item @bookingStateClass">
+
+                <span class="bd2-status-icon">
+
+                    <i class="bi @bookingStateIcon"></i>
+
+                </span>
+
+                <div>
+
+                    <small>
+                        حالة الطلب
+                    </small>
+
+                    <strong>
+                        @bookingStateText
+                    </strong>
+
+                    <p>
+                        @bookingStateDescription
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <div class="bd2-status-item @paymentStatusClass">
+
+                <span class="bd2-status-icon">
+
+                    <i class="bi @paymentStatusIcon"></i>
+
+                </span>
+
+                <div>
+
+                    <small>
+                        حالة الدفع
+                    </small>
+
+                    <strong>
+                        @paymentStatusText
+                    </strong>
+
+                    <p>
+                        @paymentStatusDescription
+                    </p>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- =========================================================
+             الإجراء التالي
+             ========================================================= -->
+
+        <section class="bd2-next-step">
+
+            <span>
+
+                <i class="bi bi-compass-fill"></i>
+
+            </span>
+
+            <div>
+
+                <h2>
+                    @actionTitle
+                </h2>
+
+                <p>
+                    @actionDescription
+                </p>
+
+                @if (requiresPayment &&
+                !string.IsNullOrWhiteSpace(
+                paymentDeadlineText))
+                {
+                    <span class="bd2-deadline">
+
+                        <i class="bi bi-alarm-fill"></i>
+
+                        آخر مهلة:
+                        @paymentDeadlineText
+
+                    </span>
+                }
+
+            </div>
+
+        </section>
+
+
+        <!-- =========================================================
+             سبب الرفض
+             ========================================================= -->
+        @if (bookingStateCode == "rejected" &&
+        !string.IsNullOrWhiteSpace(
+        Model.RejectionReason))
+        {
+            <section class="bd2-rejection">
+
+                <i class="bi bi-exclamation-triangle-fill"></i>
+
+                <div>
+
+                    <strong>
+                        سبب رفض الحجز
+                    </strong>
+
+                    <p>
+                        @Model.RejectionReason
+                    </p>
+
+                </div>
+
+            </section>
+        }
+
+
+        <!-- =========================================================
+             رفض إثبات الدفع السابق
+             ========================================================= -->
+        @if (bookingStateCode == "awaitingpayment" &&
+        hasPaymentProofRejection)
+        {
+            <section class="bd2-lifecycle-alert is-payment-rejected">
+
+                <span class="bd2-lifecycle-alert-icon">
+                    <i class="bi bi-file-earmark-x-fill"></i>
+                </span>
+
+                <div class="bd2-lifecycle-alert-copy">
+                    <small>إجراء مطلوب منك</small>
+                    <h2>تم رفض إثبات الدفع السابق</h2>
+                    <p>@Model.PaymentProofRejectionReason</p>
+
+                    <div class="bd2-lifecycle-alert-meta">
+                        @if (!string.IsNullOrWhiteSpace(paymentProofRejectedAtText))
+                        {
+                            <span>
+                                <i class="bi bi-calendar2-x"></i>
+                                @paymentProofRejectedAtText
+                            </span>
+                        }
+
+                        <span>
+                            <i class="bi bi-arrow-repeat"></i>
+                            عدد مرات الرفض: @Math.Max(1, Model.PaymentProofReviewCount)
+                        </span>
+                    </div>
+                </div>
+
+                <a asp-controller="BookingFlow"
+               asp-action="Payment"
+               asp-route-id="@Model.BookingId"
+               class="bd2-lifecycle-alert-action">
+                    <i class="bi bi-cloud-arrow-up-fill"></i>
+                    رفع إثبات جديد
+                </a>
+
+            </section>
+        }
+
+
+        <!-- =========================================================
+             إغلاق أو إلغاء الحجز
+             ========================================================= -->
+        @if (bookingStateCode == "cancelled" ||
+        bookingStateCode == "rejected" ||
+        bookingStateCode == "expired" ||
+        bookingStateCode == "noshow" ||
+        bookingStateCode == "completed")
+        {
+            <section class="bd2-closure-card
+                            @(isCancelledByOwner ? "is-owner" : string.Empty)">
+
+                <div class="bd2-closure-heading">
+                    <span>
+                        <i class="bi @(isCancelledByOwner
+                            ? "bi-building-x"
+                            : bookingStateCode == "completed"
+                                ? "bi-check2-circle"
+                                : bookingStateCode == "noshow"
+                                    ? "bi-person-x"
+                                    : "bi-info-circle-fill")"></i>
+                    </span>
+
+                    <div>
+                        <small>بيانات آخر إجراء</small>
+                        <h2>
+                            @(isCancelledByOwner
+                                ? "ألغت المنشأة الحجز"
+                                : isCancelledByCustomer
+                                ? "تم إلغاء الحجز من حسابك"
+                                : bookingStateText)
+                        </h2>
+                    </div>
+                </div>
+
+                <div class="bd2-closure-grid">
+                    <div>
+                        <small>منفذ الإجراء</small>
+                        <strong>@closureSourceText</strong>
+                    </div>
+
+                    <div>
+                        <small>وقت الإغلاق</small>
+                        <strong>
+                            @(string.IsNullOrWhiteSpace(closedAtText)
+                                ? "غير محدد"
+                                : closedAtText)
+                        </strong>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(lastStatusChangedAtText))
+                    {
+                        <div>
+                            <small>آخر تحديث للحالة</small>
+                            <strong>@lastStatusChangedAtText</strong>
+                        </div>
+                    }
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(closureReason))
+                {
+                    <div class="bd2-closure-reason">
+                        <i class="bi bi-chat-square-text-fill"></i>
+                        <div>
+                            <small>السبب</small>
+                            <p>@closureReason</p>
+                        </div>
+                    </div>
+                }
+
+            </section>
+        }
+
+
+        <!-- =========================================================
+             طلب الاسترداد
+             ========================================================= -->
+        @if (latestRefundRequest != null)
+        {
+            <section class="bd2-refund-card"
+                 data-customer-refund-context
+                 data-refund-request-id="@latestRefundRequest.RefundRequestId"
+                 data-refund-wallet-id="@(latestRefundRequest.RefundWalletId?.ToString() ?? string.Empty)"
+                 data-refund-account="@(latestRefundRequest.RefundAccountNumber ?? string.Empty)"
+                 data-refund-beneficiary="@(latestRefundRequest.RefundBeneficiaryName ?? string.Empty)"
+                 data-refund-amount-text="@(refundAmountTexts.TryGetValue(latestRefundRequest.RefundRequestId, out var refundDataAmountText) ? refundDataAmountText : $"{latestRefundRequest.RefundAmount:N0} ر.ي")"
+                 data-refund-set-url="@Url.Action("SetRefundDestination", "Bookings")"
+                 data-refund-wallets-url="@Url.Action("RefundWallets", "Bookings")"
+                 data-refund-confirm-url="@Url.Action("ConfirmRefundReceived", "Bookings")">
+
+                <div class="bd2-refund-heading">
+                    <span>
+                        <i class="bi bi-arrow-counterclockwise"></i>
+                    </span>
+
+                    <div>
+                        <small>الحالة المالية بعد الإلغاء</small>
+                        <h2>@refundStatusText</h2>
+                    </div>
+
+                    @if (latestRefundRequest.RefundAmount > 0m)
+                    {
+                        <strong class="bd2-refund-heading-amount">
+                            @(refundAmountTexts.TryGetValue(latestRefundRequest.RefundRequestId, out var refundHeadingAmountText) ? refundHeadingAmountText : $"{latestRefundRequest.RefundAmount:N0} ر.ي")
+                        </strong>
+                    }
+                </div>
+
+                <div class="bd2-refund-grid">
+                    <div>
+                        <small>المدفوع المسجل</small>
+                        <strong>@(refundDepositPaidTexts.TryGetValue(latestRefundRequest.RefundRequestId, out var refundDepositText) ? refundDepositText : $"{latestRefundRequest.DepositPaid:N0} ر.ي")</strong>
+                    </div>
+
+                    <div>
+                        <small>المبلغ المحتجز</small>
+                        <strong>@(refundCancellationFeeTexts.TryGetValue(latestRefundRequest.RefundRequestId, out var refundFeeText) ? refundFeeText : $"{latestRefundRequest.CancellationFee:N0} ر.ي")</strong>
+                    </div>
+
+                    <div class="is-refund-amount">
+                        <small>يعود إليك</small>
+                        <strong>@(refundAmountTexts.TryGetValue(latestRefundRequest.RefundRequestId, out var refundValueText) ? refundValueText : $"{latestRefundRequest.RefundAmount:N0} ر.ي")</strong>
+                    </div>
+
+                    <div>
+                        <small>تاريخ الطلب</small>
+                        <strong>
+                            @(latestRefundRequest.RequestedAt.HasValue
+                                ? latestRefundRequest.RequestedAt.Value.ToString(
+                                "dd MMMM yyyy، hh:mm tt",
+                                arabicCulture)
+                                : "غير محدد")
+                        </strong>
+                    </div>
+                </div>
+
+                @if (latestRefundRequest.RefundAmount > 0m)
+                {
+                    <div class="bd2-refund-customer-center">
+
+                        <div class="bd2-refund-progress"
+                     aria-label="مسار الاسترداد">
+
+                            <article class="is-done">
+                                <span><i class="bi bi-check-lg"></i></span>
+                                <div>
+                                    <small>1</small>
+                                    <strong>إنشاء الطلب</strong>
+                                </div>
+                            </article>
+
+                            <i></i>
+
+                            <article class="@(refundHasDestination ? "is-done" : "is-current")">
+                                <span>
+                                    <i class="bi @(refundHasDestination ? "bi-check-lg" : "bi-wallet2")"></i>
+                                </span>
+                                <div>
+                                    <small>2</small>
+                                    <strong>حساب الاستلام</strong>
+                                </div>
+                            </article>
+
+                            <i></i>
+
+                            <article class="@(refundTransferred ? "is-done" : refundHasDestination ? "is-current" : string.Empty)">
+                                <span>
+                                    <i class="bi @(refundTransferred ? "bi-check-lg" : "bi-send")"></i>
+                                </span>
+                                <div>
+                                    <small>3</small>
+                                    <strong>تحويل المنشأة</strong>
+                                </div>
+                            </article>
+
+                            <i></i>
+
+                            <article class="@(refundCompleted ? "is-done" : refundCanConfirmReceived ? "is-current" : string.Empty)">
+                                <span>
+                                    <i class="bi @(refundCompleted ? "bi-check-lg" : "bi-person-check")"></i>
+                                </span>
+                                <div>
+                                    <small>4</small>
+                                    <strong>تأكيد الاستلام</strong>
+                                </div>
+                            </article>
+
+                        </div>
+
+                        @if (refundCanSetDestination && !refundHasDestination)
+                        {
+                            <div class="bd2-refund-callout is-action">
+                                <span>
+                                    <i class="bi bi-wallet2"></i>
+                                </span>
+
+                                <div>
+                                    <small>مطلوب منك الآن</small>
+                                    <h3>حدد حساب استلام الاسترداد</h3>
+                                    <p>
+                                        اختر المحفظة وأدخل رقم الحساب واسم المستفيد،
+                                        وبعدها ستظهر الوجهة للمنشأة لتنفيذ التحويل.
+                                    </p>
+                                </div>
+
+                                <button type="button"
+                            data-refund-action="destination">
+                                    <i class="bi bi-plus-lg"></i>
+                                    تحديد الحساب
+                                </button>
+                            </div>
+                        }
+                        else if (refundCanConfirmReceived)
+                        {
+                            <div class="bd2-refund-callout is-transferred">
+                                <span>
+                                    <i class="bi bi-send-check-fill"></i>
+                                </span>
+
+                                <div>
+                                    <small>تم تحويل المبلغ</small>
+                                    <h3>
+                                        @(refundAmountTexts.TryGetValue(latestRefundRequest.RefundRequestId, out var refundTransferredAmountText) ? refundTransferredAmountText : $"{latestRefundRequest.RefundAmount:N0} ر.ي")
+                                    </h3>
+
+                                    <p>
+                                        رقم الحوالة:
+                                        <b dir="ltr">@latestRefundRequest.ReferenceNumber</b>
+                                        @if (!string.IsNullOrWhiteSpace(refundTransferredAtText))
+                                        {
+                                            <span> · @refundTransferredAtText</span>
+                                        }
+                                    </p>
+                                </div>
+
+                                <div class="bd2-refund-callout-actions">
+                                    @if (!string.IsNullOrWhiteSpace(refundProofUrl))
+                                    {
+                                        <a href="@refundProofUrl"
+                           target="_blank"
+                           rel="noopener">
+                                            <i class="bi bi-image"></i>
+                                            عرض السند
+                                        </a>
+                                    }
+
+                                    <button type="button"
+                                data-refund-action="confirm">
+                                        <i class="bi bi-check2-circle"></i>
+                                        تأكيد استلام المبلغ
+                                    </button>
+                                </div>
+                            </div>
+                        }
+                        else if (refundCompleted)
+                        {
+                            <div class="bd2-refund-callout is-completed">
+                                <span>
+                                    <i class="bi bi-patch-check-fill"></i>
+                                </span>
+
+                                <div>
+                                    <small>التسوية مكتملة</small>
+                                    <h3>تم تأكيد استلام مبلغك بنجاح</h3>
+                                    <p>
+                                        أُغلق طلب الاسترداد بعد تأكيد الاستلام.
+                                    </p>
+                                </div>
+
+                                @if (!string.IsNullOrWhiteSpace(refundProofUrl))
+                                {
+                                    <a href="@refundProofUrl"
+                       target="_blank"
+                       rel="noopener">
+                                        <i class="bi bi-image"></i>
+                                        سند التحويل
+                                    </a>
+                                }
+                            </div>
+                        }
+                        else if (refundHasDestination)
+                        {
+                            <div class="bd2-refund-callout is-waiting">
+                                <span>
+                                    <i class="bi bi-hourglass-split"></i>
+                                </span>
+
+                                <div>
+                                    <small>وجهة الاسترداد محفوظة</small>
+                                    <h3 dir="ltr">@refundMaskedAccount</h3>
+                                    <p>
+                                        بانتظار أن تسجل المنشأة تحويل المبلغ إلى الحساب المحدد.
+                                    </p>
+                                </div>
+
+                                @if (refundCanSetDestination)
+                                {
+                                    <button type="button"
+                            data-refund-action="destination">
+                                        <i class="bi bi-pencil-square"></i>
+                                        تعديل الحساب
+                                    </button>
+                                }
+                            </div>
+                        }
+
+                    </div>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(latestRefundRequest.Reason))
+                {
+                    <p class="bd2-refund-note">
+                        <i class="bi bi-info-circle-fill"></i>
+                        @latestRefundRequest.Reason
+                    </p>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(latestRefundRequest.Notes))
+                {
+                    <p class="bd2-refund-note">
+                        <i class="bi bi-journal-text"></i>
+                        @latestRefundRequest.Notes
+                    </p>
+                }
+
+            </section>
+        }
+
+
+        <!-- =========================================================
+             معلومات الحجز والغرفة أو الباقة
+             ========================================================= -->
+
+        <section class="bd2-grid">
+
+            <article class="bd2-card">
+
+                <header class="bd2-card-heading">
+
+                    <span>
+
+                        <i class="bi bi-calendar2-check-fill"></i>
+
+                    </span>
+
+                    <div>
+
+                        <small>
+                            البيانات الأساسية
+                        </small>
+
+                        <h2>
+                            معلومات الحجز
+                        </h2>
+
+                    </div>
+
+                </header>
+
+
+                <div class="bd2-info-list">
+
+                    <div class="bd2-info-row">
+
+                        <i class="bi bi-calendar-event"></i>
+
+                        <span>
+                            تاريخ الحجز
+                        </span>
+
+                        <strong>
+                            @bookingPeriodText
+                        </strong>
+
+                    </div>
+
+
+                    <div class="bd2-info-row">
+
+                        <i class="bi bi-clock-history"></i>
+
+                        <span>
+                            إنشاء الطلب
+                        </span>
+
+                        <strong>
+                            @createdAtText
+                        </strong>
+
+                    </div>
+
+
+                    <div class="bd2-info-row">
+
+                        <i class="bi bi-people-fill"></i>
+
+                        <span>
+                            عدد الأشخاص
+                        </span>
+
+                        <strong>
+                            @guestsText
+                        </strong>
+
+                    </div>
+
+
+                    <div class="bd2-info-row">
+
+                        <i class="bi bi-boxes"></i>
+
+                        <span>
+                            الكمية
+                        </span>
+
+                        <strong>
+                            @Math.Max(
+                            1,
+                            Model.Quantity)
+                        </strong>
+
+                    </div>
+
+
+                    @if (!string.Equals(
+                    bookingTypeText,
+                    "غير محدد",
+                    StringComparison.OrdinalIgnoreCase))
+                    {
+                        <div class="bd2-info-row">
+
+                            <i class="bi bi-person-badge-fill"></i>
+
+                            <span>
+                                نوع الحجز
+                            </span>
+
+                            <strong>
+                                @bookingTypeText
+                            </strong>
+
+                        </div>
+                    }
+
+
+                    @if (!string.Equals(
+                    seatingSetup,
+                    "غير محدد",
+                    StringComparison.OrdinalIgnoreCase))
+                    {
+                        <div class="bd2-info-row">
+
+                            <i class="bi bi-grid-3x3-gap-fill"></i>
+
+                            <span>
+                                ترتيب الجلسة
+                            </span>
+
+                            <strong>
+                                @seatingSetup
+                            </strong>
+
+                        </div>
+                    }
+
+                </div>
+
+            </article>
+
+
+            <article class="bd2-card
+                            bd2-item-card">
+
+                <header class="bd2-card-heading">
+
+                    <span>
+
+                        <i class="bi @(isRoomBooking
+                            ? "bi-door-open-fill"
+                            : "bi-stars")">
+                        </i>
+
+                    </span>
+
+                    <div>
+
+                        <small>
+                            الخيار الذي تم حجزه
+                        </small>
+
+                        <h2>
+                            @(isRoomBooking
+                                ? "تفاصيل الغرفة"
+                                : "تفاصيل الباقة")
+                        </h2>
+
+                    </div>
+
+                </header>
+
+
+                <div class="bd2-item-main">
+
+                    <span>
+
+                        <i class="bi @(isRoomBooking
+                            ? "bi-door-closed-fill"
+                            : "bi-calendar2-heart-fill")">
+                        </i>
+
+                    </span>
+
+                    <div>
+
+                        <small>
+                            @(isRoomBooking
+                                ? "الوحدة المحجوزة"
+                                : "الباقة المحجوزة")
+                        </small>
+
+                        <strong>
+                            @itemTitle
+                        </strong>
+
+                        <p>
+                            @itemSubtitle
+                        </p>
+
+                    </div>
+
+                    <div class="bd2-item-price">
+
+                        <b>
+                            @itemPriceText
+                        </b>
+
+                    </div>
+
+                </div>
+
+                @if (isRoomBooking && assignedRoomUnits.Count > 0)
+                {
+                    <div class="bd2-assigned-rooms">
+
+                        <div class="bd2-assigned-rooms-heading">
+                            <span>
+                                <i class="bi bi-key-fill"></i>
+                            </span>
+                            <div>
+                                <small>التسكين الفعلي</small>
+                                <strong>أرقام الغرف والطوابق</strong>
+                            </div>
+                        </div>
+
+                        <div class="bd2-assigned-room-list">
+                            @foreach (var assignment in assignedRoomUnits)
+                            {
+                                var floorLabel =
+                                !string.IsNullOrWhiteSpace(assignment.RoomUnit.FloorLabel)
+                                ? assignment.RoomUnit.FloorLabel!.Trim()
+                                : assignment.RoomUnit.FloorNumber == 0
+                                ? "الدور الأرضي"
+                                : assignment.RoomUnit.FloorNumber < 0
+                                ? $"القبو {Math.Abs(assignment.RoomUnit.FloorNumber)}"
+                                : $"الطابق {assignment.RoomUnit.FloorNumber}";
+
+                                <div class="bd2-assigned-room-chip">
+                                    <i class="bi bi-door-closed-fill"></i>
+                                    <span>
+                                        <b>@assignment.RoomUnit.RoomNumber</b>
+                                        <small>@floorLabel</small>
+                                    </span>
+                                </div>
+                            }
+                        </div>
+
+                    </div>
+                }
+
+
+                <p class="bd2-item-description">
+                    @itemDescription
+                </p>
+
+
+                <div class="bd2-mini-grid">
+
+                    @if (isRoomBooking)
+                    {
+                        <div class="bd2-mini-item">
+
+                            <small>
+                                عدد الليالي
+                            </small>
+
+                            <strong>
+                                @nightsCount
+                            </strong>
+
+                        </div>
+
+                        <div class="bd2-mini-item">
+
+                            <small>
+                                عدد الغرف
+                            </small>
+
+                            <strong>
+                                @Math.Max(
+                            1,
+                            Model.Quantity)
+                            </strong>
+
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="bd2-mini-item">
+
+                            <small>
+                                الفترة
+                            </small>
+
+                            <strong>
+                                @itemSubtitle
+                            </strong>
+
+                        </div>
+
+                        <div class="bd2-mini-item">
+
+                            <small>
+                                السعة القصوى
+                            </small>
+
+                            <strong>
+                                @(packageCapacity > 0
+                                    ? $"{packageCapacity} شخص"
+                                    : "غير محددة")
+                            </strong>
+
+                        </div>
+                    }
+
+
+                    <div class="bd2-mini-item">
+
+                        <small>
+                            البالغون
+                        </small>
+
+                        <strong>
+                            @adultsCount
+                        </strong>
+
+                    </div>
+
+
+                    <div class="bd2-mini-item">
+
+                        <small>
+                            الأطفال
+                        </small>
+
+                        <strong>
+                            @childrenCount
+                        </strong>
+
+                    </div>
+
+                </div>
+
+            </article>
+
+        </section>
+
+
+        <!-- =========================================================
+             الخدمات الإضافية
+             ========================================================= -->
+        @if (additionalServices.Count > 0)
+        {
+            <section class="bd2-card
+                            bd2-services-card">
+
+                <header class="bd2-card-heading">
+
+                    <span>
+
+                        <i class="bi bi-stars"></i>
+
+                    </span>
+
+                    <div>
+
+                        <small>
+                            الخدمات التي أضيفت للحجز
+                        </small>
+
+                        <h2>
+                            الخدمات الإضافية
+                        </h2>
+
+                    </div>
+
+                </header>
+
+
+                <div class="bd2-services-list">
+
+                    @foreach (var bookingService in additionalServices)
+                    {
+                        var serviceName =
+                        bookingService
+                        .Service?
+                        .ServiceName?
+                        .Trim();
+
+                        if (string.IsNullOrWhiteSpace(serviceName))
+                        {
+                            serviceName =
+                            "خدمة إضافية";
+                        }
+
+                        var serviceTotal =
+                        bookingService.UnitPrice *
+                        bookingService.Quantity;
+
+                        <div class="bd2-service">
+
+                            <div>
+
+                                <strong>
+                                    @serviceName
+                                </strong>
+
+                                <small>
+                                    الكمية:
+                                    @bookingService.Quantity
+
+                                    · سعر الوحدة:
+
+                                    @ServiceUnitPriceText(bookingService)
+                                </small>
+
+                            </div>
+
+                            <b>
+                                @ServiceTotalPriceText(bookingService)
+                            </b>
+
+                        </div>
+                    }
+
+                </div>
+
+            </section>
+        }
+
+
+        <!-- =========================================================
+             العرض المحفوظ مع الحجز
+             ========================================================= -->
+        @if (hasPromotion)
+        {
+            <section class="bd3-promotion-card" aria-label="العرض المطبق على الحجز">
+
+                <div class="bd3-promotion-orb" aria-hidden="true">
+                    <i class="bi bi-fire"></i>
+                </div>
+
+                <div class="bd3-promotion-copy">
+                    <span class="bd3-promotion-eyebrow">
+                        <i class="bi bi-patch-check-fill"></i>
+                        محفوظ مع هذا الحجز
+                    </span>
+
+                    <h2>@promotionTitle</h2>
+
+                    <div class="bd3-promotion-badges">
+                        <span class="is-discount">
+                            <i class="bi bi-lightning-charge-fill"></i>
+                            @promotionDiscountLabel
+                        </span>
+
+                        @if (!string.IsNullOrWhiteSpace(promotionCode))
+                        {
+                            <button type="button"
+                            class="bd3-promotion-code"
+                            data-copy-promotion-code="@promotionCode"
+                            title="نسخ كود العرض">
+                                <i class="bi bi-copy"></i>
+                                <span>@promotionCode</span>
+                            </button>
+                        }
+                    </div>
+
+                    <p>
+                        هذه البيانات محفوظة لحظة إنشاء الحجز، لذلك لن تتغير قيمة الخصم حتى لو انتهى العرض أو تم تعديله لاحقًا.
+                    </p>
+                </div>
+
+                <div class="bd3-promotion-money">
+                    <div>
+                        <small>قبل الخصم</small>
+                        <del>@originalTotalPriceText</del>
+                    </div>
+                    <span class="bd3-promotion-arrow">
+                        <i class="bi bi-arrow-left"></i>
+                    </span>
+                    <div class="is-final">
+                        <small>بعد العرض</small>
+                        <strong>@totalPriceText</strong>
+                    </div>
+                    <span class="bd3-saving-pill">
+                        وفّرت @discountAmountText
+                    </span>
+                </div>
+
+            </section>
+        }
+
+
+        <!-- =========================================================
+             الملخص المالي
+             ========================================================= -->
+
+        <section class="bd2-finance @(hasPromotion ? "has-promotion" : string.Empty)">
+
+            <div class="bd2-finance-head">
+
+                <div class="bd2-finance-title">
+
+                    <span>
+
+                        <i class="bi bi-wallet2"></i>
+
+                    </span>
+
+                    <div>
+
+                        <small>
+                            المبالغ المسجلة على الحجز
+                        </small>
+
+                        <h2>
+                            الملخص المالي
+                        </h2>
+
+                    </div>
+
+                </div>
+
+                @if (hasPromotion)
+                {
+                    <div class="bd3-finance-discount-summary">
+                        <span>
+                            <small>قبل الخصم</small>
+                            <del>@originalTotalPriceText</del>
+                        </span>
+                        <span class="is-discount">
+                            <small>@promotionDiscountLabel</small>
+                            <strong>-@discountAmountText</strong>
+                        </span>
+                    </div>
+                }
+
+                <div class="bd2-total-hero">
+
+                    <strong>
+                        @totalPriceText
+                    </strong>
+
+                </div>
+
+            </div>
+
+
+            <div class="bd2-money-grid">
+
+                <div class="bd2-money-item
+                            is-deposit">
+
+                    <small>
+                        العربون المطلوب
+                    </small>
+
+                    <strong>
+                        @depositAmountText
+                    </strong>
+
+                    <span>
+                        @(depositAmount > 0m
+                            ? "المبلغ المطلوب لتثبيت الحجز"
+                            : "لا يوجد عربون على هذا الحجز")
+                    </span>
+
+                </div>
+
+
+                <div class="bd2-money-item
+                            is-paid">
+
+                    <small>
+                        المبلغ المعتمد
+                    </small>
+
+                    <strong>
+                        @approvedPaidAmountText
+                    </strong>
+
+                    <span>
+                        @(isPaymentConfirmed ||
+                            hasApprovedPaymentStatus
+
+                            ? "تم اعتماد هذا المبلغ رسميًا"
+
+                            : isPaymentUnderReview
+
+                            ? "الحوالة ما زالت قيد المراجعة"
+
+                            : "لم يتم اعتماد مبلغ بعد")
+                    </span>
+
+                </div>
+
+
+                <div class="bd2-money-item
+                            is-remaining">
+
+                    <small>
+                        المتبقي لدى المنشأة
+                    </small>
+
+                    <strong>
+                        @remainingAmountText
+                    </strong>
+
+                    <span>
+                        يُدفع حسب سياسة المنشأة
+                    </span>
+
+                </div>
+
+            </div>
+
+
+            @if (proofUploaded)
+            {
+                <span class="bd2-proof-line">
+
+                    <i class="bi bi-check-circle-fill"></i>
+
+                    تم رفع إثبات الحوالة بنجاح
+
+                </span>
+            }
+
+        </section>
+
+
+        <!-- =========================================================
+             إلغاء الحجز
+             يظهر فقط للحالات القابلة للإلغاء وقبل بدء الموعد
+             ========================================================= -->
+        @if (canCancelBooking)
+        {
+            <section id="bookingCancellationPanel"
+                 class="bd2-cancellation-panel"
+                 aria-labelledby="bookingCancellationTitle"
+                 data-booking-id="@Model.BookingId"
+                 data-booking-state="@Model.BookingState"
+                 data-quote-url="@cancellationQuoteUrl"
+                 data-cancel-url="@cancelBookingUrl">
+
+                <div class="bd2-cancellation-decoration"
+                 aria-hidden="true">
+                </div>
+
+                <div class="bd2-cancellation-icon"
+                 aria-hidden="true">
+
+                    <i class="bi bi-calendar-x-fill"></i>
+
+                </div>
+
+                <div class="bd2-cancellation-copy">
+
+                    <span class="bd2-cancellation-eyebrow">
+
+                        <i class="bi bi-shield-check"></i>
+
+                        إلغاء آمن حسب سياسة المنشأة
+
+                    </span>
+
+                    <h2 id="bookingCancellationTitle">
+                        هل تغيّرت خطتك؟
+                    </h2>
+
+                    <p>
+                        @cancellationHint
+                    </p>
+
+                    <div class="bd2-cancellation-meta">
+
+                        <span>
+                            <i class="bi bi-receipt-cutoff"></i>
+                            عرض الملخص قبل الإلغاء
+                        </span>
+
+                        <span>
+                            <i class="bi bi-chat-square-text"></i>
+                            سبب الإلغاء مطلوب
+                        </span>
+
+                    </div>
+
+                </div>
+
+                <div class="bd2-cancellation-actions">
+
+                    <button type="button"
+                        id="btnCancelOrder"
+                        class="bd2-cancel-booking-button"
+                        data-booking-id="@Model.BookingId"
+                        data-place-name="@placeName"
+                        data-quote-url="@cancellationQuoteUrl"
+                        data-cancel-url="@cancelBookingUrl"
+                        aria-describedby="bookingCancellationNote">
+
+                        <span class="bd2-cancel-button-icon">
+                            <i class="bi bi-x-lg"></i>
+                        </span>
+
+                        <span class="bd2-cancel-button-copy">
+                            <small>مراجعة السياسة أولًا</small>
+                            <strong>إلغاء الحجز</strong>
+                        </span>
+
+                        <i class="bi bi-chevron-left bd2-cancel-button-arrow"
+                       aria-hidden="true">
+                        </i>
+
+                    </button>
+
+                    <small id="bookingCancellationNote"
+                       class="bd2-cancellation-note">
+
+                        لن يتم الإلغاء قبل عرض الغرامة أو مبلغ الاسترداد وتأكيدك النهائي.
+
+                    </small>
+
+                </div>
+
+                <form id="bookingCancellationAntiForgeryForm"
+                  class="d-none"
+                  aria-hidden="true">
+
+                    @Html.AntiForgeryToken()
+
+                </form>
+
+            </section>
+        }
+
+
+        <!-- =========================================================
+             الإجراءات
+             ========================================================= -->
+
+        <section class="bd2-actions">
+
+            @if (requiresPayment)
+            {
+                <a asp-controller="BookingFlow"
+               asp-action="Payment"
+               asp-route-id="@Model.BookingId"
+               class="bd2-action
+                          is-payment">
+
+                    <span>
+
+                        <small>
+                            الخطوة المطلوبة الآن
+                        </small>
+
+                        <strong>
+                            الانتقال لدفع العربون
+                        </strong>
+
+                    </span>
+
+                    <span>
+
+                        <i class="bi bi-arrow-left"></i>
+
+                    </span>
+
+                </a>
+            }
+
+
+            <a asp-controller="Places"
+               asp-action="Details"
+               asp-route-id="@Model.PlaceId"
+               class="bd2-place-details-link">
+
+                <i class="bi bi-building-check"></i>
+
+                <strong>
+                    استعراض تفاصيل المنشأة
+                </strong>
+
+                <i class="bi bi-chevron-left"></i>
+
+            </a>
+
+            <a asp-controller="Bookings"
+               asp-action="MyBookings"
+               class="bd2-my-bookings-link">
+
+                <i class="bi bi-calendar2-week"></i>
+
+                <span>
+                    العودة إلى حجوزاتي
+                </span>
+
+            </a>
+
+        </section>
+
+
+        <!-- =========================================================
+             الفاتورة
+             ========================================================= -->
+
+        <partial name="_BookingInvoice"
+                 model="Model" />
+
+    </div>
+
+</main>
+
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/intl-tel-input@23.0.4/build/js/intlTelInput.min.js"></script>
+
+    <script src="~/js/customer/BookingInvoice.js"
+        asp-append-version="true">
+    </script>
+
+    <script src="~/js/customer/BookingDetails.js"
+        asp-append-version="true">
+    </script>
+
+    <script>
+        (() => {
+            "use strict";
+
+            document
+                .querySelectorAll("img")
+                .forEach(image => {
+
+                    image.addEventListener(
+                        "error",
+                        () => {
+
+                            if (
+                                !image.src.endsWith(
+                                    "/images/bg1.jpg")
+                            ) {
+                                image.src =
+                                    "/images/bg1.jpg";
+                            }
+
+                        },
+                        {
+                            once: true
+                        }
+                    );
+
+                });
+        })();
+    </script>
+}

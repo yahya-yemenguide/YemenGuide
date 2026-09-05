@@ -1,0 +1,701 @@
+﻿using System;
+using System.Linq;
+using System.Security.Claims;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using YemenGuide.Core.DTOs.Owner;
+using YemenGuide.Core.Entities;
+using YemenGuide.Data;
+using YemenGuide.Web.Filters;
+
+namespace YemenGuide.Web.Areas.Owner.Controllers
+{
+    [Area("Owner")]
+    [Authorize(Roles = "Owner")]
+    [AuthorizeActiveOwner]
+    public class SettingsController : Controller
+    {
+        private readonly AppDbContext _context;
+        private readonly ILogger<SettingsController> _logger;
+
+        public SettingsController(
+            AppDbContext context,
+            ILogger<SettingsController> logger)
+        {
+            _context = context;
+            _logger = logger;
+        }
+
+        private bool TryGetCurrentOwnerId(out int ownerId)
+        {
+            ownerId = 0;
+
+            return int.TryParse(
+                       User.FindFirstValue(ClaimTypes.NameIdentifier),
+                       out ownerId) &&
+                   ownerId > 0;
+        }
+
+        private IQueryable<Place> BuildOwnedBookablePlacesQuery(int ownerId)
+        {
+            return _context.Places
+                .Where(place =>
+                    place.OwnerId == ownerId &&
+                    place.Category != null &&
+                    place.Category.BookingSystemId >= 1 &&
+                    place.Category.BookingSystemId <= 4);
+        }
+
+        private async Task<string> GetOwnerAccountStateAsync(int ownerId)
+        {
+            return await _context.Users
+                .AsNoTracking()
+                .Where(user => user.UserId == ownerId && user.Role == "Owner")
+                .Select(user => user.AccountState ?? string.Empty)
+                .FirstOrDefaultAsync() ?? string.Empty;
+        }
+
+        private static bool IsPreActivationState(string? state)
+        {
+            return string.Equals(state, "Pending", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(state, "Rejected", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private async Task<bool> CanUseVerificationPolicyFlowAsync(
+            int ownerId,
+            int placeId)
+        {
+            if (ownerId <= 0 || placeId <= 0)
+                return false;
+
+            var state = await GetOwnerAccountStateAsync(ownerId);
+            if (!IsPreActivationState(state))
+                return false;
+
+            return await _context.Places
+                .AsNoTracking()
+                .AnyAsync(place =>
+                    place.PlaceId == placeId &&
+                    place.OwnerId == ownerId &&
+                    place.Status == "Pending" &&
+                    place.Category != null &&
+                    place.Category.BookingSystemId >= 1 &&
+                    place.Category.BookingSystemId <= 4);
+        }
+
+        private async Task<bool> CanAccessPolicyEndpointAsync(
+            int ownerId,
+            int placeId,
+            bool verificationFlow)
+        {
+            if (ownerId <= 0 || placeId <= 0)
+                return false;
+
+            var state = await GetOwnerAccountStateAsync(ownerId);
+
+            if (string.Equals(state, "Active", StringComparison.OrdinalIgnoreCase))
+            {
+                return await BuildOwnedBookablePlacesQuery(ownerId)
+                    .AsNoTracking()
+                    .AnyAsync(place => place.PlaceId == placeId);
+            }
+
+            return verificationFlow &&
+                   await CanUseVerificationPolicyFlowAsync(ownerId, placeId);
+        }
+
+        private static string Clean(string? value)
+        {
+            return value?.Trim() ?? string.Empty;
+        }
+
+        private static string? CleanNullable(string? value)
+        {
+            return string.IsNullOrWhiteSpace(value)
+                ? null
+                : value.Trim();
+        }
+
+        private static FacilitySettingsDto MapPolicyToDto(PlacePolicy policy)
+        {
+            return new FacilitySettingsDto
+            {
+                PlaceId = policy.PlaceId,
+                BookingApprovalMode = policy.BookingApprovalMode,
+                DepositPoliciesJson = policy.DepositPoliciesJson,
+                SecurityPoliciesJson = policy.SecurityPoliciesJson,
+                PaymentTimeout = policy.PaymentTimeout,
+                IsSarSupported = policy.IsSarSupported,
+                IsUsdSupported = policy.IsUsdSupported,
+                CleaningFee = policy.CleaningFee,
+                TaxPercentage = policy.TaxPercentage,
+                IsNonRefundableEnabled = policy.IsNonRefundableEnabled,
+                NonRefundableDiscount = policy.NonRefundableDiscount,
+                FreeCancellationHours = policy.FreeCancellationHours,
+                ImmediateGracePeriod = policy.ImmediateGracePeriod,
+                PenaltyType = policy.PenaltyType,
+                PenaltyValue = policy.PenaltyValue,
+                ConfiscateOnNoShow = policy.ConfiscateOnNoShow,
+                NoShowGraceMinutes = policy.NoShowGraceMinutes,
+                RefundTransferFee = policy.RefundTransferFee,
+                RefundProcessingDays = policy.RefundProcessingDays,
+                ExceptionPoliciesJson = policy.ExceptionPoliciesJson,
+                OperationSystemMode = policy.OperationSystemMode,
+                CheckInTime = policy.CheckInTime,
+                CheckOutTime = policy.CheckOutTime,
+                ShiftsJson = policy.ShiftsJson,
+                BufferTimeHours = policy.BufferTimeHours,
+                MinimumNoticeHours = policy.MinimumNoticeHours,
+                MaximumHorizonMonths = policy.MaximumHorizonMonths,
+                ClosedDaysCsv = policy.ClosedDaysCsv,
+                IsChatEnabled = policy.IsChatEnabled,
+                WelcomeMessage = policy.WelcomeMessage,
+                OfflineReplyToggle = policy.OfflineReplyToggle,
+                OfflineMessage = policy.OfflineMessage,
+                QuickRepliesJson = policy.QuickRepliesJson,
+                EmergencyContact = policy.EmergencyContact ?? string.Empty,
+                ContactEmail = policy.ContactEmail,
+                IsSoundAlertEnabled = policy.IsSoundAlertEnabled,
+                IsPushNoticeEnabled = policy.IsPushNoticeEnabled,
+                ForFamiliesOnly = policy.ForFamiliesOnly,
+                AllowSmoking = policy.AllowSmoking,
+                AllowParties = policy.AllowParties,
+                AllowQatInside = policy.AllowQatInside
+            };
+        }
+
+        private static void ApplyDtoToPolicy(
+            FacilitySettingsDto model,
+            PlacePolicy policy)
+        {
+            policy.BookingApprovalMode = Clean(model.BookingApprovalMode);
+            policy.DepositPoliciesJson =
+                string.IsNullOrWhiteSpace(model.DepositPoliciesJson)
+                    ? "[]"
+                    : model.DepositPoliciesJson;
+            policy.SecurityPoliciesJson =
+                string.IsNullOrWhiteSpace(model.SecurityPoliciesJson)
+                    ? "[]"
+                    : model.SecurityPoliciesJson;
+            policy.PaymentTimeout = model.PaymentTimeout;
+            policy.IsSarSupported = model.IsSarSupported ?? false;
+            policy.IsUsdSupported = model.IsUsdSupported ?? false;
+            policy.CleaningFee = model.CleaningFee;
+            policy.TaxPercentage = model.TaxPercentage;
+            policy.IsNonRefundableEnabled = model.IsNonRefundableEnabled;
+            policy.NonRefundableDiscount = model.NonRefundableDiscount;
+            policy.FreeCancellationHours = model.FreeCancellationHours;
+            policy.ImmediateGracePeriod = model.ImmediateGracePeriod ?? false;
+            policy.PenaltyType = Clean(model.PenaltyType);
+            policy.PenaltyValue = model.PenaltyValue;
+            policy.ConfiscateOnNoShow = model.ConfiscateOnNoShow ?? false;
+            policy.NoShowGraceMinutes = model.NoShowGraceMinutes;
+            policy.RefundTransferFee = Clean(model.RefundTransferFee);
+            policy.RefundProcessingDays = model.RefundProcessingDays;
+            policy.ExceptionPoliciesJson =
+                string.IsNullOrWhiteSpace(model.ExceptionPoliciesJson)
+                    ? "[]"
+                    : model.ExceptionPoliciesJson;
+            policy.OperationSystemMode = Clean(model.OperationSystemMode);
+            policy.CheckInTime = CleanNullable(model.CheckInTime);
+            policy.CheckOutTime = CleanNullable(model.CheckOutTime);
+            policy.ShiftsJson =
+                string.IsNullOrWhiteSpace(model.ShiftsJson)
+                    ? "[]"
+                    : model.ShiftsJson;
+            policy.BufferTimeHours = model.BufferTimeHours;
+            policy.MinimumNoticeHours = model.MinimumNoticeHours;
+            policy.MaximumHorizonMonths = model.MaximumHorizonMonths;
+            policy.ClosedDaysCsv = Clean(model.ClosedDaysCsv);
+            policy.IsChatEnabled = model.IsChatEnabled ?? false;
+            policy.WelcomeMessage = Clean(model.WelcomeMessage);
+            policy.OfflineReplyToggle = model.OfflineReplyToggle;
+            policy.OfflineMessage = Clean(model.OfflineMessage);
+            policy.QuickRepliesJson =
+                string.IsNullOrWhiteSpace(model.QuickRepliesJson)
+                    ? "[]"
+                    : model.QuickRepliesJson;
+            policy.EmergencyContact = Clean(model.EmergencyContact);
+            policy.ContactEmail = CleanNullable(model.ContactEmail);
+            policy.IsSoundAlertEnabled = model.IsSoundAlertEnabled ?? true;
+            policy.IsPushNoticeEnabled = model.IsPushNoticeEnabled ?? true;
+            policy.ForFamiliesOnly = model.ForFamiliesOnly;
+            policy.AllowSmoking = model.AllowSmoking;
+            policy.AllowParties = model.AllowParties;
+            policy.AllowQatInside = model.AllowQatInside;
+        }
+
+        private JsonResult InvalidModelJson()
+        {
+            var message = ModelState.Values
+                .SelectMany(value => value.Errors)
+                .Select(error => error.ErrorMessage)
+                .FirstOrDefault();
+
+            return Json(new
+            {
+                success = false,
+                message = string.IsNullOrWhiteSpace(message)
+                    ? "راجع القيم المدخلة ثم حاول مرة أخرى."
+                    : message
+            });
+        }
+
+        [HttpGet]
+        [AllowPendingOwnerVerification]
+        public async Task<IActionResult> FacilitySettings(
+            int? autoPlaceId = null,
+            bool verificationFlow = false)
+        {
+            if (!TryGetCurrentOwnerId(out var ownerId))
+            {
+                return Challenge();
+            }
+
+            var accountState = await GetOwnerAccountStateAsync(ownerId);
+
+            // رحلة التوثيق قبل التفعيل:
+            // لا نفتح إعدادات عامة ولا نعتمد كوكي الهيدر. نسمح فقط للمنشأة
+            // Pending التي أنشأها نفس المالك داخل الرحلة.
+            if (!string.Equals(accountState, "Active", StringComparison.OrdinalIgnoreCase))
+            {
+                var requestedVerificationPlaceId =
+                    autoPlaceId.GetValueOrDefault();
+
+                if (!verificationFlow ||
+                    requestedVerificationPlaceId <= 0 ||
+                    !await CanUseVerificationPolicyFlowAsync(
+                        ownerId,
+                        requestedVerificationPlaceId))
+                {
+                    return Redirect("/Account/VerifyAccount");
+                }
+
+                var verificationPlace = await _context.Places
+                    .AsNoTracking()
+                    .Where(place =>
+                        place.PlaceId == requestedVerificationPlaceId &&
+                        place.OwnerId == ownerId)
+                    .Select(place => new
+                    {
+                        place.PlaceId,
+                        Name = place.PlaceNameAndDesc
+                    })
+                    .FirstOrDefaultAsync();
+
+                if (verificationPlace == null)
+                {
+                    return Redirect("/Account/VerifyAccount");
+                }
+
+                ViewBag.ActivePlaceId = verificationPlace.PlaceId;
+                ViewBag.ActivePlaceName = verificationPlace.Name;
+                ViewBag.CanManagePolicies = true;
+                ViewBag.VerificationFlow = true;
+
+                return View("FacilitySettingsVerification");
+            }
+
+            var ownerPlaces = await _context.Places
+                .AsNoTracking()
+                .Where(place => place.OwnerId == ownerId)
+                .Select(place => new
+                {
+                    place.PlaceId,
+                    Name = place.PlaceNameAndDesc,
+                    Status = place.Status,
+                    IsBookable =
+                        place.Category != null &&
+                        place.Category.BookingSystemId >= 1 &&
+                        place.Category.BookingSystemId <= 4
+                })
+                .OrderByDescending(place =>
+                    place.Status == "Approved" ||
+                    place.Status == "Active")
+                .ThenBy(place => place.Name)
+                .ToListAsync();
+
+            if (ownerPlaces.Count == 0)
+            {
+                ViewBag.ActivePlaceId = 0;
+                ViewBag.ActivePlaceName = "لا توجد منشأة";
+                ViewBag.CanManagePolicies = false;
+                ViewBag.VerificationFlow = false;
+
+                return View();
+            }
+
+            var cookieName = $"ownerActivePlace_{ownerId}";
+            _ = int.TryParse(
+                Request.Cookies[cookieName],
+                out var cookiePlaceId);
+
+            var requestedPlaceId =
+                autoPlaceId.HasValue && autoPlaceId.Value > 0
+                    ? autoPlaceId.Value
+                    : cookiePlaceId;
+
+            var activePlace = ownerPlaces
+                .FirstOrDefault(place => place.PlaceId == requestedPlaceId)
+                ?? ownerPlaces.First();
+
+            if (cookiePlaceId != activePlace.PlaceId)
+            {
+                Response.Cookies.Append(
+                    cookieName,
+                    activePlace.PlaceId.ToString(),
+                    new CookieOptions
+                    {
+                        Expires = DateTimeOffset.UtcNow.AddYears(1),
+                        HttpOnly = false,
+                        IsEssential = true,
+                        SameSite = SameSiteMode.Lax,
+                        Secure = Request.IsHttps,
+                        Path = "/"
+                    });
+            }
+
+            ViewBag.ActivePlaceId = activePlace.PlaceId;
+            ViewBag.ActivePlaceName = activePlace.Name;
+            ViewBag.CanManagePolicies = activePlace.IsBookable;
+            ViewBag.VerificationFlow = false;
+
+            return View();
+        }
+
+        [HttpGet]
+        [AllowPendingOwnerVerification]
+        public async Task<IActionResult> GetFacilitySettings(
+            int placeId,
+            bool verificationFlow = false)
+        {
+            if (!TryGetCurrentOwnerId(out var ownerId))
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = "تعذر التعرف على حساب المالك."
+                });
+            }
+
+            if (placeId <= 0)
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = "رقم المنشأة غير صحيح."
+                });
+            }
+
+            var ownsPlace = await CanAccessPolicyEndpointAsync(
+                ownerId,
+                placeId,
+                verificationFlow);
+
+            if (!ownsPlace)
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = "المنشأة غير موجودة أو لا تدعم إعدادات الحجز."
+                });
+            }
+
+            var policy = await _context.PlacePolicies
+                .AsNoTracking()
+                .FirstOrDefaultAsync(item => item.PlaceId == placeId);
+
+            if (policy == null)
+            {
+                return Json(new
+                {
+                    success = true,
+                    isNew = true,
+                    data = new FacilitySettingsDto
+                    {
+                        PlaceId = placeId,
+                        NoShowGraceMinutes = 60
+                    }
+                });
+            }
+
+            return Json(new
+            {
+                success = true,
+                isNew = false,
+                data = MapPolicyToDto(policy)
+            });
+        }
+
+        [HttpPost]
+        [AllowPendingOwnerVerification]
+        public async Task<IActionResult> SaveFacilitySettings(
+            [FromBody] FacilitySettingsDto model,
+            [FromQuery] bool verificationFlow = false)
+        {
+            if (!TryGetCurrentOwnerId(out var ownerId))
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = "تعذر التعرف على حساب المالك."
+                });
+            }
+
+            if (model == null || model.PlaceId <= 0)
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = "بيانات المنشأة غير صالحة."
+                });
+            }
+
+            if (!ModelState.IsValid)
+            {
+                return InvalidModelJson();
+            }
+
+            var canAccessPlace = await CanAccessPolicyEndpointAsync(
+                ownerId,
+                model.PlaceId,
+                verificationFlow);
+
+            if (!canAccessPlace)
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = "لا تملك صلاحية تعديل سياسات هذه المنشأة."
+                });
+            }
+
+            var ownedPlace = await BuildOwnedBookablePlacesQuery(ownerId)
+                .FirstOrDefaultAsync(place => place.PlaceId == model.PlaceId);
+
+            if (ownedPlace == null)
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = "لا تملك صلاحية تعديل سياسات هذه المنشأة."
+                });
+            }
+
+            try
+            {
+                var policy = await _context.PlacePolicies
+                    .FirstOrDefaultAsync(item => item.PlaceId == model.PlaceId);
+
+                if (policy == null)
+                {
+                    policy = new PlacePolicy
+                    {
+                        PlaceId = model.PlaceId,
+                        NoShowGraceMinutes = 60,
+                        CreatedAt = DateTime.Now
+                    };
+
+                    ApplyDtoToPolicy(model, policy);
+                    _context.PlacePolicies.Add(policy);
+                }
+                else
+                {
+                    ApplyDtoToPolicy(model, policy);
+                }
+
+                int? platformOwnerId = await _context.SystemSettings
+                    .AsNoTracking()
+                    .OrderBy(setting => setting.Id)
+                    .Select(setting => setting.PlatformOwnerUserId)
+                    .FirstOrDefaultAsync();
+
+                if (string.Equals(ownedPlace.Status, "WaitOwner", StringComparison.OrdinalIgnoreCase))
+                {
+                    ownedPlace.Status = "Active";
+                    ownedPlace.IsAvailable = true;
+                }
+                else if (platformOwnerId == ownerId &&
+                         string.Equals(ownedPlace.Status, "Active", StringComparison.OrdinalIgnoreCase))
+                {
+                    ownedPlace.IsAvailable = true;
+                }
+
+                await _context.SaveChangesAsync();
+
+                return Json(new
+                {
+                    success = true,
+                    message = "تم حفظ سياسات المنشأة بنجاح."
+                });
+            }
+            catch (DbUpdateException exception)
+            {
+                _logger.LogError(
+                    exception,
+                    "Failed to save facility settings for PlaceId {PlaceId}",
+                    model.PlaceId);
+
+                return Json(new
+                {
+                    success = false,
+                    message = "تعذر حفظ السياسات في قاعدة البيانات."
+                });
+            }
+            catch (Exception exception)
+            {
+                _logger.LogError(
+                    exception,
+                    "Unexpected error while saving facility settings for PlaceId {PlaceId}",
+                    model.PlaceId);
+
+                return Json(new
+                {
+                    success = false,
+                    message = "حدث خطأ غير متوقع أثناء حفظ السياسات."
+                });
+            }
+        }
+
+        [HttpPost]
+        [AllowPendingOwnerVerification]
+        public async Task<IActionResult> ApplyDefaultPolicies(
+            [FromBody] int placeId,
+            [FromQuery] bool verificationFlow = false)
+        {
+            if (!TryGetCurrentOwnerId(out var ownerId))
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = "تعذر التعرف على حساب المالك."
+                });
+            }
+
+            if (placeId <= 0)
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = "رقم المنشأة غير صحيح."
+                });
+            }
+
+            var canAccessPlace = await CanAccessPolicyEndpointAsync(
+                ownerId,
+                placeId,
+                verificationFlow);
+
+            if (!canAccessPlace)
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = "المنشأة غير موجودة أو لا تملك صلاحية إدارتها."
+                });
+            }
+
+            var place = await BuildOwnedBookablePlacesQuery(ownerId)
+                .Include(item => item.PlacePolicy)
+                .FirstOrDefaultAsync(item => item.PlaceId == placeId);
+
+            if (place == null)
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = "المنشأة غير موجودة أو لا تملك صلاحية إدارتها."
+                });
+            }
+
+            if (place.PlacePolicy != null)
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = "تم إعداد السياسات مسبقًا لهذه المنشأة."
+                });
+            }
+
+            var defaultPolicy = new PlacePolicy
+            {
+                PlaceId = placeId,
+                BookingApprovalMode = "Manual",
+                DepositPoliciesJson =
+                    "[{\"val\":\"20\",\"type\":\"%\",\"desc\":\"عربون مبدئي لتأكيد الحجز\"}]",
+                SecurityPoliciesJson =
+                    "[\"إبراز الهوية الوطنية الأصلية أو جواز السفر عند الوصول للمطابقة.\"]",
+                PaymentTimeout = 12,
+                IsSarSupported = true,
+                IsUsdSupported = true,
+                CleaningFee = 0m,
+                TaxPercentage = 0m,
+                IsNonRefundableEnabled = false,
+                NonRefundableDiscount = 10,
+                FreeCancellationHours = 48,
+                ImmediateGracePeriod = true,
+                PenaltyType = "LoseDeposit",
+                PenaltyValue = 0m,
+                ConfiscateOnNoShow = true,
+                NoShowGraceMinutes = 60,
+                RefundTransferFee = "CustomerPays",
+                RefundProcessingDays = 3,
+                ExceptionPoliciesJson = "[]",
+                OperationSystemMode = "FullDay",
+                CheckInTime = "14:00",
+                CheckOutTime = "12:00",
+                ShiftsJson = "[]",
+                BufferTimeHours = 2,
+                MinimumNoticeHours = 24,
+                MaximumHorizonMonths = 6,
+                ClosedDaysCsv = string.Empty,
+                IsChatEnabled = true,
+                WelcomeMessage =
+                    "أهلًا بك في منشأتنا! نسعد بخدمتك. يرجى إبراز إثبات الهوية عند الوصول.",
+                OfflineReplyToggle = false,
+                OfflineMessage = string.Empty,
+                QuickRepliesJson = "[]",
+                EmergencyContact = place.PhoneNumber ?? string.Empty,
+                ContactEmail = string.Empty,
+                IsSoundAlertEnabled = true,
+                IsPushNoticeEnabled = true,
+                ForFamiliesOnly = false,
+                AllowSmoking = false,
+                AllowParties = false,
+                AllowQatInside = false,
+                CreatedAt = DateTime.Now
+            };
+
+            _context.PlacePolicies.Add(defaultPolicy);
+
+            int? platformOwnerId = await _context.SystemSettings
+                .AsNoTracking()
+                .OrderBy(setting => setting.Id)
+                .Select(setting => setting.PlatformOwnerUserId)
+                .FirstOrDefaultAsync();
+
+            if (string.Equals(place.Status, "WaitOwner", StringComparison.OrdinalIgnoreCase))
+            {
+                place.Status = "Active";
+                place.IsAvailable = true;
+            }
+            else if (platformOwnerId == ownerId &&
+                     string.Equals(place.Status, "Active", StringComparison.OrdinalIgnoreCase))
+            {
+                place.IsAvailable = true;
+            }
+
+            await _context.SaveChangesAsync();
+
+            return Json(new
+            {
+                success = true,
+                message = "تم تطبيق السياسات الافتراضية بنجاح."
+            });
+        }
+    }
+}

@@ -1,0 +1,189 @@
+@using YemenGuide.Core.DTOs.Owner
+@model OwnerReportsPageDto
+@{
+    ViewData["Title"] = "البلاغات والقضايا";
+    Layout = "~/Areas/Owner/Views/Shared/_OwnerLayout.cshtml";
+
+    var scope = OwnerReportValues.NormalizeScope(Model.Filter.Scope);
+    var status = OwnerReportValues.NormalizeStatusGroup(Model.Filter.StatusGroup);
+    var isIncoming = scope == OwnerReportValues.ScopeIncoming;
+}
+
+@section Styles {
+    <link rel="stylesheet" href="@(Url.Content("~/css/owner/owner-reports.css"))?v=20260828-0105" />
+}
+
+<div class="or-page" data-owner-reports-page="list" dir="rtl">
+    <div class="or-shell">
+        <header class="or-hero or-hero--compact">
+            <div class="or-hero__copy">
+                <span class="or-eyebrow"><i class="bi bi-shield-check"></i> مركز القضايا</span>
+                <h1>البلاغات والقضايا</h1>
+                <p>تابع القضايا التي أحالتها الإدارة إليك، وبلاغاتك المرسلة ضد العملاء من مكان واحد.</p>
+            </div>
+            <div class="or-hero__actions">
+                <a asp-area="Owner" asp-controller="Reports" asp-action="CreateOwnerReport" class="or-primary-btn">
+                    <i class="bi bi-plus-lg"></i><span>بلاغ جديد ضد عميل</span>
+                </a>
+            </div>
+        </header>
+
+        <nav class="or-main-tabs" aria-label="المسارات الرئيسية">
+            <a asp-area="Owner" asp-controller="Reports" asp-action="OwnerReports"
+               asp-route-scope="@OwnerReportValues.ScopeIncoming" asp-route-statusGroup="all"
+               class="or-main-tab @(isIncoming ? "is-active" : "")">
+                <span class="or-main-tab__icon"><i class="bi bi-inbox-fill"></i></span>
+                <span class="or-main-tab__text"><strong>قضايا تحتاج متابعتي</strong><small>ما أحالته الإدارة إليك</small></span>
+                <span class="or-main-tab__count">@Model.Summary.IncomingCount</span>
+                @if (Model.Summary.IncomingNeedsResponseCount > 0)
+                {
+                    <span class="or-main-tab__alert">@Model.Summary.IncomingNeedsResponseCount تحتاج ردك</span>
+                }
+            </a>
+
+            <a asp-area="Owner" asp-controller="Reports" asp-action="OwnerReports"
+               asp-route-scope="@OwnerReportValues.ScopeMine" asp-route-statusGroup="all"
+               class="or-main-tab @(!isIncoming ? "is-active is-mine" : "is-mine")">
+                <span class="or-main-tab__icon"><i class="bi bi-flag-fill"></i></span>
+                <span class="or-main-tab__text"><strong>بلاغاتي على العملاء</strong><small>البلاغات التي أرسلتها للإدارة</small></span>
+                <span class="or-main-tab__count">@Model.Summary.MineCount</span>
+            </a>
+        </nav>
+
+        <section class="or-toolbar">
+            <div class="or-status-tabs" aria-label="فلترة الحالات">
+                <a class="@(status == OwnerReportValues.StatusAll ? "is-active" : "")"
+                   asp-action="OwnerReports" asp-route-scope="@scope" asp-route-statusGroup="all" asp-route-search="@Model.Filter.Search">الكل</a>
+                <a class="@(status == OwnerReportValues.StatusNeedsResponse ? "is-active" : "")"
+                   asp-action="OwnerReports" asp-route-scope="@scope" asp-route-statusGroup="needs-response" asp-route-search="@Model.Filter.Search">
+                    @(isIncoming ? "تحتاج ردي" : "تحتاج متابعة")
+                </a>
+                <a class="@(status == OwnerReportValues.StatusActive ? "is-active" : "")"
+                   asp-action="OwnerReports" asp-route-scope="@scope" asp-route-statusGroup="active" asp-route-search="@Model.Filter.Search">قيد المتابعة</a>
+                <a class="@(status == OwnerReportValues.StatusCompleted ? "is-active" : "")"
+                   asp-action="OwnerReports" asp-route-scope="@scope" asp-route-statusGroup="completed" asp-route-search="@Model.Filter.Search">منتهية</a>
+            </div>
+
+            <form method="get" asp-action="OwnerReports" class="or-search-form">
+                <input type="hidden" name="scope" value="@scope" />
+                <input type="hidden" name="statusGroup" value="@status" />
+                <label>
+                    <i class="bi bi-search"></i>
+                    <input name="search" value="@Model.Filter.Search" placeholder="ابحث برقم القضية أو الاسم أو المنشأة..." autocomplete="off" />
+                    @if (!string.IsNullOrWhiteSpace(Model.Filter.Search))
+                    {
+                        <a asp-action="OwnerReports" asp-route-scope="@scope" asp-route-statusGroup="@status" class="or-search-clear" aria-label="مسح البحث"><i class="bi bi-x-lg"></i></a>
+                    }
+                </label>
+                <button type="submit">بحث</button>
+            </form>
+        </section>
+
+        <div class="or-list-head">
+            <div>
+                <strong>@(isIncoming ? "القضايا المحالة إليك" : "بلاغاتك المرسلة")</strong>
+                <span>@Model.FilteredCount نتيجة</span>
+            </div>
+            @if (!isIncoming)
+            {
+                <div class="or-summary-pills">
+                    <span><b>@Model.Summary.MineActiveCount</b> نشطة</span>
+                    <span><b>@Model.Summary.MineCompletedCount</b> منتهية</span>
+                </div>
+            }
+        </div>
+
+        @if (Model.Items.Count == 0)
+        {
+            <section class="or-empty">
+                <span><i class="bi @(isIncoming ? "bi-inbox" : "bi-flag")"></i></span>
+                <h2>@(isIncoming ? "لا توجد قضايا محالة إليك" : "لا توجد بلاغات في هذا القسم")</h2>
+                <p>@(isIncoming ? "عندما تحتاج الإدارة ردك على قضية ستظهر هنا مباشرة." : "يمكنك إنشاء بلاغ جديد ضد عميل مرتبط بحجز أو تقييم حقيقي في منشآتك.")</p>
+                @if (!isIncoming)
+                {
+                    <a asp-action="CreateOwnerReport" class="or-primary-btn"><i class="bi bi-plus-lg"></i> إنشاء بلاغ</a>
+                }
+            </section>
+        }
+        else
+        {
+            <section class="or-card-grid">
+                @foreach (var item in Model.Items)
+                {
+                    var needsReply = item.NeedsOwnerResponse;
+                    <article class="or-case-card @(needsReply ? "is-urgent" : "")" data-report-card>
+                        <a asp-action="OwnerReportDetails" asp-route-id="@item.ReportId" class="or-case-card__click" aria-label="فتح القضية @item.ReportNumber"></a>
+                        <div class="or-case-card__top">
+                            <div class="or-case-number"><i class="bi bi-hash"></i><span>@item.ReportNumber</span></div>
+                            <span class="or-status tone-@item.StatusTone">@item.StatusLabel</span>
+                        </div>
+
+                        <div class="or-case-card__body">
+                            <div class="or-case-type-row">
+                                <span class="or-type-chip"><i class="bi bi-tag-fill"></i>@item.ReportTypeLabel</span>
+                                <span class="or-priority priority-@item.Priority.ToLowerInvariant()">@item.PriorityLabel</span>
+                            </div>
+                            <h2>@item.Title</h2>
+
+                            <div class="or-party-strip">
+                                <span class="or-party-strip__icon"><i class="bi bi-person-fill"></i></span>
+                                <div>
+                                    <small>@(isIncoming ? "العميل المبلّغ" : "العميل المبلّغ ضده")</small>
+                                    <strong>@(string.IsNullOrWhiteSpace(item.CustomerName) ? "عميل" : item.CustomerName)</strong>
+                                </div>
+                                @if (item.CustomerWarningCount > 0)
+                                {
+                                    <span class="or-warning-chip"><i class="bi bi-exclamation-triangle-fill"></i>@item.CustomerWarningCount</span>
+                                }
+                            </div>
+
+                            @if (!string.IsNullOrWhiteSpace(item.ReferenceLabel) || !string.IsNullOrWhiteSpace(item.PlaceName))
+                            {
+                                <div class="or-reference-line">
+                                    <i class="bi bi-link-45deg"></i>
+                                    <span>@(item.ReferenceLabel ?? item.PlaceName)</span>
+                                </div>
+                            }
+
+                            @if (needsReply)
+                            {
+                                <div class="or-reply-callout @(item.IsOverdue ? "is-overdue" : "")">
+                                    <i class="bi bi-reply-fill"></i>
+                                    <div>
+                                        <strong>@(item.IsOverdue ? "انتهت مهلة الرد" : "الإدارة تنتظر ردك")</strong>
+                                        @if (item.ReplyDeadline.HasValue)
+                                        {
+                                            <small>حتى @item.ReplyDeadline.Value.ToString("yyyy/MM/dd - hh:mm tt")</small>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        <footer class="or-case-card__footer">
+                            <span><i class="bi bi-clock"></i> @item.UpdatedAt.ToString("yyyy/MM/dd")</span>
+                            <a asp-action="OwnerReportDetails" asp-route-id="@item.ReportId" class="or-open-case">
+                                <span>@(needsReply ? "الرد الآن" : "فتح القضية")</span><i class="bi bi-arrow-left"></i>
+                            </a>
+                        </footer>
+                    </article>
+                }
+            </section>
+        }
+
+        @if (Model.TotalPages > 1)
+        {
+            <nav class="or-pagination" aria-label="صفحات البلاغات">
+                <a asp-action="OwnerReports" asp-route-scope="@scope" asp-route-statusGroup="@status" asp-route-search="@Model.Filter.Search"
+                   asp-route-page="@(Model.CurrentPage - 1)" class="@(!Model.HasPreviousPage ? "is-disabled" : "")"><i class="bi bi-chevron-right"></i></a>
+                <span>صفحة <b>@Model.CurrentPage</b> من <b>@Model.TotalPages</b></span>
+                <a asp-action="OwnerReports" asp-route-scope="@scope" asp-route-statusGroup="@status" asp-route-search="@Model.Filter.Search"
+                   asp-route-page="@(Model.CurrentPage + 1)" class="@(!Model.HasNextPage ? "is-disabled" : "")"><i class="bi bi-chevron-left"></i></a>
+            </nav>
+        }
+    </div>
+</div>
+
+@section Scripts {
+    <script src="@(Url.Content("~/js/owner/owner-reports.js"))?v=20260828-0105"></script>
+}

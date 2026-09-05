@@ -1,0 +1,696 @@
+﻿@model YemenGuide.Core.DTOs.Owner.ReviewFeedbackDto
+@using System
+@using System.Globalization
+@using YemenGuide.Core.DTOs.Owner
+
+@functions {
+    string FormatReviewTime(DateTime value)
+    {
+        var elapsed = DateTime.Now - value;
+
+        if (elapsed.TotalSeconds < 0)
+            elapsed = TimeSpan.Zero;
+
+        if (elapsed.TotalSeconds < 60)
+            return "الآن";
+
+        if (elapsed.TotalMinutes < 60)
+            return $"منذ {(int)elapsed.TotalMinutes} د";
+
+        if (elapsed.TotalHours < 24)
+            return $"منذ {(int)elapsed.TotalHours} س";
+
+        if (elapsed.TotalDays < 7)
+            return $"منذ {(int)elapsed.TotalDays} ي";
+
+        return value.ToString("yyyy/MM/dd", CultureInfo.InvariantCulture);
+    }
+
+    string StarsLabel(int? stars)
+    {
+        return stars switch
+        {
+            5 => "ممتاز",
+            4 => "جيد جدًا",
+            3 => "جيد",
+            2 => "ضعيف",
+            1 => "سيئ",
+            _ => "بدون تقييم"
+        };
+    }
+
+    void RenderReviewNode(ReviewItemDto reviewItem, int depth)
+    {
+        var isRootReview = depth == 0;
+        var depthClass = isRootReview ? "orv-node--root" : "orv-node--reply";
+        var ownerClass = reviewItem.IsOwnerReply ? "is-owner-reply" : string.Empty;
+
+        <article class="orv-node @depthClass @ownerClass"
+             id="owner-review-@reviewItem.ReviewId"
+             data-review-id="@reviewItem.ReviewId"
+             data-review-depth="@depth">
+
+            <div class="orv-node__rail" aria-hidden="true"></div>
+
+            <div class="orv-node__layout">
+                <div class="orv-avatar-wrap">
+                    @if (!string.IsNullOrWhiteSpace(reviewItem.ProfileImage))
+                    {
+                        <img class="orv-avatar-image"
+                     src="@reviewItem.ProfileImage"
+                     alt="صورة @reviewItem.UserName"
+                     loading="lazy" />
+                    }
+                    else
+                    {
+                        <span class="orv-avatar-fallback" aria-hidden="true">
+                            @reviewItem.InitialLetter
+                        </span>
+                    }
+
+                    @if (reviewItem.IsOwnerReply)
+                    {
+                        <span class="orv-owner-check"
+                      title="رد المنشأة"
+                      aria-label="رد المنشأة">
+                            <i class="bi bi-patch-check-fill"></i>
+                        </span>
+                    }
+                </div>
+
+                <div class="orv-node__content">
+                    <div class="orv-node__head">
+                        <div class="orv-node__identity">
+                            <div class="orv-node__name-row">
+                                <strong>@reviewItem.UserName</strong>
+
+                                @if (reviewItem.IsOwnerReply)
+                                {
+                                    <span class="orv-owner-label">رد المنشأة</span>
+                                }
+                                else if (isRootReview)
+                                {
+                                    <span class="orv-customer-label">عميل</span>
+                                }
+                            </div>
+
+                            @if (isRootReview && reviewItem.Stars.HasValue)
+                            {
+                                <div class="orv-stars-line"
+                             aria-label="@reviewItem.Stars من 5 - @StarsLabel(reviewItem.Stars)">
+                                    <span class="orv-stars">
+                                        @for (var starIndex = 1; starIndex <= 5; starIndex++)
+                                        {
+                                            <i class="bi @(starIndex <= reviewItem.Stars.Value ? "bi-star-fill" : "bi-star")"></i>
+                                        }
+                                    </span>
+
+                                    <span class="orv-stars-caption">
+                                        @StarsLabel(reviewItem.Stars)
+                                    </span>
+                                </div>
+                            }
+                        </div>
+
+                        @if (isRootReview)
+                        {
+                            <span class="orv-reply-state @(reviewItem.HasOwnerReply ? "is-replied" : "is-unanswered")">
+                                <i class="bi @(reviewItem.HasOwnerReply ? "bi-check2-circle" : "bi-hourglass-split")"></i>
+                                @(reviewItem.HasOwnerReply ? "تم الرد" : "بانتظار الرد")
+                            </span>
+                        }
+                    </div>
+
+                    <p class="orv-node__text">
+                        @if (!string.IsNullOrWhiteSpace(reviewItem.RepliedToName))
+                        {
+                            <span class="orv-mention">@@@reviewItem.RepliedToName</span>
+                        }
+
+                        <span class="orv-review-text">@reviewItem.ReviewText</span>
+                    </p>
+
+                    <div class="orv-node__meta">
+                        <time datetime="@reviewItem.CreatedAt.ToString("O")">
+                            <i class="bi bi-clock"></i>
+                            @FormatReviewTime(reviewItem.CreatedAt)
+                        </time>
+
+                        @if (reviewItem.IsEdited)
+                        {
+                            <span class="orv-edited-label">تم التعديل</span>
+                        }
+
+                        <button type="button"
+                            class="orv-meta-action"
+                            data-orv-like
+                            data-review-id="@reviewItem.ReviewId"
+                            aria-pressed="@(reviewItem.IsLikedByMe ? "true" : "false")"
+                            title="إعجاب">
+                            <i class="bi @(reviewItem.IsLikedByMe ? "bi-heart-fill" : "bi-heart")"></i>
+                            <span data-orv-like-count>@reviewItem.LikesCount</span>
+                        </button>
+
+                        <button type="button"
+                            class="orv-meta-action is-primary"
+                            data-orv-reply
+                            data-review-id="@reviewItem.ReviewId"
+                            data-user-name="@reviewItem.UserName">
+                            <i class="bi bi-reply"></i>
+                            رد
+                        </button>
+
+                        @if (reviewItem.CanEdit)
+                        {
+                            <button type="button"
+                            class="orv-meta-action is-edit"
+                            data-orv-edit
+                            data-review-id="@reviewItem.ReviewId"
+                            data-review-text="@reviewItem.ReviewText"
+                            data-user-name="@reviewItem.UserName">
+                                <i class="bi bi-pencil-square"></i>
+                                تعديل
+                            </button>
+                        }
+
+                        @if (reviewItem.CanDelete)
+                        {
+                            <button type="button"
+                            class="orv-meta-action is-delete"
+                            data-orv-delete
+                            data-review-id="@reviewItem.ReviewId"
+                            data-owner-reply="@(reviewItem.IsOwnerReply ? "true" : "false")"
+                            data-root-review="@(isRootReview ? "true" : "false")"
+                            data-replies-count="@reviewItem.RepliesCount"
+                            title="@(isRootReview
+                                        ? "حذف التقييم وجميع الردود التابعة له"
+                                        : "حذف الرد وجميع الردود التابعة له")">
+                                <i class="bi bi-trash3"></i>
+                                @(isRootReview
+                                ? "حذف التقييم"
+                                : reviewItem.IsOwnerReply
+                                ? "حذف"
+                                : "حذف الرد")
+                            </button>
+                        }
+                    </div>
+
+                    @if (reviewItem.Replies != null && reviewItem.Replies.Count > 0)
+                    {
+                        <button type="button"
+                        class="orv-replies-toggle"
+                        data-orv-toggle-replies
+                        data-review-id="@reviewItem.ReviewId"
+                        data-replies-count="@reviewItem.RepliesCount"
+                        aria-expanded="false"
+                        aria-controls="owner-review-replies-@reviewItem.ReviewId">
+                            <span class="orv-replies-toggle__line"></span>
+                            <i class="bi bi-chevron-down"></i>
+                            <span data-orv-replies-label>
+                                عرض @reviewItem.RepliesCount من الردود
+                            </span>
+                        </button>
+
+                        <div class="orv-replies"
+                     id="owner-review-replies-@reviewItem.ReviewId"
+                     data-orv-replies-container
+                     hidden>
+                            @foreach (var childReply in reviewItem.Replies)
+                            {
+                                RenderReviewNode(childReply, depth + 1);
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </article>
+    }
+}
+
+<section class="owner-reviews-panel"
+         data-owner-reviews-panel
+         data-total-reviews="@Model.TotalReviews"
+         data-panel-url="@Url.Action("Panel", "OwnerReviews", new { area = "Owner" })"
+         data-like-url="@Url.Action("ToggleLike", "OwnerReviews", new { area = "Owner" })"
+         data-add-reply-url="@Url.Action("AddReply", "OwnerReviews", new { area = "Owner" })"
+         data-edit-reply-url="@Url.Action("EditReply", "OwnerReviews", new { area = "Owner" })"
+         data-delete-reply-url="@Url.Action("DeleteReply", "OwnerReviews", new { area = "Owner" })">
+
+    <form class="orv-token-form" data-orv-token-form>
+        @Html.AntiForgeryToken()
+    </form>
+
+    @if (!Model.HasActivePlace)
+    {
+        <div class="orv-no-place-state">
+            <span class="orv-no-place-state__icon">
+                <i class="bi bi-building-exclamation"></i>
+            </span>
+
+            <div>
+                <h2>لا توجد منشأة متاحة</h2>
+                <p>@(Model.ErrorMessage ?? "أضف منشأة أولًا لتظهر تقييماتها هنا.")</p>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="orv-summary-grid">
+            <article class="orv-rating-card">
+                <div class="orv-rating-card__score">
+                    <strong>@Model.AverageRating.ToString("0.0", CultureInfo.InvariantCulture)</strong>
+                    <span>من 5</span>
+                </div>
+
+                <div class="orv-rating-card__details">
+                    <div class="orv-rating-card__stars" aria-label="متوسط التقييم">
+                        @for (var averageStar = 1; averageStar <= 5; averageStar++)
+                        {
+                            <i class="bi @(averageStar <= Math.Round(Model.AverageRating) ? "bi-star-fill" : "bi-star")"></i>
+                        }
+                    </div>
+
+                    <h2>صوت عملائك باختصار</h2>
+                    <p>ملخص حي لتجربة العملاء مع المنشأة المحددة.</p>
+
+                    <span class="orv-total-pill">
+                        <i class="bi bi-people"></i>
+                        @Model.TotalReviews تقييم
+                    </span>
+                </div>
+            </article>
+
+            <article class="orv-distribution-card">
+                <div class="orv-card-title">
+                    <span>
+                        <i class="bi bi-bar-chart-line"></i>
+                    </span>
+
+                    <div>
+                        <h3>توزيع النجوم</h3>
+                        <p>نظرة دقيقة على مستوى الرضا</p>
+                    </div>
+                </div>
+
+                <div class="orv-distribution-list">
+                    @for (var distributionStar = 5; distributionStar >= 1; distributionStar--)
+                    {
+                        var starCount = Model.StarDistribution.TryGetValue(distributionStar, out var savedCount)
+                        ? savedCount
+                        : 0;
+
+                        var starPercent = Model.TotalReviews > 0
+                        ? Math.Round((double)starCount / Model.TotalReviews * 100d, 1)
+                        : 0d;
+
+                        <div class="orv-distribution-row">
+                            <span class="orv-distribution-row__star">
+                                @distributionStar
+                                <i class="bi bi-star-fill"></i>
+                            </span>
+
+                            <div class="orv-distribution-track" aria-hidden="true">
+                                <span style="width: @starPercent.ToString("0.0", CultureInfo.InvariantCulture)%"></span>
+                            </div>
+
+                            <span class="orv-distribution-row__count">@starCount</span>
+                        </div>
+                    }
+                </div>
+            </article>
+        </div>
+
+        <div class="orv-kpi-grid">
+            <article class="orv-kpi is-total">
+                <span class="orv-kpi__icon"><i class="bi bi-chat-square-heart"></i></span>
+                <div>
+                    <small>إجمالي التقييمات</small>
+                    <strong>@Model.TotalReviews</strong>
+                    <span>للمنشأة الحالية</span>
+                </div>
+            </article>
+
+            <article class="orv-kpi is-replied">
+                <span class="orv-kpi__icon"><i class="bi bi-check2-circle"></i></span>
+                <div>
+                    <small>تم الرد عليها</small>
+                    <strong>@Model.RepliedReviews</strong>
+                    <span>@Model.OwnerRepliesCount رد من المنشأة</span>
+                </div>
+            </article>
+
+            <article class="orv-kpi is-waiting">
+                <span class="orv-kpi__icon"><i class="bi bi-hourglass-split"></i></span>
+                <div>
+                    <small>بانتظار الرد</small>
+                    <strong>@Model.UnansweredReviews</strong>
+                    <span>تحتاج متابعتك</span>
+                </div>
+            </article>
+
+            <article class="orv-kpi is-rate">
+                <span class="orv-kpi__icon"><i class="bi bi-speedometer2"></i></span>
+                <div>
+                    <small>نسبة الاستجابة</small>
+                    <strong>@Model.ReplyRate.ToString("0.0", CultureInfo.InvariantCulture)%</strong>
+                    <span>من إجمالي التقييمات</span>
+                </div>
+            </article>
+        </div>
+
+        <section class="orv-filter-card">
+            <div class="orv-filter-card__head">
+                <div class="orv-card-title">
+                    <span><i class="bi bi-funnel"></i></span>
+
+                    <div>
+                        <h3>البحث والفلترة</h3>
+                        <p>اعرض ما تحتاجه فقط دون ازدحام</p>
+                    </div>
+                </div>
+
+                <button type="button"
+                    class="orv-filter-toggle"
+                    data-orv-filter-toggle
+                    aria-expanded="false">
+                    <span>إظهار الفلاتر</span>
+                    <i class="bi bi-chevron-down"></i>
+                </button>
+            </div>
+
+            <div class="orv-quick-filters" aria-label="فلاتر سريعة">
+                <button type="button"
+                    class="orv-filter-chip @(Model.Filter.Sentiment == "all" && !Model.Filter.Rating.HasValue ? "is-active" : string.Empty)"
+                    data-orv-sentiment="all"
+                    data-orv-clear-rating="true">
+                    الكل
+                    <span>@Model.TotalReviews</span>
+                </button>
+
+                <button type="button"
+                    class="orv-filter-chip @(Model.Filter.Sentiment == "positive" ? "is-active" : string.Empty)"
+                    data-orv-sentiment="positive">
+                    <i class="bi bi-emoji-smile"></i>
+                    إيجابية
+                </button>
+
+                <button type="button"
+                    class="orv-filter-chip @(Model.Filter.Sentiment == "negative" ? "is-active" : string.Empty)"
+                    data-orv-sentiment="negative">
+                    <i class="bi bi-emoji-frown"></i>
+                    سلبية
+                </button>
+
+                @for (var filterStar = 5; filterStar >= 1; filterStar--)
+                {
+                    <button type="button"
+                    class="orv-filter-chip is-star @(Model.Filter.Rating == filterStar ? "is-active" : string.Empty)"
+                    data-orv-rating="@filterStar">
+                        @filterStar
+                        <i class="bi bi-star-fill"></i>
+                    </button>
+                }
+            </div>
+
+            <form class="orv-filter-form"
+              data-orv-filter-form
+              hidden>
+
+                <input type="hidden"
+                   name="Sentiment"
+                   value="@Model.Filter.Sentiment"
+                   data-orv-sentiment-input />
+
+                <input type="hidden"
+                   name="Rating"
+                   value="@(Model.Filter.Rating?.ToString() ?? string.Empty)"
+                   data-orv-rating-input />
+
+                <input type="hidden"
+                   name="Page"
+                   value="1" />
+
+                <input type="hidden"
+                   name="PageSize"
+                   value="@Model.PageSize" />
+
+                <label class="orv-field orv-field--search">
+                    <span>البحث</span>
+                    <div class="orv-input-wrap">
+                        <i class="bi bi-search"></i>
+                        <input type="search"
+                           name="Search"
+                           value="@Model.Filter.Search"
+                           placeholder="اسم العميل أو نص التعليق..."
+                           autocomplete="off" />
+                    </div>
+                </label>
+
+                <label class="orv-field">
+                    <span>حالة الرد</span>
+                    <div class="orv-input-wrap">
+                        <i class="bi bi-reply-all"></i>
+                        <select name="ReplyState">
+                            <option value="all" selected="@(Model.Filter.ReplyState == "all" ? "selected" : null)">كل الحالات</option>
+                            <option value="replied" selected="@(Model.Filter.ReplyState == "replied" ? "selected" : null)">تم الرد</option>
+                            <option value="unanswered" selected="@(Model.Filter.ReplyState == "unanswered" ? "selected" : null)">بدون رد</option>
+                        </select>
+                    </div>
+                </label>
+
+                <label class="orv-field">
+                    <span>الترتيب</span>
+                    <div class="orv-input-wrap">
+                        <i class="bi bi-sort-down"></i>
+                        <select name="SortBy" data-orv-auto-submit>
+                            <option value="newest" selected="@(Model.Filter.SortBy == "newest" ? "selected" : null)">الأحدث أولًا</option>
+                            <option value="oldest" selected="@(Model.Filter.SortBy == "oldest" ? "selected" : null)">الأقدم أولًا</option>
+                            <option value="highest" selected="@(Model.Filter.SortBy == "highest" ? "selected" : null)">الأعلى تقييمًا</option>
+                            <option value="lowest" selected="@(Model.Filter.SortBy == "lowest" ? "selected" : null)">الأقل تقييمًا</option>
+                            <option value="most-liked" selected="@(Model.Filter.SortBy == "most-liked" ? "selected" : null)">الأكثر إعجابًا</option>
+                        </select>
+                    </div>
+                </label>
+
+                <label class="orv-field">
+                    <span>من تاريخ</span>
+                    <div class="orv-input-wrap">
+                        <i class="bi bi-calendar3"></i>
+                        <input type="date"
+                           name="DateFrom"
+                           value="@(Model.Filter.DateFrom?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty)" />
+                    </div>
+                </label>
+
+                <label class="orv-field">
+                    <span>إلى تاريخ</span>
+                    <div class="orv-input-wrap">
+                        <i class="bi bi-calendar-check"></i>
+                        <input type="date"
+                           name="DateTo"
+                           value="@(Model.Filter.DateTo?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty)" />
+                    </div>
+                </label>
+
+                <div class="orv-filter-actions">
+                    <button type="button"
+                        class="orv-button orv-button--ghost"
+                        data-orv-reset-filters>
+                        <i class="bi bi-arrow-counterclockwise"></i>
+                        مسح الفلاتر
+                    </button>
+
+                    <button type="submit"
+                        class="orv-button orv-button--primary">
+                        <i class="bi bi-search"></i>
+                        تطبيق
+                    </button>
+                </div>
+            </form>
+        </section>
+
+        <section class="orv-stream-card">
+            <header class="orv-stream-head">
+                <div class="orv-card-title">
+                    <span><i class="bi bi-chat-left-text"></i></span>
+
+                    <div>
+                        <h3>آراء العملاء</h3>
+                        <p>
+                            عرض @Model.Reviews.Count من @Model.FilteredReviewsCount نتيجة
+                        </p>
+                    </div>
+                </div>
+
+                @if (Model.UnansweredReviews > 0)
+                {
+                    <button type="button"
+                    class="orv-unanswered-shortcut"
+                    data-orv-reply-state="unanswered">
+                        <i class="bi bi-lightning-charge-fill"></i>
+                        اعرض غير المجاب عليها
+                        <span>@Model.UnansweredReviews</span>
+                    </button>
+                }
+            </header>
+
+            <!-- التثبيت والتمرير خاصان بالتعليقات فقط، وليس بالملخص أو الفلاتر. -->
+            <div class="orv-conversation-frame">
+                <div class="orv-conversation-scroll"
+                 data-orv-scroll-area
+                 tabindex="0"
+                 aria-label="تعليقات العملاء والردود">
+
+                    <div class="orv-review-stream" data-orv-review-stream>
+                        @if (Model.Reviews != null && Model.Reviews.Count > 0)
+                        {
+                            foreach (var rootReview in Model.Reviews)
+                            {
+                                RenderReviewNode(rootReview, 0);
+                            }
+                        }
+                        else
+                        {
+                            <div class="orv-empty-state">
+                                <span class="orv-empty-state__icon">
+                                    <i class="bi bi-chat-square-heart"></i>
+                                </span>
+
+                                <h3>
+                                    @(Model.TotalReviews == 0
+                                        ? "لا توجد تقييمات حتى الآن"
+                                        : "لا توجد نتائج مطابقة")
+                                </h3>
+
+                                <p>
+                                    @(Model.TotalReviews == 0
+                                        ? "عندما يضيف العملاء تقييماتهم ستظهر هنا مباشرة."
+                                        : "جرّب تغيير الفلاتر أو مسح عبارة البحث.")
+                                </p>
+
+                                @if (Model.TotalReviews > 0)
+                                {
+                                    <button type="button"
+                                class="orv-button orv-button--ghost"
+                                data-orv-reset-filters>
+                                        <i class="bi bi-arrow-counterclockwise"></i>
+                                        عرض جميع التقييمات
+                                    </button>
+                                }
+                            </div>
+                        }
+                    </div>
+
+                    @if (Model.TotalPages > 1)
+                    {
+                        <nav class="orv-pagination" aria-label="صفحات التقييمات">
+                            <button type="button"
+                            class="orv-page-button"
+                            data-orv-page="@(Model.CurrentPage - 1)"
+                            disabled="@(!Model.HasPreviousPage ? "disabled" : null)"
+                            aria-label="الصفحة السابقة">
+                                <i class="bi bi-chevron-right"></i>
+                            </button>
+
+                            <span class="orv-page-status">
+                                صفحة <strong>@Model.CurrentPage</strong> من <strong>@Model.TotalPages</strong>
+                            </span>
+
+                            <button type="button"
+                            class="orv-page-button"
+                            data-orv-page="@(Model.CurrentPage + 1)"
+                            disabled="@(!Model.HasNextPage ? "disabled" : null)"
+                            aria-label="الصفحة التالية">
+                                <i class="bi bi-chevron-left"></i>
+                            </button>
+                        </nav>
+                    }
+                </div>
+
+                <!-- محرر ثابت مثل حقل التعليق عند العميل؛ لا ينشئ تقييمًا مستقلًا. -->
+                <footer class="orv-fixed-composer"
+                    data-orv-composer
+                    aria-label="محرر رد المنشأة">
+
+                    <div class="orv-composer-context"
+                     data-orv-composer-context
+                     hidden>
+                        <span class="orv-composer-context__icon">
+                            <i class="bi bi-reply-fill" data-orv-context-icon></i>
+                        </span>
+
+                        <div>
+                            <small data-orv-context-eyebrow>الرد على</small>
+                            <strong data-orv-target-name>العميل</strong>
+                        </div>
+
+                        <button type="button"
+                            class="orv-composer-cancel"
+                            data-orv-cancel-composer
+                            aria-label="إلغاء الرد أو التعديل"
+                            title="إلغاء">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </div>
+
+                    <div class="orv-composer-row">
+                        <div class="orv-composer-avatar" aria-hidden="true">
+                            @if (!string.IsNullOrWhiteSpace(Model.OwnerProfileImage))
+                            {
+                                <img src="@Model.OwnerProfileImage"
+                             alt="" />
+                            }
+                            else
+                            {
+                                <span>@Model.OwnerInitial</span>
+                            }
+                        </div>
+
+                        <div class="orv-composer-input-shell">
+                            <textarea class="orv-composer-textarea"
+                                  data-orv-composer-text
+                                  maxlength="2000"
+                                  rows="1"
+                                  aria-label="نص الرد"
+                                  placeholder="اضغط «رد» أسفل أي تعليق، ثم اكتب رد المنشأة هنا..."></textarea>
+
+                            <div class="orv-composer-tools">
+                                <div class="orv-emoji-anchor">
+                                    <button type="button"
+                                        class="orv-composer-tool"
+                                        data-orv-toggle-emoji
+                                        aria-expanded="false"
+                                        aria-controls="ownerReviewsEmojiPanel"
+                                        title="إضافة إيموجي">
+                                        <i class="bi bi-emoji-smile"></i>
+                                    </button>
+
+                                    <div class="orv-emoji-panel"
+                                     id="ownerReviewsEmojiPanel"
+                                     data-orv-emoji-panel
+                                     hidden>
+                                        <emoji-picker class="orv-emoji-picker"
+                                                  data-orv-emoji-picker></emoji-picker>
+                                    </div>
+                                </div>
+
+                                <span class="orv-character-count">
+                                    <strong data-orv-character-count>0</strong>/2000
+                                </span>
+                            </div>
+                        </div>
+
+                        <button type="button"
+                            class="orv-composer-submit"
+                            data-orv-submit-composer
+                            title="نشر الرد"
+                            aria-label="نشر الرد">
+                            <i class="bi bi-send-fill"></i>
+                            <span data-orv-submit-label>نشر</span>
+                        </button>
+                    </div>
+                </footer>
+            </div>
+        </section>
+    }
+</section>

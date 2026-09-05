@@ -1,0 +1,2483 @@
+@model YemenGuide.Core.Entities.SystemSetting
+
+@using System.Security.Claims
+@using System.Globalization
+@using YemenGuide.Core.Constants
+@inject YemenGuide.Web.Services.Employees.IAdminPermissionService AdminPermissionService
+
+@{
+    ViewData["Title"] = "إعدادات النظام";
+    ViewData["DisableGoogleMaps"] = true;
+    Layout = "~/Areas/Admin/Views/Shared/_AdminLayout.cshtml";
+
+    var currentAdminUserId =
+        int.TryParse(
+            User.FindFirstValue(ClaimTypes.NameIdentifier),
+            out var parsedAdminUserId)
+            ? parsedAdminUserId
+            : 0;
+
+    var canManageGeneral =
+        await AdminPermissionService.HasPermissionAsync(
+            currentAdminUserId,
+            AdminPermissionKeys.Settings.ManageGeneral);
+
+    var canManagePaymentNetworks =
+        await AdminPermissionService.HasPermissionAsync(
+            currentAdminUserId,
+            AdminPermissionKeys.Settings.ManagePaymentNetworks);
+
+    var canManageHeroSlides =
+        await AdminPermissionService.HasPermissionAsync(
+            currentAdminUserId,
+            AdminPermissionKeys.Settings.ManageHeroSlides);
+
+    var canManageFinanceSettings =
+        await AdminPermissionService.HasPermissionAsync(
+            currentAdminUserId,
+            AdminPermissionKeys.Finance.ManageSettings);
+
+    var exchangeRateStatus =
+        string.IsNullOrWhiteSpace(Model.ExchangeRateLastStatus)
+            ? "Never"
+            : Model.ExchangeRateLastStatus.Trim();
+
+    var exchangeRateStatusLabel =
+        exchangeRateStatus == "Success"
+            ? "محدّث بنجاح"
+            : exchangeRateStatus == "Failed"
+                ? "تعذر آخر تحديث"
+                : "لم يتم التحديث بعد";
+
+    var exchangeRateStatusIcon =
+        exchangeRateStatus == "Success"
+            ? "bi-check-circle-fill"
+            : exchangeRateStatus == "Failed"
+                ? "bi-exclamation-triangle-fill"
+                : "bi-clock-history";
+
+    string GetExchangeSourceLabel(string? source)
+    {
+        var normalized = (source ?? string.Empty).Trim();
+
+        return normalized switch
+        {
+            "YemenSul" => "يمن سول (YemenSul)",
+            "Manual" => "إدخال يدوي",
+            "" => "لم يُحدَّد بعد",
+            _ => normalized
+        };
+    }
+
+    string FormatYemenExchangeDate(DateTime? value)
+    {
+        if (!value.HasValue)
+        {
+            return string.Empty;
+        }
+
+        // جميع أوقات خدمة أسعار الصرف تُحفظ في قاعدة البيانات بتوقيت UTC.
+        // اليمن = UTC+3.
+        var utcValue =
+            value.Value.Kind == DateTimeKind.Local
+                ? value.Value.ToUniversalTime()
+                : value.Value.Kind == DateTimeKind.Utc
+                    ? value.Value
+                    : DateTime.SpecifyKind(value.Value, DateTimeKind.Utc);
+
+        var yemenTime =
+            utcValue.AddHours(3);
+
+        return yemenTime.ToString(
+            "dd/MM/yyyy - hh:mm tt",
+            new CultureInfo("ar-YE"));
+    }
+
+    var exchangeRateSource =
+        GetExchangeSourceLabel(
+            Model.ExchangeRateLastSource);
+
+    var exchangeRateLastUpdatedText =
+        Model.ExchangeRateLastUpdatedAt.HasValue
+            ? FormatYemenExchangeDate(Model.ExchangeRateLastUpdatedAt)
+            : "لا يوجد تحديث ناجح حتى الآن";
+
+    var exchangeRateLastAttemptText =
+        Model.ExchangeRateLastAttemptAt.HasValue
+            ? FormatYemenExchangeDate(Model.ExchangeRateLastAttemptAt)
+            : "لا توجد محاولة تحديث حتى الآن";
+
+    var financePermissionIcon =
+        canManageFinanceSettings
+            ? "bi-unlock-fill"
+            : "bi-lock-fill";
+
+    var financePermissionLabel =
+        canManageFinanceSettings
+            ? "صلاحية إدارة"
+            : "عرض فقط";
+
+    var exchangeModeCss =
+        Model.AutoUpdateExchangeRates == true
+            ? "is-auto"
+            : "is-manual";
+
+    var exchangeModeIcon =
+        Model.AutoUpdateExchangeRates == true
+            ? "bi-lightning-charge-fill"
+            : "bi-pencil-fill";
+
+    var exchangeModeLabel =
+        Model.AutoUpdateExchangeRates == true
+            ? "تلقائي"
+            : "يدوي";
+
+    var maintenanceType =
+        Model.MaintenanceType switch
+        {
+            "ReadOnly" => "ReadOnly",
+            "Partial" => "Partial",
+            _ => "Full"
+        };
+
+    string FormatYemenMaintenanceInput(DateTime? value)
+    {
+        if (!value.HasValue)
+        {
+            return string.Empty;
+        }
+
+        // أوقات الصيانة تُحفظ UTC، وحقول datetime-local تُعرض بتوقيت اليمن UTC+3.
+        var utcValue =
+            value.Value.Kind == DateTimeKind.Local
+                ? value.Value.ToUniversalTime()
+                : value.Value.Kind == DateTimeKind.Utc
+                    ? value.Value
+                    : DateTime.SpecifyKind(value.Value, DateTimeKind.Utc);
+
+        return utcValue
+            .AddHours(3)
+            .ToString("yyyy-MM-ddTHH:mm", CultureInfo.InvariantCulture);
+    }
+
+    var maintenanceStartInput =
+        FormatYemenMaintenanceInput(Model.MaintenanceStartAt);
+
+    var maintenanceEndInput =
+        FormatYemenMaintenanceInput(Model.MaintenanceEndAt);
+
+    var defaultWalletLogoPath =
+        string.IsNullOrWhiteSpace(Model.DefaultWalletLogoPath)
+            ? "/images/wallets/default-wallet.png"
+            : Model.DefaultWalletLogoPath.Trim();
+
+}
+
+@section Styles {
+    <link rel="stylesheet"
+      href="~/css/admin/settings.css"
+      asp-append-version="true" />
+}
+
+
+    <div class="container-fluid px-4 py-3 system-settings-page"
+     data-admin-settings-root
+     data-settings-build="2026-09-04-2355"
+     data-can-manage-general="@canManageGeneral.ToString().ToLowerInvariant()"
+     data-can-manage-payment-networks="@canManagePaymentNetworks.ToString().ToLowerInvariant()"
+     data-can-manage-hero-slides="@canManageHeroSlides.ToString().ToLowerInvariant()"
+     data-can-manage-finance-settings="@canManageFinanceSettings.ToString().ToLowerInvariant()"
+     data-default-wallet-logo="@defaultWalletLogoPath">
+
+        @Html.AntiForgeryToken()
+
+        <!-- =========================================================
+             واجهة القيادة الرئيسية للإعدادات
+             ========================================================= -->
+
+        <section class="settings-command-hero mb-4" aria-labelledby="settingsPageTitle">
+            <div class="settings-command-hero__content">
+                <div class="settings-command-hero__eyebrow">
+                    <span class="settings-command-hero__eyebrow-icon">
+                        <i class="bi bi-command"></i>
+                    </span>
+                    <span>مركز التحكم بالمنصة</span>
+                </div>
+
+                <h1 id="settingsPageTitle" class="settings-command-hero__title">
+                    إعدادات النظام
+                </h1>
+
+                <p class="settings-command-hero__description">
+                    إدارة هوية دليلك اليمني، سياسات التشغيل، التواصل، أسعار الصرف، الصيانة وشبكات الدفع من لوحة موحدة.
+                </p>
+            </div>
+
+            <div class="settings-command-hero__signals" aria-label="ملخص حالة النظام">
+                <div class="settings-command-signal">
+                    <span class="settings-command-signal__icon">
+                        <i class="bi bi-shield-check"></i>
+                    </span>
+                    <span class="settings-command-signal__body">
+                        <small>حالة المنصة</small>
+                        <strong id="maintenanceHeroStatus">@(Model.MaintenanceMode ? "وضع الصيانة" : "تعمل بصورة طبيعية")</strong>
+                </span>
+            </div>
+
+            <div class="settings-command-signal settings-command-signal--exchange"
+                 data-exchange-summary-status="@exchangeRateStatus">
+                <span class="settings-command-signal__icon">
+                    <i class="bi @exchangeRateStatusIcon"></i>
+                </span>
+                <span class="settings-command-signal__body">
+                    <small>أسعار الصرف</small>
+                    <strong id="exchangeRateHeroStatus">@exchangeRateStatusLabel</strong>
+                </span>
+            </div>
+
+            <div class="settings-command-signal">
+                <span class="settings-command-signal__icon">
+                    <i class="bi bi-person-lock"></i>
+                </span>
+                <span class="settings-command-signal__body">
+                    <small>صلاحية المالية</small>
+                    <strong>@(canManageFinanceSettings ? "إدارة كاملة" : "عرض فقط")</strong>
+                </span>
+            </div>
+        </div>
+    </section>
+
+
+    <!-- =========================================================
+         التبويبات الخمسة
+         ========================================================= -->
+
+    <div class="settings-tabs-scroll mb-4"
+         role="region"
+         aria-label="تبويبات إعدادات النظام">
+
+        <div class="custom-tabs-container settings-premium-tabs d-flex justify-content-start"
+             role="tablist"
+             aria-keyshortcuts="ArrowLeft ArrowRight Home End">
+
+            <button type="button"
+                    class="tab-btn active"
+                    data-target="branding-tab"
+                    role="tab"
+                    aria-selected="true"
+                    aria-controls="settings-branding-panel"
+                    tabindex="0">
+                <span class="settings-tab-icon"><i class="bi bi-stars"></i></span>
+                <span class="settings-tab-copy">
+                    <strong class="tab-label">الهوية والمظهر</strong>
+                    <small>العلامة والسلايدر</small>
+                </span>
+            </button>
+
+            <button type="button"
+                    class="tab-btn"
+                    data-target="policies-tab"
+                    role="tab"
+                    aria-selected="false"
+                    aria-controls="settings-policies-panel"
+                    tabindex="-1">
+                <span class="settings-tab-icon"><i class="bi bi-sliders2"></i></span>
+                <span class="settings-tab-copy">
+                    <strong class="tab-label">التشغيل والمالية</strong>
+                    <small>السياسات وأسعار الصرف</small>
+                </span>
+            </button>
+
+            <button type="button"
+                    class="tab-btn"
+                    data-target="contact-tab"
+                    role="tab"
+                    aria-selected="false"
+                    aria-controls="settings-contact-panel"
+                    tabindex="-1">
+                <span class="settings-tab-icon"><i class="bi bi-headset"></i></span>
+                <span class="settings-tab-copy">
+                    <strong class="tab-label">التواصل</strong>
+                    <small>الدعم والروابط</small>
+                </span>
+            </button>
+
+            <button type="button"
+                    class="tab-btn"
+                    data-target="maintenance-tab"
+                    role="tab"
+                    aria-selected="false"
+                    aria-controls="settings-maintenance-panel"
+                    tabindex="-1">
+                <span class="settings-tab-icon"><i class="bi bi-shield-exclamation"></i></span>
+                <span class="settings-tab-copy">
+                    <strong class="tab-label">الطوارئ</strong>
+                    <small>الصيانة والإيقاف</small>
+                </span>
+            </button>
+
+            <button type="button"
+                    class="tab-btn"
+                    data-target="wallets-tab"
+                    role="tab"
+                    aria-selected="false"
+                    aria-controls="settings-wallets-panel"
+                    tabindex="-1">
+                <span class="settings-tab-icon"><i class="bi bi-wallet2"></i></span>
+                <span class="settings-tab-copy">
+                    <strong class="tab-label">شبكات الدفع</strong>
+                    <small>القنوات المعتمدة</small>
+                </span>
+            </button>
+
+        </div>
+    </div>
+
+
+    <!-- =========================================================
+         المحتوى الرئيسي
+         ========================================================= -->
+
+    <div class="glass-card p-4 shadow-sm border-0 rounded-4 settings-main-panel">
+
+
+        @* =========================================================
+        1. تبويب الهوية والماركة
+        ========================================================= *@
+
+        <div id="settings-branding-panel" class="tab-pane-content branding-tab settings-tab-panel is-active" role="tabpanel">
+
+            <div class="settings-tab-intro mb-4">
+                <div class="settings-tab-intro__icon"><i class="bi bi-stars"></i></div>
+                <div class="settings-tab-intro__copy">
+                    <span>هوية المنصة</span>
+                    <h2>المظهر الذي يراه المستخدم أولاً</h2>
+                    <p>تحكم بالشعار، وصف المنصة، المواسم وتجربة الـHero من مكان واحد.</p>
+                </div>
+            </div>
+
+
+            <!-- البيانات الأساسية والهوية البصرية -->
+
+            <div class="row g-4">
+
+                <div class="col-md-6">
+
+                    <div class="settings-card p-4 h-100 rounded-4 shadow-sm border-0">
+
+                        <h6 class="fw-bold text-navy mb-4">
+
+                            <i class="bi bi-info-square me-2 text-primary"></i>
+
+                            البيانات الأساسية
+                        </h6>
+
+
+                        <div class="form-floating mb-3">
+
+                            <input type="text"
+                                   class="form-control rounded-3"
+                                   id="siteName"
+                                   placeholder="اسم المنصة"
+                                   value="@Model.SiteName">
+
+                            <label for="siteName">
+                                اسم المنصة الرسمي
+                            </label>
+
+                        </div>
+
+
+                        <div class="form-floating">
+
+                            <textarea class="form-control rounded-3"
+                                      id="siteDescription"
+                                      placeholder="وصف المنصة">@Model.SiteDescription</textarea>
+
+                            <label for="siteDescription">
+                                الوصف لمحركات البحث (SEO)
+                            </label>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <div class="col-md-6">
+
+                    <div class="settings-card p-4 h-100 rounded-4 shadow-sm border-0">
+
+                        <h6 class="fw-bold text-navy mb-4">
+
+                            <i class="bi bi-images me-2 text-primary"></i>
+
+                            الهوية البصرية (الشعارات)
+                        </h6>
+
+
+                        <label for="logoFile"
+                               class="settings-file-picker settings-file-picker--large mb-3"
+                               data-file-dropzone
+                               role="button"
+                               tabindex="0"
+                               aria-label="اختيار شعار المنصة">
+                            <span id="logoFilePreview" class="settings-file-picker__visual">
+                                @if (!string.IsNullOrWhiteSpace(Model.LogoPath))
+                                {
+                                    <img src="@Model.LogoPath"
+                                     alt="شعار المنصة الحالي"
+                                     class="settings-file-picker__thumb">
+                                }
+                                else
+                                {
+                                    <i class="bi bi-image"></i>
+                                }
+                            </span>
+
+                            <span class="settings-file-picker__content">
+                                <span class="settings-file-picker__eyebrow">الهوية البصرية</span>
+                                <strong>شعار المنصة الرئيسي</strong>
+                                <span id="logoFileNameDisplay"
+                                      class="settings-file-picker__filename">
+                                    اسحب الصورة هنا أو اضغط للاختيار
+                                </span>
+                                <small>اختر صورة واضحة وعالية الجودة، وسيبقى الشعار الحالي حتى تحفظ التغييرات.</small>
+                            </span>
+
+                            <span class="settings-file-picker__action">
+                                <i class="bi bi-cloud-arrow-up"></i>
+                                اختيار صورة
+                            </span>
+                        </label>
+
+                        <input type="file"
+                               id="logoFile"
+                               accept="image/*"
+                               class="d-none"
+                               data-file-picker-input
+                               data-file-name-target="logoFileNameDisplay"
+                               data-file-preview-target="logoFilePreview"
+                               data-empty-label="اسحب الصورة هنا أو اضغط للاختيار">
+
+
+                        <label for="faviconFile"
+                               class="settings-file-picker settings-file-picker--large"
+                               data-file-dropzone
+                               role="button"
+                               tabindex="0"
+                               aria-label="اختيار أيقونة المتصفح">
+                            <span id="faviconFilePreview" class="settings-file-picker__visual settings-file-picker__visual--compact">
+                                @if (!string.IsNullOrWhiteSpace(Model.FaviconPath))
+                                {
+                                    <img src="@Model.FaviconPath"
+                                     alt="أيقونة المتصفح الحالية"
+                                     class="settings-file-picker__thumb">
+                                }
+                                else
+                                {
+                                    <i class="bi bi-browser-chrome"></i>
+                                }
+                            </span>
+
+                            <span class="settings-file-picker__content">
+                                <span class="settings-file-picker__eyebrow">أيقونة المتصفح</span>
+                                <strong>الأيقونة الصغيرة للمنصة</strong>
+                                <span id="faviconFileNameDisplay"
+                                      class="settings-file-picker__filename">
+                                    اسحب الصورة هنا أو اضغط للاختيار
+                                </span>
+                                <small>يفضل ملف مربع وواضح مثل 64×64 أو 128×128 بكسل.</small>
+                            </span>
+
+                            <span class="settings-file-picker__action">
+                                <i class="bi bi-image"></i>
+                                اختيار صورة
+                            </span>
+                        </label>
+
+                        <input type="file"
+                               id="faviconFile"
+                               accept="image/*"
+                               class="d-none"
+                               data-file-picker-input
+                               data-file-name-target="faviconFileNameDisplay"
+                               data-file-preview-target="faviconFilePreview"
+                               data-empty-label="اسحب الصورة هنا أو اضغط للاختيار">
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- إعدادات المواسم والترحيب -->
+
+            <div class="mt-5 settings-section">
+
+                <h5 class="fw-bold mb-3 text-primary settings-section-title">
+
+                    <i class="bi bi-stars me-2"></i>
+
+                    إعدادات المواسم والترحيب
+                </h5>
+
+
+                <div class="row g-4">
+
+                    <div class="col-lg-7">
+
+                        <div class="settings-card p-4 h-100 rounded-4 shadow-sm border-0">
+
+                            <h6 class="fw-bold mb-4 text-navy">
+                                عناوين الواجهة الرئيسية والثيم
+                            </h6>
+
+
+                            <div class="row g-3">
+
+                                <div class="col-md-7">
+
+                                    <div class="form-floating">
+
+                                        <input type="text"
+                                               class="form-control rounded-3"
+                                               id="heroTitleMain"
+                                               value="@(string.IsNullOrEmpty(Model.HeroTitleMain) ? "دليلك اليمني بين يديك.." : Model.HeroTitleMain)"
+                                               placeholder="العنوان">
+
+                                        <label for="heroTitleMain">
+                                            العنوان الرئيسي الثابت
+                                        </label>
+
+                                    </div>
+
+                                </div>
+
+
+                                <div class="col-md-5">
+
+                                    <div class="form-floating">
+
+                                        <input type="text"
+                                               class="form-control rounded-3"
+                                               id="heroTitleSub"
+                                               value="@(string.IsNullOrEmpty(Model.HeroTitleSub) ? "اكتشف" : Model.HeroTitleSub)"
+                                               placeholder="الكلمة المساعدة">
+
+                                        <label for="heroTitleSub">
+                                            الكلمة المساعدة
+                                        </label>
+
+                                    </div>
+
+                                </div>
+
+
+                                <div class="col-12 mt-4">
+
+                                    <label class="fw-bold small text-muted mb-2 d-block">
+                                        تفعيل الثيم الموسمي (المؤثرات البصرية)
+                                    </label>
+
+
+                                    <div class="form-floating">
+
+                                        <select class="form-select rounded-3 border-primary border-opacity-25"
+                                                id="seasonTheme">
+
+                                            <option value="Normal"
+                                                    selected="@(Model.SeasonTheme == "Normal" ? "selected" : null)">
+
+                                                إيقاف المؤثرات (وضع كلاسيكي هادئ)
+                                            </option>
+
+                                            <option value="Ramadan"
+                                                    selected="@(Model.SeasonTheme == "Ramadan" ? "selected" : null)">
+
+                                                🌙 ثيم الأجواء الرمضانية
+                                            </option>
+
+                                            <option value="Eid"
+                                                    selected="@(Model.SeasonTheme == "Eid" ? "selected" : null)">
+
+                                                🎉 ثيم بهجة الأعياد
+                                            </option>
+
+                                            <option value="Rain"
+                                                    selected="@(Model.SeasonTheme == "Rain" ? "selected" : null)">
+
+                                                🌧️ ثيم الطبيعة والأمطار
+                                            </option>
+
+                                            <option value="Snow"
+                                                    selected="@(Model.SeasonTheme == "Snow" ? "selected" : null)">
+
+                                                ❄️ ثيم الثلوج الناعمة
+                                            </option>
+
+                                            <option value="Spring"
+                                                    selected="@(Model.SeasonTheme == "Spring" ? "selected" : null)">
+
+                                                🌸 ثيم بتلات الورد الربيعية
+                                            </option>
+
+                                            <option value="Autumn"
+                                                    selected="@(Model.SeasonTheme == "Autumn" ? "selected" : null)">
+
+                                                🍂 ثيم أوراق الخريف الدافئة
+                                            </option>
+
+                                            <option value="Gold"
+                                                    selected="@(Model.SeasonTheme == "Gold" ? "selected" : null)">
+
+                                                ✨ ثيم غبار الذهب المضيء
+                                            </option>
+
+                                        </select>
+
+
+                                        <label for="seasonTheme">
+                                            اختر الموسم الحالي
+                                        </label>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="col-lg-5">
+
+                        <div class="settings-card p-4 h-100 rounded-4 shadow-sm border-0">
+
+                            <div class="d-flex justify-content-between align-items-center mb-4 settings-card-switch-header">
+
+                                <h6 class="fw-bold mb-0 text-navy">
+                                    شريط التهنئة العائم (VIP)
+                                </h6>
+
+
+                                <div class="form-check form-switch m-0">
+
+                                    <input class="form-check-input"
+                                           type="checkbox"
+                                           id="isBannerActive"
+                                           @(Model.IsBannerActive == true ? "checked" : "")>
+
+                                </div>
+
+                            </div>
+
+
+                            <div class="form-floating">
+
+                                <textarea class="form-control rounded-3"
+                                          id="bannerText"
+                                          placeholder="التهنئة">@(string.IsNullOrEmpty(Model.BannerText) ? "إدارة منصة دليلك اليمني تهنئكم بحلول المناسبة السعيدة، كل عام وأنتم بخير! ✨" : Model.BannerText)</textarea>
+
+                                <label for="bannerText">
+                                    اكتب نص الإشعار أو التهنئة هنا
+                                </label>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- استوديو السلايدر -->
+
+            <div class="mt-5 settings-section">
+
+                <h5 class="fw-bold mb-3 text-primary settings-section-title">
+
+                    <i class="bi bi-display me-2"></i>
+
+                    استوديو العرض السينمائي (السلايدر)
+                </h5>
+
+
+                <div class="settings-card p-4 mb-4 rounded-4 shadow-sm border-primary border-opacity-10">
+
+                    <form id="addHeroSlideForm">
+
+                        <div class="row g-3 align-items-center settings-slider-form-row">
+
+
+                            <div class="col-lg-3">
+
+                                <label class="fw-bold small text-muted mb-2 d-block">
+                                    النص التفاعلي
+                                </label>
+
+                                <input type="text"
+                                       class="form-control rounded-3 p-3"
+                                       id="newSlideText"
+                                       placeholder="مثال: أرقى الفنادق"
+                                       required>
+
+                            </div>
+
+
+                            <div class="col-lg-4">
+
+                                <label class="fw-bold small text-muted mb-2 d-block">
+                                    صورة أو فيديو عالي الدقة
+                                </label>
+
+
+                                <label for="newSlideImage"
+                                       class="settings-file-picker settings-file-picker--compact settings-slide-upload-label"
+                                       data-file-dropzone
+                                       role="button"
+                                       tabindex="0"
+                                       aria-label="اختيار صورة أو فيديو للسلايد">
+                                    <span class="settings-file-picker__visual settings-file-picker__visual--compact">
+                                        <i class="bi bi-cloud-arrow-up"></i>
+                                    </span>
+                                    <span class="settings-file-picker__content">
+                                        <strong>صورة أو فيديو للسلايد</strong>
+                                        <span id="fileNameDisplay"
+                                              class="settings-file-picker__filename">
+                                            اسحب الملف هنا أو اضغط للاختيار
+                                        </span>
+                                        <small>صور، أو فيديو بصيغة إم بي 4 — حتى 20 ميجابايت.</small>
+                                    </span>
+                                    <span class="settings-file-picker__action">
+                                        اختيار ملف
+                                    </span>
+                                </label>
+
+                                <input type="file"
+                                       id="newSlideImage"
+                                       accept="image/*, video/mp4"
+                                       class="d-none"
+                                       required
+                                       data-file-picker-input
+                                       data-file-name-target="fileNameDisplay"
+                                       data-empty-label="اسحب الملف هنا أو اضغط للاختيار">
+
+                            </div>
+
+
+                            <div class="col-lg-3">
+
+                                <label class="fw-bold small text-muted mb-2 d-block text-center">
+                                    ألوان النصوص فوق هذه الصورة
+                                </label>
+
+
+                                <div class="d-flex justify-content-center gap-3 settings-colors-row">
+
+                                    <div class="text-center">
+
+                                        <input type="color"
+                                               class="form-control form-control-color p-1 rounded-3 border border-2 border-secondary mb-1"
+                                               id="newSlideMainTextColor"
+                                               value="#ffffff"
+                                               title="اختر لون العنوان الثابت">
+
+                                        <small class="text-navy fw-bold">
+
+                                            العنوان الثابت
+                                        </small>
+
+                                    </div>
+
+
+                                    <div class="text-center">
+
+                                        <input type="color"
+                                               class="form-control form-control-color p-1 rounded-3 border border-2 border-secondary mb-1"
+                                               id="newSlideAccentColor"
+                                               value="#ff5a5f"
+                                               title="اختر لون الكلمة المتحركة">
+
+                                        <small class="text-orange fw-bold">
+
+                                            الكلمة المتحركة
+                                        </small>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+
+                            <div class="col-lg-2 settings-slider-submit-column">
+
+                                <label class="fw-bold small text-muted mb-2 d-block text-transparent">
+
+                                    إضافة
+                                </label>
+
+
+                                <button type="submit"
+                                        class="btn btn-primary w-100 rounded-3 shadow-sm settings-slider-add-btn">
+
+                                    <i class="bi bi-plus-lg me-1"></i>
+
+                                    إدراج
+                                </button>
+
+                            </div>
+
+                        </div>
+
+                    </form>
+
+                </div>
+
+
+                <div class="settings-card p-0 rounded-4 shadow-sm border-0 overflow-hidden">
+
+                    <div class="table-responsive settings-table-scroll">
+
+                        <table class="table table-hover align-middle mb-0 text-center custom-admin-table slider-admin-table">
+
+                            <thead class="bg-light text-muted">
+
+                                <tr>
+
+                                    <th>
+                                        الترتيب
+                                    </th>
+
+                                    <th>
+                                        المعاينة
+                                    </th>
+
+                                    <th>
+                                        نوع المرفق
+                                    </th>
+
+                                    <th>
+                                        النص التفاعلي
+                                    </th>
+
+                                    <th>
+                                        الألوان
+                                    </th>
+
+                                    <th>
+                                        الحالة
+                                    </th>
+
+                                    <th>
+                                        إجراءات
+                                    </th>
+
+                                </tr>
+
+                            </thead>
+
+
+                            <tbody id="heroSlidesTableBody">
+
+                                <tr>
+
+                                    <td colspan="7"
+                                        class="text-center py-5 text-muted">
+
+                                        <div class="spinner-border spinner-border-sm text-primary me-2"
+                                             role="status">
+                                        </div>
+
+                                        جاري تحميل السلايدرات...
+                                    </td>
+
+                                </tr>
+
+                            </tbody>
+
+                        </table>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div class="mt-4 pt-4 border-top text-end settings-save-actions">
+
+                <button type="button"
+                        class="btn btn-primary btn-lg rounded-pill px-5 shadow btn-save-tab"
+                        data-save-section="branding">
+
+                    <i class="bi bi-save2-fill me-2"></i>
+
+                    حفظ التعديلات
+                </button>
+
+            </div>
+
+        </div>
+
+
+        @* =========================================================
+        2. تبويب السياسات والتسعيرة المزدوجة
+        ========================================================= *@
+
+        <div id="settings-policies-panel" class="tab-pane-content policies-tab settings-tab-panel" role="tabpanel">
+
+            <div class="settings-tab-intro mb-4">
+                <div class="settings-tab-intro__icon"><i class="bi bi-sliders2"></i></div>
+                <div class="settings-tab-intro__copy">
+                    <span>التشغيل والمالية</span>
+                    <h2>سياسات المنصة ومركز أسعار الصرف</h2>
+                    <p>قواعد التشغيل، العملة الافتراضية وأسعار سوقي صنعاء وعدن مع التحكم اليدوي والتلقائي.</p>
+                </div>
+            </div>
+
+            <div class="row g-4">
+
+
+                <!-- الموافقة التلقائية -->
+
+                <div class="col-md-6">
+
+                    <div class="settings-card p-4">
+
+                        <div class="d-flex align-items-start gap-3 mb-3 settings-option-row">
+
+                            <div class="card-icon">
+
+                                <i class="bi bi-check2-circle"></i>
+
+                            </div>
+
+
+                            <div class="flex-grow-1">
+
+                                <div class="d-flex justify-content-between align-items-center settings-option-content">
+
+                                    <div class="settings-option-text">
+
+                                        <label class="fw-bold mb-1">
+                                            الموافقة التلقائية على الأماكن
+                                        </label>
+
+                                        <small class="text-muted d-block">
+                                            نشر الأماكن دون مراجعة
+                                        </small>
+
+                                    </div>
+
+
+                                    <div class="form-check form-switch settings-option-switch">
+
+                                        <input class="form-check-input"
+                                               type="checkbox"
+                                               id="autoApprovePlaces"
+                                               @(Model.AutoApprovePlaces ? "checked" : null)>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <!-- السماح بالتسجيل -->
+
+                <div class="col-md-6">
+
+                    <div class="settings-card p-4">
+
+                        <div class="d-flex align-items-start gap-3 mb-3 settings-option-row">
+
+                            <div class="card-icon">
+
+                                <i class="bi bi-person-plus"></i>
+
+                            </div>
+
+
+                            <div class="flex-grow-1">
+
+                                <div class="d-flex justify-content-between align-items-center settings-option-content">
+
+                                    <div class="settings-option-text">
+
+                                        <label class="fw-bold mb-1">
+                                            السماح بتسجيل مستخدمين جدد
+                                        </label>
+
+                                        <small class="text-muted d-block">
+                                            فتح باب التسجيل للزوار
+                                        </small>
+
+                                    </div>
+
+
+                                    <div class="form-check form-switch settings-option-switch">
+
+                                        <input class="form-check-input"
+                                               type="checkbox"
+                                               id="allowRegistration"
+                                               @(Model.AllowNewRegistrations == true ? "checked" : null)>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <!-- الحد الأقصى لحجم الصورة -->
+
+                <div class="col-md-6">
+
+                    <div class="settings-card p-4">
+
+                        <div class="d-flex align-items-start gap-3 mb-3 settings-field-row">
+
+                            <div class="card-icon">
+
+                                <i class="bi bi-file-image"></i>
+
+                            </div>
+
+
+                            <div class="flex-grow-1">
+
+                                <div class="form-floating">
+
+                                    <input type="number"
+                                           class="form-control"
+                                           id="maxImageSize"
+                                           min="1"
+                                           max="100"
+                                           inputmode="numeric"
+                                           value="@Model.MaxImageSize">
+
+                                    <label for="maxImageSize">
+                                        الحد الأقصى لحجم الصورة (ميجابايت)
+                                    </label>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <!-- الحد الأقصى لعدد الصور -->
+
+                <div class="col-md-6">
+
+                    <div class="settings-card p-4">
+
+                        <div class="d-flex align-items-start gap-3 mb-3 settings-field-row">
+
+                            <div class="card-icon">
+
+                                <i class="bi bi-images"></i>
+
+                            </div>
+
+
+                            <div class="flex-grow-1">
+
+                                <div class="form-floating">
+
+                                    <input type="number"
+                                           class="form-control"
+                                           id="maxImageCount"
+                                           min="1"
+                                           max="100"
+                                           inputmode="numeric"
+                                           value="@Model.MaxImageCount">
+
+                                    <label for="maxImageCount">
+                                        الحد الأقصى لعدد الصور لكل مكان
+                                    </label>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <!-- =========================================================
+                     مركز المالية وأسعار الصرف
+                     ========================================================= -->
+
+                <div class="col-12 mt-4 settings-finance-heading">
+                    <div class="settings-section-heading settings-section-heading--finance">
+                        <div class="settings-section-heading__icon">
+                            <i class="bi bi-currency-exchange"></i>
+                        </div>
+                        <div class="settings-section-heading__copy">
+                            <span>المركز المالي</span>
+                            <h3>العملة وأسعار الصرف</h3>
+                            <p>إدارة العملة الافتراضية وأسعار سوقي صنعاء وعدن دون خلط بين السوقين.</p>
+                        </div>
+                        <div class="settings-section-heading__permission">
+                            <i class="bi @financePermissionIcon"></i>
+                            <span>@financePermissionLabel</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- العمولة + العملة الافتراضية -->
+                <div class="col-lg-4 col-md-6">
+                    <div class="settings-card settings-compact-finance-card p-4 h-100">
+                        <div class="settings-mini-heading">
+                            <span class="settings-mini-heading__icon"><i class="bi bi-percent"></i></span>
+                            <div>
+                                <small>إيرادات المنصة</small>
+                                <strong>نسبة العمولة</strong>
+                            </div>
+                        </div>
+
+                        <div class="form-floating mt-4">
+                            <input type="number"
+                                   min="0"
+                                   max="100"
+                                   step="0.01"
+                                   class="form-control"
+                                   id="commissionPercentage"
+                                   value="@((Model.CommissionPercentage ?? 0).ToString("F2", System.Globalization.CultureInfo.InvariantCulture))">
+                            <label for="commissionPercentage">نسبة عمولة المنصة (%)</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-4 col-md-6">
+                    <div class="settings-card settings-compact-finance-card p-4 h-100">
+                        <div class="settings-mini-heading">
+                            <span class="settings-mini-heading__icon"><i class="bi bi-cash-coin"></i></span>
+                            <div>
+                                <small>العرض للمستخدم</small>
+                                <strong>العملة الافتراضية</strong>
+                            </div>
+                        </div>
+
+                        <div class="form-floating mt-4">
+                            <select class="form-select" id="defaultCurrency">
+                                <option value="ريال يمني"
+                                        selected="@(Model.DefaultCurrency == "ريال يمني" ? "selected" : null)">
+                                    ريال يمني (YER)
+                                </option>
+                                <option value="ريال سعودي"
+                                        selected="@(Model.DefaultCurrency == "ريال سعودي" ? "selected" : null)">
+                                    ريال سعودي (SAR)
+                                </option>
+                                <option value="دولار أمريكي"
+                                        selected="@(Model.DefaultCurrency == "دولار أمريكي" ? "selected" : null)">
+                                    دولار أمريكي (USD)
+                                </option>
+                            </select>
+                            <label for="defaultCurrency">العملة الافتراضية للنظام</label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- وضع إدارة أسعار الصرف -->
+                <div class="col-lg-4 col-12">
+                    <div class="settings-card exchange-mode-card p-4 h-100"
+                         data-exchange-mode-card>
+                        <div class="exchange-mode-card__top">
+                            <div class="settings-mini-heading mb-0">
+                                <span class="settings-mini-heading__icon"><i class="bi bi-arrow-repeat"></i></span>
+                                <div>
+                                    <small>طريقة التحديث</small>
+                                    <strong>إدارة أسعار الصرف</strong>
+                                </div>
+                            </div>
+
+                            <span class="exchange-mode-badge @exchangeModeCss"
+                                  id="exchangeRateModeBadge">
+                                <i class="bi @exchangeModeIcon"></i>
+                                <span>@exchangeModeLabel</span>
+                            </span>
+                        </div>
+
+                        <div class="exchange-mode-card__switch mt-4">
+                            <div>
+                                <label for="autoUpdateExchangeRates" class="fw-bold d-block mb-1">
+                                    التحديث التلقائي
+                                </label>
+                                <small>
+                                    عند التفعيل تُجلب أسعار صنعاء وعدن من المصدر المعتمد، وتبقى آخر أسعار سليمة عند أي فشل.
+                                </small>
+                            </div>
+
+                            <div class="form-check form-switch m-0">
+                                <input class="form-check-input"
+                                       type="checkbox"
+                                       role="switch"
+                                       id="autoUpdateExchangeRates"
+                                       @(Model.AutoUpdateExchangeRates == true ? "checked" : null)>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- لوحة حالة المصدر -->
+                <div class="col-12">
+                    <section class="exchange-monitor"
+                             id="exchangeRateMonitor"
+                             data-status="@exchangeRateStatus">
+
+                        <div class="exchange-monitor__lead">
+                            <div class="exchange-monitor__pulse">
+                                <span></span>
+                                <i class="bi @exchangeRateStatusIcon"></i>
+                            </div>
+
+                            <div class="exchange-monitor__lead-copy">
+                                <small>حالة تحديث أسعار الصرف</small>
+                                <h4 id="exchangeRateStatusLabel">@exchangeRateStatusLabel</h4>
+                                <p>
+                                    يوضح هذا القسم حالة آخر عملية تحديث للأسعار، وإذا فشل المصدر يحتفظ النظام بآخر أسعار سليمة محفوظة.
+                                </p>
+                            </div>
+
+                            <button type="button"
+                                    class="exchange-refresh-button"
+                                    id="refreshExchangeRatesNow"
+                                    data-requires-finance-permission="true">
+                                <i class="bi bi-arrow-clockwise"></i>
+                                <span>تحديث الأسعار الآن</span>
+                            </button>
+                        </div>
+
+                        <div class="exchange-monitor__meta">
+                            <div class="exchange-monitor-stat">
+                                <span class="exchange-monitor-stat__icon"><i class="bi bi-broadcast-pin"></i></span>
+                                <div>
+                                    <small>مصدر الأسعار</small>
+                                    <strong id="exchangeRateSourceLabel">@exchangeRateSource</strong>
+                                    <span class="exchange-monitor-stat__hint">من أين جاءت الأسعار الحالية</span>
+                                </div>
+                            </div>
+
+                            <div class="exchange-monitor-stat">
+                                <span class="exchange-monitor-stat__icon"><i class="bi bi-check2-circle"></i></span>
+                                <div>
+                                    <small>آخر تحديث ناجح</small>
+                                    <strong id="exchangeRateLastUpdated">@exchangeRateLastUpdatedText</strong>
+                                    <span class="exchange-monitor-stat__hint">آخر مرة تم فيها حفظ الأسعار بنجاح</span>
+                                </div>
+                            </div>
+
+                            <div class="exchange-monitor-stat">
+                                <span class="exchange-monitor-stat__icon"><i class="bi bi-clock-history"></i></span>
+                                <div>
+                                    <small>آخر محاولة تحديث</small>
+                                    <strong id="exchangeRateLastAttempt">@exchangeRateLastAttemptText</strong>
+                                    <span class="exchange-monitor-stat__hint">آخر مرة حاول فيها النظام جلب الأسعار</span>
+                                </div>
+                            </div>
+
+                            <div class="exchange-monitor-stat">
+                                <span class="exchange-monitor-stat__icon"><i class="bi bi-shield-check"></i></span>
+                                <div>
+                                    <small>الحماية عند الفشل</small>
+                                    <strong>الاحتفاظ بآخر أسعار سليمة</strong>
+                                    <span class="exchange-monitor-stat__hint">لا تُستبدل الأسعار إذا فشل التحديث</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="exchange-monitor__error @(string.IsNullOrWhiteSpace(Model.ExchangeRateLastError) ? "d-none" : string.Empty)"
+                             id="exchangeRateErrorBox"
+                             role="alert">
+                            <i class="bi bi-exclamation-octagon-fill"></i>
+                            <div>
+                                <small>تفاصيل آخر فشل</small>
+                                <span id="exchangeRateLastError">@Model.ExchangeRateLastError</span>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- سوق صنعاء + سوق عدن -->
+                <div class="col-xl-6">
+                    <article class="exchange-market-card exchange-market-card--sanaa h-100"
+                             data-exchange-market="North">
+                        <header class="exchange-market-card__header">
+                            <div class="exchange-market-card__identity">
+                                <span class="exchange-market-card__symbol"><i class="bi bi-geo-alt-fill"></i></span>
+                                <div>
+                                    <small>الشمال / سوق العملة القديمة</small>
+                                    <h4>سوق صنعاء</h4>
+                                </div>
+                            </div>
+                            <span class="exchange-market-card__tag">صنعاء</span>
+                        </header>
+
+                        <p class="exchange-market-card__description">
+                            الأسعار المعتمدة للمنشآت التي تصنَّف مدنها تلقائياً ضمن سوق صنعاء.
+                        </p>
+
+                        <div class="exchange-market-card__rates">
+                            <div class="exchange-rate-field">
+                                <div class="exchange-rate-field__currency">
+                                    <span class="exchange-rate-field__coin">$</span>
+                                    <div>
+                                        <strong>الدولار الأمريكي</strong>
+                                        <small>USD → YER</small>
+                                    </div>
+                                </div>
+                                <div class="exchange-rate-field__input">
+                                    <input type="number"
+                                           min="0.01"
+                                           step="0.01"
+                                           inputmode="decimal"
+                                           class="form-control"
+                                           id="sanaaUsdRate"
+                                           data-exchange-rate-input
+                                           data-market="North"
+                                           data-currency="USD"
+                                           value="@Model.SanaaUsdRate.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)">
+                                    <span>ر.ي</span>
+                                </div>
+                            </div>
+
+                            <div class="exchange-rate-field">
+                                <div class="exchange-rate-field__currency">
+                                    <span class="exchange-rate-field__coin">ر.س</span>
+                                    <div>
+                                        <strong>الريال السعودي</strong>
+                                        <small>SAR → YER</small>
+                                    </div>
+                                </div>
+                                <div class="exchange-rate-field__input">
+                                    <input type="number"
+                                           min="0.01"
+                                           step="0.01"
+                                           inputmode="decimal"
+                                           class="form-control"
+                                           id="sanaaSarRate"
+                                           data-exchange-rate-input
+                                           data-market="North"
+                                           data-currency="SAR"
+                                           value="@Model.SanaaSarRate.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)">
+                                    <span>ر.ي</span>
+                                </div>
+                            </div>
+                        </div>
+                    </article>
+                </div>
+
+                <div class="col-xl-6">
+                    <article class="exchange-market-card exchange-market-card--aden h-100"
+                             data-exchange-market="South">
+                        <header class="exchange-market-card__header">
+                            <div class="exchange-market-card__identity">
+                                <span class="exchange-market-card__symbol"><i class="bi bi-geo-alt-fill"></i></span>
+                                <div>
+                                    <small>الجنوب / سوق العملة الجديدة</small>
+                                    <h4>سوق عدن</h4>
+                                </div>
+                            </div>
+                            <span class="exchange-market-card__tag">عدن</span>
+                        </header>
+
+                        <p class="exchange-market-card__description">
+                            الأسعار المعتمدة للمنشآت التي تصنَّف مدنها تلقائياً ضمن سوق عدن.
+                        </p>
+
+                        <div class="exchange-market-card__rates">
+                            <div class="exchange-rate-field">
+                                <div class="exchange-rate-field__currency">
+                                    <span class="exchange-rate-field__coin">$</span>
+                                    <div>
+                                        <strong>الدولار الأمريكي</strong>
+                                        <small>USD → YER</small>
+                                    </div>
+                                </div>
+                                <div class="exchange-rate-field__input">
+                                    <input type="number"
+                                           min="0.01"
+                                           step="0.01"
+                                           inputmode="decimal"
+                                           class="form-control"
+                                           id="adenUsdRate"
+                                           data-exchange-rate-input
+                                           data-market="South"
+                                           data-currency="USD"
+                                           value="@Model.AdenUsdRate.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)">
+                                    <span>ر.ي</span>
+                                </div>
+                            </div>
+
+                            <div class="exchange-rate-field">
+                                <div class="exchange-rate-field__currency">
+                                    <span class="exchange-rate-field__coin">ر.س</span>
+                                    <div>
+                                        <strong>الريال السعودي</strong>
+                                        <small>SAR → YER</small>
+                                    </div>
+                                </div>
+                                <div class="exchange-rate-field__input">
+                                    <input type="number"
+                                           min="0.01"
+                                           step="0.01"
+                                           inputmode="decimal"
+                                           class="form-control"
+                                           id="adenSarRate"
+                                           data-exchange-rate-input
+                                           data-market="South"
+                                           data-currency="SAR"
+                                           value="@Model.AdenSarRate.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)">
+                                    <span>ر.ي</span>
+                                </div>
+                            </div>
+                        </div>
+                    </article>
+                </div>
+
+                <div class="col-12">
+                    <div class="exchange-routing-note">
+                        <span class="exchange-routing-note__icon"><i class="bi bi-signpost-split-fill"></i></span>
+                        <div>
+                            <strong>اختيار السوق يتم حسب مدينة المنشأة وليس موقع العميل.</strong>
+                            <p>
+                                منشأة في عدن تستخدم سعر سوق عدن حتى لو كان العميل في صنعاء، ومنشأة في صنعاء تستخدم سعر سوق صنعاء حتى لو كان العميل في عدن.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+
+            <div class="mt-4 pt-3 border-top settings-save-actions">
+
+                <button type="button"
+                        class="btn btn-primary btn-save-tab"
+                        data-save-section="policies">
+
+                    <i class="bi bi-save me-2"></i>
+
+                    حفظ التشغيل والمالية
+                </button>
+
+            </div>
+
+        </div>
+
+
+        @* =========================================================
+        3. تبويب التواصل
+        ========================================================= *@
+
+        <div id="settings-contact-panel" class="tab-pane-content contact-tab settings-tab-panel" role="tabpanel">
+
+            <div class="settings-tab-intro mb-4">
+                <div class="settings-tab-intro__icon"><i class="bi bi-headset"></i></div>
+                <div class="settings-tab-intro__copy">
+                    <span>قنوات التواصل</span>
+                    <h2>ابقِ قنوات المنصة موحدة وواضحة</h2>
+                    <p>البريد الرسمي، رقم الدعم وروابط شبكات التواصل المستخدمة في واجهات النظام.</p>
+                </div>
+            </div>
+
+            <div class="row g-4">
+
+
+                <!-- البريد الرسمي -->
+
+                <div class="col-md-6">
+
+                    <div class="settings-card p-4">
+
+                        <div class="d-flex align-items-start gap-3 mb-3 settings-field-row">
+
+                            <div class="card-icon">
+
+                                <i class="bi bi-envelope"></i>
+
+                            </div>
+
+
+                            <div class="flex-grow-1">
+
+                                <div class="form-floating">
+
+                                    <input type="email"
+                                           class="form-control"
+                                           id="officialEmail"
+                                           value="@Model.ContactEmail">
+
+                                    <label for="officialEmail">
+                                        البريد الإلكتروني الرسمي
+                                    </label>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <!-- رقم الدعم -->
+
+                <div class="col-md-6">
+
+                    <div class="settings-card p-4">
+
+                        <div class="d-flex align-items-start gap-3 mb-3 settings-field-row">
+
+                            <div class="card-icon">
+
+                                <i class="bi bi-telephone"></i>
+
+                            </div>
+
+
+                            <div class="flex-grow-1">
+
+                                <div class="form-floating">
+
+                                    <input type="text"
+                                           class="form-control"
+                                           id="supportPhone"
+                                           value="@Model.SupportPhone">
+
+                                    <label for="supportPhone">
+                                        رقم الهاتف لخدمة العملاء
+                                    </label>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <!-- فيسبوك -->
+
+                <div class="col-md-3">
+
+                    <div class="settings-card p-4">
+
+                        <div class="d-flex align-items-start gap-3 mb-3 settings-field-row">
+
+                            <div class="card-icon">
+
+                                <i class="bi bi-facebook text-primary"></i>
+
+                            </div>
+
+
+                            <div class="flex-grow-1">
+
+                                <div class="form-floating">
+
+                                    <input type="text"
+                                           class="form-control"
+                                           id="fbLink"
+                                           value="@Model.FacebookLink"
+                                           placeholder="">
+
+                                    <label for="fbLink">
+                                        فيسبوك
+                                    </label>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <!-- X -->
+
+                <div class="col-md-3">
+
+                    <div class="settings-card p-4">
+
+                        <div class="d-flex align-items-start gap-3 mb-3 settings-field-row">
+
+                            <div class="card-icon">
+
+                                <i class="bi bi-twitter-x text-dark"></i>
+
+                            </div>
+
+
+                            <div class="flex-grow-1">
+
+                                <div class="form-floating">
+
+                                    <input type="text"
+                                           class="form-control"
+                                           id="xLink"
+                                           value="@Model.TwitterLink"
+                                           placeholder="">
+
+                                    <label for="xLink">
+                                        X
+                                    </label>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <!-- إنستقرام -->
+
+                <div class="col-md-3">
+
+                    <div class="settings-card p-4">
+
+                        <div class="d-flex align-items-start gap-3 mb-3 settings-field-row">
+
+                            <div class="card-icon">
+
+                                <i class="bi bi-instagram text-danger"></i>
+
+                            </div>
+
+
+                            <div class="flex-grow-1">
+
+                                <div class="form-floating">
+
+                                    <input type="text"
+                                           class="form-control"
+                                           id="instaLink"
+                                           value="@Model.InstagramLink"
+                                           placeholder="">
+
+                                    <label for="instaLink">
+                                        إنستقرام
+                                    </label>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <!-- واتساب -->
+
+                <div class="col-md-3">
+
+                    <div class="settings-card p-4">
+
+                        <div class="d-flex align-items-start gap-3 mb-3 settings-field-row">
+
+                            <div class="card-icon">
+
+                                <i class="bi bi-whatsapp text-success"></i>
+
+                            </div>
+
+
+                            <div class="flex-grow-1">
+
+                                <div class="form-floating">
+
+                                    <input type="text"
+                                           class="form-control"
+                                           id="waLink"
+                                           value="@Model.WhatsAppNumber"
+                                           placeholder="">
+
+                                    <label for="waLink">
+                                        واتساب
+                                    </label>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div class="mt-4 pt-3 border-top settings-save-actions">
+
+                <button type="button"
+                        class="btn btn-primary btn-save-tab"
+                        data-save-section="contact">
+
+                    <i class="bi bi-save me-2"></i>
+
+                    حفظ إعدادات التواصل
+                </button>
+
+            </div>
+
+        </div>
+
+
+        @* =========================================================
+        4. تبويب الصيانة والطوارئ — النسخة المبسطة والواضحة
+        ========================================================= *@
+
+        <div id="settings-maintenance-panel" class="tab-pane-content maintenance-tab settings-tab-panel" role="tabpanel">
+
+            <div class="settings-tab-intro settings-tab-intro--danger mb-4">
+                <div class="settings-tab-intro__icon"><i class="bi bi-tools"></i></div>
+                <div class="settings-tab-intro__copy">
+                    <span>مركز الصيانة</span>
+                    <h2>شغّل الصيانة بخطوات بسيطة وواضحة</h2>
+                    <p>ابدأ من المفتاح الرئيسي، ثم اختر ما تريد إيقافه ومن يتأثر ومتى تبدأ الصيانة. الإدارة تبقى مستثناة دائمًا.</p>
+                </div>
+            </div>
+
+            <section class="maintenance-simple"
+                     data-maintenance-center
+                     data-enabled="@Model.MaintenanceMode.ToString().ToLowerInvariant()"
+                     data-type="@maintenanceType">
+
+                @* الحالة الرئيسية *@
+                <div class="maintenance-simple-status" data-maintenance-status-board>
+                    <div class="maintenance-simple-status__identity">
+                        <span class="maintenance-simple-status__icon" aria-hidden="true">
+                            <i class="bi bi-check2-circle"></i>
+                        </span>
+                        <div>
+                            <small>حالة المنصة</small>
+                            <h3 id="maintenanceStatusTitle">
+                                @(Model.MaintenanceMode ? "وضع الصيانة مفعّل" : "المنصة تعمل بشكل طبيعي")
+                            </h3>
+                            <p id="maintenanceStatusDescription">
+                                @(Model.MaintenanceMode
+                                    ? "إعدادات الصيانة أدناه هي التي ستحدد ما الذي يتوقف ومن يتأثر."
+                                    : "لا توجد قيود صيانة مفعلة الآن، وجميع الخدمات تعمل بصورة طبيعية.")
+                            </p>
+                        </div>
+                    </div>
+
+                    <label class="maintenance-simple-power" for="maintenanceMode">
+                        <span>
+                            <strong id="maintenancePowerLabel">@(Model.MaintenanceMode ? "إيقاف الصيانة" : "تشغيل الصيانة")</strong>
+                            <small>المفتاح الرئيسي</small>
+                        </span>
+                        <span class="form-check form-switch m-0">
+                            <input class="form-check-input"
+                                   type="checkbox"
+                                   id="maintenanceMode"
+                                   @(Model.MaintenanceMode ? "checked" : null)>
+                        </span>
+                    </label>
+                </div>
+
+                <div class="maintenance-simple-normal-note" id="maintenanceNormalNote">
+                    <i class="bi bi-check-circle-fill"></i>
+                    <div>
+                        <strong>كل شيء طبيعي الآن</strong>
+                        <span>إذا لم تكن بحاجة إلى صيانة، لا تحتاج إلى تغيير أي شيء. فعّل المفتاح فقط عندما تريد تطبيق الصيانة.</span>
+                    </div>
+                </div>
+
+                @* تظهر الخطوات فقط عند تفعيل الصيانة *@
+                <div class="maintenance-simple-setup" id="maintenanceSetupPanel">
+
+                    @* 1. النوع *@
+                    <section class="maintenance-simple-step">
+                        <header class="maintenance-simple-step__head">
+                            <span class="maintenance-simple-step__number">1</span>
+                            <div>
+                                <h3>ماذا تريد أن توقف؟</h3>
+                                <p>اختر الخيار الذي يصف ما تريد فعله بالضبط.</p>
+                            </div>
+                        </header>
+
+                        <div class="maintenance-simple-choice-grid maintenance-simple-choice-grid--three" role="radiogroup" aria-label="نوع الصيانة">
+                            <label class="maintenance-simple-choice maintenance-simple-choice--danger" data-maintenance-type-card="Full">
+                                <input type="radio"
+                                       name="maintenanceType"
+                                       id="maintenanceTypeFull"
+                                       value="Full"
+                                       @(maintenanceType == "Full" ? "checked" : null)>
+                                <span class="maintenance-simple-choice__check"><i class="bi bi-check-lg"></i></span>
+                                <span class="maintenance-simple-choice__icon"><i class="bi bi-lock-fill"></i></span>
+                                <span class="maintenance-simple-choice__copy">
+                                    <strong>إغلاق المنصة بالكامل</strong>
+                                    <small>يظهر للمستخدمين شاشة الصيانة ولا يستطيعون استخدام المنصة.</small>
+                                </span>
+                                <span class="maintenance-simple-choice__footer">أقوى وضع</span>
+                            </label>
+
+                            <label class="maintenance-simple-choice maintenance-simple-choice--warning" data-maintenance-type-card="ReadOnly">
+                                <input type="radio"
+                                       name="maintenanceType"
+                                       id="maintenanceTypeReadOnly"
+                                       value="ReadOnly"
+                                       @(maintenanceType == "ReadOnly" ? "checked" : null)>
+                                <span class="maintenance-simple-choice__check"><i class="bi bi-check-lg"></i></span>
+                                <span class="maintenance-simple-choice__icon"><i class="bi bi-eye-fill"></i></span>
+                                <span class="maintenance-simple-choice__copy">
+                                    <strong>السماح بالتصفح فقط</strong>
+                                    <small>يشاهد المستخدم المحتوى، لكن العمليات التي تغيّر البيانات تتوقف.</small>
+                                </span>
+                                <span class="maintenance-simple-choice__footer">مشاهدة فقط</span>
+                            </label>
+
+                            <label class="maintenance-simple-choice maintenance-simple-choice--primary" data-maintenance-type-card="Partial">
+                                <input type="radio"
+                                       name="maintenanceType"
+                                       id="maintenanceTypePartial"
+                                       value="Partial"
+                                       @(maintenanceType == "Partial" ? "checked" : null)>
+                                <span class="maintenance-simple-choice__check"><i class="bi bi-check-lg"></i></span>
+                                <span class="maintenance-simple-choice__icon"><i class="bi bi-sliders2"></i></span>
+                                <span class="maintenance-simple-choice__copy">
+                                    <strong>إيقاف خدمات محددة فقط</strong>
+                                    <small>المنصة تستمر بالعمل، وأنت تختار الخدمات التي تريد إيقافها.</small>
+                                </span>
+                                <span class="maintenance-simple-choice__footer">تحكم دقيق</span>
+                            </label>
+                        </div>
+
+                        @* تظهر فقط مع الصيانة الجزئية *@
+                        <div class="maintenance-simple-partial" id="maintenancePartialPanel" data-maintenance-partial-panel>
+                            <div class="maintenance-simple-partial__head">
+                                <i class="bi bi-ui-checks-grid"></i>
+                                <div>
+                                    <strong>ما الخدمات التي تريد إيقافها؟</strong>
+                                    <span>اضغط على أي خدمة لإيقافها مؤقتًا. الباقي سيستمر بالعمل.</span>
+                                </div>
+                            </div>
+
+                            <div class="maintenance-simple-services">
+                                <label class="maintenance-service-card" for="maintenanceBlockBookings">
+                                    <input type="checkbox" id="maintenanceBlockBookings" @(Model.MaintenanceBlockBookings ? "checked" : null)>
+                                    <span class="maintenance-service-card__icon"><i class="bi bi-calendar-x"></i></span>
+                                    <span class="maintenance-service-card__copy">
+                                        <strong>الحجوزات</strong>
+                                        <small>إنشاء وإدارة الحجوزات</small>
+                                    </span>
+                                    <span class="maintenance-service-card__state">يعمل</span>
+                                </label>
+
+                                <label class="maintenance-service-card" for="maintenanceBlockPayments">
+                                    <input type="checkbox" id="maintenanceBlockPayments" @(Model.MaintenanceBlockPayments ? "checked" : null)>
+                                    <span class="maintenance-service-card__icon"><i class="bi bi-credit-card"></i></span>
+                                    <span class="maintenance-service-card__copy">
+                                        <strong>المدفوعات</strong>
+                                        <small>الدفع وإثباتات الدفع</small>
+                                    </span>
+                                    <span class="maintenance-service-card__state">يعمل</span>
+                                </label>
+
+                                <label class="maintenance-service-card" for="maintenanceBlockOwnerChanges">
+                                    <input type="checkbox" id="maintenanceBlockOwnerChanges" @(Model.MaintenanceBlockOwnerChanges ? "checked" : null)>
+                                    <span class="maintenance-service-card__icon"><i class="bi bi-building-gear"></i></span>
+                                    <span class="maintenance-service-card__copy">
+                                        <strong>تعديلات المالك</strong>
+                                        <small>المنشآت والغرف والباقات والسياسات</small>
+                                    </span>
+                                    <span class="maintenance-service-card__state">يعمل</span>
+                                </label>
+
+                                <label class="maintenance-service-card" for="maintenanceBlockMessages">
+                                    <input type="checkbox" id="maintenanceBlockMessages" @(Model.MaintenanceBlockMessages ? "checked" : null)>
+                                    <span class="maintenance-service-card__icon"><i class="bi bi-chat-dots"></i></span>
+                                    <span class="maintenance-service-card__copy">
+                                        <strong>الرسائل</strong>
+                                        <small>إرسال الرسائل الجديدة</small>
+                                    </span>
+                                    <span class="maintenance-service-card__state">يعمل</span>
+                                </label>
+
+                                <label class="maintenance-service-card" for="maintenanceBlockReviews">
+                                    <input type="checkbox" id="maintenanceBlockReviews" @(Model.MaintenanceBlockReviews ? "checked" : null)>
+                                    <span class="maintenance-service-card__icon"><i class="bi bi-star"></i></span>
+                                    <span class="maintenance-service-card__copy">
+                                        <strong>التقييمات</strong>
+                                        <small>إضافة وتعديل التقييمات</small>
+                                    </span>
+                                    <span class="maintenance-service-card__state">يعمل</span>
+                                </label>
+
+                                <label class="maintenance-service-card" for="maintenanceBlockRegistrations">
+                                    <input type="checkbox" id="maintenanceBlockRegistrations" @(Model.MaintenanceBlockRegistrations ? "checked" : null)>
+                                    <span class="maintenance-service-card__icon"><i class="bi bi-person-plus"></i></span>
+                                    <span class="maintenance-service-card__copy">
+                                        <strong>التسجيل</strong>
+                                        <small>إنشاء حسابات جديدة</small>
+                                    </span>
+                                    <span class="maintenance-service-card__state">يعمل</span>
+                                </label>
+                            </div>
+                        </div>
+                    </section>
+
+                    @* 2. النطاق *@
+                    <section class="maintenance-simple-step">
+                        <header class="maintenance-simple-step__head">
+                            <span class="maintenance-simple-step__number">2</span>
+                            <div>
+                                <h3>من سيتأثر بالصيانة؟</h3>
+                                <p>اختر الفئة التي تريد تطبيق الصيانة عليها.</p>
+                            </div>
+                        </header>
+
+                        <input type="checkbox"
+                               id="maintenanceAffectOwners"
+                               @(Model.MaintenanceAffectOwners == true ? "checked" : null)
+                               hidden>
+
+                        <div class="maintenance-simple-choice-grid maintenance-simple-choice-grid--two" role="radiogroup" aria-label="الفئات المتأثرة بالصيانة">
+                            <label class="maintenance-simple-choice maintenance-simple-choice--compact" data-maintenance-scope-card="customers">
+                                <input type="radio"
+                                       name="maintenanceScope"
+                                       id="maintenanceScopeCustomers"
+                                       value="customers"
+                                       @(Model.MaintenanceAffectOwners != true ? "checked" : null)>
+                                <span class="maintenance-simple-choice__check"><i class="bi bi-check-lg"></i></span>
+                                <span class="maintenance-simple-choice__icon"><i class="bi bi-people"></i></span>
+                                <span class="maintenance-simple-choice__copy">
+                                    <strong>العملاء والزوار فقط</strong>
+                                    <small>المالكون يستمرون في استخدام لوحة التحكم.</small>
+                                </span>
+                            </label>
+
+                            <label class="maintenance-simple-choice maintenance-simple-choice--compact" data-maintenance-scope-card="everyone">
+                                <input type="radio"
+                                       name="maintenanceScope"
+                                       id="maintenanceScopeEveryone"
+                                       value="everyone"
+                                       @(Model.MaintenanceAffectOwners == true ? "checked" : null)>
+                                <span class="maintenance-simple-choice__check"><i class="bi bi-check-lg"></i></span>
+                                <span class="maintenance-simple-choice__icon"><i class="bi bi-buildings"></i></span>
+                                <span class="maintenance-simple-choice__copy">
+                                    <strong>العملاء والزوار والمالكون</strong>
+                                    <small>الصيانة تشمل جميع الواجهات ما عدا الإدارة.</small>
+                                </span>
+                            </label>
+                        </div>
+
+                        <div class="maintenance-simple-admin-note">
+                            <i class="bi bi-person-badge-fill"></i>
+                            <div>
+                                <strong>الإدارة مستثناة دائمًا</strong>
+                                <span>يمكن لموظفي الإدارة المصرح لهم الدخول وإيقاف الصيانة أو تعديل إعداداتها.</span>
+                            </div>
+                            <i class="bi bi-check-circle-fill"></i>
+                        </div>
+                    </section>
+
+                    @* 3. الوقت *@
+                    <section class="maintenance-simple-step">
+                        <header class="maintenance-simple-step__head">
+                            <span class="maintenance-simple-step__number">3</span>
+                            <div>
+                                <h3>متى تبدأ الصيانة؟</h3>
+                                <p>شغّلها فورًا أو حدّد موعدًا لاحقًا بتوقيت اليمن.</p>
+                            </div>
+                        </header>
+
+                        <div class="maintenance-simple-choice-grid maintenance-simple-choice-grid--two" role="radiogroup" aria-label="موعد بدء الصيانة">
+                            <label class="maintenance-simple-choice maintenance-simple-choice--compact" data-maintenance-timing-card="now">
+                                <input type="radio"
+                                       name="maintenanceTiming"
+                                       id="maintenanceTimingNow"
+                                       value="now"
+                                       @(string.IsNullOrWhiteSpace(maintenanceStartInput) ? "checked" : null)>
+                                <span class="maintenance-simple-choice__check"><i class="bi bi-check-lg"></i></span>
+                                <span class="maintenance-simple-choice__icon"><i class="bi bi-lightning-charge-fill"></i></span>
+                                <span class="maintenance-simple-choice__copy">
+                                    <strong>ابدأ الآن</strong>
+                                    <small>تبدأ الصيانة بعد الحفظ مباشرة وتستمر حتى توقفها يدويًا.</small>
+                                </span>
+                            </label>
+
+                            <label class="maintenance-simple-choice maintenance-simple-choice--compact" data-maintenance-timing-card="scheduled">
+                                <input type="radio"
+                                       name="maintenanceTiming"
+                                       id="maintenanceTimingScheduled"
+                                       value="scheduled"
+                                       @(!string.IsNullOrWhiteSpace(maintenanceStartInput) ? "checked" : null)>
+                                <span class="maintenance-simple-choice__check"><i class="bi bi-check-lg"></i></span>
+                                <span class="maintenance-simple-choice__icon"><i class="bi bi-calendar2-week"></i></span>
+                                <span class="maintenance-simple-choice__copy">
+                                    <strong>تحديد موعد</strong>
+                                    <small>اختر تاريخ ووقت البداية، ويمكن تحديد نهاية تلقائية.</small>
+                                </span>
+                            </label>
+                        </div>
+
+                        <div class="maintenance-simple-schedule" id="maintenanceSchedulePanel">
+                            <div class="maintenance-simple-schedule__fields">
+                                <div class="maintenance-simple-field">
+                                    <label for="maintenanceStartAt">
+                                        <span>موعد البداية</span>
+                                        <small>بتوقيت اليمن</small>
+                                    </label>
+                                    <input type="datetime-local"
+                                           class="form-control"
+                                           id="maintenanceStartAt"
+                                           value="@maintenanceStartInput">
+                                </div>
+
+                                <div class="maintenance-simple-field" id="maintenanceEndField">
+                                    <label for="maintenanceEndAt">
+                                        <span>موعد الانتهاء</span>
+                                        <small>اختياري</small>
+                                    </label>
+                                    <input type="datetime-local"
+                                           class="form-control"
+                                           id="maintenanceEndAt"
+                                           value="@maintenanceEndInput">
+                                </div>
+                            </div>
+
+                            <label class="maintenance-simple-inline-toggle" for="maintenanceNoEnd">
+                                <span>
+                                    <strong>بدون موعد انتهاء</strong>
+                                    <small>تستمر الصيانة حتى توقفها يدويًا.</small>
+                                </span>
+                                <span class="form-check form-switch m-0">
+                                    <input class="form-check-input"
+                                           type="checkbox"
+                                           id="maintenanceNoEnd"
+                                           @(string.IsNullOrWhiteSpace(maintenanceEndInput) ? "checked" : null)>
+                                </span>
+                            </label>
+                        </div>
+
+                        <div class="maintenance-simple-summary-line" id="maintenanceScheduleSummary">
+                            <i class="bi bi-clock-history"></i>
+                            <span>سيبدأ وضع الصيانة فورًا بعد الحفظ.</span>
+                        </div>
+                    </section>
+
+                    @* 4. الرسالة *@
+                    <section class="maintenance-simple-step">
+                        <header class="maintenance-simple-step__head">
+                            <span class="maintenance-simple-step__number">4</span>
+                            <div>
+                                <h3>ماذا سيشاهد المستخدم؟</h3>
+                                <p>اكتب رسالة قصيرة وواضحة. هذه هي الرسالة التي ستظهر عند الحاجة.</p>
+                            </div>
+                        </header>
+
+                        <div class="maintenance-simple-message-grid">
+                            <div class="maintenance-simple-field">
+                                <label for="maintenanceTitle">
+                                    <span>العنوان</span>
+                                    <small>مثال: نعود إليكم قريبًا</small>
+                                </label>
+                                <input type="text"
+                                       class="form-control"
+                                       id="maintenanceTitle"
+                                       maxlength="150"
+                                       value="@(Model.MaintenanceTitle ?? "نعود إليكم قريبًا")"
+                                       placeholder="نعود إليكم قريبًا">
+                            </div>
+
+                            <div class="maintenance-simple-field maintenance-simple-field--message">
+                                <label for="maintenanceMessage">
+                                    <span>رسالة الصيانة</span>
+                                    <small>رسالة مطمئنة ومختصرة</small>
+                                </label>
+                                <textarea class="form-control"
+                                          id="maintenanceMessage"
+                                          maxlength="500"
+                                          placeholder="نجري حاليًا بعض التحسينات على المنصة، وسنعود إليكم قريبًا...">@Model.MaintenanceMessage</textarea>
+                                <div class="maintenance-simple-message-footer">
+                                    <span><i class="bi bi-lightbulb"></i> اجعل الرسالة بسيطة ولا تذكر تفاصيل تقنية داخلية.</span>
+                                    <span id="maintenanceMessageCounter">0 / 500</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <label class="maintenance-simple-contact" for="maintenanceShowContact">
+                            <span class="maintenance-simple-contact__icon"><i class="bi bi-headset"></i></span>
+                            <span class="maintenance-simple-contact__copy">
+                                <strong>إظهار وسائل التواصل والدعم</strong>
+                                <small>سيستخدم النظام البريد والهاتف والواتساب المسجلة في تبويب «التواصل».</small>
+                            </span>
+                            <span class="form-check form-switch m-0">
+                                <input class="form-check-input"
+                                       type="checkbox"
+                                       id="maintenanceShowContact"
+                                       @(Model.MaintenanceShowContact == true ? "checked" : null)>
+                            </span>
+                        </label>
+                    </section>
+
+                </div>
+
+                @* الملخص والحفظ يبقيان ظاهرين حتى يمكن إيقاف الصيانة بسهولة *@
+                <div class="maintenance-simple-final" data-maintenance-preview>
+                    <div class="maintenance-simple-final__icon"><i class="bi bi-eye-fill"></i></div>
+                    <div class="maintenance-simple-final__body">
+                        <small>ملخص ما سيحدث عند الحفظ</small>
+                        <strong id="maintenancePreviewTitle">سيتم تحديث الملخص تلقائيًا</strong>
+                        <p id="maintenancePreviewText">غيّر الخيارات لترى النتيجة هنا قبل التطبيق.</p>
+                    </div>
+                    <span class="maintenance-simple-final__badge" id="maintenancePreviewBadge">طبيعي</span>
+                    <button type="button"
+                            class="btn btn-primary btn-save-tab maintenance-save-button"
+                            data-save-section="maintenance">
+                        <i class="bi bi-shield-check"></i>
+                        <span id="maintenanceSaveButtonText">حفظ إعدادات الصيانة</span>
+                    </button>
+                </div>
+
+            </section>
+
+        </div>
+
+
+        @* =========================================================
+        5. تبويب شبكات الدفع
+        ========================================================= *@
+
+        <div id="settings-wallets-panel" class="tab-pane-content wallets-tab settings-tab-panel" role="tabpanel">
+
+            <div class="settings-tab-intro mb-4">
+                <div class="settings-tab-intro__icon"><i class="bi bi-wallet2"></i></div>
+                <div class="settings-tab-intro__copy">
+                    <span>شبكات الدفع</span>
+                    <h2>القنوات المعتمدة داخل دليلك اليمني</h2>
+                    <p>إضافة الشبكات والمحافظ والتحكم في ظهورها وحالتها التشغيلية.</p>
+                </div>
+            </div>
+
+            <div class="row g-4">
+
+
+
+                <!-- الشعار الافتراضي للشبكات -->
+                <div class="col-12">
+                    <div class="wallet-default-logo-panel" data-default-wallet-logo-panel>
+                        <div class="wallet-default-logo-panel__preview">
+                            <span class="wallet-default-logo-panel__halo"></span>
+                            <img id="defaultWalletLogoPreview"
+                                 src="@defaultWalletLogoPath"
+                                 alt="الشعار الافتراضي لشبكات الدفع">
+                        </div>
+
+                        <div class="wallet-default-logo-panel__copy">
+                            <span class="wallet-default-logo-panel__eyebrow">الصورة الاحتياطية</span>
+                            <h3>الشعار الافتراضي لشبكات الدفع</h3>
+                            <p>يظهر تلقائيًا لأي بنك أو محفظة لم يتم رفع شعار خاص بها. تغييره هنا يزيل الاعتماد على الصورة الثابتة داخل الكود.</p>
+
+                            <div class="wallet-default-logo-panel__actions">
+                                <label class="wallet-default-logo-picker settings-file-picker-inline"
+                                       for="defaultWalletLogoUpload"
+                                       data-file-dropzone
+                                       role="button"
+                                       tabindex="0">
+                                    <i class="bi bi-image-fill"></i>
+                                    <span id="defaultWalletLogoFileName">اختيار شعار جديد</span>
+                                    <input type="file"
+                                           id="defaultWalletLogoUpload"
+                                           accept="image/jpeg,image/png,image/webp"
+                                           hidden
+                                           data-file-picker-input
+                                           data-file-name-target="defaultWalletLogoFileName"
+                                           data-empty-label="اختيار شعار جديد">
+                                </label>
+
+                                <button type="button"
+                                        class="btn wallet-default-logo-save"
+                                        id="saveDefaultWalletLogoButton">
+                                    <i class="bi bi-cloud-arrow-up-fill"></i>
+                                    حفظ الشعار الافتراضي
+                                </button>
+                            </div>
+
+                            <small class="wallet-default-logo-panel__hint">
+                                الصيغ المناسبة: جي بي جي، بي إن جي، أو ويب بي — وإذا لم ترفع صورة جديدة سيبقى الشعار الحالي كما هو.
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- إضافة شبكة دفع -->
+
+                <div class="col-12">
+
+                    <div class="settings-card p-4">
+
+                        <div class="d-flex align-items-center gap-3 mb-4 settings-card-heading">
+
+                            <div class="card-icon">
+
+                                <i class="bi bi-plus-circle"></i>
+
+                            </div>
+
+
+                            <div class="settings-card-heading-text">
+
+                                <h5 class="fw-bold mb-0">
+                                    إضافة شبكة معتمدة جديدة
+                                </h5>
+
+                                <small class="text-muted">
+                                    إدراج قناة دفع للنظام
+                                </small>
+
+                            </div>
+
+                        </div>
+
+
+                        <form id="addSupportedWalletForm">
+
+                            <div class="row g-3 align-items-end settings-wallet-form-row">
+
+
+                                <div class="col-md-5">
+
+                                    <div class="form-floating">
+
+                                        <input type="text"
+                                               class="form-control"
+                                               id="newWalletName"
+                                               placeholder="اسم الشبكة"
+                                               required>
+
+                                        <label for="newWalletName">
+                                            اسم البنك أو المحفظة
+                                        </label>
+
+                                    </div>
+
+                                </div>
+
+
+                                <div class="col-md-5">
+
+                                    <div class="custom-file-upload-group">
+
+                                        <label class="form-label small text-muted fw-bold mb-2 d-block">
+                                            <i class="bi bi-image me-1 text-primary"></i>
+                                            شعار الشبكة (اختياري)
+                                        </label>
+
+                                        <label for="newWalletLogo"
+                                               class="settings-file-picker settings-file-picker--wallet"
+                                               data-file-dropzone
+                                               role="button"
+                                               tabindex="0"
+                                               aria-label="اختيار شعار البنك أو المحفظة">
+                                            <span id="newWalletLogoPreview" class="settings-file-picker__visual settings-file-picker__visual--compact">
+                                                <i class="bi bi-bank"></i>
+                                            </span>
+                                            <span class="settings-file-picker__content">
+                                                <strong>إضافة شعار للشبكة</strong>
+                                                <span id="newWalletLogoFileNameDisplay"
+                                                      class="settings-file-picker__filename">
+                                                    اضغط أو اسحب الصورة هنا
+                                                </span>
+                                                <small>جي بي جي، بي إن جي، أو ويب بي — اختياري.</small>
+                                            </span>
+                                            <span class="settings-file-picker__action">
+                                                اختيار صورة
+                                            </span>
+                                        </label>
+
+                                        <input type="file"
+                                               class="d-none"
+                                               id="newWalletLogo"
+                                               accept="image/jpeg,image/png,image/webp"
+                                               data-file-picker-input
+                                               data-file-name-target="newWalletLogoFileNameDisplay"
+                                               data-file-preview-target="newWalletLogoPreview"
+                                               data-empty-label="اضغط أو اسحب الصورة هنا">
+
+                                    </div>
+
+                                </div>
+
+
+                                <div class="col-md-2">
+
+                                    <button type="submit"
+                                            class="btn btn-primary w-100 py-3 rounded-3 settings-wallet-add-btn">
+
+                                        <i class="bi bi-plus-lg me-2"></i>
+
+                                        إضافة
+                                    </button>
+
+                                </div>
+
+                            </div>
+
+                        </form>
+
+                    </div>
+
+                </div>
+
+
+                <!-- جدول الشبكات -->
+
+                <div class="col-12">
+
+                    <div class="settings-card p-4">
+
+                        <div class="d-flex align-items-center gap-3 mb-4 settings-card-heading">
+
+                            <div class="card-icon text-success">
+
+                                <i class="bi bi-shield-check"></i>
+
+                            </div>
+
+
+                            <div class="settings-card-heading-text">
+
+                                <h5 class="fw-bold mb-0">
+                                    القنوات الفعالة في النظام
+                                </h5>
+
+                                <small class="text-muted">
+                                    إدارة الشبكات المتاحة
+                                </small>
+
+                            </div>
+
+                        </div>
+
+
+                        <div class="table-responsive settings-table-scroll">
+
+                            <table class="table table-hover align-middle mb-0 custom-admin-table wallets-admin-table">
+
+                                <thead>
+
+                                    <tr>
+
+                                        <th scope="col"
+                                            class="text-center">
+
+                                            #
+                                        </th>
+
+                                        <th scope="col">
+                                            الشعار
+                                        </th>
+
+                                        <th scope="col">
+                                            اسم المحفظة
+                                        </th>
+
+                                        <th scope="col"
+                                            class="text-center">
+
+                                            الحالة
+                                        </th>
+
+                                        <th scope="col"
+                                            class="text-center">
+
+                                            إجراء
+                                        </th>
+
+                                    </tr>
+
+                                </thead>
+
+
+                                <tbody id="supportedWalletsTableBody">
+
+                                    <tr>
+
+                                        <td colspan="5"
+                                            class="text-center py-4 text-muted">
+
+                                            <div class="spinner-border spinner-border-sm text-primary me-2"
+                                                 role="status">
+                                            </div>
+
+                                            جاري جلب البيانات...
+                                        </td>
+
+                                    </tr>
+
+                                </tbody>
+
+                            </table>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+@section Scripts {
+
+    <script src="~/lib/sweetalert2/sweetalert2.js"></script>
+    <script src="~/js/admin/settings-actions.js"
+        asp-append-version="true"></script>
+}

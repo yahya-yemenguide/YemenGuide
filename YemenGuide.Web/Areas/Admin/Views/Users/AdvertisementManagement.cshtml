@@ -1,0 +1,31 @@
+@model YemenGuide.Core.DTOs.Admin.AdminAdvertisementManagementPageDto
+@{ ViewData["Title"] = "إدارة الإعلانات"; Layout = "_AdminLayout"; }
+@section Styles { <link rel="stylesheet" href="~/css/admin/advertisements.css" asp-append-version="true" /> }
+
+<main class="admx-page" dir="rtl" id="adminAdvertisementsApp" data-default-tab="@Model.DefaultTab"
+ data-overview-url="@Url.Action("OverviewTab", "Advertisements", new { area = "Admin" })"
+ data-ads-url="@Url.Action("AdvertisementsTab", "Advertisements", new { area = "Admin" })"
+ data-plans-url="@Url.Action("PlansTab", "Advertisements", new { area = "Admin" })"
+ data-reports-url="@Url.Action("ReportsTab", "Advertisements", new { area = "Admin" })"
+ data-report-print-url="@Url.Action("AdvertisementReportPrint", "Advertisements", new { area = "Admin" })"
+ data-report-export-url="@Url.Action("ExportAdvertisementReport", "Advertisements", new { area = "Admin" })"
+ data-details-url="@Url.Action("AdvertisementDetails", "Advertisements", new { area = "Admin" })"
+ data-plan-form-url="@Url.Action("PlanForm", "Advertisements", new { area = "Admin" })"
+ data-save-plan-url="@Url.Action("SavePlan", "Advertisements", new { area = "Admin" })"
+ data-plan-status-url="@Url.Action("ChangePlanStatus", "Advertisements", new { area = "Admin" })"
+ data-review-payment-url="@Url.Action("ReviewPayment", "Advertisements", new { area = "Admin" })"
+ data-review-ad-url="@Url.Action("ReviewAdvertisement", "Advertisements", new { area = "Admin" })"
+ data-control-ad-url="@Url.Action("ChangeAdvertisementStatus", "Advertisements", new { area = "Admin" })">
+ @Html.AntiForgeryToken()
+ <header class="admx-page-head"><div><span class="admx-eyebrow"><i class="bi bi-megaphone"></i> مركز الإعلانات</span><h1>إدارة الإعلانات</h1><p>متابعة الطلبات والأسعار والنتائج من مكان واحد واضح.</p></div></header>
+ <nav class="admx-tabs" aria-label="أقسام إدارة الإعلانات">
+  <button type="button" class="admx-tab" data-admx-tab="overview"><span class="admx-tab-icon"><i class="bi bi-grid"></i></span><span class="admx-tab-label">نظرة عامة</span></button>
+  <button type="button" class="admx-tab" data-admx-tab="ads"><span class="admx-tab-icon"><i class="bi bi-megaphone"></i></span><span class="admx-tab-label">الإعلانات</span>@if(Model.Overview.PendingReviewCount + Model.Overview.AwaitingPaymentCount > 0){<b>@(Model.Overview.PendingReviewCount + Model.Overview.AwaitingPaymentCount)</b>}</button>
+  @if(Model.CanManagePlans){<button type="button" class="admx-tab" data-admx-tab="placements"><span class="admx-tab-icon"><i class="bi bi-pin-map"></i></span><span class="admx-tab-label">أماكن الظهور والأسعار</span></button>}
+  @if(Model.CanViewReports){<button type="button" class="admx-tab" data-admx-tab="reports"><span class="admx-tab-icon"><i class="bi bi-file-earmark-bar-graph"></i></span><span class="admx-tab-label">التقارير والمالية</span></button>}
+ </nav>
+ <section class="admx-stage" id="admxStage" aria-live="polite">@await Html.PartialAsync("_OverviewTab", Model.Overview)</section>
+</main>
+<div class="admx-modal-root" id="admxModalRoot" aria-live="polite"></div>
+<div class="admx-toast-root" id="admxToastRoot" aria-live="assertive"></div>
+@section Scripts { <script src="~/js/admin/advertisements.js" asp-append-version="true"></script> }

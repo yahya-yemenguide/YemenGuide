@@ -1,0 +1,1014 @@
+﻿@model YemenGuide.Core.DTOs.Customer.CheckoutViewModel
+@using System
+@using System.Globalization
+
+@functions {
+    private static string BookingTypeLabel(string? value)
+    {
+        return (value ?? string.Empty).Trim().ToLowerInvariant() switch
+        {
+            "family" => "عائلي",
+            "men" => "رجال",
+            "women" => "نساء",
+            "company" => "جهة أو شركة",
+            "individual" => "فردي",
+            "wedding" => "زفاف",
+            "engagement" => "خطوبة",
+            "graduation" => "تخرج",
+            "conference" => "مؤتمر أو اجتماع",
+            "" => "غير محدد",
+            _ => value!.Trim()
+        };
+    }
+
+    private static string PolicyIcon(string? type)
+    {
+        return (type ?? string.Empty).Trim().ToLowerInvariant() switch
+        {
+            "deposit" => "bi-wallet2",
+            "payment" => "bi-credit-card-2-front",
+            "cancellation" => "bi-arrow-counterclockwise",
+            "security" => "bi-shield-check",
+            "insurance" => "bi-shield-lock",
+            "operation" => "bi-clock-history",
+            "terms" => "bi-file-earmark-text",
+            _ => "bi-check2-circle"
+        };
+    }
+
+    private static string PolicyTone(string? type)
+    {
+        return (type ?? string.Empty).Trim().ToLowerInvariant() switch
+        {
+            "deposit" => "is-primary",
+            "payment" => "is-primary",
+            "cancellation" => "is-coral",
+            "security" => "is-success",
+            "insurance" => "is-success",
+            "operation" => "is-warning",
+            _ => "is-neutral"
+        };
+    }
+}
+
+@{
+    ViewData["Title"] = "مراجعة وتأكيد الحجز";
+    ViewData["HideFooter"] = true;
+
+    var itemKind = Model.IsRoomBooking
+        ? "الغرفة أو الجناح"
+        : Model.IsHallBooking
+            ? "باقة القاعة"
+            : "الباقة";
+
+    var itemKindShort = Model.IsRoomBooking
+        ? "الغرفة"
+        : Model.IsHallBooking
+            ? "القاعة"
+            : "الباقة";
+
+    var approvalTitle = Model.RequiresOwnerApproval
+        ? "يحتاج موافقة المالك"
+        : "تأكيد فوري";
+
+    var approvalDescription = Model.RequiresOwnerApproval
+        ? "بعد إرسال الطلب يراجعه مالك المنشأة، وتظهر خطوة الدفع بعد الموافقة عند وجود عربون."
+        : Model.RequiresDeposit
+            ? $"بعد تأكيد الحجز تنتقل إلى دفع العربون خلال {Model.PaymentTimeoutHours} ساعة."
+            : "يتم تأكيد الحجز مباشرة بعد التحقق النهائي من التوفر.";
+
+    var submitTitle = Model.RequiresOwnerApproval
+        ? "إرسال طلب الحجز"
+        : Model.RequiresDeposit
+            ? "تأكيد الحجز والمتابعة للدفع"
+            : "تأكيد الحجز الآن";
+
+    var submitSubtitle = Model.RequiresOwnerApproval
+        ? "لن يتم طلب الدفع قبل موافقة المالك"
+        : Model.RequiresDeposit
+            ? "سيظهر لك مبلغ العربون ووسائل الدفع في الخطوة التالية"
+            : "سيعيد النظام التحقق من التوفر قبل التأكيد";
+
+    var displayEndDate = Model.EndDate?.ToString("yyyy/MM/dd", CultureInfo.InvariantCulture)
+        ?? Model.StartDate.ToString("yyyy/MM/dd", CultureInfo.InvariantCulture);
+
+    var startDateValue = Model.StartDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+    var endDateValue = Model.EndDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty;
+    var finalTotalValue = Model.FinalTotal.ToString(CultureInfo.InvariantCulture);
+
+    var itemCapacityText = Model.ItemCapacity.HasValue && Model.ItemCapacity.Value > 0
+        ? $"حتى {Model.ItemCapacity.Value * Math.Max(1, Model.Quantity)} أشخاص"
+        : "بحسب بيانات المنشأة";
+}
+
+@section Styles {
+    <link rel="stylesheet"
+      href="~/css/customer/Checkout.css"
+      asp-append-version="true" />
+}
+
+    <main class="checkout-page" dir="rtl">
+        <div class="checkout-page-decoration checkout-page-decoration-one" aria-hidden="true"></div>
+        <div class="checkout-page-decoration checkout-page-decoration-two" aria-hidden="true"></div>
+
+        <div class="checkout-shell">
+            <header class="checkout-header checkout-luxury-hero yg-checkout-reveal">
+                <div class="checkout-hero-ambient" aria-hidden="true">
+                    <span class="checkout-hero-orb orb-cyan"></span>
+                    <span class="checkout-hero-orb orb-coral"></span>
+                    <span class="checkout-hero-grid"></span>
+                </div>
+                <div class="checkout-header-navigation">
+                    <nav class="checkout-breadcrumb" aria-label="مسار التنقل">
+                        <a asp-controller="Home" asp-action="Index">الرئيسية</a>
+                        <i class="bi bi-chevron-left" aria-hidden="true"></i>
+                        <a asp-controller="Places"
+                       asp-action="Details"
+                       asp-route-id="@Model.PlaceId"
+                       asp-route-promotionId="@(Model.PromotionId ?? Model.RequestedPromotionId)">@Model.PlaceName</a>
+                        <i class="bi bi-chevron-left" aria-hidden="true"></i>
+                        <span aria-current="page">مراجعة الحجز</span>
+                    </nav>
+
+                    <button type="button"
+                        class="checkout-back-button"
+                        onclick="history.back()">
+                        <i class="bi bi-arrow-right"></i>
+                        <span>رجوع</span>
+                    </button>
+                </div>
+
+                <div class="checkout-header-content">
+                    <div class="checkout-header-title-wrap">
+                        <span class="checkout-header-icon">
+                            <i class="bi bi-bag-check-fill"></i>
+                        </span>
+
+                        <div>
+                            <span class="checkout-eyebrow">
+                                <i class="bi bi-stars"></i>
+                                مراجعة أخيرة
+                            </span>
+                            <h1>تأكد من تفاصيل حجزك</h1>
+                            <p>كل البيانات والأسعار المعروضة تم تجهيزها من النظام قبل إنشاء الحجز.</p>
+                        </div>
+                    </div>
+
+                    <div class="checkout-journey" aria-label="تقدم رحلة الحجز">
+                        <span class="is-done"><i class="bi bi-check-lg"></i><small>الاختيار</small></span>
+                        <i class="bi bi-chevron-left"></i>
+                        <span class="is-current"><i class="bi bi-stars"></i><small>المراجعة</small></span>
+                        <i class="bi bi-chevron-left"></i>
+                        <span><i class="bi bi-shield-check"></i><small>التأكيد</small></span>
+                    </div>
+
+                    <div class="checkout-approval-badge @(Model.RequiresOwnerApproval ? "is-manual" : "is-instant")">
+                        <span>
+                            <i class="bi @(Model.RequiresOwnerApproval ? "bi-hourglass-split" : "bi-lightning-charge-fill")"></i>
+                        </span>
+                        <div>
+                            <small>آلية التأكيد</small>
+                            <strong>@approvalTitle</strong>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <div class="checkout-layout">
+                <div class="checkout-main-column">
+                    <section class="checkout-card checkout-booking-card yg-checkout-reveal" aria-labelledby="bookingOverviewHeading">
+                        <div class="checkout-card-header">
+                            <div class="checkout-card-heading">
+                                <span class="checkout-card-icon">
+                                    <i class="bi bi-building-check"></i>
+                                </span>
+                                <div>
+                                    <small>المنشأة واختيارك</small>
+                                    <h2 id="bookingOverviewHeading">ملخص الحجز</h2>
+                                </div>
+                            </div>
+
+                            <span class="checkout-status-chip">
+                                <i class="bi bi-database-check"></i>
+                                بيانات مؤكدة
+                            </span>
+                        </div>
+
+                        <div class="checkout-booking-overview">
+                            <figure class="checkout-booking-media checkout-gallery-trigger"
+                                data-gallery-index="0"
+                                role="button"
+                                tabindex="0"
+                                aria-label="فتح معرض صور @Model.ItemName"
+                                title="اضغط لعرض جميع الصور">
+                                <img src="@Model.ItemImageUrl"
+                                 alt="@Model.ItemName"
+                                 loading="eager"
+                                 onerror="this.onerror=null;this.src='/images/bg1.jpg';" />
+
+                                <div class="checkout-media-overlay" aria-hidden="true"></div>
+
+                                <figcaption>
+                                    <span>@itemKindShort</span>
+                                @if (Model.HasMultipleItemImages)
+                                {
+                                    <strong>
+                                        <i class="bi bi-images"></i>
+                                        @Model.ItemImages.Count صور
+                                    </strong>
+                                }
+                            </figcaption>
+                        </figure>
+
+                        <div class="checkout-booking-copy">
+                            <div class="checkout-place-line">
+                                <span class="checkout-category-chip">
+                                    <i class="bi bi-building"></i>
+                                    @Model.CategoryName
+                                </span>
+
+                                @if (!string.IsNullOrWhiteSpace(Model.CityName))
+                                {
+                                    <span class="checkout-location-chip">
+                                        <i class="bi bi-geo-alt-fill"></i>
+                                        @Model.CityName
+                                    </span>
+                                }
+                            </div>
+
+                            <h3>@Model.PlaceName</h3>
+
+                            <div class="checkout-selected-item">
+                                <button type="button"
+                                        class="checkout-selected-item-image checkout-gallery-trigger"
+                                        data-gallery-index="0"
+                                        aria-label="عرض صور @Model.ItemName">
+
+                                    <img src="@Model.ItemImageUrl"
+                                         alt="صورة @Model.ItemName"
+                                         loading="lazy"
+                                         onerror="this.onerror=null;this.src='/images/bg1.jpg';" />
+
+                                </button>
+                                <div>
+                                    <small>@itemKind</small>
+                                    <strong>@Model.ItemName</strong>
+                                    @if (!string.IsNullOrWhiteSpace(Model.ItemSecondaryText))
+                                    {
+                                        <span>@Model.ItemSecondaryText</span>
+                                    }
+                                </div>
+                            </div>
+
+                            @if (!string.IsNullOrWhiteSpace(Model.ItemDescription))
+                            {
+                                <p class="checkout-item-description">@Model.ItemDescription</p>
+                            }
+
+                            <div class="checkout-facts-grid">
+                                <article class="checkout-fact">
+                                    <span><i class="bi bi-calendar-check"></i></span>
+                                    <div>
+                                        <small>@(Model.IsRoomBooking ? "الدخول" : "تاريخ الحجز")</small>
+                                        <strong>@Model.StartDate.ToString("yyyy/MM/dd", CultureInfo.InvariantCulture)</strong>
+                                    </div>
+                                </article>
+
+                                @if (Model.IsRoomBooking)
+                                {
+                                    <article class="checkout-fact">
+                                        <span><i class="bi bi-calendar2-x"></i></span>
+                                        <div>
+                                            <small>الخروج</small>
+                                            <strong>@displayEndDate</strong>
+                                        </div>
+                                    </article>
+                                }
+
+                                <article class="checkout-fact">
+                                    <span><i class="bi bi-moon-stars"></i></span>
+                                    <div>
+                                        <small>@(Model.IsRoomBooking ? "مدة الإقامة" : "مدة الحجز")</small>
+                                        <strong>@Model.BookingDays @(Model.IsRoomBooking ? "ليلة" : "يوم")</strong>
+                                    </div>
+                                </article>
+
+                                <article class="checkout-fact">
+                                    <span><i class="bi bi-layers"></i></span>
+                                    <div>
+                                        <small>الكمية</small>
+                                        <strong>@Model.Quantity</strong>
+                                    </div>
+                                </article>
+
+                                @if (Model.TotalGuests > 0)
+                                {
+                                    <article class="checkout-fact">
+                                        <span><i class="bi bi-people-fill"></i></span>
+                                        <div>
+                                            <small>الحضور</small>
+                                            <strong>@Model.TotalGuests أشخاص</strong>
+                                        </div>
+                                    </article>
+                                }
+
+                                @if (!string.IsNullOrWhiteSpace(Model.BookingType))
+                                {
+                                    <article class="checkout-fact">
+                                        <span><i class="bi bi-person-badge"></i></span>
+                                        <div>
+                                            <small>نوع الحجز</small>
+                                            <strong>@BookingTypeLabel(Model.BookingType)</strong>
+                                        </div>
+                                    </article>
+                                }
+
+                                @if (!string.IsNullOrWhiteSpace(Model.SeatingSetup))
+                                {
+                                    <article class="checkout-fact">
+                                        <span><i class="bi bi-grid-3x3-gap-fill"></i></span>
+                                        <div>
+                                            <small>ترتيب الجلسة</small>
+                                            <strong>@Model.SeatingSetup</strong>
+                                        </div>
+                                    </article>
+                                }
+
+                                @if (Model.ItemCapacity.HasValue && Model.ItemCapacity.Value > 0)
+                                {
+                                    <article class="checkout-fact">
+                                        <span><i class="bi bi-arrows-fullscreen"></i></span>
+                                        <div>
+                                            <small>السعة</small>
+                                            <strong>@itemCapacityText</strong>
+                                        </div>
+                                    </article>
+                                }
+
+                                @if (Model.IsRoomBooking && Model.HasArea)
+                                {
+                                    <article class="checkout-fact">
+                                        <span><i class="bi bi-aspect-ratio"></i></span>
+                                        <div>
+                                            <small>المساحة</small>
+                                            <strong>@Model.AreaSquareMeters!.Value.ToString("0.##", CultureInfo.InvariantCulture) م²</strong>
+                                        </div>
+                                    </article>
+                                }
+
+                                @if (Model.IsRoomBooking && Model.MaxAdults > 0)
+                                {
+                                    <article class="checkout-fact">
+                                        <span><i class="bi bi-person-fill"></i></span>
+                                        <div>
+                                            <small>البالغون لكل غرفة</small>
+                                            <strong>@Model.MaxAdults</strong>
+                                        </div>
+                                    </article>
+                                }
+
+                                @if (Model.IsRoomBooking && Model.MaxChildren > 0)
+                                {
+                                    <article class="checkout-fact">
+                                        <span><i class="bi bi-person-hearts"></i></span>
+                                        <div>
+                                            <small>الأطفال لكل غرفة</small>
+                                            <strong>@Model.MaxChildren</strong>
+                                        </div>
+                                    </article>
+                                }
+
+                                @if (Model.IsRoomBooking && Model.HasBeds)
+                                {
+                                    <article class="checkout-fact">
+                                        <span><i class="bi bi-bed"></i></span>
+                                        <div>
+                                            <small>عدد الأسرّة</small>
+                                            <strong>@Model.BedsCount</strong>
+                                        </div>
+                                    </article>
+                                }
+
+                                @if (Model.IsRoomBooking && Model.HasBedType)
+                                {
+                                    <article class="checkout-fact">
+                                        <span><i class="bi bi-moon"></i></span>
+                                        <div>
+                                            <small>نوع السرير</small>
+                                            <strong>@Model.BedType</strong>
+                                        </div>
+                                    </article>
+                                }
+
+                                @if (Model.IsRoomBooking && Model.FloorsCount > 0)
+                                {
+                                    <article class="checkout-fact">
+                                        <span><i class="bi bi-building"></i></span>
+                                        <div>
+                                            <small>الطوابق المتاحة لهذا النوع</small>
+                                            <strong>@Model.FloorsCount</strong>
+                                        </div>
+                                    </article>
+                                }
+                            </div>
+
+                            @if (Model.IsRoomBooking &&
+                            !string.IsNullOrWhiteSpace(Model.RoomAssignmentNotice))
+                            {
+                                <div class="checkout-trust-note" role="note">
+                                    <i class="bi bi-door-open-fill"></i>
+                                    <span>@Model.RoomAssignmentNotice</span>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </section>
+
+                @if (Model.HasAppliedPromotion ||
+                Model.HasPendingPromotionCode ||
+                (Model.PromotionWasRequested &&
+                !string.IsNullOrWhiteSpace(Model.PromotionMessage)))
+                {
+                    <section class="checkout-promotion-card yg-checkout-reveal @(Model.HasAppliedPromotion ? "is-applied" : Model.HasPendingPromotionCode ? "is-code-pending" : "is-unavailable")"
+                         aria-labelledby="checkoutPromotionHeading"
+                         data-checkout-promotion>
+                        <div class="checkout-promotion-ambient" aria-hidden="true">
+                            <span class="promo-orb promo-orb-one"></span>
+                            <span class="promo-orb promo-orb-two"></span>
+                            <span class="promo-spark promo-spark-one"></span>
+                            <span class="promo-spark promo-spark-two"></span>
+                        </div>
+
+                        <div class="checkout-promotion-icon" aria-hidden="true">
+                            <i class="bi @(Model.HasAppliedPromotion ? "bi-fire" : Model.HasPendingPromotionCode ? "bi-ticket-perforated-fill" : "bi-info-circle-fill")"></i>
+                        </div>
+
+                        <div class="checkout-promotion-copy">
+                            <span class="checkout-promotion-kicker">
+                                @if (Model.HasAppliedPromotion)
+                                {
+                                    <i class="bi bi-patch-check-fill"></i>
+                                    <span>تم التحقق من العرض</span>
+                                }
+                                else if (Model.HasPendingPromotionCode)
+                                {
+                                    <i class="bi bi-key-fill"></i>
+                                    <span>خطوة واحدة لتفعيل العرض</span>
+                                }
+                                else
+                                {
+                                    <i class="bi bi-exclamation-circle-fill"></i>
+                                    <span>تحديث حالة العرض</span>
+                                }
+                            </span>
+
+                            <h2 id="checkoutPromotionHeading">
+                                @(string.IsNullOrWhiteSpace(Model.PromotionTitle)
+                                    ? "العرض الذي اخترته"
+                                    : Model.PromotionTitle)
+                            </h2>
+
+                            @if (Model.HasAppliedPromotion)
+                            {
+                                <div class="checkout-promotion-metrics">
+                                    <span class="checkout-promotion-discount-pill">
+                                        <small>@(Model.HasRewardPromotion ? "المكافأة" : "الخصم")</small>
+                                        <strong>@Model.PromotionBenefitLabel</strong>
+                                        @if (Model.AppliedFreeQuantity > 0)
+                                        {
+                                            <small class="checkout-promotion-repeat-result">
+                                                <i class="bi bi-gift"></i>
+                                                تم احتساب @Model.AppliedFreeQuantity @(Model.AppliedFreeQuantity == 1 ? "ليلة/وحدة مجانية" : "ليالٍ/وحدات مجانية")
+                                                @if (Model.PromotionIsRewardRepeatable && Model.PromotionRepeatCount > 1)
+                                                {
+                                                    <text> عبر @Model.PromotionRepeatCount مرات من العرض</text>
+                                                }
+                                            </small>
+                                        }
+                                    </span>
+
+                                    <span class="checkout-promotion-target-pill">
+                                        <i class="bi bi-bullseye"></i>
+                                        @(string.IsNullOrWhiteSpace(Model.PromotionTargetLabel)
+                                            ? "الحجز الحالي"
+                                            : Model.PromotionTargetLabel)
+                                    </span>
+
+                                    @if (Model.PromotionMaximumDiscountAmount.HasValue &&
+                                   Model.PromotionMaximumDiscountAmount.Value > 0 &&
+                                   string.Equals(Model.PromotionDiscountType, "Percentage", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        <span class="checkout-promotion-limit-pill">
+                                            بحد أقصى
+                                            <strong>@Model.PromotionMaximumDiscountAmountText</strong>
+                                        </span>
+                                    }
+                                </div>
+
+                                @if (Model.HasMonetaryPromotion)
+                                {
+                                    <div class="checkout-promotion-saving">
+                                        <div>
+                                            <small>قيمة التوفير من العرض</small>
+                                            <strong>-@Model.DiscountAmountText</strong>
+                                        </div>
+                                        <span></span>
+                                        <div>
+                                            <small>التوفير الكلي بعد إعادة حساب الضريبة</small>
+                                            <strong>@Model.TotalSavingsText</strong>
+                                        </div>
+                                    </div>
+                                }
+                                else if (Model.HasRewardPromotion)
+                                {
+                                    <div class="checkout-promotion-saving">
+                                        <div>
+                                            <small>المكافأة المضافة</small>
+                                            <strong>@Model.PromotionBenefitLabel</strong>
+                                        </div>
+                                    </div>
+                                }
+
+                                <p class="checkout-promotion-message">
+                                    <i class="bi bi-shield-check"></i>
+                                    @(string.IsNullOrWhiteSpace(Model.PromotionMessage)
+                                        ? "سيعيد النظام التحقق من العرض مرة أخيرة عند إنشاء الحجز."
+                                        : Model.PromotionMessage)
+                                </p>
+                            }
+                            else if (Model.HasPendingPromotionCode)
+                            {
+                                <p class="checkout-promotion-message">
+                                    <i class="bi bi-key"></i>
+                                    @(string.IsNullOrWhiteSpace(Model.PromotionMessage)
+                                        ? "أدخل كود العرض ثم اضغط تطبيق حتى يعاد حساب السعر من الخادم."
+                                        : Model.PromotionMessage)
+                                </p>
+
+                                <div class="checkout-promotion-code-box">
+                                    <label for="promotionCodeEntry">كود العرض</label>
+                                    <div class="checkout-promotion-code-control" dir="ltr">
+                                        <input type="text"
+                                       id="promotionCodeEntry"
+                                       maxlength="50"
+                                       autocomplete="off"
+                                       spellcheck="false"
+                                       value="@Model.PromotionCode"
+                                       placeholder="PROMO-CODE" />
+                                        <button type="button"
+                                        id="btnApplyPromotionCode"
+                                        data-promotion-id="@(Model.RequestedPromotionId?.ToString() ?? string.Empty)">
+                                            <i class="bi bi-stars"></i>
+                                            <span>تطبيق الكود</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                <p class="checkout-promotion-message is-warning">
+                                    <i class="bi bi-info-circle"></i>
+                                    @Model.PromotionMessage
+                                </p>
+                            }
+                        </div>
+
+                        <div class="checkout-promotion-actions">
+                            @if (Model.HasAppliedPromotion)
+                            {
+                                <span class="checkout-promotion-applied-badge">
+                                    <i class="bi bi-check2-circle"></i>
+                                    مطبق
+                                </span>
+                            }
+
+                            @if (!Model.HasAppliedPromotion || !Model.PromotionIsAutomatic)
+                            {
+                                <button type="button"
+                                id="btnRemovePromotion"
+                                class="checkout-promotion-remove"
+                                title="متابعة الحجز بدون هذا العرض">
+                                    <i class="bi bi-x-lg"></i>
+                                    <span>إزالة العرض</span>
+                                </button>
+                            }
+                        </div>
+                    </section>
+                }
+
+
+                @if (Model.HasAdditionalServices)
+                {
+                    <section class="checkout-card checkout-services-card yg-checkout-reveal" aria-labelledby="additionalServicesHeading">
+                        <div class="checkout-card-header compact">
+                            <div class="checkout-card-heading">
+                                <span class="checkout-card-icon is-success">
+                                    <i class="bi bi-stars"></i>
+                                </span>
+                                <div>
+                                    <small>اختيارات إضافية</small>
+                                    <h2 id="additionalServicesHeading">الخدمات المضافة</h2>
+                                </div>
+                            </div>
+
+                            <span class="checkout-count-chip">@Model.AdditionalServices.Count</span>
+                        </div>
+
+                        <div class="checkout-services-list">
+                            @foreach (var service in Model.AdditionalServices)
+                            {
+                                <article class="checkout-service-item">
+                                    <img src="@(string.IsNullOrWhiteSpace(service.ImageUrl) ? "/images/bg1.jpg" : service.ImageUrl)"
+                                 alt="@service.ServiceName"
+                                 loading="lazy"
+                                 onerror="this.onerror=null;this.src='/images/bg1.jpg';" />
+
+                                    <div class="checkout-service-copy">
+                                        <strong>@service.ServiceName</strong>
+                                        @if (!string.IsNullOrWhiteSpace(service.Description))
+                                        {
+                                            <span>@service.Description</span>
+                                        }
+                                    </div>
+
+                                    <div class="checkout-service-price">
+                                        <strong>@service.TotalPriceText</strong>
+                                    </div>
+                                </article>
+                            }
+                        </div>
+                    </section>
+                }
+
+                <section class="checkout-card checkout-policies-card yg-checkout-reveal" aria-labelledby="policiesHeading">
+                    <div class="checkout-card-header compact">
+                        <div class="checkout-card-heading">
+                            <span class="checkout-card-icon is-coral">
+                                <i class="bi bi-file-earmark-check-fill"></i>
+                            </span>
+                            <div>
+                                <small>قبل التأكيد</small>
+                                <h2 id="policiesHeading">السياسات والشروط</h2>
+                            </div>
+                        </div>
+
+                        <span class="checkout-count-chip">@Model.Policies.Count</span>
+                    </div>
+
+                    <div class="checkout-policies-list">
+                        @if (Model.HasPolicies)
+                        {
+                            var policyIndex = 0;
+                            foreach (var policy in Model.Policies)
+                            {
+                                <details class="checkout-policy-item @PolicyTone(policy.Type)" open="@(policyIndex == 0 ? "open" : null)">
+                                    <summary>
+                                        <span class="checkout-policy-icon">
+                                            <i class="bi @PolicyIcon(policy.Type)"></i>
+                                        </span>
+                                        <div>
+                                            <small>سياسة المنشأة</small>
+                                            <strong>@policy.Title</strong>
+                                        </div>
+                                        <i class="bi bi-chevron-down checkout-policy-chevron"></i>
+                                    </summary>
+                                    <div class="checkout-policy-content">@policy.Description</div>
+                                </details>
+                                policyIndex++;
+                            }
+                        }
+                        else
+                        {
+                            <div class="checkout-empty-state">
+                                <i class="bi bi-info-circle"></i>
+                                <span>لا توجد سياسات إضافية مسجلة لهذا الحجز.</span>
+                            </div>
+                        }
+                    </div>
+                </section>
+            </div>
+
+            <aside class="checkout-summary-column" aria-labelledby="priceSummaryHeading">
+                <section class="checkout-summary-card yg-checkout-reveal">
+                    <div class="checkout-summary-header">
+                        <div>
+                            <span class="checkout-eyebrow">
+                                <i class="bi bi-receipt-cutoff"></i>
+                                ملخص مالي
+                            </span>
+                            <h2 id="priceSummaryHeading">تفاصيل السعر</h2>
+                        </div>
+
+                        <span class="checkout-currency-chip">@Model.CurrencyLabel</span>
+                    </div>
+
+                    <div class="checkout-price-list">
+                        <div class="checkout-price-row">
+                            <div>
+                                <span>سعر @itemKindShort</span>
+                                <small>
+                                    @if (Model.IsRoomBooking)
+                                    {
+                                        @($"{Model.BookingDays} ليلة × {Model.Quantity}")
+                                    }
+                                    else
+                                    {
+                                        @($"الكمية {Model.Quantity}")
+                                    }
+                                </small>
+                            </div>
+                            <strong>@Model.BaseAmountText</strong>
+                        </div>
+
+                        @if (Model.HasAdditionalServices)
+                        {
+                            <div class="checkout-price-row">
+                                <div>
+                                    <span>الخدمات الإضافية</span>
+                                    <small>@Model.AdditionalServices.Count خدمات</small>
+                                </div>
+                                <strong>@Model.ServicesTotalText</strong>
+                            </div>
+                        }
+
+                        @if (Model.HasCleaningFee)
+                        {
+                            <div class="checkout-price-row">
+                                <div>
+                                    <span>رسوم التنظيف</span>
+                                    <small>حسب سياسة المنشأة</small>
+                                </div>
+                                <strong>@Model.CleaningFeeText</strong>
+                            </div>
+                        }
+
+                        @if (Model.HasMonetaryPromotion)
+                        {
+                            <div class="checkout-price-row checkout-price-discount-row">
+                                <div>
+                                    <span>
+                                        <i class="bi bi-fire"></i>
+                                        @Model.PromotionTitle
+                                    </span>
+                                    <small>
+                                        @Model.PromotionBenefitLabel
+                                        @if (Model.PromotionMaximumDiscountAmount.HasValue &&
+                                       Model.PromotionMaximumDiscountAmount.Value > 0 &&
+                                       string.Equals(Model.PromotionDiscountType, "Percentage", StringComparison.OrdinalIgnoreCase))
+                                        {
+                                            <text> · بحد أقصى @Model.PromotionMaximumDiscountAmountText</text>
+                                        }
+                                    </small>
+                                </div>
+                                <strong>-@Model.DiscountAmountText</strong>
+                            </div>
+                        }
+
+                        @if (Model.HasAppliedPromotion && !Model.HasMonetaryPromotion)
+                        {
+                            <div class="checkout-price-row checkout-price-discount-row">
+                                <div>
+                                    <span>
+                                        <i class="bi bi-gift-fill"></i>
+                                        @Model.PromotionTitle
+                                    </span>
+                                    <small>@Model.PromotionBenefitLabel</small>
+                                </div>
+                                <strong>مجانًا</strong>
+                            </div>
+                        }
+
+                        @if (Model.HasTax)
+                        {
+                            <div class="checkout-price-row">
+                                <div>
+                                    <span>الضريبة</span>
+                                    <small>@Model.TaxPercentage.ToString("0.##", CultureInfo.InvariantCulture)%</small>
+                                </div>
+                                <strong>@Model.TaxAmountText</strong>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="checkout-final-total">
+                        <div>
+                            <small>الإجمالي النهائي</small>
+                            <strong>المبلغ المستحق للحجز</strong>
+                        </div>
+                        <div class="checkout-final-total-value">
+                            @if (Model.HasMonetaryPromotion && Model.OriginalTotalPrice > Model.FinalTotal)
+                            {
+                                <del>@Model.OriginalTotalPriceText</del>
+                            }
+                            <div>
+                                <strong>@Model.FinalTotalText</strong>
+                            </div>
+                            @if (Model.HasMonetaryPromotion && Model.TotalSavings > 0)
+                            {
+                                <small>وفرت @Model.TotalSavingsText</small>
+                            }
+                        </div>
+                    </div>
+
+                    @if (Model.RequiresDeposit)
+                    {
+                        <div class="checkout-deposit-box">
+                            <span><i class="bi bi-wallet2"></i></span>
+                            <div>
+                                <small>العربون المطلوب بعد التأكيد</small>
+                                <strong>
+                                    @Model.DepositAmountText
+                                </strong>
+                                <p>المتبقي عند المنشأة: @Model.RemainingAfterDepositText</p>
+                            </div>
+                        </div>
+                    }
+
+                    <div class="checkout-approval-note @(Model.RequiresOwnerApproval ? "is-manual" : "is-instant")">
+                        <i class="bi @(Model.RequiresOwnerApproval ? "bi-hourglass-split" : "bi-lightning-charge-fill")"></i>
+                        <div>
+                            <strong>@approvalTitle</strong>
+                            <p>@approvalDescription</p>
+                        </div>
+                    </div>
+
+                    <button type="button"
+                            id="btnFinalSubmit"
+                            class="checkout-submit-button">
+                        <span class="checkout-submit-button-icon">
+                            <i class="bi bi-check2-circle"></i>
+                        </span>
+                        <span class="checkout-submit-button-copy">
+                            <strong>@submitTitle</strong>
+                            <small>@submitSubtitle</small>
+                        </span>
+                        <i class="bi bi-arrow-left checkout-submit-arrow"></i>
+                    </button>
+
+                    <button type="button"
+                            class="checkout-secondary-button"
+                            onclick="history.back()">
+                        <i class="bi bi-pencil-square"></i>
+                        تعديل الاختيار
+                    </button>
+
+                    <div class="checkout-trust-note">
+                        <i class="bi bi-shield-lock-fill"></i>
+                        <span>سيعيد النظام التحقق من السعر والتوفر عند التأكيد.</span>
+                    </div>
+                </section>
+            </aside>
+        </div>
+    </div>
+</main>
+
+@Html.AntiForgeryToken()
+
+<div id="checkoutRequestData" hidden>
+    <input type="hidden" id="placeIdInput" value="@Model.PlaceId" />
+    <input type="hidden" id="roomIdInput" value="@(Model.RoomId?.ToString() ?? string.Empty)" />
+    <input type="hidden" id="packageIdInput" value="@(Model.PackageId?.ToString() ?? string.Empty)" />
+    <input type="hidden" id="startDateInput" value="@startDateValue" />
+    <input type="hidden" id="endDateInput" value="@endDateValue" />
+    <input type="hidden" id="quantityInput" value="@Model.Quantity" />
+    <input type="hidden" id="adultsCountInput" value="@Model.AdultsCount" />
+    <input type="hidden" id="childrenCountInput" value="@Model.ChildrenCount" />
+    <input type="hidden" id="bookingTypeInput" value="@Model.BookingType" />
+    <input type="hidden" id="seatingSetupInput" value="@Model.SeatingSetup" />
+    <input type="hidden" id="bookingApprovalModeInput" value="@Model.BookingApprovalMode" />
+    <input type="hidden" id="finalTotalInput" value="@finalTotalValue" />
+    <input type="hidden" id="promotionIdInput" value="@(Model.PromotionId?.ToString() ?? string.Empty)" />
+    <input type="hidden" id="requestedPromotionIdInput" value="@(Model.RequestedPromotionId?.ToString() ?? string.Empty)" />
+    <input type="hidden" id="promotionCodeInput" value="@Model.PromotionCode" />
+
+    @foreach (var service in Model.AdditionalServices)
+    {
+        <input type="hidden"
+           class="selected-service-id"
+           value="@service.ServiceId"
+           data-quantity="@service.Quantity" />
+    }
+</div>
+@if (Model.HasItemImages)
+{
+    <div id="checkoutGallery"
+     class="checkout-gallery"
+     aria-hidden="true">
+
+        <button type="button"
+            class="checkout-gallery-backdrop"
+            data-gallery-close
+            aria-label="إغلاق معرض الصور">
+        </button>
+
+        <section class="checkout-gallery-dialog"
+             role="dialog"
+             aria-modal="true"
+             aria-labelledby="checkoutGalleryTitle">
+
+            <header class="checkout-gallery-header">
+
+                <div class="checkout-gallery-heading">
+
+                    <span>
+                        <i class="bi bi-images"></i>
+                    </span>
+
+                    <div>
+                        <small>صور اختيارك</small>
+
+                        <h2 id="checkoutGalleryTitle">
+                            @Model.ItemName
+                        </h2>
+                    </div>
+
+                </div>
+
+                <button type="button"
+                    class="checkout-gallery-close"
+                    data-gallery-close
+                    aria-label="إغلاق معرض الصور">
+
+                    <i class="bi bi-x-lg"></i>
+
+                </button>
+
+            </header>
+
+            <div class="checkout-gallery-stage"
+             id="checkoutGalleryStage">
+
+                <button type="button"
+                    class="checkout-gallery-navigation checkout-gallery-previous"
+                    data-gallery-previous
+                    aria-label="الصورة السابقة">
+
+                    <i class="bi bi-chevron-right"></i>
+
+                </button>
+
+                <div class="checkout-gallery-image-wrap">
+
+                    <img id="checkoutGalleryMainImage"
+                     src="@Model.ItemImageUrl"
+                     alt="@Model.ItemName"
+                     onerror="this.onerror=null;this.src='/images/bg1.jpg';" />
+
+                    <span id="checkoutGalleryCounter"
+                      class="checkout-gallery-counter">
+
+                        1 / @Model.ItemImages.Count
+
+                    </span>
+
+                </div>
+
+                <button type="button"
+                    class="checkout-gallery-navigation checkout-gallery-next"
+                    data-gallery-next
+                    aria-label="الصورة التالية">
+
+                    <i class="bi bi-chevron-left"></i>
+
+                </button>
+
+            </div>
+
+            <div class="checkout-gallery-thumbnails"
+             id="checkoutGalleryThumbnails">
+
+                @for (
+               var imageIndex = 0;
+               imageIndex < Model.ItemImages.Count;
+               imageIndex++)
+                {
+                    var imagePath =
+                    Model.ItemImages[imageIndex];
+
+                    <button type="button"
+                    class="checkout-gallery-thumbnail @(imageIndex == 0 ? "is-active" : "")"
+                    data-gallery-thumbnail
+                    data-gallery-index="@imageIndex"
+                    data-gallery-src="@imagePath"
+                    aria-label="عرض الصورة رقم @(imageIndex + 1)">
+
+                        <img src="@imagePath"
+                     alt="صورة @(imageIndex + 1) من @Model.ItemName"
+                     loading="lazy"
+                     onerror="this.onerror=null;this.src='/images/bg1.jpg';" />
+
+                    </button>
+                }
+
+            </div>
+
+        </section>
+
+    </div>
+}
+@section Scripts {
+    <script src="~/lib/sweetalert2/sweetalert2.js"></script>
+
+    <script src="~/js/customer/Checkout.js"
+        asp-append-version="true"></script>
+}

@@ -1,0 +1,558 @@
+﻿@using System
+@using YemenGuide.Core.DTOs.Customer
+
+@model CustomerBookingItemDto
+
+@functions {
+    private static string GetDateText(DateTime date)
+    {
+        return date.ToString("dd/MM/yyyy");
+    }
+
+    private static string GetPeriodText(
+        DateTime startDate,
+        DateTime? endDate)
+    {
+        if (!endDate.HasValue ||
+            endDate.Value.Date == startDate.Date)
+        {
+            return "حجز ليوم واحد";
+        }
+
+        var nights =
+            Math.Max(
+                1,
+                (endDate.Value.Date - startDate.Date).Days);
+
+        return nights == 1
+            ? "ليلة واحدة"
+            : $"{nights} ليالٍ";
+    }
+
+    private static string MaskRefundAccount(
+        string? value)
+    {
+        var text =
+            value?.Trim() ??
+            string.Empty;
+
+        if (text.Length <= 5)
+        {
+            return text;
+        }
+
+        return $"{new string('•', Math.Min(7, text.Length - 4))}{text[^4..]}";
+    }
+
+    private static string GetStateDescription(
+        CustomerBookingItemDto booking)
+    {
+        if (booking.IsPending)
+        {
+            return "بانتظار موافقة المالك على الطلب";
+        }
+
+        if (booking.IsAwaitingPayment)
+        {
+            if (booking.HasPaymentProofRejection)
+            {
+                return "تم رفض إثبات الدفع السابق؛ ارفعي إثباتًا جديدًا قبل انتهاء المهلة";
+            }
+
+            return booking.IsPaymentTimerExpired
+                ? "انتهت المهلة المحددة لدفع العربون"
+                : "أكملي دفع العربون قبل انتهاء المهلة";
+        }
+
+        if (booking.IsPaymentReview)
+        {
+            return "تم رفع إشعار الدفع وجارٍ مراجعته";
+        }
+
+        if (booking.IsConfirmed)
+        {
+            return "الحجز مؤكد وجاهز في الموعد المحدد";
+        }
+
+        if (booking.IsCompleted)
+        {
+            return "تم تنفيذ الحجز وانتهاء مدته";
+        }
+
+        if (booking.IsRejected)
+        {
+            return !string.IsNullOrWhiteSpace(booking.RejectionReason)
+                ? booking.RejectionReason.Trim()
+                : "تم رفض طلب الحجز من المالك";
+        }
+
+        if (booking.IsCancelled)
+        {
+            if (booking.IsCancelledByOwner)
+            {
+                return booking.HasOwnerCancellationReason
+                    ? $"ألغت المنشأة الحجز: {booking.OwnerCancellationReason!.Trim()}"
+                    : "ألغت المنشأة هذا الحجز";
+            }
+
+            if (booking.IsCancelledByCustomer)
+            {
+                return booking.HasCustomerCancellationReason
+                    ? booking.CancellationReason!.Trim()
+                    : "تم إلغاء الحجز من حسابك";
+            }
+
+            return booking.ClosureReason ?? "تم إلغاء هذا الحجز";
+        }
+
+        if (booking.IsExpired)
+        {
+            return "انتهت مهلة إكمال الحجز";
+        }
+
+        if (booking.IsNoShow)
+        {
+            return "تم تسجيل عدم الحضور في الموعد";
+        }
+
+        return "راجعي تفاصيل الحجز لمعرفة حالته";
+    }
+
+    private static string GetStateTone(
+        CustomerBookingItemDto booking)
+    {
+        if (booking.IsPending) return "warning";
+        if (booking.IsAwaitingPayment)
+        {
+            return booking.IsPaymentTimerExpired ? "danger" : "payment";
+        }
+        if (booking.IsPaymentReview) return "review";
+        if (booking.IsConfirmed) return "success";
+        if (booking.IsCompleted) return "completed";
+        if (booking.IsRejected || booking.IsNoShow) return "danger";
+        if (booking.IsCancelled || booking.IsExpired) return "muted";
+        return "default";
+    }
+}
+
+@{
+    var endDateText =
+        Model.EndDate.HasValue
+            ? GetDateText(Model.EndDate.Value)
+            : "نفس اليوم";
+
+    var periodText =
+        GetPeriodText(Model.StartDate, Model.EndDate);
+
+    var stateDescription =
+        GetStateDescription(Model);
+
+    var stateTone =
+        GetStateTone(Model);
+
+    var searchText =
+        string.Join(
+            " ",
+            new[]
+            {
+                Model.BookingId.ToString(),
+                Model.PlaceName,
+                Model.PlaceType,
+                Model.RoomName,
+                Model.PackageName,
+                Model.ReservationUnitName,
+                Model.AssignedRoomUnitsText,
+                Model.StateLabel,
+                Model.BookingState,
+                Model.PromotionTitleSnapshot,
+                Model.PromotionCodeSnapshot
+            }
+            .Where(value => !string.IsNullOrWhiteSpace(value)))
+            .ToLowerInvariant();
+
+    var timerValue =
+        Model.TimerExpiredAt.HasValue
+            ? Model.TimerExpiredAt.Value.ToString("O")
+            : string.Empty;
+
+    var refundProofUrl =
+        Model.HasRefundProof &&
+        Model.RefundRequestId.HasValue
+            ? Url.Action(
+                "RefundProof",
+                "Bookings",
+                new
+                {
+                    id = Model.RefundRequestId.Value
+                })
+            : string.Empty;
+
+    var refundTransferredAtText =
+        Model.RefundTransferredAt.HasValue
+            ? Model.RefundTransferredAt.Value.ToString(
+                "dd/MM/yyyy - hh:mm tt")
+            : string.Empty;
+
+    var maskedRefundAccount =
+        MaskRefundAccount(
+            Model.RefundAccountNumber);
+}
+
+<article class="customer-booking-row booking-card-item @Model.StateCssClass"
+         data-booking-id="@Model.BookingId"
+         data-booking-status="@Model.FilterStatus"
+         data-booking-state="@Model.BookingState"
+         data-search-text="@searchText"
+         data-payment-expiry="@timerValue"
+         data-payment-proof-rejected="@Model.HasPaymentProofRejection.ToString().ToLowerInvariant()"
+         data-has-promotion="@Model.HasPromotion.ToString().ToLowerInvariant()"
+         data-closed-by="@(Model.ClosedByType ?? string.Empty)"
+         data-customer-refund-context
+         data-refund-request-id="@(Model.RefundRequestId?.ToString() ?? string.Empty)"
+         data-refund-wallet-id="@(Model.RefundWalletId?.ToString() ?? string.Empty)"
+         data-refund-account="@(Model.RefundAccountNumber ?? string.Empty)"
+         data-refund-beneficiary="@(Model.RefundBeneficiaryName ?? string.Empty)"
+         data-refund-amount-text="@Model.RefundAmountText"
+         data-refund-set-url="@Url.Action("SetRefundDestination", "Bookings")"
+         data-refund-wallets-url="@Url.Action("RefundWallets", "Bookings")"
+         data-refund-confirm-url="@Url.Action("ConfirmRefundReceived", "Bookings")">
+
+    <span class="customer-booking-accent" aria-hidden="true"></span>
+    <span class="customer-booking-light" aria-hidden="true"></span>
+
+    <div class="customer-booking-main">
+        <div class="customer-booking-image-wrap @stateTone">
+            <img src="@Url.Content(Model.PlaceImageUrl)"
+                 alt="صورة @Model.PlaceName"
+                 class="customer-booking-image"
+                 loading="lazy"
+                 onerror="this.onerror=null;this.src='/images/bg1.jpg';" />
+
+            <span class="customer-booking-image-shade" aria-hidden="true"></span>
+
+            <div class="customer-booking-number">
+                <span>رقم الحجز</span>
+                <strong>#@Model.BookingId</strong>
+            </div>
+
+            @if (Model.HasPromotion)
+            {
+                <div class="customer-booking-promotion-chip"
+                 title="@(Model.PromotionTitleSnapshot ?? "عرض مطبّق")">
+                    <span class="customer-booking-promotion-fire">
+                        <i class="bi bi-fire"></i>
+                    </span>
+                    <span class="customer-booking-promotion-copy">
+                        <strong>عرض مطبّق</strong>
+                        <small>@(Model.PromotionTitleSnapshot ?? Model.PromotionDiscountLabel)</small>
+                    </span>
+                </div>
+            }
+
+            <div class="customer-booking-identity">
+                <span class="customer-booking-type-pill">
+                    @Model.ReservationUnitType
+                </span>
+
+                <h5 class="customer-booking-place">
+                    @Model.PlaceName
+                </h5>
+
+                <div class="customer-booking-unit">
+                    <i class="bi bi-door-open"></i>
+                    <span>@Model.ReservationUnitName</span>
+                </div>
+
+                @if (Model.HasAssignedRoomUnits)
+                {
+                    <div class="customer-assigned-room-summary">
+                        <i class="bi bi-key-fill"></i>
+                        <span>@Model.AssignedRoomUnitsText</span>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="customer-booking-content">
+
+        <div class="customer-booking-period">
+            <div class="customer-period-head">
+                <span>
+                    <i class="bi bi-calendar3"></i>
+                    موعد الحجز
+                </span>
+                <small>@periodText</small>
+            </div>
+
+            <div class="customer-period-dates">
+                <div class="customer-period-date">
+                    <span class="customer-period-label">البداية</span>
+                    <strong>@GetDateText(Model.StartDate)</strong>
+                </div>
+
+                <span class="customer-period-arrow" aria-hidden="true">
+                    <i class="bi bi-arrow-left"></i>
+                </span>
+
+                <div class="customer-period-date">
+                    <span class="customer-period-label">النهاية</span>
+                    <strong>@endDateText</strong>
+                </div>
+            </div>
+
+            <div class="customer-period-meta">
+                <span>
+                    <i class="bi bi-moon-stars"></i>
+                    @periodText
+                </span>
+
+                @if (Model.TotalGuests > 0)
+                {
+                    <span>
+                        <i class="bi bi-people"></i>
+                        @Model.TotalGuests @(Model.TotalGuests == 1 ? "ضيف" : "ضيوف")
+                    </span>
+                }
+            </div>
+        </div>
+
+        <div class="customer-booking-total @(Model.HasPromotion ? "has-promotion" : string.Empty)">
+            <div class="customer-total-topline">
+                <span class="customer-total-label">
+                    @(Model.HasPromotion ? "السعر بعد العرض" : "إجمالي الحجز")
+                </span>
+                <i class="bi bi-wallet2"></i>
+            </div>
+
+            @if (Model.HasPromotion)
+            {
+                <span class="customer-total-before">
+                    <del>@Model.OriginalTotalPriceText</del>
+                </span>
+            }
+
+            <div class="customer-total-final">
+                <strong class="customer-total-value">
+                    @Model.TotalPriceText
+                </strong>
+            </div>
+
+            @if (Model.HasPromotion)
+            {
+                <span class="customer-total-saving">
+                    <i class="bi bi-stars"></i>
+                    وفرت @Model.DiscountAmountText
+                </span>
+            }
+        </div>
+
+        <div class="customer-booking-state">
+            <div class="customer-state-topline">
+                <span class="customer-state-badge @stateTone">
+                    <i class="bi @Model.StateIcon"></i>
+                    <span>@Model.StateLabel</span>
+                </span>
+
+                @if (Model.IsAwaitingPayment &&
+                !Model.IsPaymentTimerExpired &&
+                Model.TimerExpiredAt.HasValue)
+                {
+                    <div class="customer-payment-timer" data-countdown="@timerValue">
+                        <i class="bi bi-stopwatch-fill"></i>
+                        <span class="booking-payment-countdown">جاري حساب المهلة...</span>
+                    </div>
+                }
+            </div>
+
+            <p class="customer-state-description" title="@stateDescription">
+                @stateDescription
+            </p>
+
+            @if (Model.IsAwaitingPayment && Model.HasPaymentProofRejection)
+            {
+                <div class="customer-lifecycle-alert payment-rejected">
+                    <i class="bi bi-file-earmark-x-fill"></i>
+                    <div>
+                        <strong>تم رفض إثبات الدفع السابق</strong>
+                        <span>@Model.PaymentProofRejectionReason</span>
+                        @if (Model.PaymentProofRejectedAt.HasValue)
+                        {
+                            <small>
+                                آخر رفض: @Model.PaymentProofRejectedAt.Value.ToString("dd/MM/yyyy - hh:mm tt")
+                            </small>
+                        }
+                    </div>
+                </div>
+            }
+
+            @if (Model.IsCancelled &&
+            (Model.IsCancelledByOwner || Model.IsCancelledByCustomer))
+            {
+                <div class="customer-lifecycle-alert @(Model.IsCancelledByOwner ? "owner-cancelled" : "customer-cancelled")">
+                    <i class="bi @(Model.IsCancelledByOwner ? "bi-building-x" : "bi-calendar-x")"></i>
+                    <div>
+                        <strong>
+                            @(Model.IsCancelledByOwner ? "ألغت المنشأة الحجز" : "تم إلغاء الحجز من حسابك")
+                        </strong>
+
+                        @if (!string.IsNullOrWhiteSpace(Model.ClosureReason))
+                        {
+                            <span>@Model.ClosureReason</span>
+                        }
+
+                        @if (Model.ClosedAt.HasValue)
+                        {
+                            <small>@Model.ClosedAt.Value.ToString("dd/MM/yyyy - hh:mm tt")</small>
+                        }
+                    </div>
+                </div>
+            }
+
+            @if (Model.CanShowRefundSummary)
+            {
+                <div class="customer-refund-summary @(Model.IsRefundCompleted ? "completed" : "pending")">
+                    <i class="bi bi-arrow-counterclockwise"></i>
+                    <div>
+                        <strong>@Model.RefundStatusLabel</strong>
+                        @if (Model.RefundAmount > 0m)
+                        {
+                            <span>المبلغ: @Model.RefundAmountText</span>
+                        }
+                        else if (Model.CancellationFee > 0m)
+                        {
+                            <span>الغرامة: @Model.CancellationFeeText</span>
+                        }
+                    </div>
+                </div>
+
+                @if (Model.HasRefundRequest && Model.RefundAmount > 0m)
+                {
+                    <section class="customer-refund-strip">
+
+                        <span class="customer-refund-strip__icon">
+                            <i class="bi bi-arrow-counterclockwise"></i>
+                        </span>
+
+                        <div class="customer-refund-strip__copy">
+                            @if (Model.CanSetRefundDestination &&
+                           !Model.HasRefundDestination)
+                            {
+                                <small>الاسترداد جاهز</small>
+                                <strong>
+                                    @Model.RefundAmountText
+                                    <em>بانتظار حساب الاستلام</em>
+                                </strong>
+                            }
+                            else if (Model.CanConfirmRefundReceived)
+                            {
+                                <small>تم تحويل الاسترداد</small>
+                                <strong>
+                                    @Model.RefundAmountText
+                                    <em>بانتظار تأكيدك</em>
+                                </strong>
+                            }
+                            else if (Model.IsRefundCompleted)
+                            {
+                                <small>الاسترداد مكتمل</small>
+                                <strong>
+                                    @Model.RefundAmountText
+                                    <em>تم تأكيد الاستلام</em>
+                                </strong>
+                            }
+                            else if (Model.HasRefundDestination)
+                            {
+                                <small>حساب الاسترداد محفوظ</small>
+                                <strong>
+                                    @Model.RefundAmountText
+                                    <em dir="ltr">@maskedRefundAccount</em>
+                                </strong>
+                            }
+                            else
+                            {
+                                <small>طلب استرداد</small>
+                                <strong>
+                                    @Model.RefundAmountText
+                                    <em>@Model.RefundStatusLabel</em>
+                                </strong>
+                            }
+                        </div>
+
+                        <div class="customer-refund-strip__actions">
+                            @if (Model.CanSetRefundDestination &&
+                           !Model.HasRefundDestination)
+                            {
+                                <button type="button"
+                            class="is-primary"
+                            data-refund-action="destination">
+                                    <i class="bi bi-wallet2"></i>
+                                    تحديد الحساب
+                                </button>
+                            }
+                            else if (Model.CanConfirmRefundReceived)
+                            {
+                                @if (!string.IsNullOrWhiteSpace(refundProofUrl))
+                                {
+                                    <a href="@refundProofUrl"
+                       target="_blank"
+                       rel="noopener"
+                       class="is-light"
+                       title="عرض سند التحويل">
+                                        <i class="bi bi-image"></i>
+                                    </a>
+                                }
+
+                                <button type="button"
+                            class="is-success"
+                            data-refund-action="confirm">
+                                    <i class="bi bi-check2-circle"></i>
+                                    تأكيد الاستلام
+                                </button>
+                            }
+                            else if (Model.HasRefundDestination &&
+                            Model.CanSetRefundDestination)
+                            {
+                                <button type="button"
+                            class="is-light"
+                            data-refund-action="destination">
+                                    <i class="bi bi-pencil-square"></i>
+                                    تعديل
+                                </button>
+                            }
+                            else if (Model.IsRefundCompleted &&
+                            !string.IsNullOrWhiteSpace(refundProofUrl))
+                            {
+                                <a href="@refundProofUrl"
+                       target="_blank"
+                       rel="noopener"
+                       class="is-light">
+                                    <i class="bi bi-image"></i>
+                                    السند
+                                </a>
+                            }
+                        </div>
+
+                    </section>
+                }
+            }
+        </div>
+
+        <div class="customer-booking-actions">
+            @if (Model.CanPayDeposit)
+            {
+                <a href="@Model.PaymentUrl" class="customer-booking-button primary">
+                    <i class="bi bi-wallet2"></i>
+                    <span>
+                        @(Model.CanUploadPaymentProofAgain ? "رفع إثبات جديد" : "دفع العربون")
+                    </span>
+                </a>
+            }
+
+            <a href="@Model.DetailsUrl" class="customer-booking-button secondary">
+                <i class="bi bi-eye"></i>
+                <span>عرض التفاصيل</span>
+            </a>
+        </div>
+
+    </div>
+</article>

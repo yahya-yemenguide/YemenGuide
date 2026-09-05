@@ -1,0 +1,343 @@
+@using System
+@using System.Collections.Generic
+@using System.Linq
+@using System.Security.Claims
+@using YemenGuide.Core.Entities
+@{
+    var ownerId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "0";
+    var activePlaceCookieName = $"ownerActivePlace_{ownerId}";
+
+    _ = int.TryParse(
+        Context.Request.Cookies[activePlaceCookieName],
+        out var cookiePlaceId);
+
+    var legacyPlaces = ViewBag.Places as IEnumerable<Place>;
+    var legacyActivePlace =
+        legacyPlaces?.FirstOrDefault(place => place.PlaceId == cookiePlaceId)
+        ?? legacyPlaces?.FirstOrDefault();
+
+    var activePlaceIdText =
+        Convert.ToString((object?)ViewBag.ActivePlaceId);
+
+    var activePlaceId = 0;
+
+    _ = int.TryParse(
+        activePlaceIdText,
+        out activePlaceId);
+
+    if (activePlaceId <= 0 && legacyActivePlace != null)
+    {
+        activePlaceId = legacyActivePlace.PlaceId;
+    }
+
+    var requestedPlaceName = Convert.ToString(ViewBag.ActivePlaceName);
+    var activePlaceName =
+        !string.IsNullOrWhiteSpace(requestedPlaceName)
+            ? requestedPlaceName
+            : legacyActivePlace?.PlaceNameAndDesc
+              ?? "المنشأة الحالية";
+
+    var canManagePolicies =
+        ViewBag.CanManagePolicies is bool allowed
+            ? allowed
+            : activePlaceId > 0;
+
+    var verificationFlow =
+        ViewBag.VerificationFlow is bool verificationMode &&
+        verificationMode;
+}
+
+<main class="facility-settings-page"
+      id="facilitySettingsPage"
+      data-place-id="@activePlaceId"
+      data-place-name="@activePlaceName"
+      data-verification-flow="@(verificationFlow ? "true" : "false")"
+      dir="rtl">
+
+        <div class="facility-ambient-scene" aria-hidden="true">
+            <span class="facility-ambient-orb facility-ambient-orb--one"></span>
+            <span class="facility-ambient-orb facility-ambient-orb--two"></span>
+            <span class="facility-ambient-orb facility-ambient-orb--three"></span>
+            <span class="facility-ambient-grid"></span>
+        </div>
+
+        <input type="hidden"
+           id="activeFacilityPlaceId"
+           value="@activePlaceId" />
+
+        <header class="facility-policy-hero policy-tilt-surface" data-policy-tilt>
+            <span class="facility-hero-orbit facility-hero-orbit--one" aria-hidden="true"></span>
+            <span class="facility-hero-orbit facility-hero-orbit--two" aria-hidden="true"></span>
+            <span class="facility-hero-shine" aria-hidden="true"></span>
+
+            <div class="facility-policy-hero__content">
+                <span class="facility-policy-hero__icon" aria-hidden="true">
+                    <i class="bi bi-shield-check"></i>
+                </span>
+
+                <div class="facility-policy-hero__copy">
+                    <span class="facility-policy-hero__eyebrow">
+                        <i class="bi bi-stars"></i>
+                        مركز إعداد السياسات
+                    </span>
+                    <h1>سياسات المنشأة</h1>
+                    <p>
+                        اضبط الحجز والإلغاء والتشغيل والتواصل من مكان واحد واضح.
+                    </p>
+                </div>
+            </div>
+
+            <div class="facility-active-place policy-tilt-surface"
+                 data-policy-tilt
+                 aria-label="المنشأة التي تطبق عليها السياسات">
+                <span class="facility-active-place__icon" aria-hidden="true">
+                    <i class="bi bi-buildings"></i>
+                </span>
+                <span class="facility-active-place__copy">
+                    <small>السياسات المطبقة على</small>
+                    <strong>@activePlaceName</strong>
+                </span>
+                <span class="facility-active-place__status">
+                    <i class="bi bi-check-circle-fill"></i>
+                    @(verificationFlow ? "منشأة رحلة التوثيق" : "مختارة من الهيدر")
+                </span>
+
+                <span class="facility-sync-state is-saved"
+                      id="facilityVisualSaveState"
+                      role="status"
+                      aria-live="polite">
+                    <span class="facility-sync-state__dot" aria-hidden="true"></span>
+                    <span class="facility-sync-state__text">متزامن مع آخر حفظ</span>
+                </span>
+            </div>
+        </header>
+
+    @if (!canManagePolicies)
+    {
+        <section class="facility-policy-empty" role="status">
+            <span class="facility-policy-empty__icon" aria-hidden="true">
+                <i class="bi bi-building-exclamation"></i>
+            </span>
+            <div>
+                <h2>لا يمكن إعداد السياسات لهذه المنشأة</h2>
+                <p>
+                    اختر من الهيدر منشأة مرتبطة بنظام حجز، ثم ستظهر إعداداتها هنا تلقائيًا.
+                </p>
+            </div>
+        </section>
+    }
+    else
+    {
+        <section class="facility-tabs-shell" aria-label="أقسام سياسات المنشأة">
+            <span class="facility-tabs-shell__glow" aria-hidden="true"></span>
+            <nav class="custom-tabs-container facility-policy-tabs"
+             role="tablist"
+             aria-label="تبويبات سياسات المنشأة">
+
+                <button type="button"
+                    class="tab-btn active"
+                    id="booking-tab-button"
+                    data-target="booking-tab"
+                    role="tab"
+                    aria-controls="booking-tab-panel"
+                    aria-selected="true"
+                    tabindex="0">
+                    <span class="tab-icon-wrap" aria-hidden="true">
+                        <i class="bi bi-wallet2"></i>
+                    </span>
+                    <span class="tab-label">الحجز والدفع</span>
+                </button>
+
+                <button type="button"
+                    class="tab-btn"
+                    id="cancellation-tab-button"
+                    data-target="cancellation-tab"
+                    role="tab"
+                    aria-controls="cancellation-tab-panel"
+                    aria-selected="false"
+                    tabindex="-1">
+                    <span class="tab-icon-wrap" aria-hidden="true">
+                        <i class="bi bi-shield-x"></i>
+                    </span>
+                    <span class="tab-label">الإلغاء والاسترداد</span>
+                </button>
+
+                <button type="button"
+                    class="tab-btn"
+                    id="operational-tab-button"
+                    data-target="operational-tab"
+                    role="tab"
+                    aria-controls="operational-tab-panel"
+                    aria-selected="false"
+                    tabindex="-1">
+                    <span class="tab-icon-wrap" aria-hidden="true">
+                        <i class="bi bi-clock-history"></i>
+                    </span>
+                    <span class="tab-label">التشغيل والمواعيد</span>
+                </button>
+
+                <button type="button"
+                    class="tab-btn"
+                    id="communication-tab-button"
+                    data-target="communication-tab"
+                    role="tab"
+                    aria-controls="communication-tab-panel"
+                    aria-selected="false"
+                    tabindex="-1">
+                    <span class="tab-icon-wrap" aria-hidden="true">
+                        <i class="bi bi-chat-dots"></i>
+                    </span>
+                    <span class="tab-label">التواصل والتنبيهات</span>
+                </button>
+
+                <button type="button"
+                    class="tab-btn"
+                    id="house-rules-tab-button"
+                    data-target="house-rules-tab"
+                    role="tab"
+                    aria-controls="house-rules-tab-panel"
+                    aria-selected="false"
+                    tabindex="-1">
+                    <span class="tab-icon-wrap" aria-hidden="true">
+                        <i class="bi bi-house-heart"></i>
+                    </span>
+                    <span class="tab-label">قواعد المنشأة</span>
+                </button>
+            </nav>
+        </section>
+
+        <form id="settingsForm" autocomplete="off">
+            @Html.AntiForgeryToken()
+            <section class="facility-policy-surface">
+                <div class="tab-pane-content booking-tab"
+                 id="booking-tab-panel"
+                 role="tabpanel"
+                 aria-labelledby="booking-tab-button"
+                 style="display: block;">
+                    <partial name="_BookingPolicies" />
+                </div>
+
+                <div class="tab-pane-content cancellation-tab"
+                 id="cancellation-tab-panel"
+                 role="tabpanel"
+                 aria-labelledby="cancellation-tab-button"
+                 style="display: none;">
+                    <partial name="_CancellationPolicies" />
+                </div>
+
+                <div class="tab-pane-content operational-tab"
+                 id="operational-tab-panel"
+                 role="tabpanel"
+                 aria-labelledby="operational-tab-button"
+                 style="display: none;">
+                    <partial name="_OperationalSettings" />
+                </div>
+
+                <div class="tab-pane-content communication-tab"
+                 id="communication-tab-panel"
+                 role="tabpanel"
+                 aria-labelledby="communication-tab-button"
+                 style="display: none;">
+                    <partial name="_CommunicationSettings" />
+                </div>
+
+                <div class="tab-pane-content house-rules-tab"
+                 id="house-rules-tab-panel"
+                 role="tabpanel"
+                 aria-labelledby="house-rules-tab-button"
+                 style="display: none;">
+
+                    <div class="royal-policies-wrapper policy-section-stack fade-in-up">
+                        <section class="royal-card policy-card policy-card--coral">
+                            <header class="policy-card__header">
+                                <span class="icon-glow-wrapper policy-card__icon" aria-hidden="true">
+                                    <i class="bi bi-house-check"></i>
+                                </span>
+                                <div>
+                                    <span class="policy-card__kicker">قواعد واضحة للضيوف</span>
+                                    <h2>قوانين وثقافة المنشأة</h2>
+                                    <p>
+                                        فعّل القواعد التي تناسب طبيعة منشأتك، وستظهر ضمن شروط الحجز.
+                                    </p>
+                                </div>
+                            </header>
+
+                            <div class="policy-toggle-grid">
+                                <label class="policy-toggle-card">
+                                    <span class="policy-toggle-card__icon policy-toggle-card__icon--cyan">
+                                        <i class="bi bi-people-fill"></i>
+                                    </span>
+                                    <span class="policy-toggle-card__copy">
+                                        <strong>مخصصة للعائلات فقط</strong>
+                                        <small>تقييد استقبال الحجوزات على العائلات.</small>
+                                    </span>
+                                    <span class="form-check form-switch m-0">
+                                        <input class="form-check-input"
+                                           type="checkbox"
+                                           id="forFamiliesOnly" />
+                                    </span>
+                                </label>
+
+                                <label class="policy-toggle-card">
+                                    <span class="policy-toggle-card__icon policy-toggle-card__icon--coral">
+                                        <i class="bi bi-ban"></i>
+                                    </span>
+                                    <span class="policy-toggle-card__copy">
+                                        <strong>السماح بالتدخين</strong>
+                                        <small>فعّل الخيار إذا كان التدخين مسموحًا داخل المنشأة.</small>
+                                    </span>
+                                    <span class="form-check form-switch m-0">
+                                        <input class="form-check-input"
+                                           type="checkbox"
+                                           id="allowSmoking" />
+                                    </span>
+                                </label>
+
+                                <label class="policy-toggle-card">
+                                    <span class="policy-toggle-card__icon policy-toggle-card__icon--amber">
+                                        <i class="bi bi-music-note-beamed"></i>
+                                    </span>
+                                    <span class="policy-toggle-card__copy">
+                                        <strong>السماح بالحفلات والمناسبات</strong>
+                                        <small>السماح باستخدام المنشأة للفعاليات الخاصة.</small>
+                                    </span>
+                                    <span class="form-check form-switch m-0">
+                                        <input class="form-check-input"
+                                           type="checkbox"
+                                           id="allowParties" />
+                                    </span>
+                                </label>
+
+                                <label class="policy-toggle-card">
+                                    <span class="policy-toggle-card__icon policy-toggle-card__icon--green">
+                                        <i class="bi bi-tree"></i>
+                                    </span>
+                                    <span class="policy-toggle-card__copy">
+                                        <strong>السماح بالقات داخل المنشأة</strong>
+                                        <small>فعّل الخيار إذا كان مضغ القات مسموحًا داخل الغرف.</small>
+                                    </span>
+                                    <span class="form-check form-switch m-0">
+                                        <input class="form-check-input"
+                                           type="checkbox"
+                                           id="allowQatInside" />
+                                    </span>
+                                </label>
+                            </div>
+                        </section>
+
+                        <footer class="policy-save-bar">
+                            <div class="policy-save-bar__copy">
+                                <i class="bi bi-info-circle"></i>
+                                <span>سيتم تطبيق القواعد على المنشأة الحالية فقط.</span>
+                            </div>
+                            <button type="button" class="btn-royal-save">
+                                <i class="bi bi-shield-check"></i>
+                                <span>حفظ قواعد المنشأة</span>
+                            </button>
+                        </footer>
+                    </div>
+                </div>
+            </section>
+        </form>
+    }
+</main>

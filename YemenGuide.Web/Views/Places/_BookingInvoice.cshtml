@@ -1,0 +1,1545 @@
+﻿@using System
+@using System.Linq
+@using System.Collections.Generic
+@using YemenGuide.Core.Entities
+
+@model YemenGuide.Core.Entities.Booking
+
+@{
+    /*
+     * ================================================================
+     * البيانات الأساسية
+     * ================================================================
+     */
+
+    var financialRecord =
+        Model.FinancialRecord;
+
+    var additionalServices =
+        Model.BookingAdditionalServices?
+            .OrderBy(service =>
+                service.BookingAdditionalServiceId)
+            .ToList()
+        ?? new List<BookingAdditionalService>();
+
+    var customerName =
+        Model.Customer?.FullName?.Trim();
+
+    if (string.IsNullOrWhiteSpace(customerName))
+    {
+        customerName = "عميل دليلك اليمني";
+    }
+
+    var customerPhone =
+        Model.Customer?.PhoneNumber?.Trim();
+
+    if (string.IsNullOrWhiteSpace(customerPhone))
+    {
+        customerPhone = "غير مسجل";
+    }
+
+    var customerEmail =
+        Model.Customer?.ContactInfo?.Trim();
+
+    if (string.IsNullOrWhiteSpace(customerEmail))
+    {
+        customerEmail = "غير مسجل";
+    }
+
+    var placeName =
+        Model.Place?
+            .PlaceNameAndDesc?
+            .Trim();
+
+    if (string.IsNullOrWhiteSpace(placeName))
+    {
+        placeName = "منشأة دليلك اليمني";
+    }
+
+    var placeCategory =
+        Model.Place?
+            .Category?
+            .CategoryName?
+            .Trim();
+
+    if (string.IsNullOrWhiteSpace(placeCategory))
+    {
+        placeCategory = "منشأة";
+    }
+
+    var placeAddress =
+        Model.Place?
+            .AddressDetail?
+            .Trim();
+
+    if (string.IsNullOrWhiteSpace(placeAddress))
+    {
+        placeAddress = "العنوان غير مسجل";
+    }
+
+    var placePhone =
+        Model.Place?
+            .PhoneNumber?
+            .Trim();
+
+    if (string.IsNullOrWhiteSpace(placePhone))
+    {
+        placePhone = "غير مسجل";
+    }
+
+    /*
+     * ================================================================
+     * نوع الحجز
+     * ================================================================
+     */
+
+    var isRoomBooking =
+        Model.RoomId.HasValue &&
+        Model.Room != null;
+
+    var isPackageBooking =
+        Model.PackageId.HasValue &&
+        Model.Package != null;
+
+    var assignedRoomUnits =
+        Model.BookingRoomUnits?
+            .Where(assignment =>
+                assignment.RoomUnit != null)
+            .OrderBy(assignment =>
+                assignment.RoomUnit.FloorNumber)
+            .ThenBy(assignment =>
+                assignment.RoomUnit.RoomNumber)
+            .ToList()
+        ?? new List<BookingRoomUnit>();
+
+    var assignedRoomLabels =
+        assignedRoomUnits
+            .Select(assignment =>
+            {
+                var floorLabel =
+                    !string.IsNullOrWhiteSpace(assignment.RoomUnit.FloorLabel)
+                        ? assignment.RoomUnit.FloorLabel!.Trim()
+                        : assignment.RoomUnit.FloorNumber == 0
+                            ? "الدور الأرضي"
+                            : assignment.RoomUnit.FloorNumber < 0
+                                ? $"القبو {Math.Abs(assignment.RoomUnit.FloorNumber)}"
+                                : $"الطابق {assignment.RoomUnit.FloorNumber}";
+
+                return $"غرفة {assignment.RoomUnit.RoomNumber} — {floorLabel}";
+            })
+            .ToList();
+
+    var assignedRoomsText =
+        string.Join("، ", assignedRoomLabels);
+
+    var itemTitle =
+        isRoomBooking
+            ? Model.Room?.RoomType
+            : Model.Package?.PackageName;
+
+    if (string.IsNullOrWhiteSpace(itemTitle))
+    {
+        itemTitle =
+            isRoomBooking
+                ? "غرفة محجوزة"
+                : "باقة محجوزة";
+    }
+
+    var itemSubtitle =
+        isRoomBooking
+            ? !string.IsNullOrWhiteSpace(assignedRoomsText)
+                ? assignedRoomsText
+                : Model.Room?.RoomNumber
+            : Model.Package?.TimeFrame;
+
+    if (string.IsNullOrWhiteSpace(itemSubtitle))
+    {
+        itemSubtitle =
+            isRoomBooking
+                ? "وحدة فندقية"
+                : "باقة أو قاعة";
+    }
+
+    var itemTypeText =
+        isRoomBooking
+            ? "حجز غرفة أو وحدة فندقية"
+            : "حجز باقة أو قاعة";
+
+    var itemUnitPrice =
+        isRoomBooking
+            ? Model.Room?.Price ?? 0m
+            : Model.Package?.Price ?? 0m;
+
+    /*
+     * ================================================================
+     * التواريخ والمدة
+     * ================================================================
+     */
+
+    var startDate =
+        Model.StartDate.Date;
+
+    var endDate =
+        Model.EndDate?.Date;
+
+    var startDateText =
+        startDate.ToString("yyyy/MM/dd");
+
+    var endDateText =
+        endDate.HasValue
+            ? endDate.Value.ToString("yyyy/MM/dd")
+            : startDateText;
+
+    var nightsCount = 1;
+
+    if (isRoomBooking &&
+        endDate.HasValue)
+    {
+        nightsCount =
+            Math.Max(
+                1,
+                (endDate.Value - startDate).Days);
+    }
+
+    var bookingPeriodText =
+        isRoomBooking &&
+        endDate.HasValue
+            ? $"{startDateText} — {endDateText}"
+            : startDateText;
+
+    var createdAtText =
+        Model.CreatedAt.HasValue
+            ? Model.CreatedAt.Value
+                .ToString("yyyy/MM/dd - hh:mm tt")
+            : "غير محدد";
+
+    /*
+     * ================================================================
+     * الأشخاص والتفاصيل
+     * ================================================================
+     */
+
+    var adultsCount =
+        Math.Max(
+            0,
+            Model.AdultsCount);
+
+    var childrenCount =
+        Math.Max(
+            0,
+            Model.ChildrenCount);
+
+    var guestsCount =
+        adultsCount +
+        childrenCount;
+
+    var guestsText =
+        guestsCount > 0
+            ? $"{guestsCount} أشخاص"
+            : "غير محدد";
+
+    var bookingType =
+        Model.BookingType?.Trim();
+
+    if (string.IsNullOrWhiteSpace(bookingType))
+    {
+        bookingType = "غير محدد";
+    }
+
+    var seatingSetup =
+        Model.SeatingSetup?.Trim();
+
+    if (string.IsNullOrWhiteSpace(seatingSetup))
+    {
+        seatingSetup = "غير محدد";
+    }
+
+    /*
+     * ================================================================
+     * المبالغ
+     * ================================================================
+     */
+
+    var totalPrice =
+        Math.Max(
+            0m,
+            Model.TotalPrice);
+
+    var discountAmount =
+        Math.Max(0m, Model.DiscountAmount);
+
+    var originalTotalPrice =
+        Model.OriginalTotalPrice > 0m
+            ? Model.OriginalTotalPrice
+            : totalPrice + discountAmount;
+
+    var hasPromotion =
+        Model.PromotionId.HasValue &&
+        Model.PromotionId.Value > 0 &&
+        discountAmount > 0m;
+
+    var promotionTitle =
+        !string.IsNullOrWhiteSpace(Model.PromotionTitleSnapshot)
+            ? Model.PromotionTitleSnapshot!.Trim()
+            : "عرض محفوظ مع الحجز";
+
+    var promotionCode =
+        Model.PromotionCodeSnapshot?.Trim() ?? string.Empty;
+
+    var promotionDiscountType =
+        Model.DiscountTypeSnapshot?.Trim() ?? string.Empty;
+
+    var promotionDiscountValue =
+        Math.Max(0m, Model.DiscountValueSnapshot ?? 0m);
+
+    var fixedPromotionDiscountValueText =
+        ViewBag.PromotionDiscountValueText as string ??
+        $"{promotionDiscountValue:N0} ر.ي";
+
+    var promotionDiscountLabel =
+        promotionDiscountType.Equals("Percentage", StringComparison.OrdinalIgnoreCase)
+            ? $"خصم {promotionDiscountValue:N0}%"
+            : promotionDiscountValue > 0m
+                ? $"خصم {fixedPromotionDiscountValueText}"
+                : "خصم العرض";
+
+    var depositAmount =
+        Math.Max(
+            0m,
+            financialRecord?.DepositAmount ?? 0m);
+
+    var servicesTotal =
+        additionalServices.Sum(service =>
+            service.UnitPrice *
+            service.Quantity);
+
+    var paymentProofUploaded =
+        !string.IsNullOrWhiteSpace(
+            Model.PaymentNotificationImage);
+
+    var paymentStatusCode =
+        Model.PaymentStatus?
+            .Trim()
+            .ToLowerInvariant()
+        ?? "unpaid";
+
+    var bookingStateCode =
+        Model.BookingState?
+            .Trim()
+            .ToLowerInvariant()
+        ?? "pending";
+
+    var submittedAmount =
+        paymentProofUploaded ||
+        paymentStatusCode == "underreview" ||
+        paymentStatusCode == "paid"
+            ? depositAmount
+            : Math.Max(
+                0m,
+                financialRecord?.AmountPaidOnline ?? 0m);
+
+    var remainingAmount =
+        financialRecord != null
+            ? Math.Max(
+                0m,
+                financialRecord.AmountToPayAtProperty)
+            : Math.Max(
+                0m,
+                totalPrice - depositAmount);
+
+    var displayCurrency =
+        ViewBag.DisplayCurrency as string ??
+        "ريال يمني";
+
+    var totalPriceText =
+        ViewBag.TotalPriceText as string ??
+        $"{totalPrice:N0} ر.ي";
+
+    var originalTotalPriceText =
+        ViewBag.OriginalTotalPriceText as string ??
+        $"{originalTotalPrice:N0} ر.ي";
+
+    var discountAmountText =
+        ViewBag.DiscountAmountText as string ??
+        $"{discountAmount:N0} ر.ي";
+
+    var itemUnitPriceText =
+        ViewBag.ItemPriceText as string ??
+        $"{itemUnitPrice:N0} ر.ي";
+
+    var depositAmountText =
+        ViewBag.DepositAmountText as string ??
+        $"{depositAmount:N0} ر.ي";
+
+    var approvedPaidAmountText =
+        ViewBag.AmountPaidOnlineText as string ??
+        $"{submittedAmount:N0} ر.ي";
+
+    var submittedAmountText =
+        submittedAmount == depositAmount && depositAmount > 0m
+            ? depositAmountText
+            : approvedPaidAmountText;
+
+    var remainingAmountText =
+        ViewBag.AmountToPayAtPropertyText as string ??
+        $"{remainingAmount:N0} ر.ي";
+
+    var servicesTotalText =
+        ViewBag.ServicesTotalText as string ??
+        $"{servicesTotal:N0} ر.ي";
+
+    var serviceUnitPriceTexts =
+        ViewBag.BookingServiceUnitPriceText as Dictionary<int, string> ??
+        new Dictionary<int, string>();
+
+    var serviceTotalPriceTexts =
+        ViewBag.BookingServiceTotalPriceText as Dictionary<int, string> ??
+        new Dictionary<int, string>();
+
+    string ServiceUnitPriceText(BookingAdditionalService service) =>
+        serviceUnitPriceTexts.TryGetValue(service.ServiceId, out var text) &&
+        !string.IsNullOrWhiteSpace(text)
+            ? text
+            : $"{service.UnitPrice:N0} ر.ي";
+
+    string ServiceTotalPriceText(BookingAdditionalService service) =>
+        serviceTotalPriceTexts.TryGetValue(service.ServiceId, out var text) &&
+        !string.IsNullOrWhiteSpace(text)
+            ? text
+            : $"{service.UnitPrice * Math.Max(1, service.Quantity):N0} ر.ي";
+
+    var referenceNumber =
+        financialRecord?
+            .TransferReferenceNumber?
+            .Trim();
+
+    if (string.IsNullOrWhiteSpace(referenceNumber))
+    {
+        referenceNumber = "غير مسجل";
+    }
+
+    var paymentMethod =
+        Model.PaymentMethod?.Trim();
+
+    if (string.IsNullOrWhiteSpace(paymentMethod))
+    {
+        paymentMethod = "غير محددة";
+    }
+
+    /*
+     * ================================================================
+     * حالة الحجز
+     * ================================================================
+     */
+
+    string bookingStateText;
+    string bookingStateClass;
+    string bookingStateIcon;
+
+    switch (bookingStateCode)
+    {
+        case "confirmed":
+            bookingStateText =
+                "الحجز مؤكد";
+
+            bookingStateClass =
+                "is-success";
+
+            bookingStateIcon =
+                "bi-patch-check-fill";
+            break;
+
+        case "paymentreview":
+            bookingStateText =
+                "الحوالة قيد المراجعة";
+
+            bookingStateClass =
+                "is-review";
+
+            bookingStateIcon =
+                "bi-hourglass-split";
+            break;
+
+        case "awaitingpayment":
+            bookingStateText =
+                "بانتظار دفع العربون";
+
+            bookingStateClass =
+                "is-warning";
+
+            bookingStateIcon =
+                "bi-wallet2";
+            break;
+
+        case "pending":
+            bookingStateText =
+                "بانتظار موافقة المالك";
+
+            bookingStateClass =
+                "is-warning";
+
+            bookingStateIcon =
+                "bi-clock-history";
+            break;
+
+        case "rejected":
+            bookingStateText =
+                "الحجز مرفوض";
+
+            bookingStateClass =
+                "is-danger";
+
+            bookingStateIcon =
+                "bi-x-circle-fill";
+            break;
+
+        case "cancelled":
+        case "canceled":
+            bookingStateText =
+                "الحجز ملغي";
+
+            bookingStateClass =
+                "is-danger";
+
+            bookingStateIcon =
+                "bi-calendar-x-fill";
+            break;
+
+        case "expired":
+            bookingStateText =
+                "انتهت مهلة الحجز";
+
+            bookingStateClass =
+                "is-danger";
+
+            bookingStateIcon =
+                "bi-hourglass-bottom";
+            break;
+
+        default:
+            bookingStateText =
+                Model.BookingState ??
+                "قيد المعالجة";
+
+            bookingStateClass =
+                "is-neutral";
+
+            bookingStateIcon =
+                "bi-info-circle-fill";
+            break;
+    }
+
+    /*
+     * ================================================================
+     * حالة الدفع
+     * ================================================================
+     */
+
+    string paymentStatusText;
+    string paymentStatusClass;
+    string paymentStatusIcon;
+
+    switch (paymentStatusCode)
+    {
+        case "paid":
+            paymentStatusText =
+                "تم اعتماد الدفع";
+
+            paymentStatusClass =
+                "is-success";
+
+            paymentStatusIcon =
+                "bi-check-circle-fill";
+            break;
+
+        case "underreview":
+            paymentStatusText =
+                "الدفع قيد المراجعة";
+
+            paymentStatusClass =
+                "is-review";
+
+            paymentStatusIcon =
+                "bi-search";
+            break;
+
+        case "rejected":
+            paymentStatusText =
+                "تم رفض الحوالة";
+
+            paymentStatusClass =
+                "is-danger";
+
+            paymentStatusIcon =
+                "bi-x-octagon-fill";
+            break;
+
+        case "expired":
+            paymentStatusText =
+                "انتهت مهلة الدفع";
+
+            paymentStatusClass =
+                "is-danger";
+
+            paymentStatusIcon =
+                "bi-hourglass-bottom";
+            break;
+
+        default:
+            paymentStatusText =
+                "غير مدفوع";
+
+            paymentStatusClass =
+                "is-warning";
+
+            paymentStatusIcon =
+                "bi-wallet2";
+            break;
+    }
+
+    /*
+     * ================================================================
+     * أرقام الفاتورة
+     * ================================================================
+     */
+
+    var bookingNumber =
+        Model.BookingId
+            .ToString("D6");
+
+    var invoiceNumber =
+        $"INV-{bookingNumber}";
+
+    var invoiceGeneratedAt =
+        DateTime.Now
+            .ToString("yyyy/MM/dd - hh:mm tt");
+
+    var invoiceShareTitle =
+        $"فاتورة الحجز رقم {bookingNumber}";
+
+    var invoiceShareText =
+        $"فاتورة حجز {placeName} - رقم الحجز {bookingNumber}";
+}
+
+<link rel="stylesheet"
+      href="~/css/customer/BookingInvoice.css"
+      asp-append-version="true" />
+
+<!-- ================================================================
+     نافذة الفاتورة
+     ================================================================ -->
+
+<div id="bookingInvoiceOverlay"
+     class="booking-invoice-overlay"
+     data-booking-id="@Model.BookingId"
+     data-invoice-number="@invoiceNumber"
+     data-share-title="@invoiceShareTitle"
+     data-share-text="@invoiceShareText"
+     hidden
+     aria-hidden="true">
+
+    <!-- الخلفية -->
+    <button type="button"
+            class="booking-invoice-backdrop"
+            data-invoice-close
+            aria-label="إغلاق فاتورة الحجز">
+    </button>
+
+    <!-- نافذة الفاتورة -->
+    <section class="booking-invoice-sheet"
+             role="dialog"
+             aria-modal="true"
+             aria-labelledby="bookingInvoiceTitle">
+
+        <!-- مقبض النافذة للجوال -->
+        <div class="booking-invoice-drag-handle"
+             aria-hidden="true">
+
+            <span></span>
+        </div>
+
+        <!-- رأس النافذة -->
+        <header class="booking-invoice-toolbar">
+
+            <button type="button"
+                    class="booking-invoice-close-button"
+                    data-invoice-close
+                    aria-label="إغلاق الفاتورة">
+
+                <i class="bi bi-x-lg"></i>
+            </button>
+
+            <div class="booking-invoice-toolbar-title">
+
+                <span>
+
+                    <i class="bi bi-receipt"></i>
+                </span>
+
+                <div>
+
+                    <small>
+                        نسخة إلكترونية موثقة
+                    </small>
+
+                    <h2 id="bookingInvoiceTitle">
+                        فاتورة الحجز
+                    </h2>
+                </div>
+            </div>
+
+            <div class="booking-invoice-toolbar-actions">
+
+                <button type="button"
+                        id="shareBookingInvoiceButton"
+                        class="booking-invoice-toolbar-button"
+                        aria-label="مشاركة الفاتورة">
+
+                    <i class="bi bi-send"></i>
+
+                    <span>
+                        مشاركة
+                    </span>
+                </button>
+
+                <button type="button"
+                        id="printBookingInvoiceButton"
+                        class="booking-invoice-toolbar-button is-primary"
+                        aria-label="طباعة الفاتورة">
+
+                    <i class="bi bi-printer"></i>
+
+                    <span>
+                        طباعة
+                    </span>
+                </button>
+            </div>
+        </header>
+
+        <!-- ============================================================
+             المنطقة التي ستتم طباعتها وحدها
+             ============================================================ -->
+
+        <article id="bookingInvoicePrintable"
+                 class="booking-invoice-document"
+                 dir="rtl">
+
+            <!-- رأس الفاتورة -->
+            <header class="booking-invoice-document-header">
+
+                <div class="booking-invoice-brand">
+
+                    <span class="booking-invoice-brand-logo">
+
+                        <i class="bi bi-compass-fill"></i>
+                    </span>
+
+                    <div>
+
+                        <strong>
+                            دليلك اليمني
+                        </strong>
+
+                        <small>
+                            فاتورة حجز إلكترونية
+                        </small>
+                    </div>
+                </div>
+
+                <div class="booking-invoice-document-number">
+
+                    <small>
+                        رقم الفاتورة
+                    </small>
+
+                    <strong dir="ltr">
+                        @invoiceNumber
+                    </strong>
+
+                    <span>
+                        تاريخ الإصدار:
+                        @invoiceGeneratedAt
+                    </span>
+                </div>
+            </header>
+
+            <!-- حالة الفاتورة -->
+            <section class="booking-invoice-status-strip">
+
+                <div class="booking-invoice-status-item
+                            @bookingStateClass">
+
+                    <span>
+
+                        <i class="bi @bookingStateIcon"></i>
+                    </span>
+
+                    <div>
+
+                        <small>
+                            حالة الحجز
+                        </small>
+
+                        <strong>
+                            @bookingStateText
+                        </strong>
+                    </div>
+                </div>
+
+                <div class="booking-invoice-status-divider">
+                </div>
+
+                <div class="booking-invoice-status-item
+                            @paymentStatusClass">
+
+                    <span>
+
+                        <i class="bi @paymentStatusIcon"></i>
+                    </span>
+
+                    <div>
+
+                        <small>
+                            حالة الدفع
+                        </small>
+
+                        <strong>
+                            @paymentStatusText
+                        </strong>
+                    </div>
+                </div>
+            </section>
+
+            <!-- معلومات العميل والمنشأة -->
+            <section class="booking-invoice-two-columns">
+
+                <!-- العميل -->
+                <div class="booking-invoice-section-card">
+
+                    <div class="booking-invoice-section-heading">
+
+                        <span>
+
+                            <i class="bi bi-person-fill"></i>
+                        </span>
+
+                        <div>
+
+                            <small>
+                                صاحب الحجز
+                            </small>
+
+                            <h3>
+                                معلومات العميل
+                            </h3>
+                        </div>
+                    </div>
+
+                    <dl class="booking-invoice-definition-list">
+
+                        <div>
+
+                            <dt>
+                                الاسم
+                            </dt>
+
+                            <dd>
+                                @customerName
+                            </dd>
+                        </div>
+
+                        <div>
+
+                            <dt>
+                                رقم التواصل
+                            </dt>
+
+                            <dd dir="ltr">
+                                @customerPhone
+                            </dd>
+                        </div>
+
+                        <div>
+
+                            <dt>
+                                البريد
+                            </dt>
+
+                            <dd>
+                                @customerEmail
+                            </dd>
+                        </div>
+                    </dl>
+                </div>
+
+                <!-- المنشأة -->
+                <div class="booking-invoice-section-card">
+
+                    <div class="booking-invoice-section-heading">
+
+                        <span>
+
+                            <i class="bi bi-building-fill"></i>
+                        </span>
+
+                        <div>
+
+                            <small>
+                                مقدم الخدمة
+                            </small>
+
+                            <h3>
+                                معلومات المنشأة
+                            </h3>
+                        </div>
+                    </div>
+
+                    <dl class="booking-invoice-definition-list">
+
+                        <div>
+
+                            <dt>
+                                المنشأة
+                            </dt>
+
+                            <dd>
+                                @placeName
+                            </dd>
+                        </div>
+
+                        <div>
+
+                            <dt>
+                                التصنيف
+                            </dt>
+
+                            <dd>
+                                @placeCategory
+                            </dd>
+                        </div>
+
+                        <div>
+
+                            <dt>
+                                العنوان
+                            </dt>
+
+                            <dd>
+                                @placeAddress
+                            </dd>
+                        </div>
+
+                        <div>
+
+                            <dt>
+                                التواصل
+                            </dt>
+
+                            <dd dir="ltr">
+                                @placePhone
+                            </dd>
+                        </div>
+                    </dl>
+                </div>
+            </section>
+
+            <!-- معلومات الحجز -->
+            <section class="booking-invoice-section-card
+                            booking-invoice-booking-card">
+
+                <div class="booking-invoice-section-heading">
+
+                    <span>
+
+                        <i class="bi bi-calendar2-check-fill"></i>
+                    </span>
+
+                    <div>
+
+                        <small>
+                            تفاصيل الطلب
+                        </small>
+
+                        <h3>
+                            معلومات الحجز
+                        </h3>
+                    </div>
+
+                    <span class="booking-invoice-booking-number">
+
+                        رقم الحجز
+
+                        <b dir="ltr">
+                            #@bookingNumber
+                        </b>
+                    </span>
+                </div>
+
+                <div class="booking-invoice-booked-item">
+
+                    <span class="booking-invoice-booked-item-icon">
+
+                        <i class="bi @(isRoomBooking
+                            ? "bi-door-open-fill"
+                            : "bi-stars")">
+                        </i>
+                    </span>
+
+                    <div class="booking-invoice-booked-item-copy">
+
+                        <small>
+                            @itemTypeText
+                        </small>
+
+                        <strong>
+                            @itemTitle
+                        </strong>
+
+                        <p>
+                            @itemSubtitle
+                        </p>
+                    </div>
+
+                    <div class="booking-invoice-booked-item-price">
+
+                        <small>
+                            السعر الأساسي
+                        </small>
+
+                        <strong>
+                            @itemUnitPriceText
+                        </strong>
+                    </div>
+                </div>
+
+                @if (isRoomBooking && assignedRoomUnits.Count > 0)
+                {
+                    <div class="booking-invoice-room-units">
+                        <span class="booking-invoice-room-units-title">
+                            <i class="bi bi-key-fill"></i>
+                            التسكين الفعلي
+                        </span>
+
+                        <div class="booking-invoice-room-unit-list">
+                            @foreach (var roomLabel in assignedRoomLabels)
+                            {
+                                <span class="booking-invoice-room-unit-chip">
+                                    @roomLabel
+                                </span>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <div class="booking-invoice-information-grid">
+
+                    <div class="booking-invoice-information-item">
+
+                        <span>
+
+                            <i class="bi bi-calendar-event"></i>
+                        </span>
+
+                        <div>
+
+                            <small>
+                                تاريخ الحجز
+                            </small>
+
+                            <strong>
+                                @bookingPeriodText
+                            </strong>
+                        </div>
+                    </div>
+
+                    <div class="booking-invoice-information-item">
+
+                        <span>
+
+                            <i class="bi bi-clock-history"></i>
+                        </span>
+
+                        <div>
+
+                            <small>
+                                تاريخ إنشاء الطلب
+                            </small>
+
+                            <strong>
+                                @createdAtText
+                            </strong>
+                        </div>
+                    </div>
+
+                    <div class="booking-invoice-information-item">
+
+                        <span>
+
+                            <i class="bi bi-people-fill"></i>
+                        </span>
+
+                        <div>
+
+                            <small>
+                                عدد الأشخاص
+                            </small>
+
+                            <strong>
+                                @guestsText
+                            </strong>
+                        </div>
+                    </div>
+
+                    <div class="booking-invoice-information-item">
+
+                        <span>
+
+                            <i class="bi bi-boxes"></i>
+                        </span>
+
+                        <div>
+
+                            <small>
+                                الكمية
+                            </small>
+
+                            <strong>
+                                @Model.Quantity
+                            </strong>
+                        </div>
+                    </div>
+
+                    @if (isRoomBooking)
+                    {
+                        <div class="booking-invoice-information-item">
+
+                            <span>
+
+                                <i class="bi bi-moon-stars-fill"></i>
+                            </span>
+
+                            <div>
+
+                                <small>
+                                    عدد الليالي
+                                </small>
+
+                                <strong>
+                                    @nightsCount
+                                </strong>
+                            </div>
+                        </div>
+                    }
+
+                    @if (!string.Equals(
+                    bookingType,
+                    "غير محدد",
+                    StringComparison.OrdinalIgnoreCase))
+                    {
+                        <div class="booking-invoice-information-item">
+
+                            <span>
+
+                                <i class="bi bi-person-badge-fill"></i>
+                            </span>
+
+                            <div>
+
+                                <small>
+                                    نوع الحجز
+                                </small>
+
+                                <strong>
+                                    @bookingType
+                                </strong>
+                            </div>
+                        </div>
+                    }
+
+                    @if (!string.Equals(
+                    seatingSetup,
+                    "غير محدد",
+                    StringComparison.OrdinalIgnoreCase))
+                    {
+                        <div class="booking-invoice-information-item">
+
+                            <span>
+
+                                <i class="bi bi-grid-3x3-gap-fill"></i>
+                            </span>
+
+                            <div>
+
+                                <small>
+                                    ترتيب الجلسة
+                                </small>
+
+                                <strong>
+                                    @seatingSetup
+                                </strong>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </section>
+
+            <!-- الخدمات الإضافية -->
+            @if (additionalServices.Count > 0)
+            {
+                <section class="booking-invoice-section-card">
+
+                    <div class="booking-invoice-section-heading">
+
+                        <span>
+
+                            <i class="bi bi-stars"></i>
+                        </span>
+
+                        <div>
+
+                            <small>
+                                اختيارات العميل
+                            </small>
+
+                            <h3>
+                                الخدمات الإضافية
+                            </h3>
+                        </div>
+
+                        <span class="booking-invoice-section-count">
+
+                            @additionalServices.Count
+                            خدمات
+                        </span>
+                    </div>
+
+                    <div class="booking-invoice-services-table">
+
+                        <div class="booking-invoice-table-header">
+
+                            <span>
+                                الخدمة
+                            </span>
+
+                            <span>
+                                الكمية
+                            </span>
+
+                            <span>
+                                سعر الوحدة
+                            </span>
+
+                            <span>
+                                الإجمالي
+                            </span>
+                        </div>
+
+                        @foreach (var bookingService in
+                       additionalServices)
+                        {
+                            var serviceName =
+                            bookingService.Service?
+                            .ServiceName?
+                            .Trim();
+
+                            if (string.IsNullOrWhiteSpace(
+                            serviceName))
+                            {
+                                serviceName =
+                                "خدمة إضافية";
+                            }
+
+                            var serviceTotal =
+                            bookingService.UnitPrice *
+                            bookingService.Quantity;
+
+                            <div class="booking-invoice-table-row">
+
+                                <strong>
+                                    @serviceName
+                                </strong>
+
+                                <span>
+                                    @bookingService.Quantity
+                                </span>
+
+                                <span>
+                                    @ServiceUnitPriceText(bookingService)
+                                </span>
+
+                                <b>
+                                    @ServiceTotalPriceText(bookingService)
+                                </b>
+                            </div>
+                        }
+
+                        <div class="booking-invoice-services-total">
+
+                            <span>
+                                إجمالي الخدمات
+                            </span>
+
+                            <strong>
+                                @servicesTotalText
+                            </strong>
+                        </div>
+                    </div>
+                </section>
+            }
+
+            <!-- تفاصيل الدفع -->
+            <section class="booking-invoice-section-card">
+
+                <div class="booking-invoice-section-heading">
+
+                    <span>
+
+                        <i class="bi bi-wallet2"></i>
+                    </span>
+
+                    <div>
+
+                        <small>
+                            المبالغ والحوالة
+                        </small>
+
+                        <h3>
+                            معلومات الدفع
+                        </h3>
+                    </div>
+                </div>
+
+                <div class="booking-invoice-payment-details">
+
+                    <div>
+
+                        <small>
+                            وسيلة الدفع
+                        </small>
+
+                        <strong>
+                            @paymentMethod
+                        </strong>
+                    </div>
+
+                    <div>
+
+                        <small>
+                            الرقم المرجعي
+                        </small>
+
+                        <strong dir="ltr">
+                            @referenceNumber
+                        </strong>
+                    </div>
+
+                    <div>
+
+                        <small>
+                            إثبات الحوالة
+                        </small>
+
+                        <strong class="@(paymentProofUploaded
+                            ? "is-available"
+                            : "is-unavailable")">
+
+                            <i class="bi @(paymentProofUploaded
+                                ? "bi-check-circle-fill"
+                                : "bi-dash-circle")">
+                            </i>
+
+                            @(paymentProofUploaded
+                                ? "تم رفع الصورة"
+                                : "لم يتم الرفع")
+                        </strong>
+                    </div>
+                </div>
+            </section>
+
+            <!-- الملخص المالي -->
+            <section class="booking-invoice-financial-summary">
+
+                <div class="booking-invoice-financial-heading">
+
+                    <span>
+
+                        <i class="bi bi-calculator-fill"></i>
+                    </span>
+
+                    <div>
+
+                        <small>
+                            الملخص المالي
+                        </small>
+
+                        <h3>
+                            إجمالي الفاتورة
+                        </h3>
+                    </div>
+                </div>
+
+                @if (hasPromotion)
+                {
+                    <div class="booking-invoice-promotion-spotlight">
+                        <span class="booking-invoice-promotion-icon">
+                            <i class="bi bi-fire"></i>
+                        </span>
+                        <div class="booking-invoice-promotion-copy">
+                            <small>عرض محفوظ مع هذه الفاتورة</small>
+                            <strong>@promotionTitle</strong>
+                            <span>@promotionDiscountLabel</span>
+                        </div>
+                        <div class="booking-invoice-promotion-saving">
+                            <small>قيمة التوفير</small>
+                            <strong>-@discountAmountText</strong>
+                        </div>
+                    </div>
+                }
+
+                <div class="booking-invoice-financial-rows">
+
+                    @if (hasPromotion)
+                    {
+                        <div class="booking-invoice-before-discount">
+                            <span>الإجمالي قبل العرض</span>
+                            <strong><del>@originalTotalPriceText</del></strong>
+                        </div>
+
+                        <div class="booking-invoice-discount-row">
+                            <span>
+                                <i class="bi bi-fire"></i>
+                                @promotionTitle — @promotionDiscountLabel
+                            </span>
+                            <strong>-@discountAmountText</strong>
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(promotionCode))
+                        {
+                            <div class="booking-invoice-code-row">
+                                <span>كود العرض المحفوظ</span>
+                                <strong dir="ltr">@promotionCode</strong>
+                            </div>
+                        }
+                    }
+
+                    @if (servicesTotal > 0)
+                    {
+                        <div>
+                            <span>الخدمات الإضافية ضمن الحجز</span>
+                            <strong>@servicesTotalText</strong>
+                        </div>
+                    }
+
+                    <div class="booking-invoice-final-row">
+                        <span>الإجمالي النهائي للحجز</span>
+                        <strong>@totalPriceText</strong>
+                    </div>
+
+                    <div class="is-deposit">
+
+                        <span>
+                            العربون المطلوب
+                        </span>
+
+                        <strong>
+                            @depositAmountText
+                        </strong>
+                    </div>
+
+                    <div class="is-paid">
+
+                        <span>
+                            المبلغ المرسل
+                        </span>
+
+                        <strong>
+                            @submittedAmountText
+                        </strong>
+                    </div>
+
+                    <div class="is-remaining">
+
+                        <span>
+                            المتبقي لدى المنشأة
+                        </span>
+
+                        <strong>
+                            @remainingAmountText
+                        </strong>
+                    </div>
+                </div>
+
+                <div class="booking-invoice-grand-total">
+
+                    <span>
+
+                        <small>
+                            المبلغ الإجمالي
+                        </small>
+
+                        <strong>
+                            الإجمالي النهائي للحجز
+                        </strong>
+                    </span>
+
+                    <div>
+
+                        <b>
+                            @totalPriceText
+                        </b>
+                    </div>
+                </div>
+            </section>
+
+            <!-- تنبيه الفاتورة -->
+            <section class="booking-invoice-notice">
+
+                <span>
+
+                    <i class="bi bi-info-circle-fill"></i>
+                </span>
+
+                <p>
+                    هذه الفاتورة توثق بيانات الحجز والمبالغ المسجلة
+                    داخل منصة دليلك اليمني. تأكيد الحجز النهائي يعتمد
+                    على حالة الحجز وحالة مراجعة الدفع الموضحتين أعلاه.
+                </p>
+            </section>
+
+            <!-- توقيع الفاتورة -->
+            <footer class="booking-invoice-document-footer">
+
+                <div>
+
+                    <span class="booking-invoice-footer-seal">
+
+                        <i class="bi bi-patch-check-fill"></i>
+                    </span>
+
+                    <p>
+
+                        <strong>
+                            فاتورة إلكترونية من دليلك اليمني
+                        </strong>
+
+                        <small>
+                            لا تحتاج إلى توقيع أو ختم ورقي
+                        </small>
+                    </p>
+                </div>
+
+                <div class="booking-invoice-footer-reference">
+
+                    <small>
+                        المرجع
+                    </small>
+
+                    <strong dir="ltr">
+                        YG-@bookingNumber
+                    </strong>
+                </div>
+            </footer>
+        </article>
+    </section>
+</div>
+

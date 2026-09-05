@@ -1,0 +1,225 @@
+@using System.Globalization
+@using System.Linq
+@using System.Security.Claims
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.Extensions.Caching.Memory
+@inject YemenGuide.Data.AppDbContext _context
+@inject IMemoryCache _cache
+
+@{
+    // --- جلب الإعدادات من Cache مشترك بدل Query جديد في كل تنقل ---
+    var settings = await _cache.GetOrCreateAsync(
+        "yg:customer-shell:settings",
+        async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(30);
+            return await _context.SystemSettings
+                .AsNoTracking()
+                .FirstOrDefaultAsync();
+        });
+    string siteName = settings?.SiteName ?? "YemenGuide";
+    string siteDesc = settings?.SiteDescription ?? "دليلك السياحي اليمني";
+    string favicon = settings?.FaviconPath ?? "/favicon.ico";
+
+    // -------------------------------------------------------------
+    // تحديد الصفحة الحالية أولاً لأن الرئيسية يجب أن تبقى RTL دائماً.
+    // -------------------------------------------------------------
+    string currentController =
+        ViewContext.RouteData.Values["Controller"]?.ToString() ?? string.Empty;
+
+    string currentAction =
+        ViewContext.RouteData.Values["Action"]?.ToString() ?? string.Empty;
+
+    // الرئيسية تستخدم Google Maps فقط؛ لا داعي لتحميل Leaflet عليها.
+    bool isHomeIndex =
+        string.Equals(currentController, "Home", StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(currentAction, "Index", StringComparison.OrdinalIgnoreCase);
+
+    // اتجاه اللغة الحالية.
+    // الرئيسية العربية تبقى RTL للزائر والمسجل حتى لا تنقلب من اليمين إلى اليسار
+    // حسب Culture الضيف.
+    var isRtl =
+        isHomeIndex ||
+        CultureInfo.CurrentCulture.TextInfo.IsRightToLeft;
+
+    var direction = isRtl ? "rtl" : "ltr";
+    var langCode = CultureInfo.CurrentCulture.Name;
+
+    // اختيار ملف Bootstrap حسب الاتجاه
+    var bootstrapCss =
+        isRtl ? "bootstrap.rtl.min.css" : "bootstrap.min.css";
+
+    // -------------------------------------------------------------
+    // تحديد صفحات لوحة العميل آلياً دون تعديل كل View على حدة.
+    // -------------------------------------------------------------
+
+    var customerDashboardControllers =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                                                                {
+            "Overview",
+            "Profile",
+            "Messages",
+            "Bookings",
+            "Payments",
+            "Favorites",
+            "Reports",
+            "Notifications"
+                                                                };
+
+    bool isCustomerDashboardPage =
+        User.Identity?.IsAuthenticated == true &&
+        User.IsInRole("Customer") &&
+        customerDashboardControllers.Contains(currentController);
+
+    // المودل الإجباري لحسابات Google الجديدة يظهر في أي صفحة عميل،
+    // حتى إذا وصل المستخدم لأول مرة إلى الصفحة الرئيسية العامة.
+    bool showGooglePasswordSetup = false;
+
+    if (User.Identity?.IsAuthenticated == true && User.IsInRole("Customer"))
+    {
+        var userIdText = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (int.TryParse(userIdText, out var authenticatedUserId) && authenticatedUserId > 0)
+        {
+            showGooglePasswordSetup = await _context.Users
+                .AsNoTracking()
+                .Where(user => user.UserId == authenticatedUserId)
+                .Select(user => user.MustChangePassword)
+                .FirstOrDefaultAsync();
+        }
+    }
+
+    // يقرأها هيدر العميل لتغيير سلوكه في الهاتف.
+    ViewData["IsCustomerDashboardPage"] = isCustomerDashboardPage;
+
+    string bodyClass = isCustomerDashboardPage
+        ? "customer-dashboard-page has-customer-bottom-nav customer-signature-ui"
+        : "customer-public-page customer-signature-ui";
+}
+
+<!DOCTYPE html>
+<html lang="@langCode" dir="@direction">
+<head>
+
+    <meta charset="utf-8" />
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
+
+    <title>@ViewData["Title"] - @siteName | دليلك السياحي اليمني</title>
+
+    <meta name="description" content="@siteDesc" />
+    <link rel="icon" type="image/x-icon" href="@favicon" />
+
+    <link rel="stylesheet"
+          href="~/lib/bootstrap/css/@bootstrapCss" />
+
+    <link rel="stylesheet"
+          href="~/lib/bootstrap-icons/bootstrap-icons.css" />
+
+    <link rel="stylesheet"
+          href="~/css/shared/fonts.css"
+          asp-append-version="true" />
+
+    <link rel="stylesheet"
+          href="~/css/shared/site.css"
+          asp-append-version="true" />
+
+    <link rel="stylesheet"
+          href="~/css/customer/customer-layout.css"
+          asp-append-version="true" />
+
+    @if (showGooglePasswordSetup)
+    {
+        <link rel="stylesheet"
+          href="~/css/shared/auth-security-modal.css"
+          asp-append-version="true" />
+    }
+
+    @if (isCustomerDashboardPage)
+    {
+        <link rel="stylesheet"
+          href="~/css/customer/customer-bottom-nav.css"
+          asp-append-version="true" />
+    }
+
+    <link rel="stylesheet"
+          href="~/css/shared/footer.css"
+          asp-append-version="true" />
+
+    @await RenderSectionAsync("Styles", required: false)
+
+    @if (!isHomeIndex)
+    {
+        <link rel="stylesheet" href="~/lib/leaflet/leaflet.css" />
+        <script src="~/lib/leaflet/leaflet.js"></script>
+    }
+
+</head>
+
+<body class="@bodyClass @(showGooglePasswordSetup ? "auth-security-locked" : "")"
+      data-customer-dashboard="@(isCustomerDashboardPage ? "true" : "false")"
+      data-customer-controller="@currentController"
+      data-customer-action="@currentAction">
+
+    @if (showGooglePasswordSetup)
+    {
+        <partial name="_GooglePasswordSetupModal" />
+    }
+
+    <div class="site-wrapper">
+
+        <partial name="_HeaderCustomer" />
+
+        <main role="main"
+              class="site-main-content @(isCustomerDashboardPage ? "customer-dashboard-site-content" : "")">
+
+            @RenderBody()
+        </main>
+
+        @if (!isCustomerDashboardPage &&
+        (ViewData["HideFooter"] as bool? != true))
+        {
+            <partial name="_Footer" />
+        }
+
+        @if (isCustomerDashboardPage)
+        {
+            <partial name="_CustomerBottomNav" />
+        }
+    </div>
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+
+    <script src="~/lib/bootstrap/js/bootstrap.bundle.min.js"></script>
+
+    <script src="~/js/site.js"
+            asp-append-version="true"></script>
+
+    <script src="~/js/customer/customer-layout.js"
+            asp-append-version="true"></script>
+
+    @if (showGooglePasswordSetup)
+    {
+        <script src="~/js/shared/auth-security-modal.js"
+            asp-append-version="true"></script>
+    }
+
+    @if (isCustomerDashboardPage)
+    {
+        <script src="~/js/customer/customer-bottom-nav.js"
+            asp-append-version="true"></script>
+    }
+
+    @await RenderSectionAsync("Scripts", required: false)
+
+
+
+    <button type="button"
+            class="customer-back-to-top"
+            id="btn-back-to-top"
+            aria-label="العودة إلى أعلى الصفحة">
+        <i class="bi bi-chevron-up" aria-hidden="true"></i>
+    </button>
+
+</body>
+</html>

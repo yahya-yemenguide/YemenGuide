@@ -1,0 +1,4580 @@
+﻿/* =============================================================================
+   دليلك اليمني
+   إدارة حجوزات المالك — التصميم الكامل
+   File: wwwroot/css/owner/reservation-styles.css
+   ============================================================================= */
+
+
+/* =============================================================================
+   1. متغيرات التصميم
+   ============================================================================= */
+
+:root {
+    --reservation-font: "Cairo", "Tajawal", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --reservation-navy: #05203c;
+    --reservation-navy-light: #0b3156;
+    --reservation-navy-soft: #123f68;
+    --reservation-sky: #00a6da;
+    --reservation-sky-dark: #0089b5;
+    --reservation-sky-light: #eaf9fe;
+    --reservation-success: #10b981;
+    --reservation-success-dark: #047857;
+    --reservation-success-soft: rgba(16, 185, 129, 0.1);
+    --reservation-warning: #f59e0b;
+    --reservation-warning-dark: #b45309;
+    --reservation-warning-soft: rgba(245, 158, 11, 0.11);
+    --reservation-danger: #ef4444;
+    --reservation-danger-dark: #b91c1c;
+    --reservation-danger-soft: rgba(239, 68, 68, 0.1);
+    --reservation-info: #0ea5e9;
+    --reservation-info-dark: #0369a1;
+    --reservation-info-soft: rgba(14, 165, 233, 0.1);
+    --reservation-purple: #8b5cf6;
+    --reservation-purple-soft: rgba(139, 92, 246, 0.1);
+    --reservation-coral: #FF5A5F;
+    --reservation-coral-dark: #E7464C;
+    --reservation-coral-soft: rgba(255, 90, 95, 0.10);
+    --reservation-promo-gold: #D99A28;
+    --reservation-promo-gold-soft: rgba(217, 154, 40, 0.12);
+    --reservation-text: #102a43;
+    --reservation-text-soft: #334e68;
+    --reservation-muted: #64748b;
+    --reservation-muted-light: #94a3b8;
+    --reservation-page-background: #f4f7fb;
+    --reservation-surface: #ffffff;
+    --reservation-surface-soft: #f8fafc;
+    --reservation-surface-muted: #f1f5f9;
+    --reservation-surface-glass: rgba(255, 255, 255, 0.9);
+    --reservation-border: #e7edf3;
+    --reservation-border-dark: #d9e2ec;
+    --reservation-border-glass: rgba(255, 255, 255, 0.75);
+    --reservation-shadow-xs: 0 3px 10px rgba(5, 32, 60, 0.035);
+    --reservation-shadow-sm: 0 8px 22px rgba(5, 32, 60, 0.055);
+    --reservation-shadow: 0 16px 42px rgba(5, 32, 60, 0.075);
+    --reservation-shadow-lg: 0 30px 85px rgba(5, 32, 60, 0.18);
+    --reservation-sky-shadow: 0 14px 32px rgba(0, 166, 218, 0.22);
+    --reservation-success-shadow: 0 14px 30px rgba(16, 185, 129, 0.2);
+    --reservation-radius-xs: 9px;
+    --reservation-radius-sm: 12px;
+    --reservation-radius: 16px;
+    --reservation-radius-lg: 22px;
+    --reservation-radius-xl: 28px;
+    --reservation-transition: 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* =============================================================================
+   الغرف الفعلية والطوابق المسندة للحجز
+   ============================================================================= */
+
+.assigned-room-summary {
+    width: fit-content;
+    max-width: 100%;
+    margin-top: 8px;
+    padding: 6px 9px;
+    display: inline-flex;
+    align-items: flex-start;
+    gap: 6px;
+    border: 1px solid rgba(0, 166, 218, 0.18);
+    border-radius: 10px;
+    color: var(--reservation-navy);
+    background: linear-gradient(135deg, rgba(0, 166, 218, 0.09), rgba(16, 185, 129, 0.07));
+    font-size: 0.76rem;
+    font-weight: 800;
+    line-height: 1.55;
+}
+
+    .assigned-room-summary i {
+        flex: 0 0 auto;
+        margin-top: 2px;
+        color: var(--reservation-sky-dark);
+    }
+
+    .assigned-room-summary span {
+        min-width: 0;
+        overflow-wrap: anywhere;
+    }
+
+    .assigned-room-summary.history {
+        border-color: rgba(100, 116, 139, 0.18);
+        background: rgba(241, 245, 249, 0.82);
+    }
+
+.assigned-rooms-modal-card {
+    border-color: rgba(0, 166, 218, 0.2) !important;
+    background: linear-gradient(135deg, rgba(234, 249, 254, 0.94), rgba(236, 253, 245, 0.88)) !important;
+}
+
+.reservation-info-icon.assigned-room-icon {
+    color: #ffffff;
+    background: linear-gradient(135deg, var(--reservation-sky), var(--reservation-success));
+    box-shadow: 0 8px 20px rgba(0, 166, 218, 0.2);
+}
+
+#modalAssignedRooms {
+    line-height: 1.75;
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 767.98px) {
+    .assigned-room-summary {
+        width: 100%;
+    }
+}
+
+
+/* =============================================================================
+   2. الإعدادات الأساسية
+   ============================================================================= */
+
+.owner-reservations-page,
+.owner-reservations-page *,
+#premiumCenterModal,
+#premiumCenterModal *,
+.swal2-container,
+.swal2-container * {
+    box-sizing: border-box;
+}
+
+.owner-reservations-page,
+#premiumCenterModal,
+.swal2-container {
+    font-family: var(--reservation-font);
+}
+
+.owner-reservations-page {
+    position: relative;
+    width: 100%;
+    min-width: 0;
+    min-height: 100%;
+    direction: rtl;
+    color: var(--reservation-text);
+    isolation: isolate;
+}
+
+    .owner-reservations-page::before {
+        content: "";
+        position: absolute;
+        z-index: -1;
+        top: -50px;
+        right: -40px;
+        left: -40px;
+        height: 320px;
+        pointer-events: none;
+        background: radial-gradient( circle at 85% 10%, rgba(0, 166, 218, 0.1), transparent 38% ), radial-gradient( circle at 10% 15%, rgba(16, 185, 129, 0.055), transparent 34% );
+    }
+
+.reservation-page-container {
+    width: 100%;
+    min-width: 0;
+    padding: 20px;
+}
+
+.owner-reservations-page button,
+.owner-reservations-page input,
+.owner-reservations-page textarea,
+.owner-reservations-page select,
+#premiumCenterModal button,
+#premiumCenterModal input,
+#premiumCenterModal textarea,
+#premiumCenterModal select {
+    font-family: inherit;
+}
+
+.owner-reservations-page img,
+#premiumCenterModal img {
+    max-width: 100%;
+}
+
+.owner-reservations-page button,
+#premiumCenterModal button {
+    -webkit-tap-highlight-color: transparent;
+}
+
+.text-sky {
+    color: var(--reservation-sky) !important;
+}
+
+.fw-black {
+    font-weight: 900 !important;
+}
+
+.min-w-0 {
+    min-width: 0 !important;
+}
+
+
+/* =============================================================================
+   3. رأس الصفحة
+   ============================================================================= */
+
+.reservation-page-header {
+    position: relative;
+    width: 100%;
+    min-width: 0;
+    min-height: 100px;
+    padding: 20px 22px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 22px;
+    border: 1px solid var(--reservation-border-glass);
+    border-radius: var(--reservation-radius-lg);
+    background: linear-gradient( 135deg, rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 0.84) );
+    box-shadow: var(--reservation-shadow);
+    backdrop-filter: blur(22px);
+    -webkit-backdrop-filter: blur(22px);
+    overflow: hidden;
+}
+
+    .reservation-page-header::before {
+        content: "";
+        position: absolute;
+        top: -95px;
+        left: -65px;
+        width: 230px;
+        height: 230px;
+        border-radius: 50%;
+        pointer-events: none;
+        background: radial-gradient( circle, rgba(0, 166, 218, 0.17), transparent 68% );
+    }
+
+    .reservation-page-header::after {
+        content: "";
+        position: absolute;
+        top: 17px;
+        right: 0;
+        bottom: 17px;
+        width: 4px;
+        border-radius: 8px 0 0 8px;
+        background: linear-gradient( 180deg, var(--reservation-sky), var(--reservation-success) );
+    }
+
+    .reservation-page-header > * {
+        position: relative;
+        z-index: 1;
+    }
+
+.reservation-header-main {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.reservation-page-icon {
+    width: 56px;
+    height: 56px;
+    min-width: 56px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(255, 255, 255, 0.65);
+    border-radius: 17px;
+    color: #ffffff;
+    background: linear-gradient( 135deg, var(--reservation-sky), var(--reservation-navy) );
+    box-shadow: var(--reservation-sky-shadow), inset 0 1px 1px rgba(255, 255, 255, 0.28);
+    font-size: 1.45rem;
+}
+
+.reservation-header-copy {
+    min-width: 0;
+}
+
+.reservation-title-line {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 9px;
+}
+
+.reservation-page-title {
+    margin: 0;
+    color: var(--reservation-navy);
+    font-size: clamp(1.25rem, 2vw, 1.65rem);
+    font-weight: 900;
+    line-height: 1.4;
+}
+
+.reservation-live-badge {
+    min-height: 27px;
+    padding: 5px 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    border-radius: 999px;
+    color: var(--reservation-success-dark);
+    background: var(--reservation-success-soft);
+    font-size: 0.68rem;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.live-dot {
+    width: 7px;
+    height: 7px;
+    display: inline-block;
+    border-radius: 50%;
+    background: var(--reservation-success);
+    box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.12);
+    animation: reservationLivePulse 2s ease-in-out infinite;
+}
+
+.reservation-page-description {
+    max-width: 680px;
+    margin: 5px 0 0;
+    color: var(--reservation-muted);
+    font-size: 0.8rem;
+    font-weight: 500;
+    line-height: 1.75;
+}
+
+.reservation-refresh-btn {
+    min-width: 102px;
+    min-height: 43px;
+    padding: 9px 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    border: 1px solid rgba(0, 166, 218, 0.22);
+    border-radius: 999px;
+    color: var(--reservation-sky-dark);
+    background: rgba(255, 255, 255, 0.9);
+    box-shadow: var(--reservation-shadow-xs);
+    font-size: 0.77rem;
+    font-weight: 800;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color var(--reservation-transition), background var(--reservation-transition), border-color var(--reservation-transition), box-shadow var(--reservation-transition), transform var(--reservation-transition);
+}
+
+    .reservation-refresh-btn:hover,
+    .reservation-refresh-btn:focus-visible {
+        color: #ffffff;
+        border-color: var(--reservation-sky);
+        background: linear-gradient( 135deg, var(--reservation-sky), var(--reservation-sky-dark) );
+        box-shadow: var(--reservation-sky-shadow);
+        transform: translateY(-2px);
+    }
+
+    .reservation-refresh-btn:active {
+        transform: scale(0.97);
+    }
+
+
+/* =============================================================================
+   4. شريط الإحصائيات المصغر
+   ============================================================================= */
+
+.reservation-mini-overview {
+    width: 100%;
+    min-width: 0;
+    margin-top: 14px;
+}
+
+.mini-overview-scroll {
+    width: 100%;
+    min-width: 0;
+    min-height: 68px;
+    padding: 9px 12px;
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    gap: 4px;
+    border: 1px solid var(--reservation-border);
+    border-radius: var(--reservation-radius);
+    background: var(--reservation-surface-glass);
+    box-shadow: var(--reservation-shadow-sm);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 166, 218, 0.28) transparent;
+}
+
+    .mini-overview-scroll::-webkit-scrollbar {
+        height: 4px;
+    }
+
+    .mini-overview-scroll::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .mini-overview-scroll::-webkit-scrollbar-thumb {
+        border-radius: 999px;
+        background: rgba(0, 166, 218, 0.28);
+    }
+
+.mini-overview-item {
+    min-width: 145px;
+    min-height: 48px;
+    padding: 7px 13px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-radius: 13px;
+    transition: background var(--reservation-transition), transform var(--reservation-transition);
+}
+
+    .mini-overview-item:hover {
+        background: var(--reservation-surface-soft);
+        transform: translateY(-1px);
+    }
+
+.mini-overview-icon {
+    width: 35px;
+    height: 35px;
+    min-width: 35px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 11px;
+    font-size: 0.95rem;
+}
+
+.mini-overview-item.warning .mini-overview-icon {
+    color: var(--reservation-warning-dark);
+    background: var(--reservation-warning-soft);
+}
+
+.mini-overview-item.info .mini-overview-icon {
+    color: var(--reservation-info-dark);
+    background: var(--reservation-info-soft);
+}
+
+.mini-overview-item.success .mini-overview-icon {
+    color: var(--reservation-success-dark);
+    background: var(--reservation-success-soft);
+}
+
+.mini-overview-item.active .mini-overview-icon {
+    color: var(--reservation-sky-dark);
+    background: rgba(0, 166, 218, 0.1);
+}
+
+.mini-overview-copy {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.mini-overview-label {
+    color: var(--reservation-muted);
+    font-size: 0.7rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.mini-overview-number {
+    min-width: 25px;
+    height: 25px;
+    padding: 0 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    color: var(--reservation-navy);
+    background: var(--reservation-surface-muted);
+    font-size: 0.77rem;
+    font-weight: 900;
+}
+
+.mini-overview-divider {
+    width: 1px;
+    min-width: 1px;
+    align-self: center;
+    height: 30px;
+    background: var(--reservation-border);
+}
+
+
+/* =============================================================================
+   5. التبويبات
+   ============================================================================= */
+
+.custom-tabs-container {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    min-width: 0;
+    margin-top: 14px;
+    padding: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    border: 1px solid var(--reservation-border);
+    border-radius: 17px;
+    background: rgba(255, 255, 255, 0.78);
+    box-shadow: var(--reservation-shadow-sm);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+}
+
+    .custom-tabs-container::-webkit-scrollbar {
+        display: none;
+    }
+
+    .custom-tabs-container .tab-btn {
+        position: relative;
+        min-width: 190px;
+        min-height: 47px;
+        padding: 8px 16px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 9px;
+        border: 0;
+        border-radius: 12px;
+        color: var(--reservation-muted);
+        background: transparent;
+        font-size: 0.78rem;
+        font-weight: 800;
+        line-height: 1.3;
+        white-space: nowrap;
+        cursor: pointer;
+        transition: color var(--reservation-transition), background var(--reservation-transition), box-shadow var(--reservation-transition), transform var(--reservation-transition);
+    }
+
+        .custom-tabs-container .tab-btn:hover {
+            color: var(--reservation-sky-dark);
+            background: rgba(0, 166, 218, 0.065);
+        }
+
+        .custom-tabs-container .tab-btn.active {
+            color: #ffffff;
+            background: linear-gradient( 135deg, var(--reservation-sky), var(--reservation-sky-dark) );
+            box-shadow: 0 10px 23px rgba(0, 166, 218, 0.23);
+        }
+
+        .custom-tabs-container .tab-btn:focus-visible {
+            outline: 3px solid rgba(0, 166, 218, 0.17);
+            outline-offset: 2px;
+        }
+
+        .custom-tabs-container .tab-btn:active {
+            transform: scale(0.98);
+        }
+
+.tab-icon-wrap {
+    width: 29px;
+    height: 29px;
+    min-width: 29px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9px;
+    color: var(--reservation-sky-dark);
+    background: rgba(0, 166, 218, 0.09);
+    transition: color var(--reservation-transition), background var(--reservation-transition);
+}
+
+.tab-btn.active .tab-icon-wrap {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.18);
+}
+
+.tab-label {
+    min-width: 0;
+}
+
+.reservation-tab-count {
+    min-width: 26px;
+    height: 26px;
+    padding: 0 7px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    color: var(--reservation-navy);
+    background: rgba(5, 32, 60, 0.07);
+    font-size: 0.72rem;
+    font-weight: 900;
+}
+
+.tab-btn.active .reservation-tab-count {
+    color: var(--reservation-navy);
+    background: #ffffff;
+}
+
+
+/* =============================================================================
+   6. حاوية المحتوى
+   ============================================================================= */
+
+.reservation-content-shell {
+    position: relative;
+    width: 100%;
+    min-width: 0;
+    min-height: 320px;
+    margin-top: 14px;
+    padding: 18px;
+    border: 1px solid var(--reservation-border);
+    border-radius: var(--reservation-radius-lg);
+    background: var(--reservation-surface-glass);
+    box-shadow: var(--reservation-shadow);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+}
+
+.tab-pane-content {
+    width: 100%;
+    min-width: 0;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+    .tab-pane-content.show-smooth {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+.reservation-initial-loader {
+    min-height: 275px;
+    padding: 35px 15px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
+    .reservation-initial-loader h6 {
+        margin: 15px 0 4px;
+        color: var(--reservation-navy);
+        font-size: 0.93rem;
+        font-weight: 900;
+    }
+
+    .reservation-initial-loader p {
+        margin: 0;
+        color: var(--reservation-muted);
+        font-size: 0.74rem;
+    }
+
+.reservation-loader-ring {
+    position: relative;
+    width: 46px;
+    height: 46px;
+    border: 4px solid rgba(0, 166, 218, 0.12);
+    border-top-color: var(--reservation-sky);
+    border-radius: 50%;
+    animation: reservationLoaderSpin 0.85s linear infinite;
+}
+
+    .reservation-loader-ring::after {
+        content: "";
+        position: absolute;
+        inset: 8px;
+        border-radius: 50%;
+        background: rgba(0, 166, 218, 0.09);
+    }
+
+
+/* =============================================================================
+   7. رأس كل قسم
+   ============================================================================= */
+
+.compact-reservations-view {
+    width: 100%;
+    min-width: 0;
+}
+
+.compact-section-header {
+    width: 100%;
+    min-width: 0;
+    margin-bottom: 14px;
+    padding: 4px 3px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+}
+
+.compact-section-heading {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 11px;
+}
+
+.compact-heading-icon {
+    width: 43px;
+    height: 43px;
+    min-width: 43px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(245, 158, 11, 0.16);
+    border-radius: 13px;
+    color: var(--reservation-warning-dark);
+    background: var(--reservation-warning-soft);
+    font-size: 1rem;
+    box-shadow: var(--reservation-shadow-xs);
+}
+
+    .compact-heading-icon.active {
+        color: var(--reservation-success-dark);
+        border-color: rgba(16, 185, 129, 0.16);
+        background: var(--reservation-success-soft);
+    }
+
+    .compact-heading-icon.history {
+        color: var(--reservation-info-dark);
+        border-color: rgba(14, 165, 233, 0.16);
+        background: var(--reservation-info-soft);
+    }
+
+.compact-section-title {
+    margin: 0;
+    color: var(--reservation-navy);
+    font-size: 1.02rem;
+    font-weight: 900;
+    line-height: 1.45;
+}
+
+.compact-section-subtitle {
+    margin: 3px 0 0;
+    color: var(--reservation-muted);
+    font-size: 0.71rem;
+    font-weight: 500;
+    line-height: 1.65;
+}
+
+.compact-status-summary {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.compact-summary-chip {
+    min-height: 32px;
+    padding: 6px 9px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    font-size: 0.65rem;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+    .compact-summary-chip strong {
+        min-width: 20px;
+        height: 20px;
+        padding: 0 5px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.78);
+        font-size: 0.66rem;
+        font-weight: 900;
+    }
+
+    .compact-summary-chip.warning {
+        color: var(--reservation-warning-dark);
+        border-color: rgba(245, 158, 11, 0.2);
+        background: var(--reservation-warning-soft);
+    }
+
+    .compact-summary-chip.info {
+        color: var(--reservation-info-dark);
+        border-color: rgba(14, 165, 233, 0.2);
+        background: var(--reservation-info-soft);
+    }
+
+    .compact-summary-chip.success {
+        color: var(--reservation-success-dark);
+        border-color: rgba(16, 185, 129, 0.2);
+        background: var(--reservation-success-soft);
+    }
+
+    .compact-summary-chip.danger {
+        color: var(--reservation-danger-dark);
+        border-color: rgba(239, 68, 68, 0.2);
+        background: var(--reservation-danger-soft);
+    }
+
+
+/* =============================================================================
+   8. الشارات العامة
+   ============================================================================= */
+
+.badge-glass-success,
+.badge-glass-warning,
+.badge-glass-danger,
+.badge-glass-info {
+    min-height: 29px;
+    padding: 6px 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    font-size: 0.67rem;
+    font-weight: 800;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.badge-glass-success {
+    color: var(--reservation-success-dark) !important;
+    border-color: rgba(16, 185, 129, 0.23);
+    background: var(--reservation-success-soft) !important;
+}
+
+.badge-glass-warning {
+    color: var(--reservation-warning-dark) !important;
+    border-color: rgba(245, 158, 11, 0.25);
+    background: var(--reservation-warning-soft) !important;
+}
+
+.badge-glass-danger {
+    color: var(--reservation-danger-dark) !important;
+    border-color: rgba(239, 68, 68, 0.22);
+    background: var(--reservation-danger-soft) !important;
+}
+
+.badge-glass-info {
+    color: var(--reservation-info-dark) !important;
+    border-color: rgba(14, 165, 233, 0.22);
+    background: var(--reservation-info-soft) !important;
+}
+
+
+/* =============================================================================
+   9. الجدول التنفيذي المختصر
+   ============================================================================= */
+
+.premium-round-table,
+.compact-reservation-table-shell {
+    position: relative;
+    width: 100%;
+    min-width: 0;
+    border: 1px solid var(--reservation-border);
+    border-radius: 18px;
+    background: var(--reservation-surface);
+    box-shadow: var(--reservation-shadow-sm);
+    overflow: hidden;
+}
+
+    .compact-reservation-table-shell .table-responsive {
+        width: 100%;
+        min-width: 0;
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(0, 166, 218, 0.28) transparent;
+    }
+
+        .compact-reservation-table-shell .table-responsive::-webkit-scrollbar {
+            height: 6px;
+        }
+
+        .compact-reservation-table-shell .table-responsive::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .compact-reservation-table-shell .table-responsive::-webkit-scrollbar-thumb {
+            border-radius: 999px;
+            background: rgba(0, 166, 218, 0.27);
+        }
+
+.compact-reservation-table {
+    width: 100%;
+    min-width: 950px;
+    margin: 0;
+    color: var(--reservation-text);
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+    .compact-reservation-table thead {
+        background: linear-gradient( 180deg, #fafcfd, #f5f8fa );
+    }
+
+        .compact-reservation-table thead th {
+            padding: 14px 15px;
+            border: 0;
+            border-bottom: 1px solid var(--reservation-border);
+            color: var(--reservation-muted);
+            background: transparent;
+            font-size: 0.68rem;
+            font-weight: 900;
+            line-height: 1.4;
+            letter-spacing: 0.05px;
+            text-align: right;
+            white-space: nowrap;
+            vertical-align: middle;
+        }
+
+    .compact-reservation-table tbody td {
+        position: relative;
+        padding: 15px;
+        border: 0;
+        border-bottom: 1px solid var(--reservation-border);
+        color: var(--reservation-text);
+        background: transparent;
+        font-size: 0.78rem;
+        line-height: 1.6;
+        text-align: right;
+        vertical-align: middle;
+    }
+
+    .compact-reservation-table tbody tr:last-child td {
+        border-bottom: 0;
+    }
+
+.compact-reservation-row {
+    --row-accent: var(--reservation-sky);
+    position: relative;
+    background: var(--reservation-surface);
+    transition: background var(--reservation-transition), box-shadow var(--reservation-transition);
+}
+
+    .compact-reservation-row::after {
+        content: "";
+        position: absolute;
+        top: 11px;
+        right: 0;
+        bottom: 11px;
+        width: 3px;
+        border-radius: 3px 0 0 3px;
+        background: var(--row-accent);
+        opacity: 0.78;
+        transition: width var(--reservation-transition), opacity var(--reservation-transition);
+    }
+
+    .compact-reservation-row:hover {
+        background: rgba(0, 166, 218, 0.025);
+        box-shadow: inset 0 0 0 999px rgba(0, 166, 218, 0.012);
+    }
+
+        .compact-reservation-row:hover::after {
+            width: 4px;
+            opacity: 1;
+        }
+
+.reservation-state-pending {
+    --row-accent: var(--reservation-warning);
+}
+
+.reservation-state-awaiting {
+    --row-accent: var(--reservation-info);
+}
+
+.reservation-state-review {
+    --row-accent: var(--reservation-success);
+}
+
+.reservation-state-upcoming {
+    --row-accent: var(--reservation-info);
+}
+
+.reservation-state-active {
+    --row-accent: var(--reservation-success);
+}
+
+.reservation-state-closing {
+    --row-accent: var(--reservation-warning);
+}
+
+.reservation-state-completed {
+    --row-accent: var(--reservation-success);
+}
+
+.reservation-state-rejected,
+.reservation-state-noshow {
+    --row-accent: var(--reservation-danger);
+}
+
+.reservation-state-cancelled,
+.reservation-state-expired {
+    --row-accent: var(--reservation-warning);
+}
+
+.reservation-state-default {
+    --row-accent: var(--reservation-muted);
+}
+
+
+/* =============================================================================
+   10. عمود العميل
+   ============================================================================= */
+
+.compact-customer-column {
+    min-width: 175px;
+}
+
+.compact-customer-box {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.avatar-letter-user,
+.compact-avatar {
+    width: 41px;
+    height: 41px;
+    min-width: 41px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 3px solid #ffffff;
+    border-radius: 13px;
+    color: #ffffff;
+    box-shadow: 0 7px 17px rgba(5, 32, 60, 0.13);
+    font-size: 0.86rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    transition: transform var(--reservation-transition), box-shadow var(--reservation-transition);
+}
+
+.compact-reservation-row:hover .compact-avatar {
+    box-shadow: 0 10px 22px rgba(0, 166, 218, 0.17);
+    transform: translateY(-2px);
+}
+
+.compact-customer-info {
+    min-width: 0;
+}
+
+.compact-booking-number {
+    margin-bottom: 2px;
+    color: var(--reservation-muted);
+    font-size: 0.62rem;
+    font-weight: 700;
+}
+
+.compact-customer-name {
+    max-width: 175px;
+    color: var(--reservation-navy);
+    font-size: 0.79rem;
+    font-weight: 900;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+}
+
+
+/* =============================================================================
+   11. عمود المنشأة والوحدة
+   ============================================================================= */
+
+.compact-place-column {
+    min-width: 185px;
+    max-width: 250px;
+}
+
+.compact-place-name {
+    max-width: 235px;
+    margin-bottom: 4px;
+    color: var(--reservation-navy);
+    font-size: 0.77rem;
+    font-weight: 900;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.compact-unit-name {
+    max-width: 235px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--reservation-muted);
+    font-size: 0.68rem;
+    font-weight: 600;
+    line-height: 1.5;
+}
+
+    .compact-unit-name i {
+        color: var(--reservation-sky);
+        font-size: 0.75rem;
+    }
+
+    .compact-unit-name span {
+        min-width: 0;
+        overflow-wrap: anywhere;
+    }
+
+
+/* =============================================================================
+   12. عمود التاريخ
+   ============================================================================= */
+
+.compact-date-column {
+    min-width: 190px;
+}
+
+.compact-date-range {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+
+.compact-date-item {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.compact-date-label {
+    color: var(--reservation-muted-light);
+    font-size: 0.58rem;
+    font-weight: 700;
+}
+
+.compact-date-item strong {
+    color: var(--reservation-text-soft);
+    font-size: 0.7rem;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.compact-date-arrow {
+    color: var(--reservation-sky);
+    font-size: 0.74rem;
+}
+
+.compact-period-note {
+    margin-top: 5px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--reservation-muted);
+    font-size: 0.61rem;
+    font-weight: 600;
+}
+
+    .compact-period-note i {
+        color: var(--reservation-purple);
+    }
+
+
+/* =============================================================================
+   13. عمود الإجمالي
+   ============================================================================= */
+
+.compact-total-column {
+    min-width: 105px;
+}
+
+.compact-total-price {
+    color: var(--reservation-navy);
+    font-size: 0.91rem;
+    font-weight: 900;
+    line-height: 1.25;
+    white-space: nowrap;
+}
+
+.compact-currency {
+    display: block;
+    margin-top: 3px;
+    color: var(--reservation-muted);
+    font-size: 0.58rem;
+    font-weight: 700;
+}
+
+
+/* =============================================================================
+   14. عمود الحالة
+   ============================================================================= */
+
+.compact-state-column {
+    min-width: 145px;
+}
+
+.compact-state-badge {
+    max-width: 100%;
+}
+
+.compact-state-note {
+    max-width: 180px;
+    margin-top: 5px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--reservation-muted);
+    font-size: 0.59rem;
+    font-weight: 700;
+    line-height: 1.45;
+}
+
+    .compact-state-note.warning {
+        color: var(--reservation-warning-dark);
+    }
+
+    .compact-state-note.info {
+        color: var(--reservation-info-dark);
+    }
+
+    .compact-state-note.success {
+        color: var(--reservation-success-dark);
+    }
+
+    .compact-state-note.danger {
+        color: var(--reservation-danger-dark);
+    }
+
+.compact-state-reason {
+    max-width: 175px;
+    margin-top: 5px;
+    display: flex;
+    align-items: flex-start;
+    gap: 5px;
+    color: var(--reservation-danger-dark);
+    font-size: 0.58rem;
+    font-weight: 600;
+    line-height: 1.45;
+}
+
+    .compact-state-reason span {
+        min-width: 0;
+        display: -webkit-box;
+        overflow: hidden;
+        -webkit-line-clamp: 1;
+        -webkit-box-orient: vertical;
+    }
+
+
+/* =============================================================================
+   15. زر التفاصيل
+   ============================================================================= */
+
+.compact-action-column {
+    min-width: 135px;
+}
+
+.compact-details-button {
+    min-height: 37px;
+    padding: 8px 13px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: 1px solid rgba(0, 166, 218, 0.22);
+    border-radius: 11px;
+    color: var(--reservation-sky-dark);
+    background: linear-gradient( 145deg, rgba(255, 255, 255, 0.98), rgba(239, 249, 253, 0.82) );
+    box-shadow: var(--reservation-shadow-xs);
+    font-size: 0.67rem;
+    font-weight: 900;
+    line-height: 1.25;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: color var(--reservation-transition), background var(--reservation-transition), border-color var(--reservation-transition), box-shadow var(--reservation-transition), transform var(--reservation-transition);
+}
+
+    .compact-details-button:hover,
+    .compact-details-button:focus-visible {
+        color: #ffffff;
+        border-color: var(--reservation-sky);
+        background: linear-gradient( 135deg, var(--reservation-sky), var(--reservation-sky-dark) );
+        box-shadow: 0 10px 22px rgba(0, 166, 218, 0.22);
+        transform: translateY(-2px);
+    }
+
+    .compact-details-button:active {
+        transform: scale(0.97);
+    }
+
+
+/* =============================================================================
+   16. بحث وفلترة السجل
+   ============================================================================= */
+
+.compact-history-toolbar {
+    width: 100%;
+    min-width: 0;
+    margin-bottom: 13px;
+    padding: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    border: 1px solid var(--reservation-border);
+    border-radius: 15px;
+    background: var(--reservation-surface-soft);
+}
+
+.compact-history-search {
+    width: min(100%, 520px);
+    min-width: 220px;
+    min-height: 42px;
+    padding: 0 14px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    border: 1px solid var(--reservation-border);
+    border-radius: 999px;
+    background: var(--reservation-surface);
+    box-shadow: var(--reservation-shadow-xs);
+    transition: border-color var(--reservation-transition), box-shadow var(--reservation-transition);
+}
+
+    .compact-history-search:focus-within {
+        border-color: rgba(0, 166, 218, 0.48);
+        box-shadow: 0 0 0 4px rgba(0, 166, 218, 0.085);
+    }
+
+    .compact-history-search > i {
+        color: var(--reservation-sky);
+        font-size: 0.85rem;
+    }
+
+    .compact-history-search input {
+        width: 100%;
+        min-width: 0;
+        min-height: 40px;
+        padding: 0;
+        border: 0;
+        outline: 0;
+        color: var(--reservation-text);
+        background: transparent;
+        font-size: 0.72rem;
+        font-weight: 600;
+    }
+
+        .compact-history-search input::placeholder {
+            color: var(--reservation-muted-light);
+            font-weight: 500;
+        }
+
+.compact-history-filter {
+    flex: 0 0 auto;
+}
+
+.compact-filter-button {
+    min-width: 145px;
+    min-height: 42px;
+    padding: 8px 13px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    border: 1px solid var(--reservation-border);
+    border-radius: 12px;
+    color: var(--reservation-text-soft);
+    background: var(--reservation-surface);
+    box-shadow: var(--reservation-shadow-xs);
+    font-size: 0.7rem;
+    font-weight: 800;
+    cursor: pointer;
+    transition: color var(--reservation-transition), border-color var(--reservation-transition), background var(--reservation-transition), transform var(--reservation-transition);
+}
+
+    .compact-filter-button:hover,
+    .compact-filter-button:focus-visible {
+        color: var(--reservation-sky-dark);
+        border-color: rgba(0, 166, 218, 0.3);
+        background: var(--reservation-sky-light);
+        transform: translateY(-1px);
+    }
+
+.glass-dropdown,
+.compact-filter-menu {
+    min-width: 220px;
+    padding: 7px !important;
+    border: 1px solid var(--reservation-border);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.98);
+    box-shadow: var(--reservation-shadow-lg);
+    backdrop-filter: blur(22px);
+    -webkit-backdrop-filter: blur(22px);
+}
+
+    .compact-filter-menu .dropdown-item {
+        min-height: 39px;
+        padding: 8px 10px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        border-radius: 9px;
+        color: var(--reservation-text-soft);
+        background: transparent;
+        font-size: 0.7rem;
+        font-weight: 700;
+        transition: color var(--reservation-transition), background var(--reservation-transition), transform var(--reservation-transition);
+    }
+
+        .compact-filter-menu .dropdown-item:hover,
+        .compact-filter-menu .dropdown-item.active {
+            color: var(--reservation-sky-dark);
+            background: rgba(0, 166, 218, 0.075);
+            transform: translateX(-2px);
+        }
+
+
+/* =============================================================================
+   17. حالة عدم وجود بيانات
+   ============================================================================= */
+
+.premium-empty-state,
+.compact-empty-state {
+    width: 100%;
+    min-height: 270px;
+    padding: 38px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border: 1px dashed rgba(0, 166, 218, 0.25);
+    border-radius: 18px;
+    background: linear-gradient( 145deg, rgba(255, 255, 255, 0.92), rgba(239, 249, 253, 0.7) );
+    text-align: center;
+}
+
+.empty-state-icon {
+    width: 65px;
+    height: 65px;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(0, 166, 218, 0.15);
+    border-radius: 20px;
+    color: var(--reservation-sky);
+    background: rgba(0, 166, 218, 0.08);
+    box-shadow: inset 0 0 0 6px rgba(255, 255, 255, 0.58), 0 13px 28px rgba(0, 166, 218, 0.11);
+    font-size: 1.75rem;
+}
+
+.compact-empty-state h5,
+.compact-empty-state h6 {
+    color: var(--reservation-navy) !important;
+}
+
+.compact-empty-state p {
+    max-width: 480px;
+    color: var(--reservation-muted) !important;
+    font-size: 0.75rem;
+    line-height: 1.75;
+}
+
+.history-filter-empty {
+    min-height: 220px;
+    margin-top: 12px;
+}
+
+
+/* =============================================================================
+   18. خلفية المودال
+   ============================================================================= */
+
+.modal-backdrop.show {
+    opacity: 1 !important;
+    background: rgba(3, 18, 32, 0.62) !important;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+#premiumCenterModal {
+    z-index: 1060;
+}
+
+    #premiumCenterModal .modal-dialog {
+        width: calc(100% - 30px);
+        max-width: 1120px;
+        margin-right: auto;
+        margin-left: auto;
+    }
+
+.glass-modal-premium {
+    border: 1px solid rgba(255, 255, 255, 0.78) !important;
+    border-radius: 25px !important;
+    color: var(--reservation-text);
+    background: linear-gradient( 145deg, rgba(255, 255, 255, 0.99), rgba(247, 250, 252, 0.97) ) !important;
+    box-shadow: 0 35px 95px rgba(5, 32, 60, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(34px) saturate(135%);
+    -webkit-backdrop-filter: blur(34px) saturate(135%);
+    overflow: hidden;
+    animation: reservationModalAppear 0.34s ease both;
+}
+
+
+/* =============================================================================
+   19. رأس المودال
+   ============================================================================= */
+
+.reservation-modal-header {
+    min-height: 83px;
+    padding: 15px 18px !important;
+    border-bottom: 1px solid var(--reservation-border);
+    background: linear-gradient( 135deg, rgba(0, 166, 218, 0.07), rgba(255, 255, 255, 0.88) );
+}
+
+.modal-heading-wrap {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.reservation-modal-title-icon {
+    width: 47px;
+    height: 47px;
+    min-width: 47px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 14px;
+    color: #ffffff;
+    background: linear-gradient( 135deg, var(--reservation-sky), var(--reservation-navy) );
+    box-shadow: var(--reservation-sky-shadow);
+    font-size: 1.18rem;
+}
+
+.modal-title-copy {
+    min-width: 0;
+}
+
+#modalBookingTitle {
+    margin: 0;
+    color: var(--reservation-navy);
+    font-size: 1.02rem;
+    font-weight: 900;
+    line-height: 1.5;
+}
+
+.modal-state-badges {
+    margin-top: 5px;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+#premiumCenterModal .btn-close {
+    width: 37px;
+    height: 37px;
+    margin: 0 !important;
+    padding: 0;
+    border-radius: 11px;
+    background-color: rgba(5, 32, 60, 0.055);
+    background-size: 11px;
+    opacity: 0.65;
+    transition: opacity var(--reservation-transition), background-color var(--reservation-transition), transform var(--reservation-transition);
+}
+
+    #premiumCenterModal .btn-close:hover {
+        opacity: 1;
+        background-color: rgba(239, 68, 68, 0.1);
+        transform: rotate(90deg);
+    }
+
+    #premiumCenterModal .btn-close:focus {
+        box-shadow: 0 0 0 4px rgba(0, 166, 218, 0.09);
+    }
+
+
+/* =============================================================================
+   20. جسم المودال
+   ============================================================================= */
+
+.reservation-modal-body {
+    padding: 17px !important;
+    background: radial-gradient( circle at 100% 0, rgba(0, 166, 218, 0.045), transparent 34% ), var(--reservation-surface-soft);
+}
+
+.reservation-modal-section {
+    height: 100%;
+    padding: 17px;
+    border: 1px solid var(--reservation-border);
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.76);
+    box-shadow: var(--reservation-shadow-xs);
+}
+
+.reservation-section-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.section-title-icon {
+    width: 39px;
+    height: 39px;
+    min-width: 39px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    color: var(--reservation-sky-dark);
+    background: rgba(0, 166, 218, 0.09);
+    font-size: 0.95rem;
+}
+
+.reservation-section-title h6 {
+    margin: 0;
+    color: var(--reservation-navy);
+    font-size: 0.86rem;
+    font-weight: 900;
+    line-height: 1.5;
+}
+
+.reservation-section-title p {
+    margin: 2px 0 0;
+    color: var(--reservation-muted);
+    font-size: 0.62rem;
+    font-weight: 500;
+    line-height: 1.55;
+}
+
+
+/* =============================================================================
+   21. بطاقات المعلومات داخل المودال
+   ============================================================================= */
+
+.info-glass-card {
+    position: relative;
+    min-height: 69px;
+    padding: 11px 12px;
+    border: 1px solid var(--reservation-border) !important;
+    border-radius: 13px;
+    color: var(--reservation-text);
+    background: linear-gradient( 145deg, rgba(255, 255, 255, 0.99), rgba(248, 250, 252, 0.94) ) !important;
+    box-shadow: var(--reservation-shadow-xs);
+    overflow: hidden;
+    transition: border-color var(--reservation-transition), box-shadow var(--reservation-transition), transform var(--reservation-transition);
+}
+
+    .info-glass-card:hover {
+        border-color: rgba(0, 166, 218, 0.22) !important;
+        box-shadow: 0 10px 22px rgba(0, 166, 218, 0.07);
+        transform: translateY(-1px);
+    }
+
+.reservation-modal-info-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.reservation-info-icon {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 11px;
+    color: var(--reservation-sky-dark);
+    background: rgba(0, 166, 218, 0.09);
+    font-size: 0.85rem;
+}
+
+    .reservation-info-icon.success {
+        color: var(--reservation-success-dark);
+        background: var(--reservation-success-soft);
+    }
+
+    .reservation-info-icon.warning {
+        color: var(--reservation-warning-dark);
+        background: var(--reservation-warning-soft);
+    }
+
+    .reservation-info-icon.danger {
+        color: var(--reservation-danger-dark);
+        background: var(--reservation-danger-soft);
+    }
+
+.modal-info-copy {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+    .modal-info-copy small {
+        color: var(--reservation-muted);
+        font-size: 0.58rem;
+        font-weight: 700;
+        line-height: 1.4;
+    }
+
+    .modal-info-copy strong {
+        min-width: 0;
+        color: var(--reservation-text);
+        font-size: 0.72rem;
+        font-weight: 900;
+        line-height: 1.55;
+        overflow-wrap: anywhere;
+    }
+
+
+/* =============================================================================
+   22. إحصائيات الضيوف داخل المودال
+   ============================================================================= */
+
+.reservation-modal-mini-grid {
+    width: 100%;
+    margin-top: 13px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.modal-mini-stat {
+    min-width: 0;
+    min-height: 65px;
+    padding: 9px 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid var(--reservation-border);
+    border-radius: 12px;
+    background: var(--reservation-surface);
+}
+
+.modal-mini-stat-icon {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    color: var(--reservation-purple);
+    background: var(--reservation-purple-soft);
+    font-size: 0.8rem;
+}
+
+.modal-mini-stat div {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-mini-stat small {
+    color: var(--reservation-muted);
+    font-size: 0.55rem;
+    font-weight: 700;
+}
+
+.modal-mini-stat strong {
+    color: var(--reservation-navy);
+    font-size: 0.8rem;
+    font-weight: 900;
+}
+
+
+/* =============================================================================
+   23. الخدمات وسبب الرفض
+   ============================================================================= */
+
+.reservation-services-card {
+    min-height: 72px;
+}
+
+.services-card-heading {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.reservation-rejection-card {
+    border-color: rgba(239, 68, 68, 0.2) !important;
+    background: linear-gradient( 145deg, rgba(255, 255, 255, 0.99), rgba(254, 242, 242, 0.95) ) !important;
+}
+
+
+/* =============================================================================
+   24. البيانات المالية
+   ============================================================================= */
+
+.reservation-payment-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.reservation-financial-summary {
+    width: 100%;
+    border: 1px solid var(--reservation-border);
+    border-radius: 14px;
+    background: var(--reservation-surface);
+    overflow: hidden;
+}
+
+.financial-summary-row {
+    min-height: 54px;
+    padding: 11px 13px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border-bottom: 1px solid var(--reservation-border);
+    color: var(--reservation-muted);
+    font-size: 0.68rem;
+    font-weight: 700;
+}
+
+    .financial-summary-row:last-child {
+        border-bottom: 0;
+    }
+
+    .financial-summary-row strong {
+        color: var(--reservation-text);
+        font-size: 0.76rem;
+        font-weight: 900;
+        white-space: nowrap;
+    }
+
+    .financial-summary-row.total {
+        min-height: 62px;
+        color: var(--reservation-navy);
+        background: linear-gradient( 135deg, rgba(0, 166, 218, 0.075), rgba(255, 255, 255, 0.93) );
+        font-weight: 900;
+    }
+
+        .financial-summary-row.total strong {
+            font-size: 0.9rem;
+        }
+
+.payment-method-card {
+    min-height: 72px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 9px;
+}
+
+.payment-method-main {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.view-docs-btn {
+    min-height: 35px;
+    padding: 7px 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    border: 1px solid rgba(0, 166, 218, 0.2);
+    border-radius: 10px;
+    color: var(--reservation-sky-dark);
+    background: rgba(0, 166, 218, 0.075);
+    font-size: 0.61rem;
+    font-weight: 900;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: color var(--reservation-transition), background var(--reservation-transition), transform var(--reservation-transition);
+}
+
+    .view-docs-btn:hover,
+    .view-docs-btn:focus-visible {
+        color: #ffffff;
+        background: var(--reservation-sky);
+        transform: translateY(-1px);
+    }
+
+.reservation-payment-note {
+    padding: 10px 12px;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    border: 1px solid rgba(245, 158, 11, 0.18);
+    border-radius: 11px;
+    color: var(--reservation-warning-dark);
+    background: rgba(245, 158, 11, 0.065);
+    font-size: 0.61rem;
+    font-weight: 600;
+    line-height: 1.7;
+}
+
+    .reservation-payment-note i {
+        margin-top: 2px;
+        flex-shrink: 0;
+    }
+
+
+/* =============================================================================
+   25. تذييل المودال وأزرار الإجراءات
+   ============================================================================= */
+
+.reservation-modal-footer {
+    min-height: 72px;
+    padding: 12px 17px !important;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    border-top: 1px solid var(--reservation-border);
+    background: rgba(255, 255, 255, 0.9);
+}
+
+.modal-close-button {
+    min-height: 41px;
+    padding: 8px 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: 1px solid var(--reservation-border-dark);
+    border-radius: 999px;
+    color: var(--reservation-muted);
+    background: var(--reservation-surface);
+    font-size: 0.69rem;
+    font-weight: 800;
+    cursor: pointer;
+    transition: color var(--reservation-transition), border-color var(--reservation-transition), background var(--reservation-transition), transform var(--reservation-transition);
+}
+
+    .modal-close-button:hover,
+    .modal-close-button:focus-visible {
+        color: var(--reservation-danger-dark);
+        border-color: rgba(239, 68, 68, 0.25);
+        background: var(--reservation-danger-soft);
+        transform: translateY(-1px);
+    }
+
+.modal-action-buttons {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+    .modal-action-buttons .btn {
+        min-height: 41px;
+        padding: 8px 16px !important;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px !important;
+        font-family: inherit;
+        font-size: 0.68rem;
+        font-weight: 900 !important;
+        transition: transform var(--reservation-transition), box-shadow var(--reservation-transition);
+    }
+
+        .modal-action-buttons .btn:hover {
+            transform: translateY(-2px);
+        }
+
+    .modal-action-buttons .btn-success:hover {
+        box-shadow: var(--reservation-success-shadow);
+    }
+
+    .modal-action-buttons .btn-outline-danger:hover {
+        box-shadow: 0 12px 28px rgba(239, 68, 68, 0.18);
+    }
+
+    .modal-action-buttons .btn-warning:hover {
+        box-shadow: 0 12px 28px rgba(245, 158, 11, 0.2);
+    }
+
+.reservation-awaiting-message {
+    min-height: 39px;
+    padding: 9px 13px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid rgba(14, 165, 233, 0.2);
+    border-radius: 999px;
+    color: var(--reservation-info-dark);
+    background: var(--reservation-info-soft);
+    font-size: 0.65rem;
+    font-weight: 800;
+}
+
+
+/* =============================================================================
+   26. SweetAlert
+   ============================================================================= */
+
+.swal2-popup {
+    border: 1px solid rgba(255, 255, 255, 0.78) !important;
+    border-radius: 22px !important;
+    font-family: var(--reservation-font) !important;
+    box-shadow: var(--reservation-shadow-lg) !important;
+}
+
+.swal2-title {
+    color: var(--reservation-navy) !important;
+    font-size: 1.13rem !important;
+    font-weight: 900 !important;
+}
+
+.swal2-html-container {
+    color: var(--reservation-muted) !important;
+    font-size: 0.79rem !important;
+    line-height: 1.75 !important;
+}
+
+.swal2-textarea,
+.swal2-input {
+    border: 1px solid var(--reservation-border-dark) !important;
+    border-radius: 13px !important;
+    color: var(--reservation-text) !important;
+    font-family: var(--reservation-font) !important;
+    font-size: 0.79rem !important;
+    box-shadow: none !important;
+}
+
+    .swal2-textarea:focus,
+    .swal2-input:focus {
+        border-color: var(--reservation-sky) !important;
+        box-shadow: 0 0 0 4px rgba(0, 166, 218, 0.09) !important;
+    }
+
+.swal2-confirm,
+.swal2-cancel {
+    min-height: 41px;
+    padding: 8px 21px !important;
+    border-radius: 999px !important;
+    font-family: var(--reservation-font) !important;
+    font-size: 0.72rem !important;
+    font-weight: 900 !important;
+}
+
+
+/* =============================================================================
+   27. الوضع الليلي
+   ============================================================================= */
+
+body.dark-mode,
+html[data-bs-theme="dark"],
+body[data-bs-theme="dark"] {
+    --reservation-text: #eaf2f8;
+    --reservation-text-soft: #d1dde7;
+    --reservation-muted: #a5b4c2;
+    --reservation-muted-light: #8192a2;
+    --reservation-page-background: #0f1923;
+    --reservation-surface: #17232f;
+    --reservation-surface-soft: #121e28;
+    --reservation-surface-muted: #202f3c;
+    --reservation-surface-glass: rgba(23, 35, 47, 0.91);
+    --reservation-border: rgba(255, 255, 255, 0.085);
+    --reservation-border-dark: rgba(255, 255, 255, 0.14);
+    --reservation-border-glass: rgba(255, 255, 255, 0.085);
+    --reservation-shadow-xs: 0 4px 12px rgba(0, 0, 0, 0.13);
+    --reservation-shadow-sm: 0 10px 25px rgba(0, 0, 0, 0.18);
+    --reservation-shadow: 0 18px 45px rgba(0, 0, 0, 0.25);
+    --reservation-shadow-lg: 0 35px 90px rgba(0, 0, 0, 0.44);
+}
+
+    body.dark-mode .reservation-page-header,
+    html[data-bs-theme="dark"] .reservation-page-header,
+    body[data-bs-theme="dark"] .reservation-page-header {
+        background: linear-gradient( 145deg, rgba(25, 39, 52, 0.98), rgba(18, 30, 41, 0.95) );
+    }
+
+    body.dark-mode .reservation-page-title,
+    body.dark-mode .compact-section-title,
+    body.dark-mode .reservation-initial-loader h6,
+    body.dark-mode .compact-customer-name,
+    body.dark-mode .compact-place-name,
+    body.dark-mode .compact-total-price,
+    body.dark-mode #modalBookingTitle,
+    body.dark-mode .reservation-section-title h6,
+    body.dark-mode .modal-mini-stat strong,
+    html[data-bs-theme="dark"] .reservation-page-title,
+    html[data-bs-theme="dark"] .compact-section-title,
+    html[data-bs-theme="dark"] .reservation-initial-loader h6,
+    html[data-bs-theme="dark"] .compact-customer-name,
+    html[data-bs-theme="dark"] .compact-place-name,
+    html[data-bs-theme="dark"] .compact-total-price,
+    html[data-bs-theme="dark"] #modalBookingTitle,
+    html[data-bs-theme="dark"] .reservation-section-title h6,
+    html[data-bs-theme="dark"] .modal-mini-stat strong {
+        color: var(--reservation-text);
+    }
+
+    body.dark-mode .custom-tabs-container,
+    html[data-bs-theme="dark"] .custom-tabs-container,
+    body[data-bs-theme="dark"] .custom-tabs-container {
+        background: rgba(23, 35, 47, 0.86);
+    }
+
+    body.dark-mode .mini-overview-number,
+    html[data-bs-theme="dark"] .mini-overview-number {
+        color: var(--reservation-text);
+    }
+
+    body.dark-mode .compact-reservation-table thead,
+    html[data-bs-theme="dark"] .compact-reservation-table thead {
+        background: linear-gradient( 180deg, #1c2a37, #182531 );
+    }
+
+    body.dark-mode .compact-reservation-row:hover,
+    html[data-bs-theme="dark"] .compact-reservation-row:hover {
+        background: rgba(0, 166, 218, 0.045);
+    }
+
+    body.dark-mode .compact-avatar,
+    html[data-bs-theme="dark"] .compact-avatar {
+        border-color: #1d2b38;
+    }
+
+    body.dark-mode .compact-details-button,
+    html[data-bs-theme="dark"] .compact-details-button {
+        color: #6bd4f3;
+        border-color: rgba(0, 166, 218, 0.24);
+        background: linear-gradient( 145deg, rgba(29, 44, 57, 0.96), rgba(23, 35, 47, 0.96) );
+    }
+
+    body.dark-mode .compact-history-toolbar,
+    html[data-bs-theme="dark"] .compact-history-toolbar {
+        background: rgba(18, 30, 40, 0.75);
+    }
+
+    body.dark-mode .glass-dropdown,
+    body.dark-mode .compact-filter-menu,
+    html[data-bs-theme="dark"] .glass-dropdown,
+    html[data-bs-theme="dark"] .compact-filter-menu {
+        background: rgba(23, 35, 47, 0.99);
+    }
+
+        body.dark-mode .compact-filter-menu .dropdown-item,
+        html[data-bs-theme="dark"] .compact-filter-menu .dropdown-item {
+            color: var(--reservation-text-soft);
+        }
+
+    body.dark-mode .premium-empty-state,
+    body.dark-mode .compact-empty-state,
+    html[data-bs-theme="dark"] .premium-empty-state,
+    html[data-bs-theme="dark"] .compact-empty-state {
+        background: linear-gradient( 145deg, rgba(23, 35, 47, 0.96), rgba(17, 29, 39, 0.94) );
+    }
+
+    body.dark-mode .glass-modal-premium,
+    html[data-bs-theme="dark"] .glass-modal-premium {
+        border-color: rgba(255, 255, 255, 0.09) !important;
+        background: linear-gradient( 145deg, rgba(24, 37, 49, 0.99), rgba(16, 28, 38, 0.98) ) !important;
+    }
+
+    body.dark-mode .reservation-modal-header,
+    body.dark-mode .reservation-modal-footer,
+    html[data-bs-theme="dark"] .reservation-modal-header,
+    html[data-bs-theme="dark"] .reservation-modal-footer {
+        background: rgba(22, 35, 47, 0.94);
+    }
+
+    body.dark-mode .reservation-modal-body,
+    html[data-bs-theme="dark"] .reservation-modal-body {
+        background: radial-gradient( circle at 100% 0, rgba(0, 166, 218, 0.06), transparent 34% ), #111c26;
+    }
+
+    body.dark-mode .reservation-modal-section,
+    html[data-bs-theme="dark"] .reservation-modal-section {
+        background: rgba(23, 35, 47, 0.78);
+    }
+
+    body.dark-mode .info-glass-card,
+    html[data-bs-theme="dark"] .info-glass-card {
+        background: linear-gradient( 145deg, rgba(29, 44, 57, 0.98), rgba(22, 35, 47, 0.96) ) !important;
+    }
+
+    body.dark-mode .reservation-rejection-card,
+    html[data-bs-theme="dark"] .reservation-rejection-card {
+        background: linear-gradient( 145deg, rgba(56, 31, 37, 0.97), rgba(38, 27, 32, 0.96) ) !important;
+    }
+
+    body.dark-mode .financial-summary-row.total,
+    html[data-bs-theme="dark"] .financial-summary-row.total {
+        background: linear-gradient( 135deg, rgba(0, 166, 218, 0.1), rgba(23, 35, 47, 0.95) );
+    }
+
+    body.dark-mode .swal2-popup,
+    html[data-bs-theme="dark"] .swal2-popup {
+        color: var(--reservation-text) !important;
+        background: #17232f !important;
+    }
+
+    body.dark-mode .swal2-title,
+    html[data-bs-theme="dark"] .swal2-title {
+        color: var(--reservation-text) !important;
+    }
+
+    body.dark-mode .swal2-textarea,
+    body.dark-mode .swal2-input,
+    html[data-bs-theme="dark"] .swal2-textarea,
+    html[data-bs-theme="dark"] .swal2-input {
+        color: var(--reservation-text) !important;
+        background: #111c26 !important;
+    }
+
+
+/* =============================================================================
+   28. الشاشات المتوسطة
+   ============================================================================= */
+
+@media (max-width: 1199.98px) {
+    .reservation-page-container {
+        padding: 17px;
+    }
+
+    .reservation-content-shell {
+        padding: 16px;
+    }
+
+    .compact-reservation-table {
+        min-width: 900px;
+    }
+
+    .compact-status-summary {
+        max-width: 52%;
+    }
+
+    #premiumCenterModal .modal-dialog {
+        max-width: 970px;
+    }
+}
+
+
+/* =============================================================================
+   29. التابلت
+   ============================================================================= */
+
+@media (max-width: 991.98px) {
+    .reservation-page-container {
+        padding: 14px;
+    }
+
+    .reservation-page-header {
+        padding: 17px;
+    }
+
+    .reservation-page-icon {
+        width: 50px;
+        height: 50px;
+        min-width: 50px;
+        border-radius: 15px;
+        font-size: 1.25rem;
+    }
+
+    .mini-overview-scroll {
+        justify-content: flex-start;
+    }
+
+    .mini-overview-item {
+        flex: 0 0 auto;
+    }
+
+    .custom-tabs-container {
+        justify-content: flex-start;
+    }
+
+        .custom-tabs-container .tab-btn {
+            min-width: 170px;
+            flex: 0 0 auto;
+        }
+
+    .compact-section-header {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 11px;
+    }
+
+    .compact-status-summary {
+        max-width: none;
+        justify-content: flex-start;
+    }
+
+    .compact-reservation-table {
+        min-width: 850px;
+    }
+
+    .reservation-content-shell {
+        border-radius: 19px;
+    }
+
+    #premiumCenterModal .modal-dialog {
+        width: calc(100% - 20px);
+        max-width: none;
+    }
+
+    .glass-modal-premium {
+        border-radius: 21px !important;
+    }
+}
+
+
+/* =============================================================================
+   30. الهاتف — صفوف مختصرة بدل الجدول المزدحم
+   ============================================================================= */
+
+@media (max-width: 767.98px) {
+    .reservation-page-container {
+        padding: 9px;
+    }
+
+    .owner-reservations-page::before {
+        height: 240px;
+    }
+
+    .reservation-page-header {
+        min-height: 86px;
+        padding: 14px;
+        gap: 10px;
+        border-radius: 17px;
+    }
+
+    .reservation-header-main {
+        gap: 10px;
+    }
+
+    .reservation-page-icon {
+        width: 45px;
+        height: 45px;
+        min-width: 45px;
+        border-radius: 13px;
+        font-size: 1.08rem;
+    }
+
+    .reservation-page-title {
+        font-size: 1.12rem;
+    }
+
+    .reservation-page-description {
+        max-width: 360px;
+        font-size: 0.65rem;
+        line-height: 1.55;
+    }
+
+    .reservation-refresh-btn {
+        min-width: 43px;
+        width: 43px;
+        height: 43px;
+        min-height: 43px;
+        padding: 0;
+        border-radius: 13px;
+    }
+
+        .reservation-refresh-btn span {
+            display: none;
+        }
+
+        .reservation-refresh-btn i {
+            font-size: 0.95rem;
+        }
+
+    .reservation-mini-overview {
+        margin-top: 9px;
+    }
+
+    .mini-overview-scroll {
+        min-height: 58px;
+        padding: 6px;
+        justify-content: flex-start;
+        border-radius: 14px;
+    }
+
+    .mini-overview-item {
+        min-width: 127px;
+        min-height: 44px;
+        padding: 5px 9px;
+        gap: 7px;
+    }
+
+    .mini-overview-icon {
+        width: 31px;
+        height: 31px;
+        min-width: 31px;
+        border-radius: 9px;
+        font-size: 0.8rem;
+    }
+
+    .mini-overview-label {
+        font-size: 0.61rem;
+    }
+
+    .mini-overview-number {
+        min-width: 22px;
+        height: 22px;
+        font-size: 0.64rem;
+    }
+
+    .mini-overview-divider {
+        display: none;
+    }
+
+    .custom-tabs-container {
+        margin-top: 9px;
+        padding: 5px;
+        gap: 5px;
+        border-radius: 14px;
+    }
+
+        .custom-tabs-container .tab-btn {
+            min-width: 150px;
+            min-height: 42px;
+            padding: 7px 11px;
+            border-radius: 10px;
+            font-size: 0.68rem;
+        }
+
+    .tab-icon-wrap {
+        width: 26px;
+        height: 26px;
+        min-width: 26px;
+        border-radius: 8px;
+    }
+
+    .reservation-tab-count {
+        min-width: 23px;
+        height: 23px;
+        padding: 0 5px;
+        font-size: 0.63rem;
+    }
+
+    .reservation-content-shell {
+        min-height: 260px;
+        margin-top: 9px;
+        padding: 10px;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+    }
+
+    .compact-section-header {
+        margin-bottom: 10px;
+        padding-inline: 1px;
+        gap: 9px;
+    }
+
+    .compact-heading-icon {
+        width: 39px;
+        height: 39px;
+        min-width: 39px;
+        border-radius: 12px;
+    }
+
+    .compact-section-title {
+        font-size: 0.9rem;
+    }
+
+    .compact-section-subtitle {
+        font-size: 0.63rem;
+    }
+
+    .compact-status-summary {
+        width: 100%;
+        padding-bottom: 3px;
+        flex-wrap: nowrap;
+        justify-content: flex-start;
+        overflow-x: auto;
+        scrollbar-width: none;
+    }
+
+        .compact-status-summary::-webkit-scrollbar {
+            display: none;
+        }
+
+    .compact-summary-chip {
+        flex: 0 0 auto;
+        min-height: 29px;
+        padding: 5px 8px;
+        font-size: 0.58rem;
+    }
+
+        .compact-summary-chip strong {
+            min-width: 18px;
+            height: 18px;
+            font-size: 0.57rem;
+        }
+
+    /*
+       الجدول يبقى جدولًا في الكمبيوتر،
+       وعلى الهاتف يصبح كل صف بطاقة مدمجة.
+    */
+
+    .premium-round-table,
+    .compact-reservation-table-shell {
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+        overflow: visible;
+    }
+
+        .compact-reservation-table-shell .table-responsive {
+            overflow: visible;
+        }
+
+    .compact-reservation-table {
+        width: 100%;
+        min-width: 0;
+        display: block;
+    }
+
+        .compact-reservation-table thead {
+            display: none;
+        }
+
+        .compact-reservation-table tbody {
+            width: 100%;
+            display: grid;
+            gap: 10px;
+        }
+
+            .compact-reservation-table tbody tr,
+            .compact-reservation-row {
+                width: 100%;
+                min-width: 0;
+                padding: 13px;
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) auto;
+                grid-template-areas:
+                    "customer state"
+                    "place place"
+                    "date total"
+                    "action action";
+                column-gap: 10px;
+                row-gap: 9px;
+                border: 1px solid var(--reservation-border);
+                border-radius: 16px;
+                background: var(--reservation-surface);
+                box-shadow: var(--reservation-shadow-sm);
+                overflow: hidden;
+            }
+
+                .compact-reservation-row::after {
+                    top: 12px;
+                    bottom: 12px;
+                    width: 3px;
+                }
+
+                .compact-reservation-row:hover {
+                    background: var(--reservation-surface);
+                    box-shadow: var(--reservation-shadow-sm);
+                }
+
+            .compact-reservation-table tbody td {
+                min-width: 0;
+                padding: 0;
+                display: block;
+                border: 0;
+                background: transparent;
+            }
+
+    .compact-customer-column {
+        grid-area: customer;
+        align-self: center;
+    }
+
+    .compact-place-column {
+        grid-area: place;
+        max-width: none;
+        padding-top: 9px !important;
+        border-top: 1px solid var(--reservation-border) !important;
+    }
+
+    .compact-date-column {
+        grid-area: date;
+        align-self: end;
+    }
+
+    .compact-total-column {
+        grid-area: total;
+        align-self: end;
+        text-align: left !important;
+    }
+
+    .compact-state-column {
+        grid-area: state;
+        min-width: auto;
+        align-self: start;
+        text-align: left !important;
+    }
+
+    .compact-action-column {
+        grid-area: action;
+        min-width: 0;
+        padding-top: 9px !important;
+        border-top: 1px solid var(--reservation-border) !important;
+        text-align: center !important;
+    }
+
+    .compact-customer-box {
+        gap: 8px;
+    }
+
+    .compact-avatar {
+        width: 38px;
+        height: 38px;
+        min-width: 38px;
+        border-radius: 12px;
+        font-size: 0.77rem;
+    }
+
+    .compact-booking-number {
+        font-size: 0.57rem;
+    }
+
+    .compact-customer-name {
+        max-width: none;
+        font-size: 0.74rem;
+    }
+
+    .compact-place-name {
+        max-width: none;
+        margin-bottom: 3px;
+        font-size: 0.72rem;
+    }
+
+    .compact-unit-name {
+        max-width: none;
+        font-size: 0.63rem;
+    }
+
+    .compact-date-range {
+        gap: 5px;
+    }
+
+    .compact-date-label {
+        font-size: 0.52rem;
+    }
+
+    .compact-date-item strong {
+        font-size: 0.62rem;
+    }
+
+    .compact-date-arrow {
+        font-size: 0.63rem;
+    }
+
+    .compact-period-note {
+        display: none;
+    }
+
+    .compact-total-price {
+        font-size: 0.82rem;
+    }
+
+    .compact-currency {
+        font-size: 0.52rem;
+    }
+
+    .compact-state-badge {
+        min-height: 27px;
+        padding: 5px 8px;
+        font-size: 0.58rem;
+    }
+
+    .compact-state-note {
+        max-width: 130px;
+        margin-top: 4px;
+        justify-content: flex-end;
+        font-size: 0.51rem;
+        text-align: left;
+    }
+
+    .compact-state-reason {
+        display: none;
+    }
+
+    .compact-details-button {
+        width: 100%;
+        min-height: 38px;
+        border-radius: 11px;
+        font-size: 0.65rem;
+    }
+
+    /*
+       شريط البحث والفلترة.
+    */
+
+    .compact-history-toolbar {
+        margin-bottom: 10px;
+        padding: 8px;
+        flex-direction: column;
+        align-items: stretch;
+        border-radius: 13px;
+    }
+
+    .compact-history-search {
+        width: 100%;
+        min-width: 0;
+        min-height: 40px;
+    }
+
+    .compact-history-filter,
+    .compact-filter-button {
+        width: 100%;
+    }
+
+    .compact-filter-button {
+        min-height: 40px;
+    }
+
+    .compact-filter-menu {
+        width: 100%;
+    }
+
+    /*
+       المودال.
+    */
+
+    #premiumCenterModal {
+        padding: 0 !important;
+    }
+
+        #premiumCenterModal .modal-dialog {
+            width: calc(100% - 10px);
+            min-height: calc(100% - 10px);
+            margin: 5px auto;
+        }
+
+    .glass-modal-premium {
+        max-height: calc(100dvh - 10px);
+        border-radius: 18px !important;
+    }
+
+    .reservation-modal-header {
+        min-height: 69px;
+        padding: 11px 12px !important;
+    }
+
+    .reservation-modal-title-icon {
+        width: 40px;
+        height: 40px;
+        min-width: 40px;
+        border-radius: 12px;
+        font-size: 0.95rem;
+    }
+
+    #modalBookingTitle {
+        font-size: 0.84rem;
+    }
+
+    .modal-state-badges {
+        gap: 3px;
+    }
+
+        .modal-state-badges .badge {
+            min-height: 24px;
+            padding: 4px 7px;
+            font-size: 0.53rem;
+        }
+
+    #premiumCenterModal .btn-close {
+        width: 34px;
+        height: 34px;
+    }
+
+    .reservation-modal-body {
+        padding: 10px !important;
+    }
+
+        .reservation-modal-body > .row {
+            --bs-gutter-x: 10px;
+            --bs-gutter-y: 10px;
+        }
+
+    .reservation-modal-section {
+        padding: 12px;
+        border-radius: 15px;
+    }
+
+    .section-title-icon {
+        width: 35px;
+        height: 35px;
+        min-width: 35px;
+        border-radius: 10px;
+    }
+
+    .reservation-section-title h6 {
+        font-size: 0.78rem;
+    }
+
+    .reservation-section-title p {
+        font-size: 0.56rem;
+    }
+
+    .reservation-modal-section .row {
+        --bs-gutter-x: 8px;
+        --bs-gutter-y: 8px;
+    }
+
+    .info-glass-card {
+        min-height: 62px;
+        padding: 9px 10px;
+        border-radius: 11px;
+    }
+
+    .reservation-info-icon {
+        width: 33px;
+        height: 33px;
+        min-width: 33px;
+        border-radius: 10px;
+    }
+
+    .modal-info-copy small {
+        font-size: 0.52rem;
+    }
+
+    .modal-info-copy strong {
+        font-size: 0.65rem;
+    }
+
+    .reservation-modal-mini-grid {
+        margin-top: 9px;
+        gap: 6px;
+    }
+
+    .modal-mini-stat {
+        min-height: 57px;
+        padding: 7px;
+        gap: 6px;
+        border-radius: 10px;
+    }
+
+    .modal-mini-stat-icon {
+        width: 28px;
+        height: 28px;
+        min-width: 28px;
+        border-radius: 8px;
+        font-size: 0.68rem;
+    }
+
+    .modal-mini-stat small {
+        font-size: 0.48rem;
+    }
+
+    .modal-mini-stat strong {
+        font-size: 0.7rem;
+    }
+
+    .financial-summary-row {
+        min-height: 48px;
+        padding: 9px 10px;
+        font-size: 0.61rem;
+    }
+
+        .financial-summary-row strong {
+            font-size: 0.68rem;
+        }
+
+        .financial-summary-row.total strong {
+            font-size: 0.8rem;
+        }
+
+    .payment-method-card {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .view-docs-btn {
+        width: 100%;
+    }
+
+    .reservation-modal-footer {
+        padding: 10px !important;
+        flex-direction: column-reverse;
+        align-items: stretch;
+    }
+
+    .modal-close-button {
+        width: 100%;
+    }
+
+    .modal-action-buttons {
+        width: 100%;
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+        .modal-action-buttons .btn {
+            width: 100%;
+        }
+
+    .reservation-awaiting-message {
+        width: 100%;
+        justify-content: center;
+        border-radius: 11px;
+        text-align: center;
+        line-height: 1.65;
+    }
+
+    .swal2-popup {
+        width: calc(100% - 18px) !important;
+        padding: 18px 13px !important;
+        border-radius: 19px !important;
+    }
+}
+
+
+/* =============================================================================
+   31. الهاتف الصغير
+   ============================================================================= */
+
+@media (max-width: 479.98px) {
+    .reservation-page-header {
+        align-items: flex-start;
+    }
+
+    .reservation-live-badge {
+        display: none;
+    }
+
+    .reservation-page-description {
+        margin-top: 3px;
+        display: -webkit-box;
+        overflow: hidden;
+        -webkit-line-clamp: 1;
+        -webkit-box-orient: vertical;
+    }
+
+    .compact-summary-chip {
+        font-size: 0.54rem;
+    }
+
+    .compact-reservation-table tbody tr,
+    .compact-reservation-row {
+        padding: 11px;
+        grid-template-columns: minmax(0, 1fr) auto;
+        column-gap: 7px;
+        row-gap: 8px;
+        border-radius: 14px;
+    }
+
+    .compact-state-note {
+        display: none;
+    }
+
+    .compact-date-range {
+        align-items: flex-end;
+        flex-direction: column;
+        gap: 1px;
+    }
+
+    .compact-date-arrow {
+        display: none;
+    }
+
+    .compact-date-item {
+        align-items: flex-start;
+        flex-direction: row;
+        gap: 4px;
+    }
+
+    .compact-date-label::after {
+        content: ":";
+    }
+
+    .compact-total-column {
+        align-self: center;
+    }
+
+    .compact-total-price {
+        font-size: 0.78rem;
+    }
+
+    .reservation-modal-mini-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .modal-mini-stat {
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .modal-mini-stat-icon {
+        width: 27px;
+        height: 27px;
+        min-width: 27px;
+    }
+}
+
+
+/* =============================================================================
+   32. الهاتف شديد الصغر
+   ============================================================================= */
+
+@media (max-width: 360px) {
+    .reservation-page-container {
+        padding: 6px;
+    }
+
+    .reservation-page-header {
+        padding: 11px;
+    }
+
+    .reservation-page-icon {
+        width: 40px;
+        height: 40px;
+        min-width: 40px;
+    }
+
+    .reservation-page-title {
+        font-size: 1rem;
+    }
+
+    .reservation-refresh-btn {
+        width: 39px;
+        height: 39px;
+        min-width: 39px;
+        min-height: 39px;
+    }
+
+    .compact-reservation-table tbody tr,
+    .compact-reservation-row {
+        grid-template-areas:
+            "customer customer"
+            "state state"
+            "place place"
+            "date total"
+            "action action";
+    }
+
+    .compact-state-column {
+        text-align: right !important;
+    }
+
+    .compact-state-note {
+        justify-content: flex-start;
+        text-align: right;
+    }
+
+    .compact-total-price {
+        font-size: 0.72rem;
+    }
+
+    .compact-details-button {
+        min-height: 36px;
+    }
+
+    .reservation-modal-mini-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .modal-mini-stat {
+        align-items: center;
+        justify-content: flex-start;
+        flex-direction: row;
+        text-align: right;
+    }
+}
+
+
+/* =============================================================================
+   33. الطباعة
+   ============================================================================= */
+
+@media print {
+    .dashboard-sidebar,
+    .dashboard-topbar,
+    .reservation-refresh-btn,
+    .reservation-mini-overview,
+    .custom-tabs-container,
+    .compact-history-toolbar,
+    .compact-details-button {
+        display: none !important;
+    }
+
+    .owner-reservations-page,
+    .reservation-content-shell,
+    .premium-round-table,
+    .compact-reservation-table-shell {
+        padding: 0 !important;
+        border: 0 !important;
+        background: #ffffff !important;
+        box-shadow: none !important;
+    }
+
+    .compact-reservation-table {
+        min-width: 0;
+        font-size: 9pt;
+    }
+
+    .compact-reservation-row::after {
+        display: none;
+    }
+
+    .compact-reservation-table thead {
+        display: table-header-group;
+    }
+
+    .compact-reservation-table tbody {
+        display: table-row-group;
+    }
+
+        .compact-reservation-table tbody tr {
+            display: table-row;
+            break-inside: avoid;
+        }
+
+        .compact-reservation-table tbody td {
+            display: table-cell;
+            padding: 7px !important;
+        }
+}
+
+
+/* =============================================================================
+   34. الحركات
+   ============================================================================= */
+
+@keyframes reservationLoaderSpin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes reservationModalAppear {
+    from {
+        opacity: 0;
+        transform: translateY(16px) scale(0.98);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes reservationLivePulse {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    50% {
+        opacity: 0.6;
+        transform: scale(0.88);
+    }
+}
+
+
+/* =============================================================================
+   35. تقليل الحركة
+   ============================================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+    .owner-reservations-page *,
+    .owner-reservations-page *::before,
+    .owner-reservations-page *::after,
+    #premiumCenterModal *,
+    #premiumCenterModal *::before,
+    #premiumCenterModal *::after {
+        scroll-behavior: auto !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* =============================================================================
+   32. طبقة التثبيت النهائية — التبويبات والمودال والإضافات الجديدة
+   هذه الطبقة جزء من الملف الكامل وليست ترقيعًا منفصلًا.
+   ============================================================================= */
+
+/* ---------- التبويبات: منع الأبيض على الأبيض ---------- */
+.custom-tabs-container .tab-btn,
+.custom-tabs-container .tab-btn:visited {
+    color: var(--reservation-muted) !important;
+    background: transparent !important;
+    -webkit-text-fill-color: currentColor;
+}
+
+    .custom-tabs-container .tab-btn:hover,
+    .custom-tabs-container .tab-btn:focus-visible {
+        color: var(--reservation-sky-dark) !important;
+        background: rgba(0, 166, 218, 0.07) !important;
+    }
+
+    .custom-tabs-container .tab-btn.active,
+    .custom-tabs-container .tab-btn[aria-selected="true"] {
+        color: #ffffff !important;
+        background: linear-gradient(135deg, var(--reservation-sky), var(--reservation-sky-dark)) !important;
+        box-shadow: 0 10px 23px rgba(0, 166, 218, 0.23) !important;
+        -webkit-text-fill-color: #ffffff;
+    }
+
+        .custom-tabs-container .tab-btn.active .tab-icon-wrap,
+        .custom-tabs-container .tab-btn[aria-selected="true"] .tab-icon-wrap {
+            color: #ffffff !important;
+            background: rgba(255, 255, 255, 0.18) !important;
+        }
+
+        .custom-tabs-container .tab-btn.active .reservation-tab-count,
+        .custom-tabs-container .tab-btn[aria-selected="true"] .reservation-tab-count {
+            color: var(--reservation-navy) !important;
+            background: #ffffff !important;
+            -webkit-text-fill-color: var(--reservation-navy);
+        }
+
+/* لا تجعل CSS أي لوحة مرئية؛ JavaScript وحده يحدد اللوحة النشطة. */
+.tab-pane-content[style*="display:none"],
+.tab-pane-content[style*="display: none"] {
+    display: none !important;
+}
+
+/* ---------- المودال: حجم مريح وغير متضخم ---------- */
+#premiumCenterModal .modal-dialog {
+    width: min(1120px, calc(100% - 24px));
+    max-width: none;
+    margin: 12px auto;
+}
+
+#premiumCenterModal .glass-modal-premium {
+    max-height: calc(100dvh - 24px);
+    border-radius: 23px !important;
+}
+
+#premiumCenterModal .reservation-modal-header {
+    position: relative;
+    min-height: 78px;
+    padding: 13px 16px !important;
+    padding-left: 64px !important;
+}
+
+html[dir="ltr"] #premiumCenterModal .reservation-modal-header {
+    padding-right: 64px !important;
+    padding-left: 16px !important;
+}
+
+#premiumCenterModal .reservation-modal-close {
+    position: absolute !important;
+    top: 50% !important;
+    left: 14px !important;
+    right: auto !important;
+    margin: 0 !important;
+    transform: translateY(-50%);
+    z-index: 3;
+}
+
+html[dir="ltr"] #premiumCenterModal .reservation-modal-close {
+    right: 14px !important;
+    left: auto !important;
+}
+
+#premiumCenterModal .reservation-modal-close:hover {
+    transform: translateY(-50%) rotate(90deg);
+}
+
+#premiumCenterModal .reservation-modal-body {
+    padding: 14px !important;
+}
+
+/* ---------- المواعيد التشغيلية: أربع بطاقات صغيرة ---------- */
+.reservation-operational-panel {
+    padding: 13px;
+    border: 1px solid rgba(14, 165, 233, 0.16);
+    border-radius: 14px;
+    background: linear-gradient(135deg, rgba(14, 165, 233, 0.055), rgba(255, 255, 255, 0.96));
+    box-shadow: var(--reservation-shadow-xs);
+}
+
+.reservation-operational-panel-header {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+}
+
+    .reservation-operational-panel-header > div {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .reservation-operational-panel-header small {
+        color: var(--reservation-muted);
+        font-size: 0.56rem;
+        font-weight: 800;
+    }
+
+    .reservation-operational-panel-header strong {
+        color: var(--reservation-navy);
+        font-size: 0.66rem;
+        font-weight: 900;
+        line-height: 1.65;
+    }
+
+.reservation-operational-grid {
+    margin-top: 10px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+}
+
+.reservation-operational-item {
+    min-width: 0;
+    min-height: 57px;
+    padding: 8px 9px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+    border: 1px solid var(--reservation-border);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.88);
+}
+
+    .reservation-operational-item span {
+        color: var(--reservation-muted);
+        font-size: 0.51rem;
+        font-weight: 750;
+    }
+
+    .reservation-operational-item strong {
+        color: var(--reservation-text);
+        font-size: 0.61rem;
+        font-weight: 900;
+        line-height: 1.5;
+        overflow-wrap: anywhere;
+    }
+
+/* ---------- رفض الإثبات والإغلاق والاسترداد ---------- */
+.reservation-proof-rejection-card,
+.reservation-closure-card,
+.reservation-refund-card {
+    padding: 13px;
+    border: 1px solid var(--reservation-border);
+    border-radius: 14px;
+    background: var(--reservation-surface);
+    box-shadow: var(--reservation-shadow-xs);
+}
+
+.reservation-proof-rejection-card {
+    border-color: rgba(239, 68, 68, 0.18);
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.055), rgba(255, 255, 255, 0.96));
+}
+
+.reservation-closure-card {
+    border-color: rgba(245, 158, 11, 0.18);
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.055), rgba(255, 255, 255, 0.96));
+}
+
+.reservation-refund-card {
+    border-color: rgba(14, 165, 233, 0.18);
+    background: linear-gradient(135deg, rgba(14, 165, 233, 0.05), rgba(255, 255, 255, 0.97));
+}
+
+.reservation-proof-rejection-heading,
+.reservation-closure-heading,
+.reservation-refund-header,
+.reservation-refund-title {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+}
+
+    .reservation-proof-rejection-heading > div,
+    .reservation-closure-heading > div {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .reservation-proof-rejection-heading small,
+    .reservation-closure-heading small {
+        color: var(--reservation-muted);
+        font-size: 0.55rem;
+        font-weight: 750;
+    }
+
+    .reservation-proof-rejection-heading strong,
+    .reservation-closure-heading strong {
+        color: var(--reservation-text);
+        font-size: 0.65rem;
+        font-weight: 900;
+        line-height: 1.65;
+        overflow-wrap: anywhere;
+    }
+
+.reservation-proof-rejection-meta,
+.reservation-closure-grid,
+.reservation-refund-grid {
+    margin-top: 10px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+}
+
+    .reservation-proof-rejection-meta > span,
+    .reservation-closure-grid > div,
+    .reservation-refund-item {
+        min-width: 0;
+        padding: 8px 9px;
+        border: 1px solid var(--reservation-border);
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.82);
+        color: var(--reservation-muted);
+        font-size: 0.54rem;
+        font-weight: 700;
+    }
+
+        .reservation-proof-rejection-meta strong,
+        .reservation-closure-grid strong,
+        .reservation-refund-item strong {
+            display: block;
+            margin-top: 3px;
+            color: var(--reservation-text);
+            font-size: 0.62rem;
+            font-weight: 900;
+            overflow-wrap: anywhere;
+        }
+
+.reservation-closure-reason,
+.reservation-refund-reason {
+    margin-top: 8px;
+    padding: 9px 10px;
+    border: 1px dashed var(--reservation-border-dark);
+    border-radius: 10px;
+    color: var(--reservation-muted);
+    font-size: 0.57rem;
+    line-height: 1.65;
+}
+
+    .reservation-closure-reason strong,
+    .reservation-refund-reason strong {
+        color: var(--reservation-text);
+        font-weight: 900;
+    }
+
+.reservation-refund-header {
+    justify-content: space-between;
+}
+
+.reservation-refund-title {
+    color: var(--reservation-navy);
+    font-size: 0.7rem;
+    font-weight: 900;
+}
+
+.reservation-refund-status {
+    padding: 5px 8px;
+    border-radius: 999px;
+    color: var(--reservation-info-dark);
+    background: var(--reservation-info-soft);
+    font-size: 0.53rem;
+    font-weight: 900;
+}
+
+/* ---------- التذييل: صف واحد على المكتب ومضغوط على الهاتف ---------- */
+#premiumCenterModal .reservation-modal-footer {
+    min-height: 66px;
+    padding: 10px 14px !important;
+    align-items: center;
+    flex-wrap: nowrap;
+}
+
+#premiumCenterModal .modal-action-stack {
+    min-width: 0;
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+#premiumCenterModal .reservation-action-notice {
+    width: 100%;
+    min-height: 34px;
+    padding: 7px 10px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    border: 1px solid rgba(14, 165, 233, 0.18);
+    border-radius: 10px;
+    color: var(--reservation-info-dark);
+    background: var(--reservation-info-soft);
+    font-size: 0.59rem;
+    font-weight: 800;
+    line-height: 1.55;
+    overflow-wrap: anywhere;
+}
+
+/* النص نفسه لا يتكرر أسفل الأزرار. */
+#premiumCenterModal .reservation-action-lock-note {
+    display: none !important;
+}
+
+#premiumCenterModal .modal-action-buttons {
+    justify-content: flex-start;
+    gap: 7px;
+}
+
+    #premiumCenterModal .modal-action-buttons .btn {
+        min-height: 39px;
+        padding: 7px 13px !important;
+        font-size: 0.63rem;
+    }
+
+        #premiumCenterModal .modal-action-buttons .btn:disabled,
+        #premiumCenterModal .modal-action-buttons .btn[aria-disabled="true"] {
+            opacity: 1 !important;
+            color: #8492a1 !important;
+            border-color: #d9e2ea !important;
+            background: #edf1f4 !important;
+            box-shadow: none !important;
+            -webkit-text-fill-color: #8492a1 !important;
+            cursor: not-allowed !important;
+        }
+
+#premiumCenterModal .reservation-permanent-reject-btn,
+#premiumCenterModal .btn-permanent-reject {
+    color: #ffffff !important;
+    border-color: transparent !important;
+    background: linear-gradient(135deg, #ef4444, #b91c1c) !important;
+}
+
+#premiumCenterModal .reservation-owner-cancel-btn,
+#premiumCenterModal .btn-owner-cancel {
+    color: #ffffff !important;
+    border-color: transparent !important;
+    background: linear-gradient(135deg, #f43f5e, #be123c) !important;
+}
+
+/* ---------- الوضع الداكن للإضافات ---------- */
+body.dark-mode .reservation-operational-panel,
+html[data-bs-theme="dark"] .reservation-operational-panel,
+body.dark-mode .reservation-proof-rejection-card,
+html[data-bs-theme="dark"] .reservation-proof-rejection-card,
+body.dark-mode .reservation-closure-card,
+html[data-bs-theme="dark"] .reservation-closure-card,
+body.dark-mode .reservation-refund-card,
+html[data-bs-theme="dark"] .reservation-refund-card {
+    border-color: rgba(148, 163, 184, 0.14);
+    background: rgba(15, 23, 42, 0.74);
+}
+
+body.dark-mode .reservation-operational-item,
+html[data-bs-theme="dark"] .reservation-operational-item,
+body.dark-mode .reservation-proof-rejection-meta > span,
+html[data-bs-theme="dark"] .reservation-proof-rejection-meta > span,
+body.dark-mode .reservation-closure-grid > div,
+html[data-bs-theme="dark"] .reservation-closure-grid > div,
+body.dark-mode .reservation-refund-item,
+html[data-bs-theme="dark"] .reservation-refund-item {
+    border-color: rgba(148, 163, 184, 0.13);
+    background: rgba(15, 23, 42, 0.68);
+}
+
+/* ---------- الهاتف ---------- */
+@media (max-width: 767.98px) {
+    #premiumCenterModal {
+        padding: 0 !important;
+    }
+
+        #premiumCenterModal .modal-dialog {
+            width: calc(100% - 8px);
+            min-height: calc(100% - 8px);
+            margin: 4px auto;
+        }
+
+        #premiumCenterModal .glass-modal-premium {
+            max-height: calc(100dvh - 8px);
+            border-radius: 16px !important;
+        }
+
+        #premiumCenterModal .reservation-modal-header {
+            min-height: 64px;
+            padding: 9px 10px !important;
+            padding-left: 50px !important;
+        }
+
+    html[dir="ltr"] #premiumCenterModal .reservation-modal-header {
+        padding-right: 50px !important;
+        padding-left: 10px !important;
+    }
+
+    #premiumCenterModal .reservation-modal-close {
+        left: 8px !important;
+        width: 33px;
+        height: 33px;
+    }
+
+    html[dir="ltr"] #premiumCenterModal .reservation-modal-close {
+        right: 8px !important;
+        left: auto !important;
+    }
+
+    #premiumCenterModal .reservation-modal-body {
+        padding: 8px !important;
+    }
+
+    .reservation-operational-grid,
+    .reservation-proof-rejection-meta,
+    .reservation-closure-grid,
+    .reservation-refund-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+    }
+
+    #premiumCenterModal .reservation-modal-footer {
+        padding: 8px !important;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 7px;
+    }
+
+    #premiumCenterModal .modal-action-stack {
+        width: 100%;
+    }
+
+    #premiumCenterModal .modal-action-buttons {
+        width: 100%;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px;
+    }
+
+        #premiumCenterModal .modal-action-buttons .btn {
+            width: 100%;
+            min-height: 38px;
+            padding: 6px 8px !important;
+            font-size: 0.57rem;
+            line-height: 1.45;
+        }
+
+    #premiumCenterModal .modal-close-button {
+        width: 100%;
+        min-height: 38px;
+    }
+}
+
+@media (max-width: 430px) {
+    .reservation-operational-grid,
+    .reservation-proof-rejection-meta,
+    .reservation-closure-grid,
+    .reservation-refund-grid,
+    #premiumCenterModal .modal-action-buttons {
+        grid-template-columns: 1fr;
+    }
+
+    .custom-tabs-container .tab-btn {
+        min-width: 155px;
+    }
+}
+
+/* =============================================================================
+   36. تجربة الحجوزات بالعروض — Luxury 3D Motion
+   ============================================================================= */
+
+.owner-reservations-page {
+    perspective: 1600px;
+    perspective-origin: 50% 12%;
+}
+
+    .owner-reservations-page::after {
+        content: "";
+        position: fixed;
+        z-index: -2;
+        top: 84px;
+        left: 4vw;
+        width: min(34vw, 520px);
+        aspect-ratio: 1;
+        border-radius: 50%;
+        pointer-events: none;
+        background: radial-gradient( circle, rgba(255, 90, 95, 0.105) 0%, rgba(0, 166, 218, 0.075) 35%, transparent 72% );
+        filter: blur(12px);
+        transform: translate3d(0, 0, 0);
+        animation: reservationLuxuryAura 9s ease-in-out infinite alternate;
+    }
+
+.reservation-page-header {
+    transform-style: preserve-3d;
+    animation: reservationLuxuryHeaderIn 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.reservation-page-icon {
+    transform-style: preserve-3d;
+    animation: reservationLuxuryIconFloat 4.8s ease-in-out infinite;
+}
+
+    .reservation-page-icon > i {
+        transform: translateZ(18px);
+    }
+
+.mini-overview-item.promotion .mini-overview-icon {
+    color: var(--reservation-coral-dark);
+    border-color: rgba(255, 90, 95, 0.18);
+    background: linear-gradient( 145deg, rgba(255, 90, 95, 0.12), rgba(0, 166, 218, 0.08) );
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 7px 18px rgba(255, 90, 95, 0.10);
+}
+
+.mini-overview-item.promotion .mini-overview-number {
+    color: var(--reservation-coral-dark);
+}
+
+.compact-summary-chip.promotion {
+    position: relative;
+    color: #9A3B42;
+    border-color: rgba(255, 90, 95, 0.19);
+    background: linear-gradient( 135deg, rgba(255, 90, 95, 0.095), rgba(0, 166, 218, 0.065) );
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 6px 18px rgba(255, 90, 95, 0.08);
+    overflow: hidden;
+}
+
+    .compact-summary-chip.promotion::before {
+        content: "";
+        position: absolute;
+        inset: -60% auto -60% -40%;
+        width: 28px;
+        pointer-events: none;
+        background: rgba(255, 255, 255, 0.7);
+        filter: blur(6px);
+        transform: rotate(20deg);
+        animation: reservationPromoChipSweep 4.2s ease-in-out infinite;
+    }
+
+    .compact-summary-chip.promotion > * {
+        position: relative;
+        z-index: 1;
+    }
+
+.compact-reservation-table-shell {
+    transform-style: preserve-3d;
+    animation: reservationLuxuryShellIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.reservation-has-promotion {
+    --row-accent: var(--reservation-coral);
+    background: linear-gradient( 90deg, rgba(255, 90, 95, 0.026), rgba(0, 166, 218, 0.018) 55%, transparent );
+}
+
+    .reservation-has-promotion:hover {
+        background: linear-gradient( 90deg, rgba(255, 90, 95, 0.055), rgba(0, 166, 218, 0.035) 58%, rgba(255, 255, 255, 0.96) );
+        box-shadow: inset 0 0 0 1px rgba(255, 90, 95, 0.055), inset 0 0 45px rgba(0, 166, 218, 0.02);
+    }
+
+    .reservation-has-promotion::after {
+        background: linear-gradient( 180deg, var(--reservation-coral), var(--reservation-sky) );
+        box-shadow: 0 0 18px rgba(255, 90, 95, 0.25);
+    }
+
+.reservation-promo-ribbon {
+    width: fit-content;
+    max-width: 100%;
+    margin: 4px 0 3px;
+    padding: 4px 7px 4px 5px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border: 1px solid rgba(255, 90, 95, 0.16);
+    border-radius: 999px;
+    color: #85363C;
+    background: linear-gradient( 135deg, rgba(255, 90, 95, 0.095), rgba(255, 255, 255, 0.86) 56%, rgba(0, 166, 218, 0.065) );
+    box-shadow: 0 5px 14px rgba(5, 32, 60, 0.045), inset 0 1px 0 rgba(255, 255, 255, 0.85);
+    font-size: 0.56rem;
+    font-weight: 800;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+    .reservation-promo-ribbon strong {
+        color: var(--reservation-coral-dark);
+        font-weight: 900;
+    }
+
+.reservation-promo-ribbon-orb {
+    width: 20px;
+    height: 20px;
+    display: inline-grid;
+    place-items: center;
+    flex: 0 0 20px;
+    border-radius: 50%;
+    color: #ffffff;
+    background: linear-gradient( 135deg, var(--reservation-coral), var(--reservation-sky) );
+    box-shadow: 0 4px 10px rgba(255, 90, 95, 0.22);
+    animation: reservationPromoOrbPulse 2.8s ease-in-out infinite;
+}
+
+.reservation-promo-price-card,
+.reservation-promotion-spotlight {
+    --promo-tilt-x: 0deg;
+    --promo-tilt-y: 0deg;
+    --promo-light-x: 50%;
+    --promo-light-y: 50%;
+    position: relative;
+    transform: perspective(950px) rotateX(var(--promo-tilt-x)) rotateY(var(--promo-tilt-y)) translateZ(0);
+    transform-style: preserve-3d;
+    transition: transform 0.18s ease-out, border-color var(--reservation-transition), box-shadow var(--reservation-transition);
+    will-change: transform;
+}
+
+.reservation-promo-price-card {
+    width: min(205px, 100%);
+    min-width: 165px;
+    padding: 8px 9px;
+    border: 1px solid rgba(255, 90, 95, 0.17);
+    border-radius: 13px;
+    background: radial-gradient( circle at var(--promo-light-x) var(--promo-light-y), rgba(255, 255, 255, 0.96) 0%, transparent 34% ), linear-gradient( 145deg, rgba(255, 255, 255, 0.98), rgba(255, 246, 247, 0.90) 48%, rgba(238, 250, 254, 0.90) );
+    box-shadow: 0 9px 22px rgba(5, 32, 60, 0.075), 0 4px 12px rgba(255, 90, 95, 0.055), inset 0 1px 0 rgba(255, 255, 255, 0.98);
+    overflow: hidden;
+}
+
+    .reservation-promo-price-card::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        border-radius: inherit;
+        background: linear-gradient( 120deg, transparent 18%, rgba(255, 255, 255, 0.58) 42%, transparent 62% );
+        transform: translateX(-120%);
+        animation: reservationPromoCardShimmer 5.5s ease-in-out infinite;
+    }
+
+    .reservation-promo-price-card::after {
+        content: "";
+        position: absolute;
+        width: 58px;
+        height: 58px;
+        top: -31px;
+        left: -22px;
+        border-radius: 50%;
+        pointer-events: none;
+        background: rgba(0, 166, 218, 0.10);
+        filter: blur(1px);
+    }
+
+    .reservation-promo-price-card > * {
+        position: relative;
+        z-index: 2;
+        transform: translateZ(14px);
+    }
+
+.reservation-promo-price-head {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+}
+
+.reservation-promo-title {
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--reservation-navy);
+    font-size: 0.57rem;
+    font-weight: 900;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+    .reservation-promo-title i {
+        flex: 0 0 auto;
+        color: var(--reservation-coral);
+    }
+
+.reservation-promo-discount-pill {
+    min-height: 20px;
+    padding: 3px 6px;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    color: #ffffff;
+    background: linear-gradient( 135deg, var(--reservation-coral), var(--reservation-coral-dark) );
+    box-shadow: 0 5px 12px rgba(255, 90, 95, 0.20);
+    font-size: 0.51rem;
+    font-weight: 900;
+    white-space: nowrap;
+}
+
+.reservation-promo-price-flow {
+    margin-top: 7px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+    .reservation-promo-price-flow del {
+        color: var(--reservation-muted-light);
+        font-size: 0.62rem;
+        font-weight: 800;
+        white-space: nowrap;
+    }
+
+    .reservation-promo-price-flow > i {
+        color: var(--reservation-sky);
+        font-size: 0.82rem;
+    }
+
+    .reservation-promo-price-flow > strong {
+        color: var(--reservation-navy);
+        font-size: 0.88rem;
+        font-weight: 950;
+        white-space: nowrap;
+    }
+
+        .reservation-promo-price-flow > strong small {
+            color: var(--reservation-muted);
+            font-size: 0.49rem;
+            font-weight: 800;
+        }
+
+.reservation-promo-saving {
+    margin-top: 6px;
+    padding-top: 5px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    border-top: 1px dashed rgba(255, 90, 95, 0.17);
+    color: #8A4C31;
+    font-size: 0.54rem;
+    font-weight: 700;
+}
+
+    .reservation-promo-saving i {
+        color: var(--reservation-promo-gold);
+    }
+
+    .reservation-promo-saving strong {
+        color: var(--reservation-coral-dark);
+        font-weight: 950;
+    }
+
+/* ---------- Promo spotlight inside reservation modal ---------- */
+
+.reservation-promotion-spotlight {
+    margin-bottom: 14px;
+    padding: 17px;
+    isolation: isolate;
+    border: 1px solid rgba(255, 90, 95, 0.20);
+    border-radius: 20px;
+    background: radial-gradient( circle at var(--promo-light-x) var(--promo-light-y), rgba(255, 255, 255, 0.34), transparent 30% ), linear-gradient( 145deg, #fff8f8 0%, #ffffff 46%, #eefafe 100% );
+    box-shadow: 0 18px 42px rgba(5, 32, 60, 0.11), 0 8px 24px rgba(255, 90, 95, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.96);
+    overflow: hidden;
+}
+
+    .reservation-promotion-spotlight::before {
+        content: "";
+        position: absolute;
+        z-index: -1;
+        inset: 0;
+        pointer-events: none;
+        background: linear-gradient( 118deg, transparent 24%, rgba(255, 255, 255, 0.70) 45%, transparent 64% );
+        transform: translateX(-130%);
+        animation: reservationPromoSpotlightSweep 6.4s ease-in-out infinite;
+    }
+
+    .reservation-promotion-spotlight::after {
+        content: "";
+        position: absolute;
+        z-index: -2;
+        width: 140px;
+        height: 140px;
+        left: -65px;
+        bottom: -76px;
+        border-radius: 50%;
+        pointer-events: none;
+        background: radial-gradient( circle, rgba(0, 166, 218, 0.18), transparent 68% );
+    }
+
+.reservation-promotion-orbit {
+    position: absolute;
+    z-index: -1;
+    border: 1px solid rgba(255, 90, 95, 0.13);
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+    .reservation-promotion-orbit.orbit-one {
+        width: 105px;
+        height: 105px;
+        top: -54px;
+        right: -30px;
+        animation: reservationPromoOrbitSpin 12s linear infinite;
+    }
+
+    .reservation-promotion-orbit.orbit-two {
+        width: 54px;
+        height: 54px;
+        top: 18px;
+        right: 33px;
+        border-color: rgba(0, 166, 218, 0.16);
+        animation: reservationPromoOrbitSpin 8s linear reverse infinite;
+    }
+
+.reservation-promotion-spotlight-head {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    transform: translateZ(24px);
+}
+
+.reservation-promotion-emblem {
+    width: 43px;
+    height: 43px;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(255, 255, 255, 0.78);
+    border-radius: 14px;
+    color: #ffffff;
+    background: linear-gradient( 145deg, var(--reservation-coral), var(--reservation-sky) );
+    box-shadow: 0 10px 23px rgba(255, 90, 95, 0.20), inset 0 1px 1px rgba(255, 255, 255, 0.28);
+    font-size: 1.03rem;
+    animation: reservationPromoEmblemFloat 3.6s ease-in-out infinite;
+}
+
+.reservation-promotion-copy {
+    min-width: 0;
+}
+
+    .reservation-promotion-copy small {
+        display: block;
+        margin-bottom: 2px;
+        color: var(--reservation-muted);
+        font-size: 0.57rem;
+        font-weight: 700;
+    }
+
+    .reservation-promotion-copy strong {
+        display: block;
+        max-width: 100%;
+        color: var(--reservation-navy);
+        font-size: 0.82rem;
+        font-weight: 950;
+        line-height: 1.45;
+        overflow-wrap: anywhere;
+    }
+
+.reservation-promotion-value-badge {
+    min-height: 28px;
+    padding: 5px 9px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    color: #ffffff;
+    background: linear-gradient( 135deg, var(--reservation-coral), var(--reservation-coral-dark) );
+    box-shadow: 0 8px 18px rgba(255, 90, 95, 0.18);
+    font-size: 0.59rem;
+    font-weight: 950;
+    white-space: nowrap;
+}
+
+.reservation-promotion-price-journey {
+    margin-top: 14px;
+    padding: 11px;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 10px;
+    border: 1px solid rgba(5, 32, 60, 0.055);
+    border-radius: 15px;
+    background: rgba(255, 255, 255, 0.70);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.90);
+    transform: translateZ(16px);
+}
+
+.promotion-journey-price {
+    min-width: 0;
+}
+
+    .promotion-journey-price span {
+        display: block;
+        margin-bottom: 2px;
+        color: var(--reservation-muted);
+        font-size: 0.53rem;
+        font-weight: 700;
+    }
+
+    .promotion-journey-price strong {
+        color: var(--reservation-navy);
+        font-size: 0.76rem;
+        font-weight: 950;
+        overflow-wrap: anywhere;
+    }
+
+    .promotion-journey-price.original strong {
+        color: var(--reservation-muted);
+        text-decoration: line-through;
+        text-decoration-color: rgba(255, 90, 95, 0.55);
+    }
+
+    .promotion-journey-price.final {
+        text-align: left;
+    }
+
+        .promotion-journey-price.final strong {
+            color: var(--reservation-sky-dark);
+            font-size: 0.90rem;
+        }
+
+.promotion-journey-arrow {
+    min-width: 31px;
+    display: grid;
+    place-items: center;
+    color: var(--reservation-coral);
+}
+
+    .promotion-journey-arrow span {
+        width: 28px;
+        height: 1px;
+        grid-area: 1 / 1;
+        background: linear-gradient( 90deg, transparent, rgba(255, 90, 95, 0.28), transparent );
+    }
+
+    .promotion-journey-arrow i {
+        grid-area: 1 / 1;
+        padding: 4px;
+        border-radius: 50%;
+        background: #ffffff;
+        box-shadow: 0 4px 10px rgba(5, 32, 60, 0.06);
+    }
+
+.reservation-promotion-saving-line {
+    margin-top: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 9px;
+    flex-wrap: wrap;
+    transform: translateZ(20px);
+}
+
+.promotion-saving-main {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #70472E;
+    font-size: 0.61rem;
+    font-weight: 800;
+}
+
+    .promotion-saving-main i {
+        color: var(--reservation-promo-gold);
+        font-size: 0.82rem;
+    }
+
+    .promotion-saving-main strong {
+        color: var(--reservation-coral-dark);
+        font-size: 0.72rem;
+        font-weight: 950;
+    }
+
+.promotion-code-chip {
+    min-height: 30px;
+    padding: 4px 6px 4px 9px;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid rgba(0, 166, 218, 0.13);
+    border-radius: 999px;
+    color: var(--reservation-muted);
+    background: rgba(234, 249, 254, 0.66);
+    font-size: 0.53rem;
+    font-weight: 700;
+}
+
+    .promotion-code-chip code {
+        padding: 4px 7px;
+        border: 1px dashed rgba(0, 166, 218, 0.24);
+        border-radius: 999px;
+        color: var(--reservation-navy);
+        background: #ffffff;
+        font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+        font-size: 0.58rem;
+        font-weight: 900;
+        letter-spacing: 0.4px;
+        direction: ltr;
+    }
+
+/* ---------- 3D micro-interactions ---------- */
+
+.compact-details-button {
+    transform-style: preserve-3d;
+}
+
+    .compact-details-button:hover {
+        box-shadow: 0 10px 22px rgba(0, 166, 218, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.72);
+        transform: translateY(-2px) translateZ(8px);
+    }
+
+.reservation-has-promotion .compact-details-button:hover {
+    box-shadow: 0 10px 24px rgba(255, 90, 95, 0.12), 0 7px 18px rgba(0, 166, 218, 0.08);
+}
+
+/* ---------- Dark mode ---------- */
+
+body.dark-mode .reservation-promo-price-card,
+html[data-bs-theme="dark"] .reservation-promo-price-card {
+    border-color: rgba(255, 90, 95, 0.22);
+    background: radial-gradient( circle at var(--promo-light-x) var(--promo-light-y), rgba(255, 255, 255, 0.05), transparent 35% ), linear-gradient( 145deg, rgba(17, 38, 58, 0.98), rgba(23, 42, 59, 0.95) );
+}
+
+body.dark-mode .reservation-promotion-spotlight,
+html[data-bs-theme="dark"] .reservation-promotion-spotlight {
+    border-color: rgba(255, 90, 95, 0.22);
+    background: radial-gradient( circle at var(--promo-light-x) var(--promo-light-y), rgba(255, 255, 255, 0.05), transparent 32% ), linear-gradient( 145deg, rgba(24, 42, 58, 0.98), rgba(17, 38, 58, 0.97) );
+}
+
+body.dark-mode .reservation-promo-title,
+body.dark-mode .reservation-promo-price-flow > strong,
+body.dark-mode .reservation-promotion-copy strong,
+body.dark-mode .promotion-journey-price strong,
+body.dark-mode .promotion-code-chip code,
+html[data-bs-theme="dark"] .reservation-promo-title,
+html[data-bs-theme="dark"] .reservation-promo-price-flow > strong,
+html[data-bs-theme="dark"] .reservation-promotion-copy strong,
+html[data-bs-theme="dark"] .promotion-journey-price strong,
+html[data-bs-theme="dark"] .promotion-code-chip code {
+    color: #f8fafc;
+}
+
+body.dark-mode .reservation-promotion-price-journey,
+html[data-bs-theme="dark"] .reservation-promotion-price-journey {
+    border-color: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.035);
+}
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 991.98px) {
+    .reservation-promo-price-card {
+        min-width: 155px;
+    }
+
+    .reservation-promotion-spotlight {
+        padding: 15px;
+    }
+}
+
+@media (max-width: 767.98px) {
+    .reservation-promotion-spotlight-head {
+        grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .reservation-promotion-value-badge {
+        width: fit-content;
+        grid-column: 2;
+        justify-self: start;
+    }
+
+    .reservation-promotion-price-journey {
+        grid-template-columns: 1fr;
+        gap: 7px;
+    }
+
+    .promotion-journey-arrow {
+        width: 100%;
+        min-width: 0;
+        transform: rotate(-90deg);
+    }
+
+    .promotion-journey-price.final {
+        text-align: right;
+    }
+
+    .reservation-promotion-saving-line {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .promotion-code-chip {
+        width: fit-content;
+        max-width: 100%;
+    }
+}
+
+@media (max-width: 575.98px) {
+    .reservation-promo-price-card {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .reservation-promo-ribbon {
+        white-space: normal;
+    }
+
+    .reservation-promotion-spotlight {
+        border-radius: 17px;
+    }
+
+    .reservation-promotion-emblem {
+        width: 39px;
+        height: 39px;
+        border-radius: 12px;
+    }
+}
+
+/* ---------- Keyframes ---------- */
+
+@keyframes reservationLuxuryAura {
+    0% {
+        opacity: 0.58;
+        transform: translate3d(-2%, 0, 0) scale(0.96);
+    }
+
+    100% {
+        opacity: 0.95;
+        transform: translate3d(7%, 4%, 0) scale(1.08);
+    }
+}
+
+@keyframes reservationLuxuryHeaderIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px) rotateX(3deg);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) rotateX(0);
+    }
+}
+
+@keyframes reservationLuxuryIconFloat {
+    0%, 100% {
+        transform: translateY(0) rotateZ(0deg);
+    }
+
+    50% {
+        transform: translateY(-4px) rotateZ(1.5deg);
+    }
+}
+
+@keyframes reservationLuxuryShellIn {
+    from {
+        opacity: 0;
+        transform: translateY(12px) scale(0.992);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes reservationPromoChipSweep {
+    0%, 52% {
+        left: -45%;
+        opacity: 0;
+    }
+
+    65% {
+        opacity: 0.78;
+    }
+
+    82%, 100% {
+        left: 120%;
+        opacity: 0;
+    }
+}
+
+@keyframes reservationPromoOrbPulse {
+    0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 4px 10px rgba(255, 90, 95, 0.22);
+    }
+
+    50% {
+        transform: scale(1.08);
+        box-shadow: 0 5px 14px rgba(255, 90, 95, 0.28), 0 0 0 4px rgba(255, 90, 95, 0.06);
+    }
+}
+
+@keyframes reservationPromoCardShimmer {
+    0%, 52% {
+        transform: translateX(-125%);
+    }
+
+    74%, 100% {
+        transform: translateX(145%);
+    }
+}
+
+@keyframes reservationPromoSpotlightSweep {
+    0%, 48% {
+        transform: translateX(-135%);
+    }
+
+    72%, 100% {
+        transform: translateX(140%);
+    }
+}
+
+@keyframes reservationPromoOrbitSpin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes reservationPromoEmblemFloat {
+    0%, 100% {
+        transform: translateY(0) rotate(0deg);
+    }
+
+    50% {
+        transform: translateY(-4px) rotate(3deg);
+    }
+}
+
+
+/* =============================================================================
+   36. دفع العربون / كامل الحجز — مراجعة الحوالة
+   ============================================================================= */
+
+.reservation-payment-choice-note {
+    border-color: rgba(0, 166, 218, 0.18) !important;
+    color: var(--reservation-sky-dark) !important;
+    background: rgba(0, 166, 218, 0.065) !important;
+}
+
+.reservation-payment-review-notice {
+    align-items: center;
+    gap: 12px;
+    margin-top: 12px;
+    padding: 13px 14px;
+    border: 1px solid rgba(0, 166, 218, 0.18);
+    border-radius: 15px;
+    background: linear-gradient( 135deg, rgba(234, 249, 254, 0.95), rgba(255, 255, 255, 0.98) );
+    box-shadow: 0 10px 28px rgba(5, 32, 60, 0.06);
+}
+
+.reservation-payment-review-icon {
+    display: grid;
+    place-items: center;
+    flex: 0 0 42px;
+    width: 42px;
+    height: 42px;
+    border-radius: 14px;
+    color: #0085af;
+    background: #ffffff;
+    box-shadow: 0 6px 18px rgba(0, 166, 218, 0.12);
+}
+
+.reservation-payment-review-notice > div {
+    min-width: 0;
+}
+
+.reservation-payment-review-notice strong,
+.reservation-payment-review-notice small {
+    display: block;
+}
+
+.reservation-payment-review-notice strong {
+    margin-bottom: 3px;
+    color: var(--reservation-navy);
+    font-size: 0.72rem;
+    font-weight: 900;
+}
+
+.reservation-payment-review-notice small {
+    color: var(--reservation-muted);
+    font-size: 0.63rem;
+    font-weight: 700;
+    line-height: 1.75;
+}
+
+    .reservation-payment-review-notice small b {
+        color: #0085af;
+        font-weight: 900;
+    }
+
+.reservation-payment-approval-dialog {
+    display: grid;
+    gap: 14px;
+    margin-top: 8px;
+    text-align: right;
+}
+
+.reservation-payment-approval-summary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 9px;
+}
+
+    .reservation-payment-approval-summary > span {
+        display: grid;
+        gap: 4px;
+        min-width: 0;
+        padding: 12px 10px;
+        border: 1px solid rgba(5, 32, 60, 0.08);
+        border-radius: 14px;
+        background: rgba(248, 250, 252, 0.94);
+    }
+
+    .reservation-payment-approval-summary small {
+        color: var(--reservation-muted);
+        font-size: 0.58rem;
+        font-weight: 700;
+    }
+
+    .reservation-payment-approval-summary strong {
+        overflow: hidden;
+        color: var(--reservation-navy);
+        font-size: 0.72rem;
+        font-weight: 900;
+        text-overflow: ellipsis;
+    }
+
+.reservation-payment-approval-check {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 13px 14px;
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    border-radius: 14px;
+    color: #146b50;
+    background: rgba(16, 185, 129, 0.07);
+    cursor: pointer;
+    font-size: 0.67rem;
+    font-weight: 800;
+    line-height: 1.8;
+}
+
+    .reservation-payment-approval-check input {
+        width: 18px;
+        height: 18px;
+        margin-top: 2px;
+        accent-color: #10b981;
+    }
+
+.reservation-payment-approval-warning {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 11px 12px;
+    border: 1px solid rgba(245, 158, 11, 0.18);
+    border-radius: 13px;
+    color: var(--reservation-warning-dark);
+    background: rgba(245, 158, 11, 0.07);
+    font-size: 0.62rem;
+    font-weight: 700;
+    line-height: 1.75;
+}
+
+    .reservation-payment-approval-warning i {
+        margin-top: 2px;
+        flex-shrink: 0;
+    }
+
+@media (max-width: 640px) {
+    .reservation-payment-approval-summary {
+        grid-template-columns: 1fr;
+    }
+
+    .reservation-payment-review-notice {
+        align-items: flex-start;
+    }
+}

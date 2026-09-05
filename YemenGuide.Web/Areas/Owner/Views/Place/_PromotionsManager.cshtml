@@ -1,0 +1,840 @@
+﻿@using System.Text.Json
+@model YemenGuide.Core.DTOs.Owner.PromotionManagementDto
+
+@{
+    var promotionsJson = JsonSerializer.Serialize(
+        Model.Promotions,
+        new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                });
+
+    string ResolveGroup(string status) => status switch
+    {
+        "Active" => "active",
+        "Scheduled" => "scheduled",
+        "Draft" => "draft",
+        _ => "archived"
+    };
+
+    string pageDescription = Model.IsNonBooking
+        ? "أنشئ عرضًا ترويجيًا واضحًا للمنشأة المحددة من الهيدر، وسيستخدم النظام صورة المنشأة تلقائيًا."
+        : "ابنِ خصمًا أو عرضًا بشرط ومكافأة؛ أنت تحدد الفكرة والنظام يضبط الحقول المناسبة تلقائيًا.";
+}
+
+<section class="yg-promo-manager"
+         id="promotionManager"
+         data-place-id="@Model.PlaceId"
+         data-booking-system-id="@Model.BookingSystemId"
+         data-is-bookable="@Model.IsBookable.ToString().ToLowerInvariant()"
+         dir="rtl">
+
+    <form class="d-none" id="promotionTokenForm">
+        @Html.AntiForgeryToken()
+    </form>
+
+    @if (!Model.HasActivePlace)
+    {
+        <div class="yg-promo-no-place">
+            <span class="yg-promo-no-place__icon" aria-hidden="true">
+                <i class="bi bi-building-check"></i>
+            </span>
+            <span class="yg-promo-no-place__eyebrow">العروض والخصومات</span>
+            <h3>اختر منشأة من الهيدر أولًا</h3>
+            <p>بعد اختيار المنشأة سيحمّل النظام عروضها وقالبها المناسب تلقائيًا، بدون أي قائمة اختيار إضافية داخل الصفحة.</p>
+        </div>
+    }
+    else
+    {
+        <header class="yg-promo-page-head">
+            <div class="yg-promo-page-head__copy">
+                <span class="yg-promo-page-head__icon" aria-hidden="true">
+                    <i class="bi bi-tags"></i>
+                </span>
+                <div>
+                    <span class="yg-promo-eyebrow">إدارة المنشأة</span>
+                    <h2>العروض والخصومات</h2>
+                    <p>@pageDescription</p>
+                </div>
+            </div>
+
+            <button type="button" class="yg-promo-cta" id="openPromotionModal">
+                <i class="bi bi-plus-lg" aria-hidden="true"></i>
+                <span>إضافة عرض جديد</span>
+            </button>
+        </header>
+
+        <div class="yg-promo-stats" aria-label="ملخص العروض">
+            <article>
+                <span class="yg-promo-stat-icon is-active"><i class="bi bi-lightning-charge-fill"></i></span>
+                <div><b>@Model.ActiveCount</b><small>نشط الآن</small></div>
+            </article>
+            <article>
+                <span class="yg-promo-stat-icon is-scheduled"><i class="bi bi-calendar2-week"></i></span>
+                <div><b>@Model.ScheduledCount</b><small>مجدول</small></div>
+            </article>
+            <article>
+                <span class="yg-promo-stat-icon is-draft"><i class="bi bi-file-earmark-text"></i></span>
+                <div><b>@Model.DraftCount</b><small>مسودة</small></div>
+            </article>
+            <article>
+                <span class="yg-promo-stat-icon is-archived"><i class="bi bi-archive"></i></span>
+                <div><b>@Model.ArchivedCount</b><small>متوقف أو منتهي</small></div>
+            </article>
+        </div>
+
+        <div class="yg-promo-toolbar">
+            <div class="yg-promo-tabs" role="tablist" aria-label="حالة العرض">
+                <button type="button" data-promo-filter="active" data-count="@Model.ActiveCount">
+                    <span class="yg-promo-tab-icon"><i class="bi bi-lightning-charge"></i></span>
+                    <span class="yg-promo-tab-label">النشطة</span>
+                    <b>@Model.ActiveCount</b>
+                </button>
+                <button type="button" data-promo-filter="scheduled" data-count="@Model.ScheduledCount">
+                    <span class="yg-promo-tab-icon"><i class="bi bi-calendar2-event"></i></span>
+                    <span class="yg-promo-tab-label">المجدولة</span>
+                    <b>@Model.ScheduledCount</b>
+                </button>
+                <button type="button" data-promo-filter="draft" data-count="@Model.DraftCount">
+                    <span class="yg-promo-tab-icon"><i class="bi bi-file-earmark-text"></i></span>
+                    <span class="yg-promo-tab-label">المسودات</span>
+                    <b>@Model.DraftCount</b>
+                </button>
+                <button type="button" data-promo-filter="archived" data-count="@Model.ArchivedCount">
+                    <span class="yg-promo-tab-icon"><i class="bi bi-archive"></i></span>
+                    <span class="yg-promo-tab-label">الأرشيف</span>
+                    <b>@Model.ArchivedCount</b>
+                </button>
+            </div>
+
+            <label class="yg-promo-search">
+                <i class="bi bi-search" aria-hidden="true"></i>
+                <input type="search"
+                   id="promotionSearch"
+                   placeholder="ابحث باسم العرض أو الهدف أو الكود..."
+                   autocomplete="off" />
+            </label>
+        </div>
+
+        <div class="yg-promo-grid" id="promotionCardsGrid">
+            @foreach (var promotion in Model.Promotions)
+            {
+                string group = ResolveGroup(promotion.EffectiveStatus);
+                decimal usagePercent = promotion.TotalUsageLimit.HasValue && promotion.TotalUsageLimit.Value > 0
+                ? Math.Min(100m, promotion.UsedCount * 100m / promotion.TotalUsageLimit.Value)
+                : 0m;
+
+                <article class="yg-promo-card"
+                 data-promo-group="@group"
+                 data-promo-search="@(promotion.PromotionTitle + " " + promotion.TargetLabel + " " + promotion.PromoCode + " " + promotion.OfferSummary)">
+
+                    <div class="yg-promo-card__media">
+                        @if (!string.IsNullOrWhiteSpace(Model.PlaceImage))
+                        {
+                            <img src="@Model.PlaceImage" alt="@Model.PlaceName" loading="lazy" />
+                        }
+                        else
+                        {
+                            <div class="yg-promo-card__placeholder">
+                                <i class="bi bi-building"></i>
+                                <span>@Model.PlaceName</span>
+                            </div>
+                        }
+
+                        <span class="yg-promo-status is-@promotion.EffectiveStatus.ToLowerInvariant()">
+                            @promotion.StatusLabel
+                        </span>
+
+                        <span class="yg-promo-discount yg-promo-reward-badge">
+                            @if (promotion.OfferMode == "Discount")
+                            {
+                                <strong>@promotion.DiscountValue.ToString("0.##")</strong>
+                                <small>@(promotion.DiscountType == "Percentage" ? "%" : "ريال")</small>
+                            }
+                            else if (promotion.RewardType == "FreeQuantity")
+                            {
+                                <strong>@(promotion.RewardQuantity?.ToString() ?? "1")</strong>
+                                <small>مجانًا</small>
+                            }
+                            else if (promotion.RewardType == "FreeService")
+                            {
+                                <strong><i class="bi bi-gift-fill"></i></strong>
+                                <small>خدمة مجانية</small>
+                            }
+                            else if (promotion.RewardType == "SpecialPrice" || promotion.RewardType == "ServiceSpecialPrice")
+                            {
+                                <strong>@(promotion.SpecialPrice?.ToString("N0") ?? "—")</strong>
+                                <small>ريال</small>
+                            }
+                            else
+                            {
+                                <strong>@promotion.DiscountValue.ToString("0.##")</strong>
+                                <small>@(promotion.RewardType == "PercentageDiscount" ? "%" : "ريال")</small>
+                            }
+                        </span>
+                    </div>
+
+                    <div class="yg-promo-card__body">
+                        <div class="yg-promo-card__heading">
+                            <div>
+                                <h3>@promotion.PromotionTitle</h3>
+                                <p>@(promotion.ShortDescription ?? "عرض ترويجي مخصص للمنشأة الحالية.")</p>
+                            </div>
+                            <span class="yg-promo-target-icon"><i class="bi bi-bullseye"></i></span>
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(promotion.OfferSummary))
+                        {
+                            <div class="yg-promo-summary">
+                                <i class="bi bi-sparkles"></i>
+                                <span>@promotion.OfferSummary</span>
+                            </div>
+                        }
+
+                        <div class="yg-promo-meta">
+                            <span><i class="bi bi-bullseye"></i>@promotion.TargetLabel</span>
+                            <span><i class="bi bi-calendar3"></i>@promotion.StartDate.ToString("yyyy/MM/dd") — @promotion.EndDate.ToString("yyyy/MM/dd")</span>
+
+                            @if (Model.IsBookable)
+                            {
+                                if (promotion.IsAutomatic)
+                                {
+                                    <span><i class="bi bi-magic"></i>تطبيق تلقائي</span>
+                                }
+                                else
+                                {
+                                    <span class="yg-promo-code"><i class="bi bi-ticket-perforated"></i>@promotion.PromoCode</span>
+                                }
+                            }
+                            else
+                            {
+                                <span><i class="bi bi-megaphone"></i>عرض ترويجي</span>
+                            }
+                        </div>
+
+                        @if (Model.IsBookable && promotion.TotalUsageLimit.HasValue)
+                        {
+                            <div class="yg-promo-usage">
+                                <div>
+                                    <span>الاستخدام</span>
+                                    <b>@promotion.UsedCount / @promotion.TotalUsageLimit</b>
+                                </div>
+                                <span class="yg-promo-usage__bar">
+                                    <i style="width:@usagePercent.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)%"></i>
+                                </span>
+                            </div>
+                        }
+
+                        <div class="yg-promo-card__actions">
+                            <button type="button"
+                            class="yg-promo-action yg-promo-edit-button"
+                            data-promotion-id="@promotion.PromotionId">
+                                <i class="bi bi-pencil-square"></i><span>تعديل</span>
+                            </button>
+
+                            @if (promotion.EffectiveStatus != "Draft" &&
+                           promotion.EffectiveStatus != "Expired" &&
+                           promotion.EffectiveStatus != "Cancelled")
+                            {
+                                <button type="button"
+                            class="yg-promo-action yg-promo-status-button"
+                            data-promotion-id="@promotion.PromotionId"
+                            data-next-active="@(!promotion.IsEnabled ? "true" : "false")">
+                                    <i class="bi @(promotion.IsEnabled ? "bi-pause-circle" : "bi-play-circle")"></i>
+                                    <span>@(promotion.IsEnabled ? "إيقاف" : "تفعيل")</span>
+                                </button>
+                            }
+
+                            <button type="button"
+                            class="yg-promo-action is-danger yg-promo-delete-button"
+                            data-promotion-id="@promotion.PromotionId"
+                            data-has-bookings="@promotion.HasBookings.ToString().ToLowerInvariant()">
+                                <i class="bi bi-trash3"></i>
+                                <span>@(promotion.HasBookings ? "إلغاء" : "حذف")</span>
+                            </button>
+                        </div>
+                    </div>
+                </article>
+            }
+        </div>
+
+        <div class="yg-promo-empty" id="promotionFilteredEmpty" hidden>
+            <span class="yg-promo-empty__icon"><i class="bi bi-tags"></i></span>
+            <h3>لا توجد عروض في هذا القسم</h3>
+            <p>غيّر التبويب أو البحث، أو أنشئ عرضًا جديدًا للمنشأة المحددة.</p>
+            <button type="button" class="yg-promo-secondary-cta" data-open-promotion-from-empty>
+                <i class="bi bi-plus-lg"></i> إضافة عرض
+            </button>
+        </div>
+
+        <!-- ================================================================
+             قالب نافذة SweetAlert2.
+             لا يوجد Modal يدوي داخل الصفحة؛ يتم استنساخ هذا القالب عند الفتح.
+             ================================================================ -->
+        <template id="promotionFormTemplate">
+            <form class="yg-promo-wizard" id="promotionForm" novalidate>
+                @Html.AntiForgeryToken()
+
+                <input type="hidden" name="PromotionId" id="promotionId" value="0" />
+                <input type="hidden" name="SaveMode" id="promotionSaveMode" value="Draft" />
+                <input type="hidden" name="RemoveImage" id="promotionRemoveImage" value="false" />
+                <input type="hidden" name="ApplicableDaysCsv" id="promotionApplicableDays" />
+
+                @if (Model.IsNonBooking)
+                {
+                    <input type="hidden" name="TargetType" value="Place" />
+                    <input type="hidden" name="IsAutomatic" value="true" />
+                    <input type="hidden" name="OfferMode" value="Discount" />
+                }
+
+                <header class="yg-promo-wizard__head">
+                    <div class="yg-promo-wizard__title">
+                        <span class="yg-promo-wizard__title-icon"><i class="bi bi-stars"></i></span>
+                        <div>
+                            <span class="yg-promo-eyebrow">منشئ العروض</span>
+                            <h2 id="promotionDialogTitle">إضافة عرض جديد</h2>
+                            <p>حدّد الفكرة والهدف والمكافأة، وسيستخدم النظام صورة المنشأة تلقائيًا.</p>
+                        </div>
+                    </div>
+                    <button type="button" class="yg-promo-wizard__close" data-close-promotion-dialog aria-label="إغلاق">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                </header>
+
+                <nav class="yg-promo-stepper" aria-label="خطوات إنشاء العرض">
+                    <button type="button" class="is-active" data-step-jump="1">
+                        <b>1</b><span>الفكرة</span>
+                    </button>
+                    <i></i>
+                    <button type="button" data-step-jump="2">
+                        <b>2</b><span>بناء العرض</span>
+                    </button>
+                    <i></i>
+                    <button type="button" data-step-jump="3">
+                        <b>3</b><span>الشروط والنشر</span>
+                    </button>
+                </nav>
+
+                <div class="yg-promo-wizard__body">
+                    <div class="yg-promo-form-alert" id="promotionFormAlert" hidden></div>
+
+                    <!-- =====================================================
+                         الخطوة 1: معلومات العرض
+                         ===================================================== -->
+                    <section class="yg-promo-form-step is-active" data-promo-step="1">
+                        <div class="yg-promo-section-title">
+                            <span><i class="bi bi-lightbulb"></i></span>
+                            <div>
+                                <h3>عرّف العرض</h3>
+                                <p>اكتب اسمًا قصيرًا ووصفًا مفهومًا للعميل. صورة المنشأة ستظهر تلقائيًا مع العرض.</p>
+                            </div>
+                        </div>
+
+                        <div class="yg-promo-place-image-note">
+                            <span class="yg-promo-place-image-note__icon"><i class="bi bi-image"></i></span>
+                            <div>
+                                <b>الصورة تلقائية</b>
+                                <small>سيظهر العرض بخلفية المنشأة الحالية، لذلك لا تحتاج لرفع صورة جديدة.</small>
+                            </div>
+                            <i class="bi bi-check-circle-fill"></i>
+                        </div>
+
+                        <div class="yg-promo-fields two">
+                            <label class="yg-promo-field wide">
+                                <span>اسم العرض <em>*</em></span>
+                                <input name="PromotionTitle"
+                                   id="promotionTitle"
+                                   maxlength="150"
+                                   placeholder="مثال: احجز ليلتين والثالثة علينا"
+                                   required />
+                            </label>
+
+                            <label class="yg-promo-field wide">
+                                <span>وصف قصير</span>
+                                <input name="ShortDescription"
+                                   id="promotionShortDescription"
+                                   maxlength="250"
+                                   placeholder="جملة قصيرة تظهر في بطاقة العرض" />
+                            </label>
+
+                            <label class="yg-promo-field wide">
+                                <span>تفاصيل إضافية</span>
+                                <textarea name="Description"
+                                      id="promotionDescription"
+                                      rows="4"
+                                      placeholder="أي تفاصيل تريد توضيحها للعميل..."></textarea>
+                            </label>
+                        </div>
+                    </section>
+
+                    <!-- =====================================================
+                         الخطوة 2: الهدف + نوع العرض + المكافأة
+                         ===================================================== -->
+                    <section class="yg-promo-form-step" data-promo-step="2">
+                        <div class="yg-promo-section-title">
+                            <span><i class="bi bi-bullseye"></i></span>
+                            <div>
+                                <h3>ما الذي يشمله العرض؟</h3>
+                                <p>اختر الهدف أولًا، ثم ابنِ الخصم أو المكافأة بالطريقة التي تريدها.</p>
+                            </div>
+                        </div>
+
+                        @if (Model.IsNonBooking)
+                        {
+                            <div class="yg-promo-static-target">
+                                <span><i class="bi bi-shop"></i></span>
+                                <div>
+                                    <b>المنشأة كاملة</b>
+                                    <small>العرض هنا ترويجي ويظهر على المنشأة نفسها.</small>
+                                </div>
+                                <i class="bi bi-check-circle-fill"></i>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="yg-promo-targets">
+                                <label>
+                                    <input type="radio" name="TargetType" value="Place" checked />
+                                    <span><i class="bi bi-building"></i><b>المنشأة كاملة</b><small>كل الحجوزات المؤهلة</small></span>
+                                </label>
+
+                                @if (Model.CanTargetRooms)
+                                {
+                                    <label>
+                                        <input type="radio" name="TargetType" value="Room" />
+                                        <span><i class="bi bi-door-open"></i><b>غرفة أو جناح</b><small>نوع فندقي محدد</small></span>
+                                    </label>
+                                }
+
+                                @if (Model.CanTargetPackages)
+                                {
+                                    <label>
+                                        <input type="radio" name="TargetType" value="Package" />
+                                        <span><i class="bi bi-box-seam"></i><b>باقة</b><small>باقة محددة</small></span>
+                                    </label>
+                                }
+
+                                @if (Model.CanTargetServices)
+                                {
+                                    <label>
+                                        <input type="radio" name="TargetType" value="Service" />
+                                        <span><i class="bi bi-stars"></i><b>خدمة إضافية</b><small>خدمة محددة</small></span>
+                                    </label>
+                                }
+                            </div>
+
+                            @if (Model.CanTargetRooms)
+                            {
+                                <div class="yg-promo-target-select" data-target-select="Room" hidden>
+                                    <label class="yg-promo-field">
+                                        <span>الغرفة أو الجناح <em>*</em></span>
+                                        <select name="RoomId" id="promotionRoomId">
+                                            <option value="">اختر الغرفة أو الجناح</option>
+                                            @foreach (var item in Model.Rooms)
+                                            {
+                                                <option value="@item.Id">@item.Name — @item.Meta</option>
+                                            }
+                                        </select>
+                                    </label>
+                                </div>
+                            }
+
+                            @if (Model.CanTargetPackages)
+                            {
+                                <div class="yg-promo-target-select" data-target-select="Package" hidden>
+                                    <label class="yg-promo-field">
+                                        <span>الباقة <em>*</em></span>
+                                        <select name="PackageId" id="promotionPackageId">
+                                            <option value="">اختر الباقة</option>
+                                            @foreach (var item in Model.Packages)
+                                            {
+                                                <option value="@item.Id">@item.Name — @item.Meta</option>
+                                            }
+                                        </select>
+                                    </label>
+                                </div>
+                            }
+
+                            @if (Model.CanTargetServices)
+                            {
+                                <div class="yg-promo-target-select" data-target-select="Service" hidden>
+                                    <label class="yg-promo-field">
+                                        <span>الخدمة <em>*</em></span>
+                                        <select name="ServiceId" id="promotionServiceId">
+                                            <option value="">اختر الخدمة</option>
+                                            @foreach (var item in Model.Services)
+                                            {
+                                                <option value="@item.Id">@item.Name — @item.Meta</option>
+                                            }
+                                        </select>
+                                    </label>
+                                </div>
+                            }
+                        }
+
+                        <div class="yg-promo-divider"></div>
+
+                        @if (Model.IsBookable)
+                        {
+                            <div class="yg-promo-section-title compact">
+                                <span><i class="bi bi-diagram-3"></i></span>
+                                <div>
+                                    <h3>اختر طريقة العرض</h3>
+                                    <p>خصم مباشر، أو شرط ومكافأة مثل: احجز ليلتين واحصل على الثالثة مجانًا.</p>
+                                </div>
+                            </div>
+
+                            <div class="yg-promo-offer-mode">
+                                <label>
+                                    <input type="radio" name="OfferMode" value="Discount" checked />
+                                    <span>
+                                        <i class="bi bi-percent"></i>
+                                        <b>خصم مباشر</b>
+                                        <small>نسبة أو مبلغ ثابت بدون مكافأة إضافية</small>
+                                    </span>
+                                </label>
+                                <label>
+                                    <input type="radio" name="OfferMode" value="ConditionalReward" />
+                                    <span>
+                                        <i class="bi bi-gift"></i>
+                                        <b>شرط + مكافأة</b>
+                                        <small>أنت تحدد الشرط وما الذي يحصل عليه العميل</small>
+                                    </span>
+                                </label>
+                            </div>
+                        }
+
+                        <!-- الخصم المباشر -->
+                        <div id="promotionDiscountBuilder">
+                            <div class="yg-promo-discount-types">
+                                <label>
+                                    <input type="radio" name="DiscountType" value="Percentage" checked />
+                                    <span><i class="bi bi-percent"></i><b>نسبة مئوية</b></span>
+                                </label>
+                                <label>
+                                    <input type="radio" name="DiscountType" value="FixedAmount" />
+                                    <span><i class="bi bi-cash-coin"></i><b>مبلغ ثابت</b></span>
+                                </label>
+                            </div>
+
+                            <div class="yg-promo-money-grid">
+                                <label class="yg-promo-field">
+                                    <span id="promotionDiscountValueLabel">قيمة الخصم (%) <em>*</em></span>
+                                    <input type="number"
+                                       name="DiscountValue"
+                                       id="promotionDiscountValue"
+                                       min="0.01"
+                                       step="0.01"
+                                       inputmode="decimal"
+                                       placeholder="مثال: 20" />
+                                </label>
+
+                                <label class="yg-promo-field" id="maximumDiscountField">
+                                    <span>أقصى مبلغ للخصم (ريال)</span>
+                                    <input type="number"
+                                       name="MaximumDiscountAmount"
+                                       id="promotionMaximumDiscount"
+                                       min="0"
+                                       step="0.01"
+                                       inputmode="decimal"
+                                       placeholder="اختياري" />
+                                </label>
+                            </div>
+                        </div>
+
+                        @if (Model.IsBookable)
+                        {
+                            <!-- منشئ المكافأة -->
+                            <div id="promotionRewardBuilder" class="yg-promo-reward-builder" hidden>
+                                <div class="yg-promo-builder-label">
+                                    <span><i class="bi bi-gift-fill"></i></span>
+                                    <div>
+                                        <b>ماذا سيحصل عليه العميل؟</b>
+                                        <small>اختر المكافأة ثم أدخل قيمتها فقط.</small>
+                                    </div>
+                                </div>
+
+                                <div class="yg-promo-reward-types">
+                                    <label><input type="radio" name="RewardType" value="PercentageDiscount" /><span><i class="bi bi-percent"></i><b>خصم نسبة</b></span></label>
+                                    <label><input type="radio" name="RewardType" value="FixedDiscount" /><span><i class="bi bi-cash"></i><b>خصم مبلغ</b></span></label>
+                                    <label><input type="radio" name="RewardType" value="SpecialPrice" /><span><i class="bi bi-tag"></i><b>سعر خاص</b></span></label>
+                                    <label><input type="radio" name="RewardType" value="FreeQuantity" /><span><i class="bi bi-plus-circle"></i><b>كمية / ليلة مجانية</b></span></label>
+                                    @if (Model.CanTargetServices)
+                                    {
+                                        <label><input type="radio" name="RewardType" value="FreeService" /><span><i class="bi bi-gift"></i><b>خدمة مجانية</b></span></label>
+                                        <label><input type="radio" name="RewardType" value="ServiceSpecialPrice" /><span><i class="bi bi-stars"></i><b>خدمة بسعر خاص</b></span></label>
+                                    }
+                                </div>
+
+                                <div class="yg-promo-reward-fields">
+                                    <label class="yg-promo-field" data-reward-field="discount" hidden>
+                                        <span id="promotionRewardDiscountLabel">قيمة المكافأة <em>*</em></span>
+                                        <input type="number"
+                                       id="promotionRewardDiscountValue"
+                                       min="0.01"
+                                       step="0.01"
+                                       inputmode="decimal"
+                                       placeholder="أدخل القيمة" />
+                                    </label>
+
+                                    <label class="yg-promo-field" data-reward-field="rewardQuantity" hidden>
+                                        <span>الكمية المجانية <em>*</em></span>
+                                        <input type="number"
+                                       name="RewardQuantity"
+                                       id="promotionRewardQuantity"
+                                       min="1"
+                                       inputmode="numeric"
+                                       placeholder="مثال: 1" />
+                                    </label>
+
+                                    <div class="yg-promo-repeat-box" id="promotionRewardRepeatableField" data-reward-field="rewardRepeatable" hidden>
+                                        <label class="yg-promo-repeat-toggle">
+                                            <input type="checkbox"
+                                           name="IsRewardRepeatable"
+                                           id="promotionRewardRepeatable"
+                                           value="true" />
+                                            <span class="yg-promo-repeat-switch" aria-hidden="true"></span>
+                                            <span class="yg-promo-repeat-copy">
+                                                <b>تكرار المكافأة عند تحقق الشرط أكثر من مرة</b>
+                                                <small>مثال: احجز ليلتين + ليلة مجانية. عند حجز 6 ليالٍ يحصل العميل على ليلتين مجانًا.</small>
+                                            </span>
+                                        </label>
+                                    </div>
+
+                                    @if (Model.CanTargetServices)
+                                    {
+                                        <label class="yg-promo-field" data-reward-field="rewardService" hidden>
+                                            <span>الخدمة التي سيحصل عليها العميل <em>*</em></span>
+                                            <select name="RewardServiceId" id="promotionRewardServiceId">
+                                                <option value="">اختر الخدمة</option>
+                                                @foreach (var item in Model.Services)
+                                                {
+                                                    <option value="@item.Id">@item.Name — @item.Meta</option>
+                                                }
+                                            </select>
+                                        </label>
+                                    }
+
+                                    <label class="yg-promo-field" data-reward-field="specialPrice" hidden>
+                                        <span>السعر الخاص (ريال) <em>*</em></span>
+                                        <input type="number"
+                                       name="SpecialPrice"
+                                       id="promotionSpecialPrice"
+                                       min="0.01"
+                                       step="0.01"
+                                       inputmode="decimal"
+                                       placeholder="مثال: 25000" />
+                                    </label>
+                                </div>
+
+
+                                <div class="yg-promo-free-condition" id="promotionFreeQuantityCondition" hidden>
+                                    <div class="yg-promo-builder-label yg-promo-builder-label--condition">
+                                        <span><i class="bi bi-check2-square"></i></span>
+                                        <div>
+                                            <b>شرط الحصول على المجاني</b>
+                                            <small>حدد مقابل ماذا يحصل العميل على الكمية أو الليلة المجانية.</small>
+                                        </div>
+                                    </div>
+
+                                    <div class="yg-promo-fields two">
+                                        @if (Model.SupportsMinimumNights)
+                                        {
+                                            <label class="yg-promo-field">
+                                                <span>عدد الليالي المطلوبة</span>
+                                                <input type="number" name="MinimumNights" id="promotionMinimumNights"
+                                           min="1" inputmode="numeric" placeholder="مثال: 2" />
+                                                <small class="yg-promo-field-hint">مثال: 2 = احجز ليلتين ثم يحصل على المجاني.</small>
+                                            </label>
+                                        }
+
+                                        <label class="yg-promo-field">
+                                            <span>الكمية المطلوبة</span>
+                                            <input type="number" name="RequiredQuantity" id="promotionRequiredQuantity"
+                                           min="1" inputmode="numeric" placeholder="مثال: 2" />
+                                            <small class="yg-promo-field-hint">مثال: 2 = خذ اثنتين واحصل على المجاني.</small>
+                                        </label>
+
+                                        @if (Model.SupportsMinimumPeople)
+                                        {
+                                            <label class="yg-promo-field">
+                                                <span>أقل عدد أشخاص</span>
+                                                <input type="number" name="MinimumPeople" id="promotionMinimumPeople"
+                                           min="1" inputmode="numeric" placeholder="اختياري" />
+                                            </label>
+                                        }
+
+                                        @if (Model.SupportsBookingAmount)
+                                        {
+                                            <label class="yg-promo-field">
+                                                <span>أقل قيمة حجز (ريال)</span>
+                                                <input type="number" name="MinimumBookingAmount" id="promotionMinimumBooking"
+                                           min="0" step="0.01" inputmode="decimal" placeholder="اختياري" />
+                                            </label>
+                                        }
+                                    </div>
+
+                                    <div class="yg-promo-condition-example">
+                                        <i class="bi bi-lightbulb"></i>
+                                        <span>
+                                            مثال: <b>عدد الليالي المطلوبة 2</b> + <b>الكمية المجانية 1</b>
+                                            = احجز ليلتين وخذ الثالثة مجانًا.
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div class="yg-promo-live-summary" id="promotionLiveSummary">
+                                    <span><i class="bi bi-sparkles"></i></span>
+                                    <div>
+                                        <small>معاينة العرض</small>
+                                        <b id="promotionLiveSummaryText">اختر المكافأة وسيظهر وصف العرض هنا.</b>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        @if (Model.SupportsPromoCode)
+                        {
+                            <div class="yg-promo-apply-mode">
+                                <label>
+                                    <input type="radio" name="IsAutomatic" value="true" checked />
+                                    <span><i class="bi bi-magic"></i><b>تلقائي</b><small>يطبّق عند تحقق الشروط</small></span>
+                                </label>
+                                <label>
+                                    <input type="radio" name="IsAutomatic" value="false" />
+                                    <span><i class="bi bi-ticket-perforated"></i><b>بكود عرض</b><small>يدخله العميل أثناء الحجز</small></span>
+                                </label>
+                            </div>
+
+                            <label class="yg-promo-field" id="promotionCodeField" hidden>
+                                <span>كود العرض <em>*</em></span>
+                                <input name="PromoCode"
+                               id="promotionCode"
+                               maxlength="50"
+                               dir="ltr"
+                               autocomplete="off"
+                               placeholder="WEEKEND20" />
+                            </label>
+                        }
+                    </section>
+
+                    <!-- =====================================================
+                         الخطوة 3: المدة والقيود
+                         ===================================================== -->
+                    <section class="yg-promo-form-step" data-promo-step="3">
+                        <div class="yg-promo-section-title">
+                            <span><i class="bi bi-calendar-range"></i></span>
+                            <div>
+                                <h3>مدة العرض والشروط النهائية</h3>
+                                <p>حدد فترة تشغيل العرض، ثم أضف القيود الاختيارية فقط.</p>
+                            </div>
+                        </div>
+
+                        <div class="yg-promo-fields two">
+                            <label class="yg-promo-field">
+                                <span>بداية العرض <em>*</em></span>
+                                <input type="date" name="StartDate" id="promotionStartDate" required />
+                            </label>
+                            <label class="yg-promo-field">
+                                <span>نهاية العرض <em>*</em></span>
+                                <input type="date" name="EndDate" id="promotionEndDate" required />
+                            </label>
+                        </div>
+
+                        @if (Model.SupportsStayRange)
+                        {
+                            <details class="yg-promo-advanced-date" id="promotionStayRangeDetails">
+                                <summary>
+                                    <span class="yg-promo-advanced-date__icon"><i class="bi bi-calendar2-check"></i></span>
+                                    <span class="yg-promo-advanced-date__copy">
+                                        <b>@(Model.IsHotel ? "تحديد فترة إقامة يشملها العرض" : "تحديد فترة حجز يشملها العرض")</b>
+                                        <small>اختياري — استخدمه فقط إذا كان العرض صالحًا لفترة إقامة محددة.</small>
+                                    </span>
+                                    <i class="bi bi-chevron-down yg-promo-advanced-date__arrow"></i>
+                                </summary>
+                                <div class="yg-promo-advanced-date__body">
+                                    <div class="yg-promo-fields two">
+                                        <label class="yg-promo-field">
+                                            <span>من تاريخ</span>
+                                            <input type="date" name="StayStartDate" id="promotionStayStartDate" />
+                                        </label>
+                                        <label class="yg-promo-field">
+                                            <span>إلى تاريخ</span>
+                                            <input type="date" name="StayEndDate" id="promotionStayEndDate" />
+                                        </label>
+                                    </div>
+                                </div>
+                            </details>
+                        }
+
+                        <div class="yg-promo-days">
+                            <div>
+                                <h4>@(Model.IsNonBooking ? "أيام ظهور العرض" : "أيام تطبيق العرض")</h4>
+                                <p>اتركها بدون تحديد ليعمل العرض طوال أيام الأسبوع.</p>
+                            </div>
+                            <div class="yg-promo-day-options">
+                                <label><input type="checkbox" value="Saturday" /><span>السبت</span></label>
+                                <label><input type="checkbox" value="Sunday" /><span>الأحد</span></label>
+                                <label><input type="checkbox" value="Monday" /><span>الاثنين</span></label>
+                                <label><input type="checkbox" value="Tuesday" /><span>الثلاثاء</span></label>
+                                <label><input type="checkbox" value="Wednesday" /><span>الأربعاء</span></label>
+                                <label><input type="checkbox" value="Thursday" /><span>الخميس</span></label>
+                                <label><input type="checkbox" value="Friday" /><span>الجمعة</span></label>
+                            </div>
+                        </div>
+
+                        @if (Model.IsBookable)
+                        {
+                            <details class="yg-promo-conditions">
+                                <summary>
+                                    <span>
+                                        <i class="bi bi-sliders"></i>
+                                        <b>حدود استخدام اختيارية</b>
+                                        <small>تحكم بعدد مرات استخدام العرض بدون تعقيد.</small>
+                                    </span>
+                                    <i class="bi bi-chevron-down"></i>
+                                </summary>
+
+                                <div class="yg-promo-fields two yg-promo-conditions-grid">
+                                    @if (Model.SupportsUsageLimits)
+                                    {
+                                        <label class="yg-promo-field">
+                                            <span>إجمالي مرات الاستخدام</span>
+                                            <input type="number" name="TotalUsageLimit" id="promotionTotalUsage" min="1" inputmode="numeric" placeholder="اختياري" />
+                                        </label>
+                                        <label class="yg-promo-field">
+                                            <span>مرات الاستخدام للعميل</span>
+                                            <input type="number" name="PerCustomerUsageLimit" id="promotionPerCustomerUsage" min="1" inputmode="numeric" placeholder="اختياري" />
+                                        </label>
+                                    }
+                                </div>
+                            </details>
+                        }
+                    </section>
+                </div>
+
+                <footer class="yg-promo-wizard__footer">
+                    <button type="button" class="yg-promo-secondary" id="promotionPreviousStep" hidden>
+                        <i class="bi bi-arrow-right"></i> السابق
+                    </button>
+
+                    <span class="yg-promo-footer-spacer"></span>
+
+                    <button type="button" class="yg-promo-draft" id="savePromotionDraft">
+                        <i class="bi bi-file-earmark-text"></i> حفظ كمسودة
+                    </button>
+
+                    <button type="button" class="yg-promo-primary" id="promotionNextStep">
+                        <span>التالي</span> <i class="bi bi-arrow-left"></i>
+                    </button>
+
+                    <button type="submit" class="yg-promo-publish" id="publishPromotion" hidden>
+                        <i class="bi bi-cloud-arrow-up"></i> <span>نشر العرض</span>
+                    </button>
+                </footer>
+            </form>
+        </template>
+
+        <script type="application/json" id="promotionManagerData">@Html.Raw(promotionsJson)</script>
+    }
+</section>

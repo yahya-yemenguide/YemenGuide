@@ -1,0 +1,492 @@
+@using System.Security.Claims
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.Extensions.Caching.Memory
+@using YemenGuide.Data
+@inject AppDbContext _context
+@inject IMemoryCache _cache
+
+@{
+    // --- 1. الإعدادات من نفس Cache المستخدم في Layout ---
+    var settings = await _cache.GetOrCreateAsync(
+        "yg:customer-shell:settings",
+        async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(30);
+            return await _context.SystemSettings
+                .AsNoTracking()
+                .FirstOrDefaultAsync();
+        });
+    string siteName = settings?.SiteName ?? "YemenGuide";
+    string logoPath = settings?.LogoPath ?? "/images/logo1.png";
+
+    // --- 2. فئات "استكشف" ثابتة نسبياً: Cache قصير بدون تغيير شكل الهيدر ---
+    var exploreCategories = await _cache.GetOrCreateAsync(
+        "yg:customer-shell:categories",
+        async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(2);
+            return await _context.Categories
+                .AsNoTracking()
+                .OrderBy(category => category.CategoryName)
+                .ToListAsync();
+        });
+
+    // يظهر رابط العروض فقط إذا كان هناك عرض منشور وفعّال الآن.
+    DateTime promotionsToday = DateTime.Today;
+
+    bool hasActivePromotions = await _cache.GetOrCreateAsync(
+        "yg:customer-shell:has-active-promotions",
+        async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(20);
+            return await _context.Promotions
+                .AsNoTracking()
+                .AnyAsync(promotion =>
+                    promotion.IsActive == true &&
+                    (promotion.Status == "Active" ||
+                     promotion.Status == "Scheduled") &&
+                    promotion.StartDate <= promotionsToday &&
+                    promotion.EndDate >= promotionsToday &&
+                    promotion.Place.Status == "Active");
+        });
+
+
+    string profileImage = "";
+    string initialLetter = "V";
+    // فحص ما إذا كان الحساب غير مكتمل
+    bool isProfileComplete = true;
+
+    // يمررها الـ Layout حتى يتغير سلوك الهيدر داخل صفحات لوحة العميل فقط.
+    bool isCustomerDashboardPage =
+        ViewData["IsCustomerDashboardPage"] as bool? ?? false;
+
+    // --- 3. فحص جلسة المستخدم النشطة وجلب بياناته ---
+    if (User.Identity?.IsAuthenticated == true)
+    {
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (!string.IsNullOrEmpty(userIdClaim) &&
+            int.TryParse(userIdClaim, out int userId))
+        {
+            var customer = await _cache.GetOrCreateAsync(
+                $"yg:customer-shell:user:{userId}",
+                async entry =>
+                {
+                    // قصيرة حتى تنعكس صورة/هاتف العميل سريعاً بعد تعديل الملف الشخصي.
+                    entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(15);
+                    return await _context.Users
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(u => u.UserId == userId);
+                });
+
+            if (customer != null)
+            {
+                profileImage = customer.ProfileImage ?? "";
+
+                initialLetter = !string.IsNullOrWhiteSpace(customer.FullName)
+                    ? customer.FullName.Trim().Substring(0, 1).ToUpper()
+                    : "C";
+
+                isProfileComplete =
+                    !string.IsNullOrEmpty(customer.PhoneNumber) &&
+                    !string.IsNullOrEmpty(customer.ProfileImage);
+            }
+
+        }
+    }
+
+    // --- 4. حالة روابط الهيدر الحالية (للتوقيع المتحرك) ---
+    string currentPath =
+        Context.Request.Path.Value ?? "/";
+
+    bool isHomeNav =
+        currentPath.Equals("/", StringComparison.OrdinalIgnoreCase) ||
+        currentPath.Equals("/Home", StringComparison.OrdinalIgnoreCase) ||
+        currentPath.Equals("/Home/Index", StringComparison.OrdinalIgnoreCase);
+
+    bool isExploreNav =
+        currentPath.StartsWith(
+            "/Places",
+            StringComparison.OrdinalIgnoreCase);
+
+    bool isContactNav =
+        currentPath.Equals(
+            "/Home/Contact",
+            StringComparison.OrdinalIgnoreCase);
+}
+
+<header class="customer-site-header @(isCustomerDashboardPage ? "is-dashboard-header" : "is-public-header")">
+    <nav class="navbar navbar-expand-xl fixed-top custom-navbar customer-signature-header customer-aurora-prime @(isCustomerDashboardPage ? "customer-dashboard-navbar" : "")"
+         id="mainNavbar"
+         data-customer-dashboard="@(isCustomerDashboardPage ? "true" : "false")">
+        <!-- تم حذف طبقات Aurora المتحركة فقط لتحسين الأداء. -->
+        <div class="container-fluid px-3 px-lg-5 d-flex align-items-center justify-content-between">
+
+            <a class="navbar-brand customer-navbar-brand customer-brand-dock fw-bold d-flex align-items-center"
+               asp-area=""
+               asp-controller="Home"
+               asp-action="Index"
+               aria-label="العودة إلى الصفحة الرئيسية">
+
+                <span class="customer-brand-emblem" aria-hidden="true">
+<img src="@logoPath"
+                         alt=""
+                         class="customer-navbar-logo"
+                         onerror="this.src='/images/logo1.png'">
+                </span>
+
+                <span class="customer-brand-copy">
+                    <span class="customer-navbar-site-name">
+                        @siteName
+                    </span>
+                </span>
+            </a>
+
+            <div class="customer-header-actions d-flex align-items-center gap-2 order-xl-3">
+
+                @if (User.Identity?.IsAuthenticated == true)
+                {
+                    <div class="dropdown notification-dropdown customer-notification-center"
+                     id="customerNotificationCenter"
+                     data-header-endpoint="/Notifications/Header"
+                     data-unread-endpoint="/Notifications/UnreadCount"
+                     data-mark-read-endpoint="/Notifications/MarkAsRead"
+                     data-mark-all-endpoint="/Notifications/MarkAllAsRead">
+
+                        <button class="nav-icon customer-notification-trigger customer-signature-control position-relative text-white p-0 d-flex align-items-center justify-content-center"
+                            id="customerNotificationToggle"
+                            type="button"
+                            data-bs-toggle="dropdown"
+                            data-bs-auto-close="outside"
+                            aria-expanded="false"
+                            aria-controls="customerNotificationPanel"
+                            aria-label="فتح الإشعارات">
+
+                            <span class="customer-notification-trigger-orbit" aria-hidden="true"></span>
+
+                            <span class="customer-notification-trigger-core" aria-hidden="true">
+                                <i class="bi bi-bell-fill"></i>
+                            </span>
+
+                            <span class="customer-notification-badge"
+                              id="customerNotificationBadge"
+                              hidden>0</span>
+
+                            <span class="customer-notification-live-dot"
+                              id="customerNotificationLiveDot"
+                              aria-hidden="true"
+                              hidden></span>
+                        </button>
+
+                        <div class="dropdown-menu dropdown-menu-end customer-notifications-menu customer-notifications-menu--signature"
+                         id="customerNotificationPanel"
+                         aria-labelledby="customerNotificationToggle">
+
+                            <span class="customer-notification-dark-orb customer-notification-dark-orb--one"
+                              aria-hidden="true"></span>
+                            <span class="customer-notification-dark-orb customer-notification-dark-orb--two"
+                              aria-hidden="true"></span>
+                            <span class="customer-notification-dark-grid"
+                              aria-hidden="true"></span>
+
+                            <div class="customer-notification-panel-inner">
+                                <div class="customer-notification-head">
+                                    <div class="customer-notification-title-wrap">
+                                        <span class="customer-notification-title-icon" aria-hidden="true">
+                                            <i class="bi bi-bell"></i>
+                                        </span>
+
+                                        <div>
+                                            <span class="customer-notification-eyebrow">آخر التنبيهات</span>
+                                            <div class="customer-notification-title-row">
+                                                <h6 class="customer-notification-title mb-0">الإشعارات</h6>
+
+                                                <span class="customer-notification-unread-pill"
+                                                  id="customerNotificationUnreadPill"
+                                                  hidden>
+                                                    <span id="customerNotificationUnreadText">0</span>
+                                                    جديد
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <button type="button"
+                                        class="customer-notification-mark-all"
+                                        id="customerNotificationMarkAll"
+                                        hidden>
+                                        <i class="bi bi-check2-all"></i>
+                                        <span>قراءة الكل</span>
+                                    </button>
+                                </div>
+
+                                <div class="customer-notification-progress"
+                                 id="customerNotificationProgress"
+                                 aria-hidden="true">
+                                    <span></span>
+                                </div>
+
+                                <div class="customer-notification-body"
+                                 id="customerNotificationBody"
+                                 aria-live="polite"
+                                 aria-busy="true">
+
+                                    <div class="customer-notification-skeletons"
+                                     id="customerNotificationSkeletons"
+                                     aria-hidden="true">
+                                        @for (int skeletonIndex = 0; skeletonIndex < 4; skeletonIndex++)
+                                        {
+                                            <div class="customer-notification-skeleton">
+                                                <span class="skeleton-icon"></span>
+                                                <span class="skeleton-lines">
+                                                    <span></span>
+                                                    <span></span>
+                                                    <span></span>
+                                                </span>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+
+                                <a class="customer-notification-view-all"
+                               href="/Notifications/NotificationCenter">
+                                    <span>
+                                        عرض جميع الإشعارات
+                                    </span>
+                                    <i class="bi bi-arrow-left"></i>
+                                </a>
+                            </div>
+                        </div>
+
+                        <div class="d-none" aria-hidden="true">
+                            @Html.AntiForgeryToken()
+                        </div>
+                    </div>
+
+                    <div class="user-profile-link customer-profile-hint-host customer-signature-profile ms-2 position-relative"
+                     id="headerProfileWrapper">
+
+                        <a class="d-flex align-items-center p-0 text-decoration-none"
+                       href="/Overview/Overview"
+                       title="ملخص الحساب"
+                       aria-label="فتح ملخص الحساب">
+
+                            <div class="header-avatar-circle shadow-sm @(!isProfileComplete ? "avatar-pulse-glow" : "")"
+                             style="width: 40px; height: 40px; border-radius: 50%;
+                                        background: @(string.IsNullOrEmpty(profileImage)
+                                            ? "linear-gradient(135deg, #05203C 0%, #00A6DA 100%)"
+                                            : $"url('{profileImage}') center/cover no-repeat");
+                                        display: flex; align-items: center; justify-content: center;
+                                        border: 2px solid rgba(255,255,255,0.25);
+                                        cursor: pointer;
+                                        transition: transform 0.3s ease;"
+                             onmouseover="this.style.transform='scale(1.08)'"
+                             onmouseout="this.style.transform='scale(1)'">
+
+                                @if (string.IsNullOrEmpty(profileImage))
+                                {
+                                    <span class="text-white fw-bold fs-5">
+                                        @initialLetter
+                                    </span>
+                                }
+                            </div>
+                        </a>
+
+                        @if (!isProfileComplete)
+                        {
+                            <div class="header-luxury-hint"
+                         id="headerProfileHint"
+                         aria-label="أكمل بيانات حسابك"
+                         onclick="window.location.href='/Profile/CustomerProfile'"
+                         title="أكمل بياناتك"
+                         role="button"
+                         tabindex="0">
+
+                                <div class="hint-pointer"></div>
+                                <span class="hint-pulse-dot"></span>
+                                <span class="hint-text fw-bold text-primary">
+                                    أكمل بياناتك
+                                </span>
+                            </div>
+                        }
+                    </div>
+                }
+
+                @*
+                زر منيو الموقع يبقى ظاهرًا على الهاتف في الصفحات العامة
+                وداخل لوحة العميل. الشريط السفلي خاص بأقسام حساب العميل،
+                أما هذه القائمة فهي للتنقل العام في الموقع.
+                *@
+                <button class="navbar-toggler customer-site-menu-toggle customer-signature-menu-toggle border-0 shadow-none text-white p-1 ms-1"
+                        type="button"
+                        data-bs-toggle="offcanvas"
+                        data-bs-target="#offcanvasNavbar"
+                        aria-controls="offcanvasNavbar"
+                        aria-label="فتح قائمة الموقع">
+
+                    <i class="bi bi-list fs-2"></i>
+                </button>
+            </div>
+
+            <div class="offcanvas-xl offcanvas-end customer-public-navigation customer-signature-drawer"
+                 tabindex="-1"
+                 id="offcanvasNavbar"
+                 aria-labelledby="offcanvasNavbarLabel">
+                <!-- تم حذف الزينة المتحركة في Drawer فقط لتحسين الأداء. -->
+                <div class="offcanvas-header customer-signature-drawer-head">
+                    <a class="customer-drawer-brand"
+                       asp-controller="Home"
+                       asp-action="Index"
+                       aria-label="العودة إلى الرئيسية">
+
+                        <span class="customer-drawer-brand-emblem" aria-hidden="true">
+<img src="@logoPath"
+                                 alt=""
+                                 class="customer-drawer-brand-logo"
+                                 onerror="this.src='/images/logo1.png'">
+                        </span>
+
+                        <span class="customer-drawer-brand-copy">
+                            <strong id="offcanvasNavbarLabel">@siteName</strong>
+                            <small>اكتشف اليمن بطريقتك</small>
+                        </span>
+                    </a>
+
+                    <button type="button"
+                            class="customer-drawer-close"
+                            id="customerDrawerClose"
+                            data-signature-drawer-close
+                            data-bs-dismiss="offcanvas"
+                            aria-label="إغلاق القائمة">
+                        <span aria-hidden="true"></span>
+                        <span aria-hidden="true"></span>
+                    </button>
+                </div>
+
+                <div class="offcanvas-body align-items-center customer-signature-drawer-body">
+
+                    <div class="customer-signature-nav-shell customer-drawer-nav-shell"
+                         id="customerSignatureNavShell">
+
+                        <span class="customer-drawer-journey" aria-hidden="true"></span>
+                        <span class="customer-drawer-journey-glow" aria-hidden="true"></span>
+                        <span class="customer-nav-active-glider"
+                              id="customerNavActiveGlider"
+                              aria-hidden="true"></span>
+
+                        <ul class="navbar-nav mx-auto mb-2 mb-lg-0 staggered-list align-items-lg-center"
+                            id="customerSignatureNav">
+
+                            <li class="nav-item">
+                                <a class="nav-link modern-link customer-signature-nav-link @(isHomeNav ? "is-current" : "")"
+                                   data-signature-nav="home"
+                                   aria-current="@(isHomeNav ? "page" : null)"
+                                   asp-controller="Home"
+                                   asp-action="Index">
+
+                                    <i class="bi bi-house-door-fill nav-icon-anim me-1"></i>
+                                    الرئيسية
+                                </a>
+                            </li>
+
+                            <li class="nav-item dropdown">
+                                <a class="nav-link modern-link dropdown-toggle customer-signature-nav-link @(isExploreNav ? "is-current" : "")"
+                                   data-signature-nav="explore"
+                                   aria-current="@(isExploreNav ? "page" : null)"
+                                   href="#"
+                                   data-bs-toggle="dropdown"
+                                   aria-expanded="false">
+
+                                    <i class="bi bi-compass-fill nav-icon-anim me-1"></i>
+                                    استكشف
+                                </a>
+
+                                <ul class="dropdown-menu modern-dropdown">
+                                    @if (exploreCategories != null &&
+                                    exploreCategories.Any())
+                                    {
+                                        foreach (var cat in exploreCategories)
+                                        {
+                                            string icon = string.IsNullOrEmpty(cat.IconClass)
+                                            ? "bi-geo-alt-fill"
+                                            : cat.IconClass;
+
+                                            string color = string.IsNullOrEmpty(cat.ThemeColor)
+                                            ? "text-light"
+                                            : $"style='color:{cat.ThemeColor};'";
+
+                                            <li>
+                                                <a class="dropdown-item"
+                                           href="/Places/Search?categoryId=@cat.CategoryId">
+
+                                                    <i class="bi @icon me-2"
+                                               @Html.Raw(color)></i>
+
+                                                    @cat.CategoryName
+                                                </a>
+                                            </li>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <li>
+                                            <span class="dropdown-item text-muted">
+                                                لا توجد فئات حالياً
+                                            </span>
+                                        </li>
+                                    }
+                                </ul>
+                            </li>
+
+                            @if (hasActivePromotions)
+                            {
+                                <li class="nav-item">
+                                    <a class="nav-link modern-link customer-promotions-nav-link customer-signature-nav-link"
+                                   data-signature-nav="offers"
+                                   href="/#offers-section"
+                                   style="color: #FF5A5F !important; font-weight: bold;">
+
+                                        <i class="bi bi-fire nav-icon-anim me-1"></i>
+                                        عروض حصرية
+                                    </a>
+                                </li>
+                            }
+
+                            <li class="nav-item">
+                                <a class="nav-link modern-link customer-signature-nav-link @(isContactNav ? "is-current" : "")"
+                                   data-signature-nav="contact"
+                                   aria-current="@(isContactNav ? "page" : null)"
+                                   href="/Home/Contact">
+
+                                    <i class="bi bi-headset nav-icon-anim me-1"></i>
+                                    تواصل معنا
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+
+                    @if (User.Identity?.IsAuthenticated != true)
+                    {
+                        <div class="d-flex flex-column flex-lg-row align-items-lg-center gap-3 nav-actions mt-4 mt-lg-0">
+
+                            <a asp-controller="Account"
+                           asp-action="Login"
+                           class="btn btn-outline-light btn-sm login-btn w-100">
+
+                                <i class="bi bi-box-arrow-in-right me-1"></i>
+                                تسجيل الدخول
+                            </a>
+
+                            <a href="/Account/Login?role=owner"
+                           class="btn btn-add-place btn-sm w-100">
+
+                                <i class="bi bi-plus-lg me-1"></i>
+                                أضف منشأتك
+                            </a>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </nav>
+</header>

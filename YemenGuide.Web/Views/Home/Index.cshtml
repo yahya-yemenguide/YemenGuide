@@ -1,0 +1,1489 @@
+﻿@using System
+@model YemenGuide.Core.DTOs.Customer.HomeViewModel
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+
+@{
+    ViewData["Title"] = ViewBag.HeroTitleMain ?? "الرئيسية";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+
+    // سحب الثيم الحالي، وإذا كان فارغ نضع الافتراضي
+    string currentTheme = ViewBag.SeasonTheme ?? "Normal";
+    string platformSiteName = ViewBag.PlatformSiteName ?? "YemenGuide";
+    string platformLogoPath = ViewBag.PlatformLogoPath ?? "/images/logo1.png";
+    string googleMapsApiKey = Configuration["GoogleMaps:ApiKey"] ?? string.Empty;
+
+    // توافق آمن مع النسخ التي لم تعد تحتوي Advertisements داخل HomeViewModel.
+    // نقرأ الخاصية بالـ Reflection إن كانت موجودة، وإلا تبقى إعلانات الرئيسية فارغة
+    // بدون كسر الـ Razor أثناء الـ Build.
+    dynamic? homeAdvertisements =
+        Model?.GetType()
+              .GetProperty("Advertisements")
+              ?.GetValue(Model);
+
+    dynamic? homePrimaryAd =
+        homeAdvertisements?.PrimaryAdvertisement;
+
+    dynamic? homeSliderAd =
+        homeAdvertisements?.HasHomeSlider == true
+            ? homePrimaryAd
+            : null;
+
+    dynamic? homeBannerAd =
+        homeAdvertisements?.HasHomeBanner == true
+            ? homePrimaryAd
+            : null;
+
+    dynamic? homeFeaturedAd =
+        homeAdvertisements?.FeaturedAdvertisement;
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/customer/Index.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/customer/advertisements.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/lib/sweetalert2/sweetalert2.min.css" />
+}
+
+    @* ✨ شريط التهنئة العائم ✨ *@
+@if (ViewBag.IsBannerActive != null && (bool)ViewBag.IsBannerActive == true && !string.IsNullOrEmpty(ViewBag.BannerText))
+{
+    <div class="season-banner-floating" id="seasonBanner">
+        <i class="bi bi-stars banner-icon"></i>
+        <span>@ViewBag.BannerText</span>
+        <button class="btn-close-banner" onclick="document.getElementById('seasonBanner').style.display='none'" title="إغلاق">
+            <i class="bi bi-x"></i>
+        </button>
+    </div>
+}
+
+@{
+    string heroV5MainTitle = ViewBag.HeroTitleMain ?? "دليلك اليمني بين يديك";
+    string heroV5SubTitle = ViewBag.HeroTitleSub ?? "اكتشف";
+    string heroV5InitialText = Model.HeroSlides?.FirstOrDefault()?.TypingText ?? "أجمل الوجهات";
+}
+
+@* ============================================================= *@
+@* 1. القسم الأول: DALILAK EXPERIENCE V6 — ISOLATED BUILD       *@
+@* الصورة/الفيديو/النص/الألوان تبقى ديناميكية من الأدمن. *@
+@* ============================================================= *@
+<section class="dlx-hero theme-@currentTheme"
+         id="homeHeroV4"
+         data-build="v6.11-integrated-holographic-compass"
+         data-season="@currentTheme"
+         aria-labelledby="dynamicMainTitle">
+
+    <div class="dlx-media" id="dynamicHeroSlider" aria-hidden="true">
+        @if (Model.HeroSlides != null && Model.HeroSlides.Any())
+        {
+            int dlxSlideIndex = 0;
+            foreach (var slide in Model.HeroSlides)
+            {
+                string activeClass = dlxSlideIndex == 0 ? "active" : "";
+                bool isVideo = slide.ImagePath?.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase) == true;
+
+                if (isVideo)
+                {
+                    <video src="@slide.ImagePath"
+               class="dlx-slide @activeClass"
+               autoplay loop muted playsinline preload="metadata"
+               data-text="@slide.TypingText"
+               data-maincolor="@slide.MainTextColor"
+               data-accentcolor="@slide.AccentColor"></video>
+                }
+                else
+                {
+                    <img src="@slide.ImagePath"
+             class="dlx-slide @activeClass"
+             alt=""
+             loading="@(dlxSlideIndex == 0 ? "eager" : "lazy")"
+             fetchpriority="@(dlxSlideIndex == 0 ? "high" : "auto")"
+             data-text="@slide.TypingText"
+             data-maincolor="@slide.MainTextColor"
+             data-accentcolor="@slide.AccentColor">
+                }
+                dlxSlideIndex++;
+            }
+        }
+        else
+        {
+            <img src="~/images/bg1.jpg" class="dlx-slide active" alt=""
+             data-text="أجمل المطاعم" data-maincolor="#ffffff" data-accentcolor="#ff784d">
+            <img src="~/images/bg2.jpg" class="dlx-slide" alt="" loading="lazy"
+             data-text="أروع الشاليهات" data-maincolor="#ffffff" data-accentcolor="#ff784d">
+            <img src="~/images/bg3.jpg" class="dlx-slide" alt="" loading="lazy"
+             data-text="أجمل القاعات" data-maincolor="#ffffff" data-accentcolor="#ff784d">
+            <img src="~/images/bg4.jpg" class="dlx-slide" alt="" loading="lazy"
+             data-text="أفضل الفنادق" data-maincolor="#ffffff" data-accentcolor="#ff784d">
+        }
+
+        @* الإعلان الممول يندمج كشريحة داخل السلايدر الحالي ولا ينشئ Slider/Timer جديد. *@
+        @if (homeSliderAd != null)
+        {
+            if (homeSliderAd.IsVideo)
+            {
+                <video src="@homeSliderAd.MediaPath"
+               class="dlx-slide customer-ad-hero-media"
+               muted loop playsinline preload="metadata"
+               data-customer-ad-hero-slide="true"
+               data-advertisement-id="@homeSliderAd.AdvertisementId"
+               data-placement-type="@homeSliderAd.PlacementType"
+               data-text="@homeSliderAd.AdvertisementTitle"
+               data-maincolor="#ffffff"
+               data-accentcolor="#ff9b58"></video>
+            }
+            else
+            {
+                <img src="@homeSliderAd.MediaPath"
+             class="dlx-slide customer-ad-hero-media"
+             alt="@homeSliderAd.AdvertisementTitle"
+             loading="lazy"
+             decoding="async"
+             data-customer-ad-hero-slide="true"
+             data-advertisement-id="@homeSliderAd.AdvertisementId"
+             data-placement-type="@homeSliderAd.PlacementType"
+             data-text="@homeSliderAd.AdvertisementTitle"
+             data-maincolor="#ffffff"
+             data-accentcolor="#ff9b58"
+             onerror="this.onerror=null;this.src='/images/bg1.jpg';" />
+            }
+        }
+    </div>
+
+    <div class="dlx-shade" aria-hidden="true"></div>
+    <div class="dlx-atmosphere" aria-hidden="true">
+        <span class="dlx-contours"></span>
+        <span class="dlx-pattern"></span>
+        <span class="dlx-side-glass"></span>
+        <span class="dlx-cinema" aria-hidden="true">
+            <span class="dlx-cinema-aurora"></span>
+            <span class="dlx-cinema-bloom"></span>
+            <span class="dlx-cinema-sweep"></span>
+            <span class="dlx-cinema-flare"></span>
+            <i class="dlx-cinema-particle dlx-cinema-particle-1"></i>
+            <i class="dlx-cinema-particle dlx-cinema-particle-2"></i>
+            <i class="dlx-cinema-particle dlx-cinema-particle-3"></i>
+            <i class="dlx-cinema-particle dlx-cinema-particle-4"></i>
+        </span>
+        <span class="dlx-arc dlx-arc-cyan"></span>
+        <span class="dlx-arc dlx-arc-orange"></span>
+    </div>
+
+    <div class="dlx-season-field" id="heroSeasonField" aria-hidden="true"></div>
+
+    <button type="button"
+            class="dlx-compass-portal"
+            id="dlxCompassPortal"
+            onclick="scrollToNearby()"
+            aria-label="اكتشف الأماكن الأقرب إليك"
+            aria-describedby="dlxCompassStatus">
+        <span class="dlx-compass-scene" aria-hidden="true">
+            <span class="dlx-compass-halo"></span>
+            <span class="dlx-compass-orbit dlx-compass-orbit-outer"></span>
+            <span class="dlx-compass-orbit dlx-compass-orbit-middle"></span>
+            <span class="dlx-compass-orbit dlx-compass-orbit-inner"></span>
+            <span class="dlx-compass-radar dlx-compass-radar-a"></span>
+            <span class="dlx-compass-radar dlx-compass-radar-b"></span>
+            <span class="dlx-compass-disc">
+                <span class="dlx-compass-rim"></span>
+                <span class="dlx-compass-axis dlx-compass-axis-x"></span>
+                <span class="dlx-compass-axis dlx-compass-axis-y"></span>
+                <span class="dlx-compass-cardinal dlx-compass-n">N</span>
+                <span class="dlx-compass-cardinal dlx-compass-e">E</span>
+                <span class="dlx-compass-cardinal dlx-compass-s">S</span>
+                <span class="dlx-compass-cardinal dlx-compass-w">W</span>
+                <span class="dlx-compass-needle">
+                    <i class="dlx-compass-needle-north"></i>
+                    <i class="dlx-compass-needle-south"></i>
+                </span>
+                <span class="dlx-compass-core"></span>
+                <span class="dlx-compass-glint"></span>
+            </span>
+        </span>
+        <span class="dlx-compass-copy">
+            <strong>اكتشف الأماكن القريبة منك</strong>
+            <small id="dlxCompassStatus">اضغط لتحديد موقعك</small>
+        </span>
+    </button>
+
+    <div class="dlx-stage">
+        <div class="dlx-copy" data-hero-v5-copy>
+            <div class="dlx-season-signature" id="heroV42SeasonSignature" hidden>
+                <span class="hero-v42-season-mark"></span>
+                <small id="heroV42SeasonText"></small>
+            </div>
+
+            <div class="dlx-eyebrow">
+                <span class="dlx-eyebrow-spark" aria-hidden="true"></span>
+                <span>وجهتك تبدأ من هنا</span>
+            </div>
+
+            <h1 class="dlx-title" id="dynamicMainTitle" data-hero-v5-fit>
+                <span class="dlx-title-main" id="heroMainTitleRow">@heroV5MainTitle</span>
+                <span class="dlx-title-accent" id="heroDynamicTitleRow">
+                    <span class="dlx-title-helper">@heroV5SubTitle</span>
+                    <span class="dlx-dynamic" id="dynamicAccentWrapper">
+                        <span id="typed-text">@heroV5InitialText</span>
+                        <span class="dlx-cursor cursor" aria-hidden="true">|</span>
+                    </span>
+                    <span class="dlx-title-line" aria-hidden="true"></span>
+                </span>
+            </h1>
+
+            <div class="dlx-trust dlx-trust--hero" aria-label="ميزات المنصة">
+                <span><i class="bi bi-shield-check"></i><b>+@Model.TotalTrustedPlaces</b> منشأة موثوقة</span>
+                <em aria-hidden="true"></em>
+                <span><i class="bi bi-patch-check"></i>تقييمات حقيقية</span>
+                <em aria-hidden="true"></em>
+                <span><i class="bi bi-shield-lock"></i>حجز آمن</span>
+                <em class="dlx-clock-separator" aria-hidden="true"></em>
+                <div class="dlx-clock" aria-label="الوقت والتاريخ الحالي">
+                    <span class="dlx-live-dot" aria-hidden="true"></span>
+                    <strong id="live-time">--:--</strong>
+                    <span class="dlx-meta-dot" aria-hidden="true"></span>
+                    <small id="live-date">جارِ التحميل...</small>
+                </div>
+            </div>
+
+            <div class="dlx-discovery" id="searchBox">
+                <span class="dlx-discovery-glow" aria-hidden="true"></span>
+                <form action="/Places/Search" method="get" id="mainSearchForm" class="dlx-form">
+                    <div class="dlx-searchbar">
+                        <span class="dlx-search-icon" aria-hidden="true"><i class="bi bi-search"></i></span>
+                        <label class="visually-hidden" for="dlxQuery">عن ماذا تبحث؟</label>
+                        <input type="text" id="dlxQuery" name="q" autocomplete="off" placeholder="أين تريد أن تكون؟">
+                        <button type="submit" class="dlx-search-submit" aria-label="ابحث الآن">
+                            <i class="bi bi-arrow-left"></i>
+                            <span class="dlx-button-shine" aria-hidden="true"></span>
+                        </button>
+                    </div>
+
+                    <div class="dlx-filter-frame">
+                        <div class="dlx-filter-row">
+                            <div class="custom-dropdown dlx-filter" id="cityDropdown">
+                                <input type="hidden" name="cityId" id="cityIdInput">
+                                <div class="dropdown-header dlx-filter-trigger" role="button" tabindex="0" aria-label="اختر المدينة">
+                                    <div class="dlx-selected" id="citySelectedContent">
+                                        <i class="bi bi-geo-alt"></i><span>اختر المدينة</span>
+                                    </div>
+                                    <i class="bi bi-chevron-down dlx-chevron"></i>
+                                </div>
+                                <ul class="dropdown-list dlx-menu">
+                                    <li data-value="" data-name="كل المدن" data-icon="bi-geo-alt" data-color="#7DE6FF">
+                                        <i class="bi bi-geo-alt"></i>كل المدن
+                                    </li>
+                                    @foreach (var city in Model.Cities)
+                                    {
+                                        <li data-value="@city.Id" data-name="@city.Name" data-icon="bi-geo-alt-fill" data-color="#00A6DA">
+                                            <i class="bi bi-geo-alt-fill"></i>@city.Name
+                                        </li>
+                                    }
+                                </ul>
+                            </div>
+
+                            <div class="custom-dropdown dlx-filter" id="categoryDropdown">
+                                <input type="hidden" name="categoryId" id="categoryIdInput">
+                                <div class="dropdown-header dlx-filter-trigger" role="button" tabindex="0" aria-label="اختر الفئة">
+                                    <div class="dlx-selected" id="categorySelectedContent">
+                                        <i class="bi bi-grid"></i><span>اختر الفئة</span>
+                                    </div>
+                                    <i class="bi bi-chevron-down dlx-chevron"></i>
+                                </div>
+                                <ul class="dropdown-list dlx-menu">
+                                    <li data-value="" data-name="كل الفئات" data-icon="bi-grid" data-color="#7DE6FF">
+                                        <i class="bi bi-grid"></i>كل الفئات
+                                    </li>
+                                    @foreach (var cat in Model.Categories)
+                                    {
+                                        <li data-value="@cat.Id"
+                                        data-name="@cat.Name"
+                                        data-icon="@(string.IsNullOrEmpty(cat.IconClass) ? "bi-star" : cat.IconClass)"
+                                        data-color="@(string.IsNullOrEmpty(cat.ThemeColor) ? "#00A6DA" : cat.ThemeColor)">
+                                            <i class="bi @(string.IsNullOrEmpty(cat.IconClass) ? "bi-star" : cat.IconClass)"
+                                           style="color: @(string.IsNullOrEmpty(cat.ThemeColor) ? "#00A6DA" : cat.ThemeColor);"></i>@cat.Name
+                                        </li>
+                                    }
+                                </ul>
+                            </div>
+
+                            <button type="button" class="dlx-filter dlx-nearby" id="compassMagicBtn" onclick="scrollToNearby()">
+                                <span class="dlx-nearby-orbit" aria-hidden="true"></span>
+                                <span class="dlx-mini-compass" aria-hidden="true"><i></i></span><span>اكتشف القريب منك</span>
+                            </button>
+                        </div>
+                        <span class="dlx-route" aria-hidden="true"><i></i></span>
+                    </div>
+                </form>
+            </div>
+
+            <p class="dlx-description dlx-description--lower">أماكن مختارة، تجارب موثوقة، وحجز أسهل في كل مدينة.</p>
+        </div>
+    </div>
+
+    @if (homeSliderAd != null)
+    {
+        <aside class="customer-hero-ad-callout"
+           data-customer-hero-ad-callout
+           data-customer-ad
+           data-advertisement-id="@homeSliderAd.AdvertisementId"
+           data-placement-type="@homeSliderAd.PlacementType"
+           hidden>
+            <span class="customer-ad-sponsored-pill">
+                <i class="bi bi-megaphone-fill"></i> ممول
+            </span>
+            <span class="customer-hero-ad-copy">
+                <strong>@homeSliderAd.PlaceName</strong>
+                <small>@homeSliderAd.AdvertisementTitle</small>
+            </span>
+            <a href="@homeSliderAd.FallbackUrl"
+           class="customer-hero-ad-action"
+           data-customer-ad-click
+           data-advertisement-id="@homeSliderAd.AdvertisementId"
+           data-placement-type="@homeSliderAd.PlacementType"
+           data-fallback-url="@homeSliderAd.FallbackUrl">
+                <span>@homeSliderAd.ButtonText</span>
+                <i class="bi bi-arrow-left"></i>
+            </a>
+        </aside>
+    }
+
+    <div class="dlx-place-label" aria-hidden="true">
+        <span></span>
+        <strong id="heroV42ContextText">@heroV5InitialText</strong>
+        <small>اكتشف وجهتك التالية</small>
+    </div>
+
+    <div class="dlx-slider" id="heroSliderNav">
+        <span class="dlx-count" aria-hidden="true">
+            <strong id="heroV42SlideCurrent">01</strong><small>/</small><span id="heroV42SlideTotal">01</span>
+        </span>
+        <div class="dlx-dots" id="heroSliderDots" aria-label="التنقل بين صور الواجهة"></div>
+    </div>
+
+    <div class="dlx-progress" aria-hidden="true"><span id="heroV42ProgressFill"></span></div>
+</section>
+
+@* تم حذف نسخ Hero القديمة غير المرسومة من الصفحة لتقليل حجم الـRazor والـCSS/JS المرتبط بها. *@
+
+@* ============================================================= *@
+@* 2. القسم الثاني: تاج القمريات للفئات — Categories V9.7 *@
+@* ============================================================= *@
+@{
+    var qamariyaCategories = Model?.Categories?.ToList();
+    int qamariyaCategoryTotal = qamariyaCategories?.Count ?? 0;
+}
+
+<section class="qamariya-categories" id="categories-section" aria-labelledby="qamariyaTitle">
+    <svg class="qamariya-clip-defs" width="0" height="0" aria-hidden="true" focusable="false">
+        <defs>
+            <clipPath id="qamariyaOpeningClip" clipPathUnits="objectBoundingBox">
+                <path d="M .5 0 C .22 .075 0 .29 0 .51 L 0 1 L 1 1 L 1 .51 C 1 .29 .78 .075 .5 0 Z"></path>
+            </clipPath>
+        </defs>
+    </svg>
+
+    <img class="qamariya-section-pattern"
+         src="/images/qamariya-category-pattern.png"
+         alt=""
+         decoding="async"
+         aria-hidden="true" />
+    <span class="qamariya-pearl-light qamariya-pearl-light--one" aria-hidden="true"></span>
+    <span class="qamariya-pearl-light qamariya-pearl-light--two" aria-hidden="true"></span>
+
+    <div class="qamariya-container">
+        <header class="qamariya-heading">
+            <span class="qamariya-eyebrow">
+                <i class="bi bi-stars" aria-hidden="true"></i>
+                <span>بوابتك إلى الأفضل</span>
+            </span>
+            <h2 id="qamariyaTitle">ماذا تبحث عنه <span>اليوم؟</span></h2>
+            <p>اختر الفئة واستكشف أفضل الخيارات المتاحة</p>
+        </header>
+
+        @if (qamariyaCategories != null && qamariyaCategories.Count > 0)
+        {
+            <div class="qamariya-carousel"
+             data-qamariya-carousel
+             data-total="@qamariyaCategoryTotal"
+             dir="rtl">
+                <div class="qamariya-stage" id="qamariyaStage" aria-live="polite">
+                    <span class="qamariya-stage-aura" aria-hidden="true"></span>
+                    <span class="qamariya-stage-floor" aria-hidden="true"></span>
+
+                    @for (int i = 0; i < qamariyaCategories.Count; i++)
+                    {
+                        var cat = qamariyaCategories[i];
+                        string categoryImage = string.IsNullOrWhiteSpace(cat.ImagePath)
+                        ? "/images/default-category.jpg"
+                        : cat.ImagePath;
+                        string categoryAccent = string.IsNullOrWhiteSpace(cat.ThemeColor)
+                        ? "var(--v4-accent, var(--color-orange))"
+                        : cat.ThemeColor;
+                        string categoryIcon = string.IsNullOrWhiteSpace(cat.IconClass)
+                        ? "bi-star"
+                        : cat.IconClass.Trim();
+
+                        <article class="qamariya-card @(i == 0 ? "is-active" : "")"
+                         data-qamariya-card="@i"
+                         style="--qamariya-accent: @categoryAccent;"
+                         aria-hidden="@(i == 0 ? "false" : "true")">
+                            <a class="qamariya-card-link"
+                       href="/Places/Search?categoryId=@cat.Id"
+                       aria-label="استكشف فئة @cat.Name">
+                                <span class="qamariya-photo">
+                                    <img src="@categoryImage"
+                                 alt="@cat.Name"
+                                 decoding="async"
+                                 loading="@(i < 3 ? "eager" : "lazy")"
+                                 onerror="this.onerror=null;this.src='/images/default-category.jpg';" />
+                                    <span class="qamariya-photo-shade" aria-hidden="true"></span>
+                                </span>
+
+                                <img class="qamariya-frame"
+                             src="/images/qamariya-category-frame.png"
+                             alt=""
+                             decoding="async"
+                             aria-hidden="true" />
+
+                                <img class="qamariya-frame qamariya-frame--reinforce"
+                             src="/images/qamariya-category-frame.png"
+                             alt=""
+                             decoding="async"
+                             aria-hidden="true" />
+
+                                <span class="qamariya-caption">
+                                    <span class="qamariya-caption-icon" aria-hidden="true">
+                                        <i class="bi @categoryIcon"></i>
+                                    </span>
+                                    <strong data-qamariya-name title="@cat.Name">@cat.Name</strong>
+                                    <span class="qamariya-caption-line" aria-hidden="true"><i></i></span>
+                                    <small>استكشف الفئة</small>
+                                </span>
+                            </a>
+                        </article>
+                    }
+
+                    <button type="button"
+                        class="qamariya-arrow qamariya-arrow--right"
+                        id="qamariyaPrev"
+                        aria-label="الفئة السابقة">
+                        <i class="bi bi-chevron-right" aria-hidden="true"></i>
+                    </button>
+                    <button type="button"
+                        class="qamariya-arrow qamariya-arrow--left"
+                        id="qamariyaNext"
+                        aria-label="الفئة التالية">
+                        <i class="bi bi-chevron-left" aria-hidden="true"></i>
+                    </button>
+                </div>
+
+                <footer class="qamariya-navigation">
+                    <span class="qamariya-count" aria-hidden="true">
+                        <b id="qamariyaCurrent">01</b>
+                        <em>/ @qamariyaCategoryTotal.ToString("00")</em>
+                    </span>
+
+                    <div class="qamariya-progress" aria-hidden="true">
+                        <span class="qamariya-progress-track">
+                            <i id="qamariyaProgress"></i>
+                            <b id="qamariyaTimer"></b>
+                        </span>
+                    </div>
+
+                    <nav class="qamariya-dots" aria-label="اختيار الفئة">
+                        @for (int i = 0; i < qamariyaCategories.Count; i++)
+                        {
+                            <button type="button"
+                            class="qamariya-dot @(i == 0 ? "is-active" : "")"
+                            data-qamariya-target="@i"
+                            aria-label="عرض الفئة رقم @(i + 1)"
+                            aria-current="@(i == 0 ? "true" : "false")"></button>
+                        }
+                    </nav>
+                </footer>
+            </div>
+        }
+        else
+        {
+            <div class="qamariya-empty">
+                <i class="bi bi-grid" aria-hidden="true"></i>
+                <strong>ستظهر الفئات هنا قريبًا</strong>
+                <span>أضف الفئات من لوحة الإدارة لتظهر تلقائيًا.</span>
+            </div>
+        }
+    </div>
+</section>
+
+@if (homeBannerAd != null)
+{
+    <section class="customer-home-banner-slot"
+         aria-label="إعلان ممول"
+         data-customer-ad
+         data-advertisement-id="@homeBannerAd.AdvertisementId"
+         data-placement-type="@homeBannerAd.PlacementType">
+        <div class="container">
+            <article class="customer-home-banner">
+                <div class="customer-home-banner-media" aria-hidden="true">
+                    @if (homeBannerAd.IsVideo)
+                    {
+                        <video src="@homeBannerAd.MediaPath" muted loop autoplay playsinline preload="metadata"></video>
+                    }
+                    else
+                    {
+                        <img src="@homeBannerAd.MediaPath"
+                     alt=""
+                     loading="lazy"
+                     decoding="async"
+                     onerror="this.onerror=null;this.src='/images/bg1.jpg';" />
+                    }
+                    <span class="customer-home-banner-shade"></span>
+                </div>
+
+                <div class="customer-home-banner-content">
+                    <span class="customer-ad-sponsored-pill customer-ad-sponsored-pill--light">
+                        <i class="bi bi-megaphone-fill"></i> إعلان ممول
+                    </span>
+                    <div class="customer-home-banner-copy">
+                        <small>@homeBannerAd.PlaceName</small>
+                        <h3>@homeBannerAd.AdvertisementTitle</h3>
+                        @if (!string.IsNullOrWhiteSpace(homeBannerAd.ShortDescription))
+                        {
+                            <p>@homeBannerAd.ShortDescription</p>
+                        }
+                    </div>
+                    <a href="@homeBannerAd.FallbackUrl"
+                   class="customer-home-banner-action"
+                   data-customer-ad-click
+                   data-advertisement-id="@homeBannerAd.AdvertisementId"
+                   data-placement-type="@homeBannerAd.PlacementType"
+                   data-fallback-url="@homeBannerAd.FallbackUrl">
+                        <span>@homeBannerAd.ButtonText</span>
+                        <i class="bi bi-arrow-left"></i>
+                    </a>
+                </div>
+            </article>
+        </div>
+    </section>
+}
+
+@* ============================================================= *@
+@* ============================================================= *@
+@* ============================================================= *@
+@* 3. القسم الثالث: الأماكن المميزة — Luxury Motion 3D *@
+@* ============================================================= *@
+@if (Model?.FeaturedPlaces?.Any() == true || homeFeaturedAd != null)
+{
+    <section class="featured-wow-section" id="featured-section">
+        <span class="featured-wow-aurora featured-wow-aurora-one" aria-hidden="true"></span>
+        <span class="featured-wow-aurora featured-wow-aurora-two" aria-hidden="true"></span>
+        <span class="featured-wow-pattern" aria-hidden="true"></span>
+
+        <div class="container position-relative featured-wow-container">
+            <div class="featured-wow-heading">
+                <div class="featured-wow-heading-copy">
+                    <span class="featured-wow-eyebrow">
+                        <span class="featured-wow-eyebrow-icon"><i class="bi bi-gem"></i></span>
+                        مختارة من تجارب موثقة
+                    </span>
+
+                    <h2>أماكن تستحق أن تكون <span>مميزة</span></h2>
+                    <p>وجهات حققت تقييمًا قويًا من عملاء لديهم حجوزات مكتملة وتجارب حقيقية.</p>
+                </div>
+
+                <div class="featured-wow-summary" aria-label="عدد الأماكن المميزة">
+                    <span class="featured-wow-summary-ring" aria-hidden="true"></span>
+                    <span class="featured-wow-summary-icon"><i class="bi bi-patch-check-fill"></i></span>
+                    <span class="featured-wow-summary-copy">
+                        <strong>@((Model?.FeaturedPlaces?.Count ?? 0) + (homeFeaturedAd != null ? 1 : 0))</strong>
+                        <small>وجهات مختارة</small>
+                    </span>
+                </div>
+            </div>
+
+            <div class="luxury-horizontal-shell" data-horizontal-carousel="featured">
+                <button class="luxury-carousel-arrow luxury-carousel-prev" type="button"
+                    data-carousel-prev aria-label="عرض الأماكن السابقة">
+                    <i class="bi bi-chevron-right"></i>
+                </button>
+
+                <div class="luxury-horizontal-viewport" data-carousel-viewport>
+                    <div class="row g-4 featured-wow-grid" id="featuredContainer">
+                        @{
+                            int counter = 0;
+                        }
+
+                        @if (homeFeaturedAd != null)
+                        {
+                            <div class="col-12 col-md-6 col-xl-4 featured-place-item featured-wow-stage customer-featured-ad-stage"
+                         style="--featured-delay: 0ms;"
+                         data-customer-ad
+                         data-advertisement-id="@homeFeaturedAd.AdvertisementId"
+                         data-placement-type="@homeFeaturedAd.PlacementType">
+                                <article class="customer-featured-ad-card">
+                                    <div class="customer-featured-ad-media">
+                                        @if (homeFeaturedAd.IsVideo)
+                                        {
+                                            if (!string.IsNullOrWhiteSpace(homeFeaturedAd.ThumbnailPath))
+                                            {
+                                                <img src="@homeFeaturedAd.ThumbnailPath"
+                                     alt="@homeFeaturedAd.AdvertisementTitle"
+                                     loading="lazy" decoding="async" />
+                                            }
+                                            else
+                                            {
+                                                <video src="@homeFeaturedAd.MediaPath" muted loop autoplay playsinline preload="metadata"></video>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <img src="@homeFeaturedAd.MediaPath"
+                                     alt="@homeFeaturedAd.AdvertisementTitle"
+                                     loading="lazy" decoding="async"
+                                     onerror="this.onerror=null;this.src='/images/bg1.jpg';" />
+                                        }
+                                        <span class="customer-featured-ad-shade"></span>
+                                        <span class="customer-ad-sponsored-pill customer-featured-ad-sponsored">
+                                            <i class="bi bi-megaphone-fill"></i> ممول
+                                        </span>
+                                    </div>
+
+                                    <div class="customer-featured-ad-content">
+                                        <div class="customer-featured-ad-place">
+                                            <span><i class="bi bi-building"></i>@homeFeaturedAd.PlaceName</span>
+                                            @if (!string.IsNullOrWhiteSpace(homeFeaturedAd.CityName))
+                                            {
+                                                <span><i class="bi bi-geo-alt"></i>@homeFeaturedAd.CityName</span>
+                                            }
+                                        </div>
+                                        <h3>@homeFeaturedAd.AdvertisementTitle</h3>
+                                        @if (!string.IsNullOrWhiteSpace(homeFeaturedAd.ShortDescription))
+                                        {
+                                            <p>@homeFeaturedAd.ShortDescription</p>
+                                        }
+                                        <a href="@homeFeaturedAd.FallbackUrl"
+                                   class="customer-featured-ad-action"
+                                   data-customer-ad-click
+                                   data-advertisement-id="@homeFeaturedAd.AdvertisementId"
+                                   data-placement-type="@homeFeaturedAd.PlacementType"
+                                   data-fallback-url="@homeFeaturedAd.FallbackUrl">
+                                            <span>@homeFeaturedAd.ButtonText</span>
+                                            <i class="bi bi-arrow-left"></i>
+                                        </a>
+                                    </div>
+                                </article>
+                            </div>
+                            counter++;
+                        }
+
+                        @foreach (var place in Model.FeaturedPlaces)
+                        {
+                            string categoryName = string.IsNullOrWhiteSpace(place.CategoryName)
+                            ? "وجهة مميزة"
+                            : place.CategoryName!;
+
+                            string cityName = string.IsNullOrWhiteSpace(place.CityName)
+                            ? "اليمن"
+                            : place.CityName!;
+
+                            var extraImages = place.GalleryImages != null
+                            ? place.GalleryImages
+                            .Where(img => !string.IsNullOrWhiteSpace(img) && img != place.MainImage)
+                            .Distinct()
+                            .ToList()
+                            : new List<string>();
+
+                            var displayImages = new List<string>();
+                            displayImages.AddRange(extraImages.Take(3));
+                            while (displayImages.Count < 3) { displayImages.Add(""); }
+
+                            <div class="col-12 col-md-6 col-xl-4 featured-place-item featured-wow-stage"
+                         style="--featured-delay: @(counter * 85)ms;">
+
+                                <article class="app-card-vip luxury-edition featured-wow-card"
+                                 data-featured-3d-card>
+
+                                    <span class="featured-wow-depth" aria-hidden="true"></span>
+                                    <span class="featured-wow-spotlight" aria-hidden="true"></span>
+                                    <span class="featured-wow-shine" aria-hidden="true"></span>
+
+                                    <div class="featured-wow-media">
+                                        <a href="/Places/Details/@place.PlaceId"
+                                   class="featured-wow-main-link"
+                                   aria-label="عرض تفاصيل @place.Name">
+
+                                            <div class="luxury-grid featured-wow-gallery"
+                                         data-images="@System.Text.Json.JsonSerializer.Serialize(extraImages)">
+
+                                                <div class="grid-img-large featured-wow-main-image">
+                                                    @if (!string.IsNullOrWhiteSpace(place.MainImage))
+                                                    {
+                                                        <img src="@place.MainImage"
+                                                 class="featured-main-photo"
+                                                 alt="@place.Name"
+                                                 loading="lazy"
+                                                 decoding="async" />
+                                                    }
+                                                    else
+                                                    {
+                                                        <div class="featured-wow-placeholder">
+                                                            <i class="bi bi-image"></i>
+                                                        </div>
+                                                    }
+                                                </div>
+
+                                                <div class="grid-img-small-group featured-wow-thumbs" aria-label="صور إضافية لـ @place.Name">
+                                                    @for (int i = 0; i < 3; i++)
+                                                    {
+                                                        <div class="grid-img-small featured-wow-thumb" style="--thumb-index:@i;">
+                                                            @if (!string.IsNullOrWhiteSpace(displayImages[i]))
+                                                            {
+                                                                <img src="@displayImages[i]"
+                                                     class="magic-image"
+                                                     alt="صورة إضافية لـ @place.Name"
+                                                     loading="lazy"
+                                                     decoding="async"
+                                                     data-original="@displayImages[i]" />
+                                                            }
+                                                            else
+                                                            {
+                                                                <div class="featured-wow-thumb-empty">
+                                                                    <i class="bi bi-stars"></i>
+                                                                </div>
+                                                            }
+                                                        </div>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </a>
+
+                                        <div class="featured-wow-topbar">
+                                            <span class="featured-wow-badge">
+                                                <span class="featured-wow-badge-glow" aria-hidden="true"></span>
+                                                <i class="bi bi-award-fill"></i>
+                                                <span>مميز</span>
+                                            </span>
+
+                                            <button class="btn-favorite-app featured-wow-favorite @(place.IsFavorited ? "active" : "")"
+                                            onclick="toggleFavoriteVip(event, @place.PlaceId, this)"
+                                            type="button"
+                                            title="إضافة للمفضلة"
+                                            aria-label="إضافة @place.Name للمفضلة">
+                                                <i class="bi @(place.IsFavorited ? "bi-heart-fill text-danger" : "bi-heart")"></i>
+                                            </button>
+                                        </div>
+
+                                        <div class="featured-wow-rating">
+                                            <span class="featured-wow-rating-star"><i class="bi bi-star-fill"></i></span>
+                                            <span class="featured-wow-rating-copy">
+                                                <strong>@place.AverageRating.ToString("0.0")</strong>
+                                                <small>@place.ReviewCount تقييم موثق</small>
+                                            </span>
+                                        </div>
+
+                                        <div class="featured-wow-identity">
+                                            <a href="/Places/Details/@place.PlaceId" class="featured-wow-identity-main">
+                                                <div class="featured-wow-name-row">
+                                                    <h3>@place.Name</h3>
+                                                    <i class="bi bi-patch-check-fill"></i>
+                                                </div>
+
+                                                <div class="featured-wow-meta">
+                                                    <span><i class="bi bi-grid-fill"></i>@categoryName</span>
+                                                    <span><i class="bi bi-geo-alt-fill"></i>@cityName</span>
+                                                </div>
+                                            </a>
+
+                                            @if (place.HasActivePromotion && place.ActivePromotionId.HasValue)
+                                            {
+                                                <a class="featured-wow-offer-inline"
+                                       href="/Places/Details/@place.PlaceId?promotionId=@place.ActivePromotionId.Value"
+                                       aria-label="عرض متاح في @place.Name">
+                                                    <span class="featured-wow-offer-inline-glow" aria-hidden="true"></span>
+                                                    <span class="featured-wow-offer-inline-icon" aria-hidden="true">
+                                                        <i class="bi bi-fire"></i>
+                                                    </span>
+                                                    <span class="featured-wow-offer-inline-copy">
+                                                        <strong>عرض متاح</strong>
+                                                        <small>اكتشف الخصم</small>
+                                                    </span>
+                                                    <i class="bi bi-arrow-left featured-wow-offer-inline-arrow" aria-hidden="true"></i>
+                                                </a>
+                                            }
+                                        </div>
+                                    </div>
+
+                                    <div class="featured-wow-footer">
+                                        <div class="featured-wow-trust">
+                                            <span class="featured-wow-trust-icon"><i class="bi bi-shield-check"></i></span>
+                                            <span>
+                                                <strong>موصى به</strong>
+                                                <small>من تجارب حقيقية</small>
+                                            </span>
+                                        </div>
+
+                                        <a href="/Places/Details/@place.PlaceId" class="featured-wow-action">
+                                            <span>اكتشف المكان</span>
+                                            <i class="bi bi-arrow-left"></i>
+                                        </a>
+                                    </div>
+                                </article>
+                            </div>
+
+                            counter++;
+                        }
+                    </div>
+                </div>
+
+                <button class="luxury-carousel-arrow luxury-carousel-next" type="button"
+                    data-carousel-next aria-label="عرض المزيد من الأماكن">
+                    <i class="bi bi-chevron-left"></i>
+                </button>
+
+                <div class="luxury-carousel-progress" aria-hidden="true">
+                    <span data-carousel-progress></span>
+                </div>
+            </div>
+        </div>
+    </section>
+}
+
+
+@* 4. القسم الرابع: العروض والخصومات — تجربة 3D فاخرة *@
+@* ============================================================= *@
+@if (Model?.Promotions?.Any() == true)
+{
+    <section id="offers-section" class="home-promotions-section home-promotions-3d home-promotions-cinematic">
+        <div class="home-promotions-aurora home-promotions-aurora-one" aria-hidden="true"></div>
+        <div class="home-promotions-aurora home-promotions-aurora-two" aria-hidden="true"></div>
+        <div class="home-promotions-mesh" aria-hidden="true"></div>
+        <div class="home-promotions-timefield" aria-hidden="true">
+            <span class="home-promotions-time-ring home-promotions-time-ring-one"></span>
+            <span class="home-promotions-time-ring home-promotions-time-ring-two"></span>
+            <span class="home-promotions-time-ring home-promotions-time-ring-three"></span>
+            <span class="home-promotions-time-hand"></span>
+        </div>
+        <span class="home-promotions-light-trail home-promotions-light-trail-one" aria-hidden="true"></span>
+        <span class="home-promotions-light-trail home-promotions-light-trail-two" aria-hidden="true"></span>
+        <span class="home-promotions-stage" aria-hidden="true"></span>
+
+        <div class="container position-relative home-promotions-container">
+            <div class="home-promotions-heading home-promotions-heading-3d">
+                <div class="home-promotions-heading-copy">
+                    <span class="home-promotions-eyebrow home-promotions-eyebrow-3d">
+                        <span class="home-promotions-eyebrow-icon">
+                            <i class="bi bi-stars"></i>
+                        </span>
+                        فرص مختارة لفترة محدودة
+                    </span>
+
+                    <h2>
+                        عروض <span>حصرية</span>
+                        <small>تستحق اللحظة</small>
+                    </h2>
+
+                    <p>
+                        خصومات حقيقية من منشآت موثوقة، بأسعار واضحة
+                        ومدة محددة وشروط تظهر قبل إتمام الحجز.
+                    </p>
+                </div>
+
+                <div class="home-promotions-summary-card">
+                    <span class="home-promotions-summary-orbit" aria-hidden="true"></span>
+                    <span class="home-promotions-summary-icon">
+                        <i class="bi bi-gift-fill"></i>
+                    </span>
+                    <span class="home-promotions-summary-copy">
+                        <strong>@Model.Promotions.Count</strong>
+                        <small>عروض نشطة</small>
+                    </span>
+                </div>
+            </div>
+
+            <div class="luxury-horizontal-shell luxury-offers-shell" data-horizontal-carousel="offers">
+                <button class="luxury-carousel-arrow luxury-carousel-prev" type="button"
+                    data-carousel-prev aria-label="عرض العروض السابقة">
+                    <i class="bi bi-chevron-right"></i>
+                </button>
+
+                <div class="luxury-horizontal-viewport" data-carousel-viewport>
+                    <div class="row g-4 g-xl-5 home-promotions-grid home-promotions-grid-3d">
+                        @{
+                            int promoIndex = 0;
+                        }
+                        @foreach (var promotion in Model.Promotions)
+                        {
+                            bool isPercentage =
+                            string.Equals(
+                            promotion.DiscountType,
+                            "Percentage",
+                            StringComparison.OrdinalIgnoreCase);
+
+                            string discountValueText =
+                            !string.IsNullOrWhiteSpace(promotion.OfferBadgeValue)
+                            ? promotion.OfferBadgeValue
+                            : !string.IsNullOrWhiteSpace(promotion.DiscountValueText)
+                                ? promotion.DiscountValueText!
+                                : (isPercentage
+                                    ? $"{promotion.DiscountValue:0.#}%"
+                                    : $"{promotion.DiscountValue:N0} ر.ي");
+
+                            string discountCaption =
+                            !string.IsNullOrWhiteSpace(promotion.OfferBadgeCaption)
+                            ? promotion.OfferBadgeCaption
+                            : isPercentage ? "خصم" : "وفر";
+
+                            string expiryText = promotion.EndsToday
+                            ? "ينتهي اليوم"
+                            : promotion.EndsSoon
+                            ? $"متبقي {promotion.DaysRemaining} أيام"
+                            : $"حتى {promotion.EndDate:dd/MM/yyyy}";
+
+                            string imageUrl =
+                            string.IsNullOrWhiteSpace(promotion.ImagePath)
+                            ? "/images/places/default-main.jpg"
+                            : promotion.ImagePath;
+
+                            string targetIcon = promotion.TargetType == "Room"
+                            ? "bi-door-open"
+                            : promotion.TargetType == "Package"
+                            ? "bi-box2-heart"
+                            : promotion.TargetType == "Service"
+                            ? "bi-stars"
+                            : "bi-building";
+
+                            string applicationIcon = promotion.IsAutomatic
+                            ? "bi-magic"
+                            : "bi-ticket-perforated";
+
+                            <div class="col-12 col-md-6 col-xl-4 home-promo-stage"
+                         style="--promo-index:@promoIndex;">
+
+                                <article class="home-promo-card home-promo-card-3d home-promo-tone-@(promoIndex % 3)"
+                                 data-promo-3d-card
+                                 tabindex="0">
+
+                                    <span class="home-promo-card-ambient" aria-hidden="true"></span>
+                                    <span class="home-promo-card-shine" aria-hidden="true"></span>
+                                    <span class="home-promo-live-particles" aria-hidden="true">
+                                        <i></i><i></i><i></i><i></i><i></i><i></i>
+                                    </span>
+
+                                    <a class="home-promo-media home-promo-media-3d"
+                               href="/Places/Details/@promotion.PlaceId?promotionId=@promotion.PromotionId"
+                               aria-label="عرض تفاصيل @promotion.PromotionTitle">
+
+                                        <span class="home-promo-image-shell">
+                                            <img src="@imageUrl"
+                                         alt="@promotion.PromotionTitle"
+                                         loading="lazy"
+                                         decoding="async"
+                                         onerror="this.onerror=null;this.src='/images/places/default-main.jpg';" />
+                                        </span>
+
+                                        <span class="home-promo-media-gradient" aria-hidden="true"></span>
+                                        <span class="home-promo-media-lines" aria-hidden="true"></span>
+
+                                        <span class="home-promo-discount-float">
+                                            <span class="home-promo-discount-glow" aria-hidden="true"></span>
+                                            <span class="home-promo-discount-icon">
+                                                <i class="bi bi-lightning-charge-fill"></i>
+                                            </span>
+                                            <span class="home-promo-discount-copy">
+                                                <small>@discountCaption</small>
+                                                <strong>@discountValueText</strong>
+                                            </span>
+                                        </span>
+
+                                        <span class="home-promo-expiry home-promo-expiry-3d @(promotion.EndsToday || promotion.EndsSoon ? "is-urgent" : "")"
+                                      data-promo-countdown
+                                      data-end="@promotion.EndDate.ToString("O")">
+                                            <i class="bi bi-clock-history"></i>
+                                            <span class="home-promo-expiry-copy">
+                                                <small>ينتهي خلال</small>
+                                                <strong data-promo-countdown-value>@expiryText</strong>
+                                            </span>
+                                        </span>
+
+                                        <span class="home-promo-target home-promo-target-3d">
+                                            <i class="bi @targetIcon"></i>
+                                            <span>@promotion.TargetLabel</span>
+                                        </span>
+                                    </a>
+
+                                    <div class="home-promo-floating-panel">
+                                        <div class="home-promo-place-row home-promo-place-row-3d">
+                                            <span class="home-promo-category home-promo-category-3d">
+                                                @promotion.CategoryName
+                                            </span>
+
+                                            @if (!string.IsNullOrWhiteSpace(promotion.CityName))
+                                            {
+                                                <span class="home-promo-city home-promo-city-3d">
+                                                    <i class="bi bi-geo-alt-fill"></i>
+                                                    @promotion.CityName
+                                                </span>
+                                            }
+                                        </div>
+
+                                        <h3 class="home-promo-title home-promo-title-3d">
+                                            @promotion.PromotionTitle
+                                        </h3>
+
+                                        @if (!string.IsNullOrWhiteSpace(promotion.OfferSummary))
+                                        {
+                                            <p class="home-promo-description home-promo-description-3d">
+                                                <i class="bi bi-gift-fill"></i>
+                                                @promotion.OfferSummary
+                                            </p>
+                                            @if (promotion.IsRewardRepeatable && string.Equals(promotion.RewardType, "FreeQuantity", StringComparison.OrdinalIgnoreCase))
+                                            {
+                                                <span class="home-promo-repeat-note"><i class="bi bi-arrow-repeat"></i> يتكرر العرض لكل مجموعة مكتملة</span>
+                                            }
+                                        }
+
+                                        <a href="/Places/Details/@promotion.PlaceId?promotionId=@promotion.PromotionId"
+                                   class="home-promo-place-name home-promo-place-name-3d">
+                                            <span class="home-promo-place-verified">
+                                                <i class="bi bi-patch-check-fill"></i>
+                                            </span>
+                                            <span>@promotion.PlaceName</span>
+                                        </a>
+
+                                        @if (!string.IsNullOrWhiteSpace(promotion.ShortDescription))
+                                        {
+                                            <p class="home-promo-description home-promo-description-3d">
+                                                @promotion.ShortDescription
+                                            </p>
+                                        }
+                                        else
+                                        {
+                                            <p class="home-promo-description home-promo-description-3d">
+                                                فرصة لفترة محدودة. افتح التفاصيل لمعرفة جميع الشروط
+                                                والاستفادة من العرض المناسب لحجزك.
+                                            </p>
+                                        }
+
+                                        <div class="home-promo-meta home-promo-meta-3d">
+                                            <span class="home-promo-meta-chip home-promo-meta-chip-3d is-application">
+                                                <i class="bi @applicationIcon"></i>
+                                                @(promotion.IsAutomatic ? "يطبق تلقائيًا" : "يتطلب كود خصم")
+                                            </span>
+
+                                            @if (promotion.MinimumNights.HasValue)
+                                            {
+                                                <span class="home-promo-meta-chip home-promo-meta-chip-3d">
+                                                    <i class="bi bi-moon-stars"></i>
+                                                    من @promotion.MinimumNights ليلة
+                                                </span>
+                                            }
+
+                                            @if (promotion.MinimumPeople.HasValue)
+                                            {
+                                                <span class="home-promo-meta-chip home-promo-meta-chip-3d">
+                                                    <i class="bi bi-people"></i>
+                                                    من @promotion.MinimumPeople أشخاص
+                                                </span>
+                                            }
+                                        </div>
+
+                                        <div class="home-promo-footer home-promo-footer-3d">
+                                            <div class="home-promo-value home-promo-value-3d">
+                                                @if (promotion.HasDeterministicPrice)
+                                                {
+                                                    <span class="home-promo-price-label">السعر بعد العرض</span>
+
+                                                    <span class="home-promo-price-row">
+                                                        <span class="home-promo-old-price">
+                                                            @(promotion.OriginalTargetPriceText
+                                                                ?? $"{promotion.OriginalTargetPrice.Value:N0} ر.ي")
+                                                        </span>
+
+                                                        <span class="home-promo-new-price">
+                                                            @(promotion.DiscountedTargetPriceText
+                                                                ?? $"{promotion.DiscountedTargetPrice.Value:N0} ر.ي")
+                                                        </span>
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="home-promo-benefit-label home-promo-benefit-label-3d">
+                                                        <span class="home-promo-benefit-icon">
+                                                            <i class="bi bi-gem"></i>
+                                                        </span>
+                                                        <span>خصم على الحجوزات المؤهلة</span>
+                                                    </span>
+
+                                                    @if (promotion.MaximumDiscountAmount.HasValue &&
+                                                   promotion.MaximumDiscountAmount.Value > 0)
+                                                    {
+                                                        <small class="home-promo-cap">
+                                                            حتى @(promotion.MaximumDiscountAmountText
+                                                            ?? $"{promotion.MaximumDiscountAmount.Value:N0} ر.ي") عرض
+                                                        </small>
+                                                    }
+                                                    else if (promotion.MinimumBookingAmount.HasValue &&
+                                                    promotion.MinimumBookingAmount.Value > 0)
+                                                    {
+                                                        <small class="home-promo-cap">
+                                                            يبدأ من @(promotion.MinimumBookingAmountText
+                                                        ?? $"{promotion.MinimumBookingAmount.Value:N0} ر.ي")
+                                                        </small>
+                                                    }
+                                                }
+                                            </div>
+
+                                            <span class="home-promo-card-trust">
+                                                <i class="bi bi-shield-check"></i>
+                                                <span>عرض موثوق</span>
+                                            </span>
+
+                                            <a class="home-promo-action home-promo-action-3d"
+                                       href="/Places/Details/@promotion.PlaceId?promotionId=@promotion.PromotionId">
+                                                <span>استفد من العرض</span>
+                                                <span class="home-promo-action-icon">
+                                                    <i class="bi bi-arrow-left"></i>
+                                                </span>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </article>
+                            </div>
+                            promoIndex++;
+                        }
+                    </div>
+                </div>
+
+                <button class="luxury-carousel-arrow luxury-carousel-next" type="button"
+                    data-carousel-next aria-label="عرض المزيد من العروض">
+                    <i class="bi bi-chevron-left"></i>
+                </button>
+
+                <div class="luxury-carousel-progress" aria-hidden="true">
+                    <span data-carousel-progress></span>
+                </div>
+            </div>
+
+            <div class="home-promotions-note home-promotions-note-3d">
+                <span class="home-promotions-note-icon">
+                    <i class="bi bi-shield-check"></i>
+                </span>
+                <span>
+                    السعر والأهلية النهائية للعرض يتم التحقق منهما مرة أخرى عند إتمام الحجز.
+                </span>
+            </div>
+        </div>
+    </section>
+}
+
+@* ============================================================= *@
+@* 5. بوابة استكشاف الأماكن القريبة — Nearby Experience V10     *@
+@* ============================================================= *@
+<section id="nearby-section" class="nearby-v10" aria-labelledby="nearbyV10Title"
+         data-google-maps-key="@googleMapsApiKey">
+    <span class="v10-ornament v10-ornament--right" aria-hidden="true"></span>
+    <span class="v10-ornament v10-ornament--left" aria-hidden="true"></span>
+    <span class="nearby-v10-pearl nearby-v10-pearl--one" aria-hidden="true"></span>
+    <span class="nearby-v10-pearl nearby-v10-pearl--two" aria-hidden="true"></span>
+
+    <div class="nearby-v10-container">
+        <div class="nearby-v10-layout">
+            <header class="nearby-v10-copy">
+                <span class="v10-eyebrow">
+                    <i class="bi bi-stars" aria-hidden="true"></i>
+                    استكشاف ذكي حولك
+                </span>
+                <h2 id="nearbyV10Title">اكتشف الأماكن <span>القريبة منك</span></h2>
+                <p>وجهتك الأقرب تبدأ من موقعك؛ دع البوصلة تقودك إلى أفضل الخيارات المجاورة.</p>
+
+                <button type="button"
+                        id="nearbyGpsBtn"
+                        class="nearby-v10-compass"
+                        data-nearby-url="@Url.Action("GetNearbyPlaces", "Places")"
+                        aria-describedby="nearbyV10Status">
+                    <span class="nearby-v10-compass-scene" aria-hidden="true">
+                        <span class="nearby-v10-compass-halo"></span>
+                        <span class="nearby-v10-compass-ring nearby-v10-compass-ring--outer"></span>
+                        <span class="nearby-v10-compass-ring nearby-v10-compass-ring--inner"></span>
+                        <span class="nearby-v10-compass-cardinal nearby-v10-compass-cardinal--n">ش</span>
+                        <span class="nearby-v10-compass-cardinal nearby-v10-compass-cardinal--e">ق</span>
+                        <span class="nearby-v10-compass-cardinal nearby-v10-compass-cardinal--s">ج</span>
+                        <span class="nearby-v10-compass-cardinal nearby-v10-compass-cardinal--w">غ</span>
+                        <span class="nearby-v10-compass-needle"></span>
+                        <span class="nearby-v10-compass-core"></span>
+                    </span>
+                    <span class="nearby-v10-compass-text">
+                        <strong>حدّد موقعي الآن</strong>
+                        <small id="nearbyV10Status">نبحث لك عن الأقرب والأفضل</small>
+                    </span>
+                    <i class="bi bi-arrow-left-short nearby-v10-compass-arrow" aria-hidden="true"></i>
+                </button>
+
+                <div class="nearby-v10-assurances" aria-label="مزايا البحث القريب">
+                    <span><i class="bi bi-crosshair"></i> موقع دقيق</span>
+                    <span><i class="bi bi-shield-check"></i> منشآت موثوقة</span>
+                    <span><i class="bi bi-lightning-charge"></i> نتائج فورية</span>
+                </div>
+            </header>
+
+            <div class="nearby-v10-explorer" id="nearbyExplorer">
+                <div class="nearby-v10-map-shell" id="nearbyMapShell">
+                    <span class="nearby-v10-map-glint" aria-hidden="true"></span>
+                    <div id="map" aria-label="خريطة الأماكن القريبة"></div>
+
+                    <div class="nearby-v10-map-idle" id="nearbyMapIdle" aria-hidden="true">
+                        <span class="nearby-v10-route nearby-v10-route--one"></span>
+                        <span class="nearby-v10-route nearby-v10-route--two"></span>
+                        <span class="nearby-v10-route nearby-v10-route--three"></span>
+                        <i class="nearby-v10-pin nearby-v10-pin--one bi bi-cup-hot-fill"></i>
+                        <i class="nearby-v10-pin nearby-v10-pin--two bi bi-building-fill"></i>
+                        <i class="nearby-v10-pin nearby-v10-pin--three bi bi-house-heart-fill"></i>
+                        <span class="nearby-v10-location-pulse">
+                            <i class="bi bi-geo-alt-fill"></i>
+                        </span>
+                        <span class="nearby-v10-idle-copy">
+                            <strong>الخريطة بانتظار موقعك</strong>
+                            <small>اضغط على البوصلة لبدء الاستكشاف</small>
+                        </span>
+                    </div>
+
+                    <div class="nearby-v10-map-toolbar" role="toolbar" aria-label="أوضاع عرض الخريطة">
+                        <span class="nearby-v10-map-toolbar-label"><i class="bi bi-layers"></i> طريقة العرض</span>
+                        <div class="nearby-v10-map-modes">
+                            <button type="button" class="nearby-v10-map-mode" data-map-mode="roadmap" aria-pressed="false">
+                                <i class="bi bi-map"></i><span>خريطة</span>
+                            </button>
+                            <button type="button" class="nearby-v10-map-mode is-active" data-map-mode="satellite" aria-pressed="true">
+                                <i class="bi bi-globe2"></i><span>قمر صناعي</span>
+                            </button>
+                            <button type="button" class="nearby-v10-map-mode" data-map-mode="terrain" aria-pressed="false">
+                                <i class="bi bi-triangle"></i><span>تضاريس</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="nearby-v10-map-controls" aria-label="تخصيص الخريطة والنتائج">
+                        <button type="button" class="nearby-v10-control-toggle" id="nearbyLabelsToggle" aria-pressed="false">
+                            <i class="bi bi-signpost-split"></i><span>الأسماء</span>
+                        </button>
+                        <button type="button" class="nearby-v10-control-toggle is-active" id="nearbyPlacesToggle" aria-pressed="true">
+                            <i class="bi bi-geo-alt"></i><span>المنشآت</span>
+                        </button>
+                        <button type="button" class="nearby-v10-control-toggle" id="nearbyTrafficToggle" aria-pressed="false">
+                            <i class="bi bi-car-front"></i><span>المرور</span>
+                        </button>
+
+                        <label class="nearby-v10-range-control" for="nearbyRadius">
+                            <span class="nearby-v10-range-control__head">
+                                <i class="bi bi-bullseye"></i>
+                                <span>المسافة</span>
+                                <strong id="nearbyRadiusValue">15 كم</strong>
+                            </span>
+                            <input type="range"
+                                   id="nearbyRadius"
+                                   min="1"
+                                   max="100"
+                                   step="1"
+                                   value="15"
+                                   aria-label="نطاق البحث بالكيلومتر">
+                        </label>
+
+                        <label class="nearby-v10-control-select">
+                            <i class="bi bi-grid"></i>
+                            <select id="nearbyCategory" aria-label="فلترة حسب الفئة">
+                                <option value="">كل الفئات</option>
+                                @foreach (var cat in Model.Categories)
+                                {
+                                    <option value="@cat.Id">@cat.Name</option>
+                                }
+                            </select>
+                        </label>
+
+                        <button type="button"
+                                class="nearby-v10-control-toggle nearby-v10-filter-chip nearby-v10-filter-chip--offer"
+                                id="nearbyOffersToggle"
+                                aria-pressed="false">
+                            <i class="bi bi-percent"></i>
+                            <span>عليها عروض</span>
+                        </button>
+
+                        <button type="button"
+                                class="nearby-v10-control-toggle nearby-v10-filter-chip nearby-v10-filter-chip--bookable"
+                                id="nearbyBookableToggle"
+                                aria-pressed="false">
+                            <i class="bi bi-calendar2-check"></i>
+                            <span>متاحة للحجز</span>
+                        </button>
+
+                        <label class="nearby-v10-control-select nearby-v10-sort-control">
+                            <i class="bi bi-sort-down"></i>
+                            <select id="nearbySort" aria-label="ترتيب النتائج">
+                                <option value="distance">الأقرب أولاً</option>
+                                <option value="rating">الأعلى تقييماً</option>
+                                <option value="price_asc">الأرخص أولاً</option>
+                                <option value="price_desc">الأغلى أولاً</option>
+                            </select>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="nearby-v10-results" id="nearbyResults" aria-live="polite">
+                    <article class="nearby-v10-result nearby-v10-result--placeholder">
+                        <span class="nearby-v10-result-icon"><i class="bi bi-geo-alt"></i></span>
+                        <span><strong>الأقرب إليك</strong><small>ستظهر النتائج هنا</small></span>
+                    </article>
+                    <article class="nearby-v10-result nearby-v10-result--placeholder">
+                        <span class="nearby-v10-result-icon"><i class="bi bi-patch-check"></i></span>
+                        <span><strong>خيارات موثوقة</strong><small>مرتبة حسب المسافة</small></span>
+                    </article>
+                    <article class="nearby-v10-result nearby-v10-result--placeholder">
+                        <span class="nearby-v10-result-icon"><i class="bi bi-stars"></i></span>
+                        <span><strong>وجهتك التالية</strong><small>على بُعد ضغطة واحدة</small></span>
+                    </article>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@* ============================================================= *@
+@* 6. مسار الرحلة — How It Works V10                            *@
+@* ============================================================= *@
+<section class="journey-v10" id="how-it-works" aria-labelledby="journeyV10Title">
+    <span class="v10-ornament v10-ornament--right" aria-hidden="true"></span>
+    <span class="v10-ornament v10-ornament--left" aria-hidden="true"></span>
+
+    <div class="journey-v10-container">
+        <header class="v10-heading journey-v10-heading">
+            <span class="v10-eyebrow"><i class="bi bi-stars"></i> رحلة بسيطة وواضحة</span>
+            <h2 id="journeyV10Title">كيف تعمل <span>المنصة؟</span></h2>
+            <p>ثلاث خطوات تفصلك عن وجهتك المثالية</p>
+        </header>
+
+        <div class="journey-v10-stage" data-journey-stage>
+            <span class="journey-v10-path" aria-hidden="true">
+                <span class="journey-v10-path-light"></span>
+                <i class="journey-v10-node journey-v10-node--one"></i>
+                <i class="journey-v10-node journey-v10-node--two"></i>
+                <i class="journey-v10-node journey-v10-node--three"></i>
+            </span>
+
+            <article class="journey-v10-step journey-v10-step--one" style="--step-delay: .05s;">
+                <span class="journey-v10-number" aria-hidden="true">01</span>
+                <div class="journey-v10-medallion">
+                    <span class="journey-v10-orbit"></span>
+                    <span class="journey-v10-icon"><i class="bi bi-search"></i></span>
+                </div>
+                <h3>استكشف</h3>
+                <p>ابحث عن وجهتك بين أفضل المنشآت الموثوقة.</p>
+            </article>
+
+            <article class="journey-v10-step journey-v10-step--two" style="--step-delay: .22s;">
+                <span class="journey-v10-number" aria-hidden="true">02</span>
+                <div class="journey-v10-medallion">
+                    <span class="journey-v10-orbit"></span>
+                    <span class="journey-v10-icon"><i class="bi bi-calendar2-check"></i></span>
+                </div>
+                <h3>اختر واحجز</h3>
+                <p>اختر ما يناسبك وأكمل حجزك بسهولة وأمان.</p>
+            </article>
+
+            <article class="journey-v10-step journey-v10-step--three" style="--step-delay: .39s;">
+                <span class="journey-v10-number" aria-hidden="true">03</span>
+                <div class="journey-v10-medallion">
+                    <span class="journey-v10-orbit"></span>
+                    <span class="journey-v10-icon"><i class="bi bi-geo-alt"></i></span>
+                </div>
+                <h3>استمتع</h3>
+                <p>توجّه إلى وجهتك وعِش تجربة تستحق التكرار.</p>
+            </article>
+        </div>
+    </div>
+</section>
+
+@* ============================================================= *@
+@* 7. ختم الثقة والإحصائيات — Trust Seal V10                     *@
+@* ============================================================= *@
+<section class="trust-v10" id="stats-section" aria-labelledby="trustV10Title">
+    <span class="v10-ornament v10-ornament--right" aria-hidden="true"></span>
+    <span class="v10-ornament v10-ornament--left" aria-hidden="true"></span>
+    <span class="trust-v10-halo" aria-hidden="true"></span>
+
+    <div class="trust-v10-container">
+        <header class="v10-heading trust-v10-heading">
+            <span class="v10-heading-jewel" aria-hidden="true"></span>
+            <h2 id="trustV10Title">منصة <span>يثق بها الجميع</span></h2>
+            <p>ثقتكم هي أساس نجاحنا</p>
+        </header>
+
+        <div class="trust-v10-stage" data-trust-stage>
+            <span class="trust-v10-connector trust-v10-connector--one" aria-hidden="true"></span>
+            <span class="trust-v10-connector trust-v10-connector--two" aria-hidden="true"></span>
+            <span class="trust-v10-connector trust-v10-connector--three" aria-hidden="true"></span>
+            <span class="trust-v10-connector trust-v10-connector--four" aria-hidden="true"></span>
+
+            <article class="trust-v10-stat trust-v10-stat--one">
+                <span class="trust-v10-stat-icon"><i class="bi bi-building-check"></i></span>
+                <span class="trust-v10-stat-copy">
+                    <strong class="stat-number" data-target="@Model.TotalTrustedPlaces">0</strong>
+                    <small>منشأة موثوقة</small>
+                </span>
+            </article>
+
+            <article class="trust-v10-stat trust-v10-stat--two">
+                <span class="trust-v10-stat-icon"><i class="bi bi-calendar2-check"></i></span>
+                <span class="trust-v10-stat-copy">
+                    <strong class="stat-number" data-target="@Model.TotalSuccessfulBookings">0</strong>
+                    <small>حجز ناجح</small>
+                </span>
+            </article>
+
+            <div class="trust-v10-seal" aria-label="@platformSiteName موثوق وآمن">
+                <span class="trust-v10-seal-orbit trust-v10-seal-orbit--outer"></span>
+                <span class="trust-v10-seal-orbit trust-v10-seal-orbit--inner"></span>
+                <span class="trust-v10-seal-glint"></span>
+                <span class="trust-v10-brand-mark">
+                    <span class="trust-v10-brand-halo" aria-hidden="true"></span>
+                    <img src="@platformLogoPath"
+                         alt="شعار @platformSiteName"
+                         class="trust-v10-brand-logo"
+                         onerror="this.onerror=null;this.src='/images/logo1.png';">
+                    <small class="trust-v10-brand-check"><i class="bi bi-check2"></i></small>
+                </span>
+                <strong>@platformSiteName</strong>
+                <em>موثوق وآمن</em>
+            </div>
+
+            <article class="trust-v10-stat trust-v10-stat--three">
+                <span class="trust-v10-stat-icon"><i class="bi bi-people"></i></span>
+                <span class="trust-v10-stat-copy">
+                    <strong class="stat-number" data-target="@Model.TotalHappyCustomers">0</strong>
+                    <small>عميل سعيد</small>
+                </span>
+            </article>
+
+            <article class="trust-v10-stat trust-v10-stat--four">
+                <span class="trust-v10-stat-icon"><i class="bi bi-map"></i></span>
+                <span class="trust-v10-stat-copy">
+                    <strong class="stat-number" data-target="@Model.TotalCoveredCities">0</strong>
+                    <small>مدن مغطاة</small>
+                </span>
+            </article>
+
+            <span class="trust-v10-floor" aria-hidden="true"></span>
+        </div>
+    </div>
+</section>
+
+@* يبقى محرك التتبع متاحًا دائمًا في الرئيسية لأن MapPin قد يكون
+   الإعلان الوحيد النشط، ويُنشأ ديناميكيًا بعد طلب الموقع. *@
+<div id="customerAdvertisementTracking"
+     data-impression-url="@Url.Action("Impression", "CustomerAdvertisements")"
+     data-click-url="@Url.Action("Click", "CustomerAdvertisements")"
+     hidden>
+    @Html.AntiForgeryToken()
+</div>
+
+@section Scripts {
+    <script src="~/lib/sweetalert2/sweetalert2.js"></script>
+    <script src="~/js/customer/index.js" asp-append-version="true"></script>
+    <script src="~/js/customer/advertisements.js" asp-append-version="true"></script>
+    @* خرائط Google أصبحت Lazy Load: لا تُحمّل إلا عند الاقتراب من قسم الخريطة أو طلب الموقع. *@
+    }

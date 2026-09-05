@@ -1,0 +1,86 @@
+﻿@using System
+@using System.Text.Json
+@{
+    ViewData["Title"] = "تعبئة استبيان المنشأة";
+    Layout = "~/Areas/Admin/Views/Shared/_AdminLayout.cshtml";
+
+    var bookingSystemId = (int?)ViewBag.BookingSystemId ?? 0;
+    var ownerMode = ViewBag.OwnerMode?.ToString() ?? string.Empty;
+
+    // الاختلاف الوحيد بين الأدمن والمالك هو بيانات الحفظ المخفية.
+    // الواجهة والتصميم والخريطة والتحقق والصور والخطوات تأتي من نفس ملفات المالك.
+    var wizardConfig = new
+    {
+        mode = "admin",
+        ownerId = ViewBag.SelectedOwnerId,
+        ownerMode = ownerMode,
+        initialStatus = ViewBag.InitialStatus?.ToString() ?? "Active",
+        initialAvailability = string.Equals(
+            ViewBag.InitialAvailability?.ToString(),
+            "true",
+            StringComparison.OrdinalIgnoreCase),
+        currentOwnerName = ViewBag.CurrentOwnerName?.ToString() ?? string.Empty,
+        currentOwnerPhone = ViewBag.CurrentOwnerPhone?.ToString() ?? string.Empty,
+        newOwner = new
+        {
+            firstName = ViewBag.NewFirstName?.ToString() ?? string.Empty,
+            lastName = ViewBag.NewLastName?.ToString() ?? string.Empty,
+            username = ViewBag.NewOwnerUsername?.ToString() ?? string.Empty,
+            email = ViewBag.NewEmail?.ToString() ?? string.Empty,
+            password = ViewBag.NewOwnerPassword?.ToString() ?? string.Empty
+        },
+        redirectUrl = Url.Action(
+            "PlaceManagement",
+            "Places",
+            new { area = "Admin" }) ?? "/Admin/Places/PlaceManagement",
+        targetTab = string.Equals(ownerMode, "admin", StringComparison.OrdinalIgnoreCase)
+            ? "admin-places-tab"
+            : (bookingSystemId >= 1 && bookingSystemId <= 4
+                ? "waiting-owner-tab"
+                : "active-tab"),
+        redirectOnClose = true
+    };
+
+    var wizardConfigJson = JsonSerializer.Serialize(wizardConfig);
+}
+
+@section Styles {
+    @* نفس مكتبة الهاتف ونفس ملف تصميم الفورم المستخدمين عند المالك. *@
+    <link rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/intl-tel-input@23.0.4/build/css/intlTelInput.css" />
+
+    <link rel="stylesheet"
+      href="~/css/owner/places/add-place.css"
+      asp-append-version="true" />
+
+    <link rel="stylesheet"
+      href="~/css/admin/places-styles.css"
+      asp-append-version="true" />
+}
+
+    <div class="admin-shared-place-wizard-loader"
+         dir="rtl"
+         data-admin-place-wizard
+         data-wizard-config='@wizardConfigJson'>
+        <div class="admin-shared-place-wizard-loader__content">
+            <div class="spinner-border text-primary" role="status" aria-hidden="true"></div>
+            <span>جاري فتح نموذج إضافة المنشأة...</span>
+        </div>
+    </div>
+
+    @* نفس الـPartial الذي يستخدمه المالك حرفيًا؛ لا توجد نسخة ثانية عند الأدمن. *@
+    <div id="adminSharedPlaceWizardSource" hidden>
+        @await Html.PartialAsync(
+    "~/Areas/Owner/Views/Place/Templates/_AddPlaceForm.cshtml")
+    </div>
+
+    @section Scripts {
+    <script src="~/lib/sweetalert2/sweetalert2.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/intl-tel-input@23.0.4/build/js/intlTelInput.min.js"></script>
+
+    @* نفس JavaScript المستخدم عند المالك حرفيًا. *@
+    <script src="~/js/owner/places/add-place.js"
+        asp-append-version="true"></script>
+
+    <script src="~/js/admin/fill-survey.js" asp-append-version="true"></script>
+}

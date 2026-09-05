@@ -1,0 +1,171 @@
+﻿@using YemenGuide.Core.DTOs.Admin
+@model AdminFinancialDocumentPrintDto
+
+@{
+    Layout = null;
+    var document = Model?.Document ?? new AdminFinancialDocumentDetailsDto();
+    var autoPrint = Model?.AutoPrint ?? false;
+}
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@document.Title - @document.DocumentNumber</title>
+    <link rel="stylesheet"
+          href="~/css/admin/financials/admin-financial-print.css"
+          asp-append-version="true" />
+</head>
+<body class="afp afp--document">
+    <div class="afp-toolbar no-print">
+        <button type="button" onclick="window.print()">
+            <i class="bi bi-printer"></i>
+            طباعة
+        </button>
+        <button type="button" onclick="window.close()">إغلاق</button>
+    </div>
+
+    <main class="afp-page afp-page--document">
+        <header class="afp-header">
+            <div class="afp-brand">
+                @if (!string.IsNullOrWhiteSpace(document.PlatformLogoPath))
+                {
+                    <img src="@document.PlatformLogoPath"
+                         alt="@document.PlatformName"
+                         class="afp-brand__logo" />
+                }
+                else
+                {
+                    <div class="afp-brand__logo afp-brand__logo--placeholder">
+                        <span>DY</span>
+                    </div>
+                }
+
+                <div>
+                    <strong>@document.PlatformName</strong>
+                    <span>الإدارة المالية</span>
+                </div>
+            </div>
+
+            <div class="afp-document-number">
+                <small>رقم المستند</small>
+                <strong>@document.DocumentNumber</strong>
+            </div>
+        </header>
+
+        <section class="afp-document-title">
+            <span class="afp-document-title__badge">@document.Status</span>
+            <h1>@document.Title</h1>
+
+            @if (!string.IsNullOrWhiteSpace(document.Subtitle))
+            {
+                <p>@document.Subtitle</p>
+            }
+
+            <div class="afp-document-title__meta">
+                <span>
+                    تاريخ المستند:
+                    <strong>@document.DocumentDate.ToString("yyyy/MM/dd HH:mm")</strong>
+                </span>
+                <span>
+                    تاريخ الإنشاء:
+                    <strong>@document.GeneratedAt.ToString("yyyy/MM/dd HH:mm")</strong>
+                </span>
+            </div>
+        </section>
+
+        @foreach (var documentSection in document.Sections)
+        {
+            <section class="afp-document-section">
+                <h2>@documentSection.Title</h2>
+
+                <div class="afp-field-grid">
+                    @foreach (var field in documentSection.Fields)
+                    {
+                        <div class="afp-field @(field.IsEmphasized ? "is-emphasized" : null)">
+                            <small>@field.Label</small>
+                            <strong>@field.Value</strong>
+                            @if (!string.IsNullOrWhiteSpace(field.Hint))
+                            {
+                                <span>@field.Hint</span>
+                            }
+                        </div>
+                    }
+                </div>
+            </section>
+        }
+
+        @if (document.Amounts.Count > 0)
+        {
+            <section class="afp-amounts">
+                <div class="afp-amounts__head">
+                    <h2>المبالغ</h2>
+                    <span>@document.Currency</span>
+                </div>
+
+                <div class="afp-amount-list">
+                    @foreach (var amount in document.Amounts)
+                    {
+                        <div class="afp-amount-row @(amount.IsTotal ? "is-total" : null)"
+                             data-tone="@amount.Tone">
+                            <span>@amount.Label</span>
+                            <strong>@amount.Amount.ToString("N0") @document.Currency</strong>
+                        </div>
+                    }
+                </div>
+            </section>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(document.Notes))
+        {
+            <section class="afp-notes">
+                <strong>ملاحظات</strong>
+                <p>@document.Notes</p>
+            </section>
+        }
+
+        <section class="afp-authenticity">
+            <div>
+                <small>أُنشئ بواسطة</small>
+                <strong>@(string.IsNullOrWhiteSpace(document.GeneratedByName) ? "الإدارة المالية" : document.GeneratedByName)</strong>
+            </div>
+            <div class="afp-authenticity__mark">
+                <i class="bi bi-shield-check"></i>
+                <span>مستند إلكتروني موثق من النظام</span>
+            </div>
+        </section>
+
+        <footer class="afp-footer">
+            <div>
+                <strong>@document.PlatformName</strong>
+                <span>
+                    @(string.IsNullOrWhiteSpace(document.FooterText)
+                        ? "تم إنشاء هذا المستند إلكترونيًا من الإدارة المالية."
+                        : document.FooterText)
+                </span>
+            </div>
+
+            <div>
+                @if (!string.IsNullOrWhiteSpace(document.ContactEmail))
+                {
+                    <span>@document.ContactEmail</span>
+                }
+                @if (!string.IsNullOrWhiteSpace(document.SupportPhone))
+                {
+                    <span>@document.SupportPhone</span>
+                }
+            </div>
+        </footer>
+    </main>
+
+    @if (autoPrint)
+    {
+        <script>
+            window.addEventListener("load", function () {
+                window.print();
+            });
+        </script>
+    }
+</body>
+</html>

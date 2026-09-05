@@ -1,0 +1,522 @@
+@* OWNER_LAYOUT_V3_20260816_1751 - Mobile header + luxury sidebar *@
+@inject YemenGuide.Data.AppDbContext _context
+@using System.Security.Claims
+
+@{
+    // إعدادات الهوية العامة.
+    var settings = _context.SystemSettings.FirstOrDefault();
+    string siteName = settings?.SiteName ?? "YemenGuide";
+    string logoPath = settings?.LogoPath ?? "/images/logo1.png";
+
+    // حالة القائمة الجانبية المحفوظة لكل مستخدم.
+    var uId = User.Identity?.IsAuthenticated == true
+        ? User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "0"
+        : "0";
+    var isCompact = Context.Request.Cookies[$"compactMode_{uId}"] == "enabled";
+
+    // بيانات المالك وصورته.
+    int ownerId = 0;
+    _ = int.TryParse(uId, out ownerId);
+
+    string displayImg = "";
+    string initialLetter = "O";
+
+    if (ownerId > 0)
+    {
+        var currentUser = _context.Users
+            .Where(u => u.UserId == ownerId)
+            .Select(u => new
+            {
+                u.FullName,
+                u.ProfileImage
+            })
+            .FirstOrDefault();
+
+        if (currentUser != null)
+        {
+            displayImg = currentUser.ProfileImage ?? "";
+            initialLetter = !string.IsNullOrWhiteSpace(currentUser.FullName)
+                ? currentUser.FullName.Trim().Substring(0, 1).ToUpper()
+                : "O";
+        }
+    }
+
+    // منشآت المالك. يتم استخدام الكوكي كتفضيل واجهة فقط،
+    // وأي كنترولر يستخدم القيمة لاحقًا يجب أن يتحقق من ملكية المنشأة.
+    var ownerPlaces = _context.Places
+        .Where(p => p.OwnerId == ownerId)
+        .Select(p => new
+        {
+            p.PlaceId,
+            Name = p.PlaceNameAndDesc,
+            p.LogoImage,
+            p.CoverImage,
+            p.Status,
+            p.IsAvailable,
+            CategoryName = p.Category.CategoryName,
+            CityName = p.City.CityName
+        })
+        .OrderByDescending(p => p.Status == "Approved" || p.Status == "Active")
+        .ThenBy(p => p.Name)
+        .ToList();
+
+    string activePlaceCookieName = $"ownerActivePlace_{uId}";
+    int requestedPlaceId = 0;
+    _ = int.TryParse(Context.Request.Cookies[activePlaceCookieName], out requestedPlaceId);
+
+    var activePlace = ownerPlaces.FirstOrDefault(p => p.PlaceId == requestedPlaceId)
+        ?? ownerPlaces.FirstOrDefault();
+
+    string activePlaceImage = activePlace?.LogoImage
+        ?? activePlace?.CoverImage
+        ?? logoPath;
+
+    string StatusLabel(string? status, bool? isAvailable)
+    {
+        if (isAvailable == false)
+            return "غير متاحة";
+
+        return (status ?? "").Trim().ToLowerInvariant() switch
+        {
+            "approved" => "نشطة",
+            "active" => "نشطة",
+            "pending" => "قيد المراجعة",
+            "underreview" => "قيد المراجعة",
+            "rejected" => "مرفوضة",
+            "suspended" => "موقوفة",
+            "inactive" => "غير نشطة",
+            _ => string.IsNullOrWhiteSpace(status) ? "غير محددة" : status
+        };
+    }
+
+    string StatusClass(string? status, bool? isAvailable)
+    {
+        if (isAvailable == false)
+            return "is-muted";
+
+        return (status ?? "").Trim().ToLowerInvariant() switch
+        {
+            "approved" => "is-active",
+            "active" => "is-active",
+            "pending" => "is-pending",
+            "underreview" => "is-pending",
+            "rejected" => "is-rejected",
+            "suspended" => "is-suspended",
+            "inactive" => "is-muted",
+            _ => "is-muted"
+        };
+    }
+
+    bool IsActive(string controller, string? action = null)
+    {
+        var currentController = ViewContext.RouteData.Values["Controller"]?.ToString();
+        var currentAction = ViewContext.RouteData.Values["Action"]?.ToString();
+
+        return string.IsNullOrEmpty(action)
+            ? string.Equals(currentController, controller, StringComparison.OrdinalIgnoreCase)
+            : string.Equals(currentController, controller, StringComparison.OrdinalIgnoreCase)
+              && string.Equals(currentAction, action, StringComparison.OrdinalIgnoreCase);
+    }
+}
+
+<aside class="dashboard-sidebar @(isCompact ? "sidebar-collapsed" : "")" id="dashboardSidebar">
+    <!-- تم حذف الطبقة الزخرفية المتحركة فقط لتحسين الأداء. -->
+    <div class="yg-luxe-nav-rail" id="ygLuxeNavRail" aria-hidden="true">
+        <span class="yg-luxe-nav-line"></span>
+        <span class="yg-luxe-nav-trail" id="ygLuxeNavTrail"></span>
+        <span class="yg-luxe-nav-orb" id="ygLuxeNavOrb"><span></span></span>
+    </div>
+
+    <div class="sidebar-header">
+        <a class="sidebar-brand"
+           asp-area=""
+           asp-controller="Home"
+           asp-action="Index">
+            <span class="yg-platform-orb" aria-hidden="true">
+<img src="@logoPath"
+                     alt=""
+                     height="35"
+                     onerror="this.onerror=null;this.src='/images/logo1.png';" />
+            </span>
+            <span class="brand-text">@siteName</span>
+        </a>
+
+        <button type="button"
+                class="sidebar-close-mobile d-lg-none"
+                id="mobileSidebarClose"
+                aria-label="إغلاق القائمة الجانبية">
+            <i class="bi bi-x-lg"></i>
+        </button>
+    </div>
+
+    <div class="sidebar-menu">
+        <ul class="sidebar-nav">
+            <li class="nav-item">
+                <a class="nav-link @(IsActive("OwnerDashboard") ? "active" : "")"
+                   asp-area="Owner" asp-controller="OwnerDashboard" asp-action="DashboardOwner">
+                    <i class="bi bi-speedometer2"></i>
+                    <span class="nav-text">لوحة التحكم</span>
+                </a>
+            </li>
+
+            <li class="nav-item">
+                <a class="nav-link @(IsActive("Place", "ManagePlaces") ? "active" : "")"
+                   asp-area="Owner" asp-controller="Place" asp-action="ManagePlaces">
+                    <i class="bi bi-buildings"></i>
+                    <span class="nav-text">إدارة منشآتي</span>
+                </a>
+            </li>
+
+            <li class="nav-item">
+                <a class="nav-link @(IsActive("Settings", "FacilitySettings") ? "active" : "")"
+                   asp-area="Owner" asp-controller="Settings" asp-action="FacilitySettings">
+                    <i class="bi bi-sliders2"></i>
+                    <span class="nav-text">سياسات المنشأة</span>
+                </a>
+            </li>
+
+            <li class="nav-item">
+                <a class="nav-link @(IsActive("Reservation", "ManageReservations") ? "active" : "")"
+                   asp-area="Owner" asp-controller="Reservation" asp-action="ManageReservations">
+                    <i class="bi bi-calendar-check"></i>
+                    <span class="nav-text">إدارة الحجوزات</span>
+                </a>
+            </li>
+
+            <li class="nav-item">
+                <a class="nav-link @(IsActive("Advertisements") ? "active" : "")"
+                   asp-area="Owner" asp-controller="Advertisements" asp-action="AdvertisementManagement">
+                    <i class="bi bi-megaphone-fill"></i>
+                    <span class="nav-text">إدارة الإعلانات</span>
+                </a>
+            </li>
+
+            <li class="nav-item">
+                <a class="nav-link @(IsActive("OwnerFinancials", "ManageOwnerFinancials") ? "active" : "")"
+                   asp-area="Owner" asp-controller="OwnerFinancials" asp-action="ManageOwnerFinancials">
+                    <i class="bi bi-wallet2"></i>
+                    <span class="nav-text">الشؤون المالية والعمولات</span>
+                </a>
+            </li>
+
+            <li class="nav-item">
+                <a class="nav-link @(IsActive("Chat", "ChatInterface") ? "active" : "")"
+                   asp-area="Owner" asp-controller="Chat" asp-action="ChatInterface">
+                    <i class="bi bi-chat-square-text"></i>
+                    <span class="nav-text">التواصل المباشر</span>
+                </a>
+            </li>
+
+            <li class="nav-item">
+                <a class="nav-link @(IsActive("Reports") ? "active" : "")"
+                   asp-area="Owner" asp-controller="Reports" asp-action="OwnerReports">
+                    <i class="bi bi-flag-fill"></i>
+                    <span class="nav-text">الدعم والبلاغات</span>
+                </a>
+            </li>
+
+            <li class="nav-item">
+                <a class="nav-link @(IsActive("Profile", "OwnerProfile") ? "active" : "")"
+                   asp-area="Owner" asp-controller="Profile" asp-action="OwnerProfile">
+                    <i class="bi bi-person-badge"></i>
+                    <span class="nav-text">حسابي الشخصي</span>
+                </a>
+            </li>
+        </ul>
+    </div>
+
+    <div class="sidebar-footer">
+        <a class="nav-link text-danger" asp-area="" asp-controller="Account" asp-action="Logout">
+            <i class="bi bi-box-arrow-right"></i>
+            <span class="nav-text">تسجيل الخروج</span>
+        </a>
+    </div>
+
+    <button type="button"
+            class="sidebar-compact-toggle d-none d-lg-flex"
+            id="desktopSidebarToggle"
+            aria-label="طي أو توسيع القائمة الجانبية">
+        <i class="bi bi-chevron-right toggle-icon"></i>
+    </button>
+</aside>
+
+<div class="mobile-sidebar-backdrop d-lg-none" id="mobileSidebarBackdrop" aria-hidden="true"></div>
+
+<header class="dashboard-topbar">
+    <!-- تم حذف مشهد الهيدر المتحرك فقط لتحسين الأداء. -->
+    <div class="topbar-left">
+        <button type="button"
+                class="sidebar-toggle-mobile d-lg-none"
+                id="mobileSidebarToggle"
+                aria-label="فتح القائمة الجانبية"
+                aria-expanded="false">
+            <span class="yg-mobile-menu-glyph" aria-hidden="true">
+                <span></span><span></span><span></span>
+            </span>
+        </button>
+    </div>
+
+    <div class="topbar-search">
+        <div class="search-wrapper">
+            <i class="bi bi-search"></i>
+            <input type="text"
+                   class="form-control search-input"
+                   placeholder="ابحث عن حجز، منشأة، تقرير..."
+                   id="globalSearch"
+                   autocomplete="off" />
+        </div>
+    </div>
+
+    @if (activePlace != null)
+    {
+        <div class="topbar-place-row">
+            <div class="owner-place-switcher @(ownerPlaces.Count == 1 ? "has-single-place" : "")"
+             id="ownerPlaceSwitcher"
+             data-cookie-name="@activePlaceCookieName"
+             data-selected-place-id="@activePlace.PlaceId"
+             data-place-count="@ownerPlaces.Count">
+
+                <button type="button"
+                    class="owner-place-trigger"
+                    id="ownerPlaceTrigger"
+                    aria-haspopup="true"
+                    aria-expanded="false"
+                    aria-controls="ownerPlaceMenu"
+                    title="المنشأة الحالية: @activePlace.Name">
+                    <span class="owner-place-trigger-image">
+                        <img src="@activePlaceImage"
+                         alt="@activePlace.Name"
+                         onerror="this.onerror=null;this.src='/images/logo1.png';" />
+                        <span class="owner-place-live-dot @StatusClass(activePlace.Status, activePlace.IsAvailable)"></span>
+                    </span>
+
+                    <span class="owner-place-trigger-copy">
+                        <span class="owner-place-trigger-eyebrow">المنشأة الحالية</span>
+                        <span class="owner-place-trigger-name">@activePlace.Name</span>
+                    </span>
+
+                    @if (ownerPlaces.Count > 1)
+                    {
+                        <span class="owner-place-trigger-arrow" aria-hidden="true">
+                            <i class="bi bi-chevron-down"></i>
+                        </span>
+                    }
+                </button>
+
+                @if (ownerPlaces.Count > 1)
+                {
+                    <div class="owner-place-menu"
+                 id="ownerPlaceMenu"
+                 role="dialog"
+                 aria-label="اختيار المنشأة"
+                 aria-hidden="true">
+
+                        <div class="owner-place-menu-head">
+                            <div>
+                                <span class="owner-place-menu-kicker">نطاق لوحة التحكم</span>
+                                <h2>اختيار المنشأة</h2>
+                                <p>ستظهر بيانات المنشأة المختارة في جميع الأقسام.</p>
+                            </div>
+
+                            <button type="button"
+                            class="owner-place-menu-close"
+                            id="ownerPlaceMenuClose"
+                            aria-label="إغلاق قائمة المنشآت">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
+                        </div>
+
+                        @if (ownerPlaces.Count > 4)
+                        {
+                            <div class="owner-place-search-wrap">
+                                <i class="bi bi-search"></i>
+                                <input type="search"
+                           id="ownerPlaceSearch"
+                           class="owner-place-search"
+                           placeholder="ابحث باسم المنشأة أو المدينة..."
+                           autocomplete="off" />
+                            </div>
+                        }
+
+                        <div class="owner-place-list" id="ownerPlaceList">
+                            @foreach (var placeItem in ownerPlaces)
+                            {
+                                string placeImage = placeItem.LogoImage ?? placeItem.CoverImage ?? logoPath;
+                                bool isSelected = placeItem.PlaceId == activePlace.PlaceId;
+                                string searchText = $"{placeItem.Name} {placeItem.CategoryName} {placeItem.CityName}";
+
+                                <button type="button"
+                            class="owner-place-option @(isSelected ? "is-selected" : "")"
+                            data-place-id="@placeItem.PlaceId"
+                            data-place-name="@placeItem.Name"
+                            data-search-text="@searchText"
+                            aria-pressed="@(isSelected ? "true" : "false")">
+                                    <span class="owner-place-option-image">
+                                        <img src="@placeImage"
+                                 alt="@placeItem.Name"
+                                 onerror="this.onerror=null;this.src='/images/logo1.png';" />
+                                    </span>
+
+                                    <span class="owner-place-option-copy">
+                                        <span class="owner-place-option-name">@placeItem.Name</span>
+                                        <span class="owner-place-option-meta">
+                                            <span><i class="bi bi-grid"></i>@placeItem.CategoryName</span>
+                                            <span><i class="bi bi-geo-alt"></i>@placeItem.CityName</span>
+                                        </span>
+                                        <span class="owner-place-option-status @StatusClass(placeItem.Status, placeItem.IsAvailable)">
+                                            <span></span>
+                                            @StatusLabel(placeItem.Status, placeItem.IsAvailable)
+                                        </span>
+                                    </span>
+
+                                    <span class="owner-place-option-check" aria-hidden="true">
+                                        <i class="bi bi-check2"></i>
+                                    </span>
+                                </button>
+                            }
+                        </div>
+
+                        <div class="owner-place-empty-search" id="ownerPlaceEmptySearch" hidden>
+                            <i class="bi bi-search"></i>
+                            <strong>لم نجد منشأة مطابقة</strong>
+                            <span>جرّب كتابة اسم آخر.</span>
+                        </div>
+
+                        <div class="owner-place-menu-foot">
+                            <span><i class="bi bi-buildings"></i>@ownerPlaces.Count منشآت مرتبطة بحسابك</span>
+                            <a asp-area="Owner" asp-controller="Place" asp-action="ManagePlaces">
+                                إدارة منشآتي
+                                <i class="bi bi-arrow-left"></i>
+                            </a>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="topbar-place-row">
+            <a class="owner-place-empty-trigger"
+           asp-area="Owner"
+           asp-controller="Place"
+           asp-action="ManagePlaces"
+           title="إضافة منشأتك الأولى">
+                <span><i class="bi bi-building-add"></i></span>
+                <span class="owner-place-empty-copy">
+                    <small>لا توجد منشأة</small>
+                    <strong>أضف منشأتك الأولى</strong>
+                </span>
+            </a>
+        </div>
+    }
+
+    <div class="topbar-actions">
+        <div class="dropdown notifications-dropdown owner-notifications"
+             id="ownerNotifications"
+             data-header-endpoint="/Notifications/Header"
+             data-unread-endpoint="/Notifications/UnreadCount"
+             data-mark-all-endpoint="/Notifications/MarkAllAsRead"
+             data-center-url="/Owner/Notifications"
+             data-take="7">
+
+            <form class="owner-notification-token-form"
+                  id="ownerNotificationTokenForm"
+                  aria-hidden="true">
+                @Html.AntiForgeryToken()
+            </form>
+
+            <button class="btn btn-light position-relative owner-notification-toggle"
+                    id="ownerNotificationToggle"
+                    type="button"
+                    data-bs-toggle="dropdown"
+                    data-bs-auto-close="outside"
+                    aria-expanded="false"
+                    aria-controls="ownerNotificationMenu"
+                    aria-label="الإشعارات">
+                <i class="bi bi-bell-fill" aria-hidden="true"></i>
+                <span class="notification-badge owner-notification-badge"
+                      id="ownerNotificationBadge"
+                      hidden>0</span>
+                <span class="owner-notification-live-dot"
+                      id="ownerNotificationLiveDot"
+                      hidden
+                      aria-hidden="true"></span>
+            </button>
+
+            <div class="dropdown-menu dropdown-menu-end p-0 owner-notification-menu"
+                 id="ownerNotificationMenu"
+                 aria-labelledby="ownerNotificationToggle">
+
+                <div class="owner-notification-menu__head">
+                    <div>
+                        <span class="owner-notification-menu__eyebrow">مركز التنبيهات</span>
+                        <strong>الإشعارات الجديدة</strong>
+                    </div>
+
+                    <span class="owner-notification-unread-pill"
+                          id="ownerNotificationUnreadPill">
+                        0 غير مقروء
+                    </span>
+                </div>
+
+                <div class="owner-notification-progress"
+                     id="ownerNotificationProgress"
+                     hidden
+                     aria-hidden="true">
+                    <span></span>
+                </div>
+
+                <div class="owner-notification-body"
+                     id="ownerNotificationBody"
+                     aria-live="polite">
+                    <div class="owner-notification-loading">
+                        <span class="owner-notification-loading__spinner"></span>
+                        <strong>جاري تحميل الإشعارات...</strong>
+                    </div>
+                </div>
+
+                <div class="owner-notification-menu__foot">
+                    <button type="button"
+                            class="owner-notification-mark-all"
+                            id="ownerNotificationMarkAll"
+                            disabled>
+                        <i class="bi bi-check2-all" aria-hidden="true"></i>
+                        تعليم الكل كمقروء
+                    </button>
+
+                    <a href="/Owner/Notifications"
+                       class="owner-notification-center-link">
+                        عرض كل الإشعارات
+                        <i class="bi bi-arrow-left" aria-hidden="true"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="dropdown user-dropdown">
+            <a href="#"
+               class="d-flex align-items-center text-decoration-none dropdown-toggle"
+               data-bs-toggle="dropdown"
+               aria-label="قائمة الحساب">
+                <div class="header-avatar-circle d-flex align-items-center justify-content-center shadow-sm"
+                     style="background: @(string.IsNullOrEmpty(displayImg) ? "linear-gradient(135deg, #00A6DA 0%, #42C9EB 100%)" : $"url('{displayImg}') center/cover no-repeat");">
+                    @if (string.IsNullOrEmpty(displayImg))
+                    {
+                        <span class="text-white fw-bold small">@initialLetter</span>
+                    }
+                </div>
+            </a>
+            <ul class="dropdown-menu dropdown-menu-end">
+                <li><a class="dropdown-item" href="/Owner/Profile/OwnerProfile#personal"><i class="bi bi-person-lines-fill me-2"></i>حسابي الشخصي</a></li>
+                <li><a class="dropdown-item" href="/Owner/Profile/OwnerProfile#settings"><i class="bi bi-sliders me-2"></i>تفضيلات النظام والتنبيهات</a></li>
+                <li><a class="dropdown-item text-danger-hover" href="/Owner/Profile/OwnerProfile#security"><i class="bi bi-shield-lock me-2"></i>الأمان ومنطقة الحساب</a></li>
+                <li><hr class="dropdown-divider" /></li>
+                <li><a class="dropdown-item text-danger" asp-area="" asp-controller="Account" asp-action="Logout"><i class="bi bi-box-arrow-right"></i>تسجيل الخروج</a></li>
+            </ul>
+        </div>
+    </div>
+</header>
+
+<div class="owner-place-backdrop" id="ownerPlaceBackdrop" aria-hidden="true"></div>
+

@@ -1,0 +1,1448 @@
+@import url("/css/shared/fonts.css");
+
+/* =============================================================
+ * LOGIN.CSS - تنسيق صفحة تسجيل الدخول وإنشاء الحساب (نسخة فخمة ومصححة)
+ * ============================================================= */
+
+
+/* =============================================================
+ * 1. استيراد خط Tajawal محلياً
+ * ============================================================= */
+
+/* =============================================================
+ * 2. إعادة التعيين والمتغيرات الأساسية
+ * ============================================================= */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: var(--yg-font-family);
+}
+
+:root {
+    --primary-dark: #05203C;
+    --primary-light: #00A6DA;
+    --accent-orange: #FF5A5F;
+    --white: #FFFFFF;
+    --text-muted: #777;
+    --input-bg: #f5f8fa;
+}
+
+
+/* =============================================================
+ * 3. إخفاء الهيدر والفوتر
+ * ============================================================= */
+
+header, footer {
+    display: none !important;
+}
+
+
+/* =============================================================
+ * 4. تنسيق الجسم الأساسي (Body)
+ * ============================================================= */
+
+body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background: #eef4f8;
+}
+
+
+/* =============================================================
+ * 5. الحاوية الرئيسية (Container)
+ * ============================================================= */
+
+.container {
+    position: relative;
+    width: 850px;
+    height: 650px;
+    background: var(--white);
+    border-radius: 30px;
+    box-shadow: 0 15px 40px rgba(5, 32, 60, 0.08);
+    margin: 20px;
+    overflow: hidden;
+}
+
+
+/* =============================================================
+ * 6. صندوق النموذج (Form Box)
+ * ============================================================= */
+
+.form-box {
+    position: absolute;
+    right: 0;
+    width: 50%;
+    height: 100%;
+    background: var(--white);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 30px;
+    z-index: 1;
+    transition: .6s ease-in-out 1.2s, visibility 0s 1s;
+}
+
+
+/* =============================================================
+ * 7. تفعيل الحاوية (Active State)
+ * ============================================================= */
+
+.container.active .form-box {
+    right: 50%;
+}
+
+
+/* =============================================================
+ * 8. نموذج التسجيل (Register Form)
+ * ============================================================= */
+
+.form-box.register {
+    visibility: hidden;
+}
+
+.container.active .form-box.register {
+    visibility: visible;
+}
+
+
+/* =============================================================
+ * 9. تنسيق النماذج والعناوين مع فرض الهوامش المحمية
+ * ============================================================= */
+
+form {
+    width: 100%;
+    max-width: 320px; /* جدار الحماية: يمنع تمدد الحقول ويجبر النظام على ترك هوامش جانبية راقية */
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.container h1 {
+    font-size: 26px;
+    margin-bottom: 15px;
+    font-weight: 800;
+    color: var(--primary-dark);
+    text-align: center;
+}
+
+
+/* =============================================================
+ * 10. تنسيق حقول الإدخال الفخمة (Input Box)
+ * ============================================================= */
+
+.input-box {
+    position: relative;
+    margin: 10px 0;
+    width: 100%;
+}
+
+.form-box.register .input-box {
+    margin: 7px 0; /* تقليص طفيف ومدروس لمنع الازدحام في شاشة التسجيل */
+}
+
+.input-box input {
+    width: 100%;
+    padding: 11px 42px 11px 15px;
+    background: var(--input-bg);
+    border-radius: 10px;
+    border: 1.5px solid transparent;
+    outline: none;
+    font-size: 13.5px;
+    color: var(--primary-dark);
+    transition: all 0.3s ease;
+}
+
+    .input-box input::placeholder {
+        color: #a0aec0;
+        font-size: 12.5px;
+    }
+
+    .input-box input:focus {
+        border-color: var(--primary-light);
+        background: var(--white);
+        box-shadow: 0 0 8px rgba(0, 166, 218, 0.08);
+    }
+
+.input-box i {
+    position: absolute;
+    right: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 15px;
+    color: #a0aec0;
+    transition: color 0.3s ease;
+}
+
+.input-box input:focus ~ i {
+    color: var(--primary-light);
+}
+
+
+/* =============================================================
+ * 11. شريط الخيارات (ذكرني / نسيت كلمة المرور) - معالجة الحجم والغمق
+ * ============================================================= */
+
+.form-options, .remember-forgot {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 5px 0 15px;
+    padding: 0 2px;
+    font-size: 12px !important; /* تصغير الخط بالكامل ليكون كلاسيكياً ناعماً */
+    width: 100%;
+}
+
+    /* معالجة نص ذكرني */
+    .remember-me, .remember-forgot label {
+        display: flex;
+        align-items: center;
+        color: #666 !important; /* تخفيف اللون ليصبح مريحاً */
+        font-weight: 500 !important; /* إلغاء الغمق المفرط (Bold) */
+        font-size: 12px !important;
+        cursor: pointer;
+        user-select: none;
+    }
+
+        .remember-me input[type="checkbox"], .remember-forgot input[type="checkbox"] {
+            margin-left: 6px;
+            accent-color: var(--primary-light);
+            cursor: pointer;
+            width: 13px;
+            height: 13px;
+        }
+
+    /* معالجة نسيت كلمة المرور */
+    .forgot-link a, .remember-forgot a {
+        color: #666 !important;
+        text-decoration: none;
+        font-weight: 500 !important; /* إلغاء الوزن العريض */
+        font-size: 12px !important;
+        transition: color 0.3s ease;
+    }
+
+        .forgot-link a:hover, .remember-forgot a:hover {
+            color: var(--primary-light) !important;
+            text-decoration: underline;
+        }
+
+
+/* =============================================================
+ * 12. نصوص رسائل الخطأ اللحظية (تحت الحقول)
+ * ============================================================= */
+
+.error-text, #emailError, #usernameError {
+    text-align: right;
+    font-size: 11.5px !important;
+    font-weight: 600;
+    color: #dc3545;
+    margin-top: 2px;
+    margin-bottom: 4px;
+    padding-right: 2px;
+    display: none;
+    transition: all 0.3s ease;
+}
+
+
+/* =============================================================
+ * 13. زر الإرسال الرئيسي (Submit Button)
+ * ============================================================= */
+
+.btn {
+    width: 100%;
+    height: 40px;
+    background: var(--primary-dark);
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    font-size: 14.5px;
+    color: var(--white);
+    font-weight: 700;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 10px rgba(5, 32, 60, 0.12);
+    margin-top: 5px;
+}
+
+    .btn:hover {
+        background: var(--primary-light);
+        transform: translateY(-1px);
+        box-shadow: 0 5px 12px rgba(0, 166, 218, 0.22);
+    }
+
+
+/* =============================================================
+ * 14. روابط التنقل السفلى
+ * ============================================================= */
+
+.logreg-link {
+    font-size: 13px;
+    color: #666;
+    margin-top: 12px;
+    text-align: center;
+}
+
+    .logreg-link a {
+        color: var(--primary-light);
+        text-decoration: none;
+        font-weight: bold;
+        margin-right: 4px;
+    }
+
+
+/* =============================================================
+ * 15. قسم تسجيل الدخول بجوجل (Social Login)
+ * ============================================================= */
+
+.social-login {
+    margin-top: 12px;
+    text-align: center;
+    width: 100%;
+}
+
+    .social-login p {
+        color: #bbb;
+        font-size: 11.5px;
+        margin-bottom: 10px;
+        position: relative;
+    }
+
+        .social-login p::before,
+        .social-login p::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            width: 25%;
+            height: 1px;
+            background: #eee;
+        }
+
+        .social-login p::before {
+            right: 5%;
+        }
+
+        .social-login p::after {
+            left: 5%;
+        }
+
+.google-btn {
+    width: 100%;
+    height: 38px;
+    background: var(--white);
+    border: 1px solid #e1e8ed;
+    border-radius: 10px;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    font-size: 13.5px;
+    color: #555;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+    .google-btn i {
+        color: #ea4335;
+        font-size: 16px;
+    }
+
+    .google-btn:hover {
+        background: #f8f9fa;
+        border-color: #cbd5e1;
+    }
+
+
+/* =============================================================
+ * 16. اختيار نوع الحساب (Role Selection)
+ * ============================================================= */
+
+.role-selection {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin: 8px 0 12px 0;
+    width: 100%;
+}
+
+.role-option {
+    flex: 1;
+    position: relative;
+}
+
+    .role-option input[type="radio"] {
+        display: none;
+    }
+
+.role-label {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 7px 4px;
+    border: 1.5px solid #e1e8ed;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    color: #666;
+    font-size: 12.5px;
+    font-weight: 700;
+    background: var(--input-bg);
+}
+
+    .role-label i {
+        font-size: 1.1rem;
+        color: #888;
+        transition: all 0.3s ease;
+    }
+
+.role-option input[type="radio"]:checked + .role-label {
+    border-color: var(--primary-light);
+    background: rgba(0, 166, 218, 0.04);
+    color: var(--primary-light);
+    box-shadow: 0 2px 6px rgba(0, 166, 218, 0.06);
+}
+
+    .role-option input[type="radio"]:checked + .role-label i {
+        color: var(--primary-light);
+    }
+
+
+/* =============================================================
+ * 17. رابط العودة للرئيسية (Return Home) - استعادة الروح البرتقالية الفخمة
+ * ============================================================= */
+
+.return-home {
+    margin-top: 15px;
+    text-align: center;
+    width: 100%;
+}
+
+    .return-home a {
+        color: var(--accent-orange) !important; /* تثبيت اللون البرتقالي الجذاب بقوة */
+        font-weight: 700;
+        text-decoration: none;
+        font-size: 13px;
+        transition: all 0.3s ease;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+    }
+
+        .return-home a:hover {
+            opacity: 0.8;
+            text-decoration: underline;
+            transform: translateY(-0.5px);
+        }
+
+
+/* =============================================================
+ * 18. شريط التبديل الملون واللوحات (Toggle Panel)
+ * ============================================================= */
+
+.toggle-box {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+    .toggle-box::before {
+        content: '';
+        position: absolute;
+        left: -250%;
+        width: 300%;
+        height: 100%;
+        background: linear-gradient(135deg, var(--primary-dark), var(--primary-light));
+        border-radius: 150px;
+        z-index: 2;
+        transition: 1.8s ease-in-out;
+    }
+
+.container.active .toggle-box::before {
+    left: 50%;
+}
+
+.toggle-panel {
+    position: absolute;
+    width: 50%;
+    height: 100%;
+    color: var(--white);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 2;
+    transition: .6s ease-in-out;
+    pointer-events: auto;
+}
+
+    .toggle-panel.toggle-left {
+        left: 0;
+        transition-delay: 1.2s;
+    }
+
+.container.active .toggle-panel.toggle-left {
+    left: -50%;
+    transition-delay: .6s;
+}
+
+.toggle-panel.toggle-right {
+    right: -50%;
+    transition-delay: .6s;
+}
+
+.container.active .toggle-panel.toggle-right {
+    right: 0;
+    transition-delay: 1.2s;
+}
+
+.toggle-panel h1 {
+    font-size: 30px;
+    color: var(--white);
+    margin-bottom: 8px;
+}
+
+.toggle-panel p {
+    margin-bottom: 15px;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 14.5px;
+    line-height: 1.5;
+    padding: 0 25px;
+    text-align: center;
+}
+
+
+/* =============================================================
+ * 19. التجاوب (Media Queries) - الشاشات الصغيرة (فقط تعديل الاسم واللقب)
+ * ============================================================= */
+
+@media screen and (max-width: 650px) {
+    .container {
+        height: 750px;
+    }
+
+    .form-box {
+        bottom: 0;
+        width: 100%;
+        height: 75%;
+        padding: 15px 25px;
+        overflow-y: auto;
+    }
+
+    .container.active .form-box {
+        right: 0;
+        bottom: 25%;
+    }
+
+    .toggle-box::before {
+        left: 0;
+        top: -270%;
+        width: 100%;
+        height: 300%;
+        border-radius: 20vw;
+    }
+
+    .container.active .toggle-box::before {
+        left: 0;
+        top: 75%;
+    }
+
+    .toggle-panel {
+        width: 100%;
+        height: 25%;
+        padding: 0 10px;
+    }
+
+        .toggle-panel h1 {
+            font-size: 22px;
+        }
+
+        .toggle-panel p {
+            font-size: 12.5px;
+            padding: 0 15px;
+            margin-bottom: 8px;
+        }
+
+        .toggle-panel.toggle-left {
+            top: 0;
+        }
+
+    .container.active .toggle-panel.toggle-left {
+        left: 0;
+        top: -25%;
+    }
+
+    .toggle-panel.toggle-right {
+        right: 0;
+        bottom: -25%;
+    }
+
+    .container.active .toggle-panel.toggle-right {
+        bottom: 0;
+    }
+
+    /* ✅ التعديل الوحيد: جعل الاسم واللقب بجانب بعضهما ✅ */
+    .name-grid {
+        flex-direction: row !important;
+        gap: 8px !important;
+    }
+
+        .name-grid .input-box {
+            flex: 1 !important;
+            margin: 0 !important;
+        }
+
+    .return-home {
+        margin-top: 12px;
+    }
+}
+
+
+/* =============================================================
+ * 20. الرسوم المتحركة (Animations)
+ * ============================================================= */
+
+@keyframes fadeInUp {
+    0% {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.form-box.login form > *,
+.toggle-panel.toggle-left > * {
+    animation: fadeInUp 0.6s ease-out backwards;
+    animation-delay: var(--d, 0s);
+}
+
+.container.active .form-box.register form > *,
+.container.active .toggle-panel.toggle-right > * {
+    animation: fadeInUp 0.6s ease-out backwards;
+    animation-delay: calc(var(--d, 0s) + 0.5s);
+}
+
+
+/* =============================================================
+ * 21. الوضع الليلي (Dark Mode) الفخم
+ * ============================================================= */
+
+body.dark-mode {
+    background: #0f1115;
+}
+
+    body.dark-mode .container {
+        background: #181a20;
+        box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4);
+    }
+
+        body.dark-mode .container h1 {
+            color: #f1f2f6;
+        }
+
+    body.dark-mode .form-box {
+        background: #181a20;
+    }
+
+    body.dark-mode .input-box input {
+        background: #20232a;
+        color: #e2e8f0;
+        border-color: rgba(255, 255, 255, 0.04);
+    }
+
+        body.dark-mode .input-box input:focus {
+            border-color: #00A6DA;
+            background: #181a20;
+            box-shadow: 0 0 8px rgba(0, 166, 218, 0.15);
+        }
+
+        body.dark-mode .input-box input::placeholder {
+            color: #64748b;
+        }
+
+    body.dark-mode .input-box i {
+        color: #64748b;
+    }
+
+    body.dark-mode .input-box input:focus ~ i {
+        color: #00A6DA;
+    }
+
+    body.dark-mode .remember-me, body.dark-mode .remember-forgot label {
+        color: #94a3b8 !important;
+    }
+
+    body.dark-mode .forgot-link a, body.dark-mode .remember-forgot a {
+        color: #94a3b8 !important;
+    }
+
+        body.dark-mode .forgot-link a:hover, body.dark-mode .remember-forgot a:hover {
+            color: #00A6DA !important;
+        }
+
+    body.dark-mode .btn {
+        background: #00A6DA;
+        color: #fff;
+    }
+
+        body.dark-mode .btn:hover {
+            background: #008cba;
+        }
+
+    body.dark-mode .logreg-link {
+        color: #94a3b8;
+    }
+
+        body.dark-mode .logreg-link a {
+            color: #00A6DA;
+        }
+
+    body.dark-mode .social-login p {
+        color: #64748b;
+    }
+
+        body.dark-mode .social-login p::before,
+        body.dark-mode .social-login p::after {
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+    body.dark-mode .google-btn {
+        background: #20232a;
+        border-color: rgba(255, 255, 255, 0.08);
+        color: #e2e8f0;
+    }
+
+        body.dark-mode .google-btn:hover {
+            background: #2a2d35;
+        }
+
+    body.dark-mode .toggle-box::before {
+        background: linear-gradient(135deg, #121418, #00A6DA);
+    }
+
+    body.dark-mode .role-label {
+        background: #20232a;
+        border-color: rgba(255, 255, 255, 0.04);
+        color: #94a3b8;
+    }
+
+        body.dark-mode .role-label i {
+            color: #64748b;
+        }
+
+    body.dark-mode .role-option input[type="radio"]:checked + .role-label {
+        border-color: #00A6DA;
+        background: rgba(0, 166, 218, 0.1);
+        color: #e2e8f0;
+    }
+
+        body.dark-mode .role-option input[type="radio"]:checked + .role-label i {
+            color: #00A6DA;
+        }
+
+    body.dark-mode .return-home a {
+        color: var(--accent-orange) !important;
+    }
+
+        body.dark-mode .return-home a:hover {
+            opacity: 0.85;
+        }
+
+
+/* =============================================================
+ * 22. PREMIUM 3D UPGRADE — نفس البنية والحركة الأصلية بدون تغيير
+ * ============================================================= */
+
+/*
+ * هذه الطبقة ترفع الإحساس البصري فقط.
+ * لم يتم تغيير قيم حركة .form-box أو .toggle-box::before أو
+ * مواضع .toggle-panel الأصلية أعلاه.
+ */
+
+.auth-premium-page {
+    position: relative;
+    isolation: isolate;
+    overflow-x: hidden;
+    background: radial-gradient(circle at 10% 12%, rgba(0, 166, 218, .10), transparent 28rem), radial-gradient(circle at 90% 88%, rgba(255, 90, 95, .075), transparent 25rem), linear-gradient(145deg, #f8fcfe 0%, #eef6fa 45%, #f9fbfd 100%);
+}
+
+    .auth-premium-page::before {
+        content: '';
+        position: fixed;
+        inset: 0;
+        z-index: -3;
+        pointer-events: none;
+        opacity: .34;
+        background-image: linear-gradient(45deg, rgba(5, 32, 60, .025) 25%, transparent 25%, transparent 75%, rgba(5, 32, 60, .025) 75%), linear-gradient(-45deg, rgba(0, 166, 218, .022) 25%, transparent 25%, transparent 75%, rgba(0, 166, 218, .022) 75%);
+        background-position: 0 0, 18px 18px;
+        background-size: 36px 36px;
+        mask-image: linear-gradient(to bottom, rgba(0,0,0,.65), transparent 92%);
+    }
+
+.auth-ambient {
+    position: fixed;
+    inset: 0;
+    z-index: -2;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.auth-ambient-orb {
+    position: absolute;
+    display: block;
+    border-radius: 50%;
+    will-change: transform;
+    transform: translate3d(0, 0, 0);
+}
+
+.auth-ambient-orb--cyan {
+    width: 36rem;
+    height: 36rem;
+    inset: -15rem auto auto -13rem;
+    background: radial-gradient(circle, rgba(0,166,218,.17), rgba(0,166,218,0) 68%);
+    animation: authAmbientFloatA 18s ease-in-out infinite alternate;
+}
+
+.auth-ambient-orb--coral {
+    width: 29rem;
+    height: 29rem;
+    inset: auto -12rem -12rem auto;
+    background: radial-gradient(circle, rgba(255,90,95,.12), rgba(255,90,95,0) 68%);
+    animation: authAmbientFloatB 22s ease-in-out infinite alternate;
+}
+
+.auth-ambient-orb--pearl {
+    width: 25rem;
+    height: 25rem;
+    left: 48%;
+    top: 8%;
+    opacity: .58;
+    background: radial-gradient(circle, rgba(255,255,255,.95), rgba(255,255,255,0) 69%);
+    animation: authAmbientFloatC 25s ease-in-out infinite alternate;
+}
+
+@keyframes authAmbientFloatA {
+    to {
+        transform: translate3d(5rem, 3rem, 0) scale(1.08);
+    }
+}
+
+@keyframes authAmbientFloatB {
+    to {
+        transform: translate3d(-4rem, -2rem, 0) scale(.94);
+    }
+}
+
+@keyframes authAmbientFloatC {
+    to {
+        transform: translate3d(-3rem, 4rem, 0) scale(1.1);
+    }
+}
+
+.auth-premium-shell {
+    --premium-pointer-x: 50%;
+    --premium-pointer-y: 42%;
+    border: 1px solid rgba(255, 255, 255, .82);
+    box-shadow: 0 32px 90px rgba(5, 32, 60, .14), 0 10px 30px rgba(5, 32, 60, .065), inset 0 1px 0 rgba(255, 255, 255, .88);
+    transform: translateZ(0);
+    perspective: 1600px;
+}
+
+    .auth-premium-shell::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        z-index: 5;
+        pointer-events: none;
+        border-radius: inherit;
+        background: radial-gradient(circle at var(--premium-pointer-x) var(--premium-pointer-y), rgba(255,255,255,.23), transparent 22%), linear-gradient(115deg, transparent 22%, rgba(255,255,255,.12) 44%, transparent 62%);
+        mix-blend-mode: soft-light;
+        opacity: .55;
+        transition: opacity .35s ease;
+    }
+
+    .auth-premium-shell:hover::after,
+    .auth-premium-shell.is-interacting::after {
+        opacity: .82;
+    }
+
+/* =============================================================
+ * 23. رفع اللوحة المتحركة نفسها — مع الحفاظ على مسارها الأصلي
+ * ============================================================= */
+
+.toggle-box::before {
+    background: radial-gradient(circle at var(--premium-pointer-x, 50%) var(--premium-pointer-y, 42%), rgba(255,255,255,.18), transparent 21%), radial-gradient(circle at 18% 78%, rgba(255,255,255,.08), transparent 26%), linear-gradient(135deg, #05203C 0%, #07456a 34%, #00A6DA 100%);
+    box-shadow: inset -30px 0 80px rgba(255,255,255,.035), inset 30px 0 90px rgba(5,32,60,.17);
+}
+
+.toggle-box::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    opacity: .18;
+    background-image: linear-gradient(45deg, rgba(255,255,255,.16) 12.5%, transparent 12.5%, transparent 37.5%, rgba(255,255,255,.16) 37.5%, rgba(255,255,255,.16) 62.5%, transparent 62.5%, transparent 87.5%, rgba(255,255,255,.16) 87.5%), linear-gradient(-45deg, rgba(255,255,255,.08) 12.5%, transparent 12.5%, transparent 37.5%, rgba(255,255,255,.08) 37.5%, rgba(255,255,255,.08) 62.5%, transparent 62.5%, transparent 87.5%, rgba(255,255,255,.08) 87.5%);
+    background-size: 44px 44px;
+    background-position: 0 0, 22px 22px;
+    mask-image: radial-gradient(circle at center, #000 0%, rgba(0,0,0,.82) 52%, transparent 88%);
+    animation: premiumPatternDrift 18s linear infinite;
+}
+
+@keyframes premiumPatternDrift {
+    to {
+        background-position: 44px 22px, 66px 44px;
+    }
+}
+
+.toggle-panel {
+    isolation: isolate;
+    transform-style: preserve-3d;
+    overflow: hidden;
+}
+
+    .toggle-panel > h1,
+    .toggle-panel > p,
+    .toggle-panel > .journey-signature {
+        position: relative;
+        z-index: 4;
+        transform: translateZ(28px);
+        text-shadow: 0 4px 24px rgba(5, 32, 60, .15);
+    }
+
+    .toggle-panel h1 {
+        letter-spacing: -.35px;
+    }
+
+.panel-cinematic-art {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    transform-style: preserve-3d;
+}
+
+.cinematic-ring {
+    position: absolute;
+    display: block;
+    border-radius: 50%;
+    pointer-events: none;
+    will-change: transform;
+}
+
+.cinematic-ring--outer {
+    width: 330px;
+    height: 330px;
+    inset-inline-start: -130px;
+    top: 50%;
+    margin-top: -165px;
+    border: 1px solid rgba(255,255,255,.10);
+    box-shadow: inset 0 0 50px rgba(255,255,255,.025), 0 0 0 22px rgba(255,255,255,.018), 0 0 0 66px rgba(255,255,255,.014);
+    animation: cinematicOrbit 16s linear infinite;
+}
+
+    .cinematic-ring--outer::before,
+    .cinematic-ring--outer::after {
+        content: '';
+        position: absolute;
+        border-radius: 50%;
+    }
+
+    .cinematic-ring--outer::before {
+        width: 9px;
+        height: 9px;
+        top: 20px;
+        left: 76px;
+        background: rgba(255,255,255,.82);
+        box-shadow: 0 0 16px rgba(255,255,255,.52);
+    }
+
+    .cinematic-ring--outer::after {
+        inset: 37px;
+        border: 1px dashed rgba(255,255,255,.075);
+    }
+
+.cinematic-ring--inner {
+    width: 180px;
+    height: 180px;
+    inset-inline-end: -50px;
+    top: 12%;
+    border: 1px solid rgba(255,255,255,.075);
+    animation: cinematicOrbitReverse 21s linear infinite;
+}
+
+.cinematic-glow {
+    position: absolute;
+    width: 250px;
+    height: 250px;
+    right: 50%;
+    top: 50%;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,255,255,.16), transparent 68%);
+    filter: blur(2px);
+    transform: translate(50%, -50%) scale(.92);
+    opacity: .65;
+    animation: cinematicGlowPulse 5.5s ease-in-out infinite alternate;
+}
+
+@keyframes cinematicOrbit {
+    to {
+        transform: rotate(360deg) translateZ(16px);
+    }
+}
+
+@keyframes cinematicOrbitReverse {
+    to {
+        transform: rotate(-360deg) translateZ(10px);
+    }
+}
+
+@keyframes cinematicGlowPulse {
+    to {
+        transform: translate(50%, -50%) scale(1.16);
+        opacity: .92;
+    }
+}
+
+.journey-signature {
+    width: 154px;
+    height: 18px;
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    opacity: .78;
+}
+
+.journey-node {
+    flex: 0 0 auto;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: rgba(255,255,255,.74);
+    box-shadow: 0 0 0 4px rgba(255,255,255,.055);
+}
+
+.journey-node--accent {
+    background: #ffd59a;
+    box-shadow: 0 0 0 4px rgba(255,213,154,.08), 0 0 14px rgba(255,213,154,.28);
+}
+
+.journey-track {
+    position: relative;
+    width: 104px;
+    height: 1px;
+    overflow: visible;
+    background: linear-gradient(90deg, rgba(255,255,255,.16), rgba(255,255,255,.62), rgba(255,255,255,.16));
+}
+
+    .journey-track::before {
+        content: '';
+        position: absolute;
+        inset: -2px 0 auto;
+        height: 5px;
+        opacity: .35;
+        background: repeating-linear-gradient(90deg, transparent 0 8px, rgba(255,255,255,.54) 8px 10px);
+    }
+
+.journey-runner {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    top: 50%;
+    left: 0;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 0 0 4px rgba(255,255,255,.09), 0 0 18px rgba(255,255,255,.5);
+    transform: translate(-50%, -50%);
+    animation: journeyRunner 4.6s cubic-bezier(.45,0,.25,1) infinite;
+}
+
+@keyframes journeyRunner {
+    0%, 8% {
+        left: 0;
+        opacity: .28;
+    }
+
+    45% {
+        opacity: 1;
+    }
+
+    92%, 100% {
+        left: 100%;
+        opacity: .28;
+    }
+}
+
+/* أثناء الانتقال الكبير: نفس الحركة الأصلية، لكن الضوء والمسار يتفاعلان معها */
+.auth-premium-shell.is-switching .toggle-box::before {
+    filter: saturate(1.08) brightness(1.035);
+}
+
+.auth-premium-shell.is-switching .journey-runner {
+    animation-duration: 1.35s;
+}
+
+.auth-premium-shell.is-switching .cinematic-glow {
+    opacity: .98;
+}
+
+/* =============================================================
+ * 24. النموذج — عمق فاخر بدون إضافة ازدحام
+ * ============================================================= */
+
+.form-box {
+    background: radial-gradient(circle at var(--premium-pointer-x, 50%) var(--premium-pointer-y, 42%), rgba(0,166,218,.035), transparent 28%), rgba(255,255,255,.985);
+}
+
+    .form-box form {
+        position: relative;
+        z-index: 1;
+        transform: translateZ(22px);
+    }
+
+.container h1 {
+    letter-spacing: -.4px;
+    text-shadow: 0 6px 22px rgba(5,32,60,.055);
+}
+
+.input-box {
+    transform: translateZ(0);
+}
+
+    .input-box input {
+        border-color: rgba(5,32,60,.055);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.8), 0 3px 9px rgba(5,32,60,.025);
+        transition: border-color .28s ease, box-shadow .28s ease, background-color .28s ease, transform .28s cubic-bezier(.22,1,.36,1);
+    }
+
+    .input-box:focus-within input {
+        transform: translateY(-1px);
+        border-color: rgba(0,166,218,.72);
+        box-shadow: 0 10px 24px rgba(0,166,218,.10), 0 0 0 4px rgba(0,166,218,.055), inset 0 1px 0 rgba(255,255,255,.92);
+    }
+
+    .input-box:focus-within i {
+        color: var(--primary-light);
+        transform: translateY(-50%) scale(1.06);
+        text-shadow: 0 0 12px rgba(0,166,218,.18);
+    }
+
+    .input-box.is-invalid-premium {
+        animation: premiumFieldShake .34s ease;
+    }
+
+        .input-box.is-invalid-premium input {
+            border-color: rgba(255,90,95,.68);
+            box-shadow: 0 0 0 4px rgba(255,90,95,.055);
+        }
+
+@keyframes premiumFieldShake {
+    0%,100% {
+        transform: translateX(0);
+    }
+
+    30% {
+        transform: translateX(3px);
+    }
+
+    60% {
+        transform: translateX(-3px);
+    }
+}
+
+.btn {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+    background: linear-gradient(135deg, #05203C 0%, #075581 48%, #00A6DA 100%);
+    background-size: 190% 190%;
+    box-shadow: 0 11px 25px rgba(5,32,60,.15), inset 0 1px 0 rgba(255,255,255,.16);
+    transition: transform .28s cubic-bezier(.22,1,.36,1), box-shadow .28s ease, filter .28s ease, background-position .6s ease;
+}
+
+    .btn::before {
+        content: '';
+        position: absolute;
+        inset: -70% auto -70% -34%;
+        width: 24%;
+        z-index: -1;
+        transform: rotate(18deg) translateX(-220%);
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,.48), transparent);
+        transition: transform .8s cubic-bezier(.22,1,.36,1);
+    }
+
+    .btn:hover,
+    .btn:focus-visible,
+    .btn:active {
+        background-position: 100% 50%;
+        filter: saturate(1.05);
+        transform: translateY(-2px);
+        box-shadow: 0 15px 32px rgba(0,166,218,.22), inset 0 1px 0 rgba(255,255,255,.20);
+    }
+
+        .btn:hover::before,
+        .btn:focus-visible::before,
+        .btn:active::before {
+            transform: rotate(18deg) translateX(620%);
+        }
+
+    .btn:active {
+        transform: translateY(0) scale(.992);
+    }
+
+    .btn:disabled {
+        cursor: wait;
+        opacity: .8;
+        transform: none;
+    }
+
+.google-btn {
+    position: relative;
+    overflow: hidden;
+    text-decoration: none;
+    box-shadow: 0 7px 18px rgba(5,32,60,.045), inset 0 1px 0 #fff;
+    transition: transform .26s cubic-bezier(.22,1,.36,1), box-shadow .26s ease, border-color .26s ease, background-color .26s ease;
+}
+
+    .google-btn::before {
+        content: '';
+        position: absolute;
+        width: 78px;
+        height: 78px;
+        inset-inline-start: -46px;
+        top: 50%;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(0,166,218,.085), transparent 68%);
+        transform: translateY(-50%);
+        transition: transform .45s ease, opacity .45s ease;
+    }
+
+    .google-btn:hover,
+    .google-btn:focus-visible,
+    .google-btn:active {
+        background: #fff;
+        border-color: rgba(0,166,218,.22);
+        transform: translateY(-2px);
+        box-shadow: 0 13px 26px rgba(5,32,60,.085), inset 0 1px 0 #fff;
+    }
+
+        .google-btn:hover::before,
+        .google-btn:focus-visible::before,
+        .google-btn:active::before {
+            transform: translate(18px, -50%) scale(1.18);
+        }
+
+    .google-btn:active {
+        transform: translateY(0) scale(.994);
+    }
+
+.role-label {
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.75);
+    transition: transform .26s cubic-bezier(.22,1,.36,1), border-color .26s ease, background-color .26s ease, color .26s ease, box-shadow .26s ease;
+}
+
+    .role-label:hover,
+    .role-option input[type="radio"]:focus-visible + .role-label {
+        transform: translateY(-1px);
+        border-color: rgba(0,166,218,.28);
+    }
+
+.role-option input[type="radio"]:checked + .role-label {
+    box-shadow: 0 9px 20px rgba(0,166,218,.09), inset 0 1px 0 rgba(255,255,255,.9);
+    transform: translateY(-1px);
+}
+
+.return-home a,
+.logreg-link a,
+.forgot-link a {
+    position: relative;
+}
+
+    .return-home a::after,
+    .logreg-link a::after,
+    .forgot-link a::after {
+        content: '';
+        position: absolute;
+        right: 0;
+        bottom: -2px;
+        width: 100%;
+        height: 1px;
+        transform: scaleX(0);
+        transform-origin: right;
+        background: currentColor;
+        transition: transform .28s ease;
+    }
+
+    .return-home a:hover::after,
+    .logreg-link a:hover::after,
+    .forgot-link a:hover::after,
+    .return-home a:focus-visible::after,
+    .logreg-link a:focus-visible::after,
+    .forgot-link a:focus-visible::after {
+        transform: scaleX(1);
+    }
+
+/* =============================================================
+ * 25. Mobile Premium — نفس الأنيميشن الأساسية ولكن مصقولة للهاتف
+ * ============================================================= */
+
+@media screen and (max-width: 650px) {
+    .auth-premium-page {
+        min-height: 100dvh;
+        padding-block: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-bottom));
+    }
+
+    .auth-premium-shell {
+        width: min(100% - 18px, 850px);
+        margin: 8px auto;
+        border-radius: 26px;
+        box-shadow: 0 24px 62px rgba(5,32,60,.14), 0 8px 20px rgba(5,32,60,.055), inset 0 1px 0 rgba(255,255,255,.9);
+    }
+
+    .toggle-box::after {
+        background-size: 36px 36px;
+        background-position: 0 0, 18px 18px;
+        opacity: .14;
+        animation-duration: 15s;
+    }
+
+    .cinematic-ring--outer {
+        width: 230px;
+        height: 230px;
+        margin-top: -115px;
+        inset-inline-start: -78px;
+    }
+
+    .cinematic-ring--inner {
+        width: 126px;
+        height: 126px;
+        inset-inline-end: -32px;
+        top: -12px;
+    }
+
+    .cinematic-glow {
+        width: 180px;
+        height: 180px;
+    }
+
+    .journey-signature {
+        width: 132px;
+        height: 14px;
+        margin-top: 0;
+    }
+
+    .journey-track {
+        width: 86px;
+    }
+
+    .toggle-panel > h1,
+    .toggle-panel > p,
+    .toggle-panel > .journey-signature {
+        transform: translateZ(18px);
+    }
+
+    .input-box input {
+        font-size: max(13.5px, 16px);
+    }
+
+    .btn:hover,
+    .google-btn:hover,
+    .role-label:hover {
+        transform: none;
+    }
+
+    .btn:active {
+        transform: scale(.985);
+    }
+
+    .google-btn:active,
+    .role-label:active {
+        transform: scale(.99);
+    }
+
+    /* اللمعة على الهاتف تُفعَّل عبر اللمس أيضاً */
+    .btn.is-touching::before {
+        transform: rotate(18deg) translateX(620%);
+    }
+
+    .auth-ambient-orb--cyan {
+        width: 27rem;
+        height: 27rem;
+    }
+
+    .auth-ambient-orb--coral {
+        width: 23rem;
+        height: 23rem;
+    }
+}
+
+@media screen and (max-width: 420px) {
+    .auth-premium-shell {
+        width: calc(100% - 12px);
+        margin: 6px auto;
+        border-radius: 22px;
+    }
+
+    .journey-signature {
+        transform: scale(.92) translateZ(16px);
+    }
+}
+
+/* =============================================================
+ * 26. Dark mode premium refinements
+ * ============================================================= */
+
+body.dark-mode.auth-premium-page {
+    background: radial-gradient(circle at 12% 10%, rgba(0,166,218,.095), transparent 28rem), radial-gradient(circle at 88% 86%, rgba(255,90,95,.055), transparent 24rem), #0f1115;
+}
+
+body.dark-mode .auth-premium-shell {
+    border-color: rgba(255,255,255,.055);
+    box-shadow: 0 32px 90px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.03);
+}
+
+body.dark-mode .form-box {
+    background: radial-gradient(circle at var(--premium-pointer-x, 50%) var(--premium-pointer-y, 42%), rgba(0,166,218,.045), transparent 28%), #181a20;
+}
+
+body.dark-mode .input-box input {
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.018), 0 4px 12px rgba(0,0,0,.08);
+}
+
+body.dark-mode .google-btn {
+    box-shadow: 0 8px 18px rgba(0,0,0,.11), inset 0 1px 0 rgba(255,255,255,.025);
+}
+
+/* =============================================================
+ * 27. Accessibility / performance
+ * ============================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+    .auth-ambient-orb,
+    .toggle-box::after,
+    .cinematic-ring,
+    .cinematic-glow,
+    .journey-runner {
+        animation: none !important;
+    }
+
+    .auth-premium-shell::after,
+    .input-box input,
+    .btn,
+    .google-btn,
+    .role-label {
+        transition-duration: .01ms !important;
+    }
+}

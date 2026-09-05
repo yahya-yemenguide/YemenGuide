@@ -1,0 +1,297 @@
+@model YemenGuide.Core.DTOs.Notifications.NotificationCenterDto
+@using YemenGuide.Core.Constants
+
+@{
+    ViewData["Title"] = "مركز الإشعارات";
+    Layout = "~/Areas/Owner/Views/Shared/_OwnerLayout.cshtml";
+
+    string FilterUrl(string filter, int page = 1)
+    {
+        return $"/Owner/Notifications?filter={Uri.EscapeDataString(filter)}&page={page}&pageSize={Model.PageSize}";
+    }
+
+    string TypeIcon(string? type)
+    {
+        return (type ?? string.Empty) switch
+        {
+            NotificationTypes.BookingCreated => "bi-calendar-plus-fill",
+            NotificationTypes.BookingAccepted => "bi-calendar-check-fill",
+            NotificationTypes.BookingConfirmed => "bi-patch-check-fill",
+            NotificationTypes.BookingRejected => "bi-calendar-x-fill",
+            NotificationTypes.BookingCancelled => "bi-x-octagon-fill",
+            NotificationTypes.BookingExpired => "bi-hourglass-split",
+
+            NotificationTypes.PaymentRequired => "bi-wallet2",
+            NotificationTypes.PaymentReceived => "bi-receipt-cutoff",
+            NotificationTypes.PaymentApproved => "bi-check-circle-fill",
+            NotificationTypes.PaymentRejected => "bi-exclamation-circle-fill",
+            NotificationTypes.RefundRequested => "bi-arrow-counterclockwise",
+            NotificationTypes.RefundReadyForTransfer => "bi-lightning-charge-fill",
+            NotificationTypes.RefundTransferred => "bi-send-check-fill",
+            NotificationTypes.RefundCompleted => "bi-cash-coin",
+
+            NotificationTypes.ReviewCreated => "bi-star-fill",
+            NotificationTypes.ReviewReply => "bi-chat-square-quote-fill",
+            NotificationTypes.Message => "bi-chat-dots-fill",
+            "ChatMessage" => "bi-chat-dots-fill",
+
+            NotificationTypes.ReportCreated => "bi-shield-exclamation",
+            NotificationTypes.ReportReply => "bi-shield-check",
+            NotificationTypes.ReportEscalated => "bi-arrow-up-circle-fill",
+            NotificationTypes.ReportWithdrawn => "bi-arrow-return-left",
+            NotificationTypes.ReportResolved => "bi-check-circle-fill",
+            NotificationTypes.ReportRejected => "bi-shield-x",
+
+            NotificationTypes.Promotion => "bi-percent",
+            NotificationTypes.Advertisement => "bi-megaphone-fill",
+            NotificationTypes.Account => "bi-person-check-fill",
+            NotificationTypes.Security => "bi-shield-lock-fill",
+            _ => "bi-bell-fill"
+        };
+    }
+
+    string TypeTone(string? type)
+    {
+        var value = type ?? string.Empty;
+
+        if (value.Equals(NotificationTypes.BookingRejected, StringComparison.OrdinalIgnoreCase) ||
+            value.Equals(NotificationTypes.BookingCancelled, StringComparison.OrdinalIgnoreCase) ||
+            value.Equals(NotificationTypes.PaymentRejected, StringComparison.OrdinalIgnoreCase) ||
+            value.Equals(NotificationTypes.ReportRejected, StringComparison.OrdinalIgnoreCase))
+            return "coral";
+
+        if (value.Equals(NotificationTypes.BookingAccepted, StringComparison.OrdinalIgnoreCase) ||
+            value.Equals(NotificationTypes.BookingConfirmed, StringComparison.OrdinalIgnoreCase) ||
+            value.Equals(NotificationTypes.PaymentApproved, StringComparison.OrdinalIgnoreCase) ||
+            value.Equals(NotificationTypes.RefundReadyForTransfer, StringComparison.OrdinalIgnoreCase) ||
+            value.Equals(NotificationTypes.RefundCompleted, StringComparison.OrdinalIgnoreCase) ||
+            value.Equals(NotificationTypes.ReportResolved, StringComparison.OrdinalIgnoreCase))
+            return "green";
+
+        if (value.Equals(NotificationTypes.BookingExpired, StringComparison.OrdinalIgnoreCase) ||
+            value.StartsWith("Payment", StringComparison.OrdinalIgnoreCase) ||
+            value.StartsWith("Refund", StringComparison.OrdinalIgnoreCase) ||
+            value.Equals(NotificationTypes.Security, StringComparison.OrdinalIgnoreCase))
+            return "amber";
+
+        if (value.StartsWith("Review", StringComparison.OrdinalIgnoreCase))
+            return "violet";
+
+        if (value.Equals(NotificationTypes.Advertisement, StringComparison.OrdinalIgnoreCase) ||
+            value.Equals(NotificationTypes.Promotion, StringComparison.OrdinalIgnoreCase))
+            return "orange";
+
+        return "cyan";
+    }
+
+    string TypeLabel(string? type)
+    {
+        var value = type ?? string.Empty;
+        if (value.StartsWith("Booking", StringComparison.OrdinalIgnoreCase)) return "حجز";
+        if (value.StartsWith("Payment", StringComparison.OrdinalIgnoreCase)) return "دفع";
+        if (value.StartsWith("Refund", StringComparison.OrdinalIgnoreCase)) return "استرداد";
+        if (value.StartsWith("Review", StringComparison.OrdinalIgnoreCase)) return "تقييم";
+        if (value.StartsWith("Report", StringComparison.OrdinalIgnoreCase)) return "بلاغ";
+        if (value.Equals(NotificationTypes.Message, StringComparison.OrdinalIgnoreCase) ||
+            value.Equals("ChatMessage", StringComparison.OrdinalIgnoreCase)) return "رسالة";
+        if (value.Equals(NotificationTypes.Advertisement, StringComparison.OrdinalIgnoreCase)) return "إعلان";
+        if (value.Equals(NotificationTypes.Promotion, StringComparison.OrdinalIgnoreCase)) return "عرض";
+        if (value.Equals(NotificationTypes.Account, StringComparison.OrdinalIgnoreCase)) return "الحساب";
+        if (value.Equals(NotificationTypes.Security, StringComparison.OrdinalIgnoreCase)) return "أمان";
+        return "إشعار";
+    }
+
+    string DateText(DateTime? date)
+    {
+        return date.HasValue ? date.Value.ToString("yyyy/MM/dd - hh:mm tt") : "الآن";
+    }
+
+    string ActiveClass(string filter) =>
+        string.Equals(Model.Filter, filter, StringComparison.OrdinalIgnoreCase) ? "active" : string.Empty;
+
+    string SectionTitle() => Model.Filter switch
+    {
+        "unread" => "غير المقروءة",
+        "booking" => "الحجوزات",
+        "payment" => "الدفع والاسترداد",
+        "review" => "التقييمات",
+        "message" => "الرسائل",
+        "report" => "البلاغات والقضايا",
+        _ => "جميع الإشعارات"
+    };
+}
+
+@section PageStyles {
+    <link rel="stylesheet"
+          href="~/css/owner/owner-notification-center.css"
+          asp-append-version="true" />
+}
+
+<section class="owner-notification-center-page"
+         id="ownerNotificationCenterPage"
+         data-focus-notification="@Model.FocusNotificationId"
+         data-center-data-endpoint="/Owner/Notifications/Data"
+         data-mark-all-endpoint="/Notifications/MarkAllAsRead"
+         data-page-size="@Model.PageSize"
+         data-current-filter="@Model.Filter"
+         data-current-page="@Model.CurrentPage">
+
+    <form class="owner-notification-center-token-form" aria-hidden="true">
+        @Html.AntiForgeryToken()
+    </form>
+
+    <div class="owner-notification-center-shell">
+        <header class="owner-notification-center-hero">
+            <div class="owner-notification-center-hero__copy">
+                <span class="owner-notification-center-hero__icon" aria-hidden="true">
+                    <i class="bi bi-bell-fill"></i>
+                </span>
+                <div>
+                    <span class="owner-notification-center-eyebrow">مركز إشعارات المالك</span>
+                    <h1>كل ما يحتاج انتباهك في مكان واحد</h1>
+                    <p>تابع الحجوزات والدفعات والتقييمات والرسائل والبلاغات، ثم انتقل إلى الحدث المرتبط مباشرة.</p>
+                </div>
+            </div>
+
+            <div class="owner-notification-center-hero__stats">
+                <div class="owner-notification-center-stat">
+                    <span>إجمالي الإشعارات</span>
+                    <strong id="ownerNotificationCenterTotalHero">@Model.TotalCount</strong>
+                </div>
+                <div class="owner-notification-center-stat is-unread">
+                    <span>غير المقروء</span>
+                    <strong id="ownerNotificationCenterUnreadHero">@Model.UnreadCount</strong>
+                </div>
+                <button type="button"
+                        class="owner-notification-center-mark-all @(Model.UnreadCount <= 0 ? "is-disabled" : string.Empty)"
+                        id="ownerNotificationCenterMarkAll"
+                        data-unread-count="@Model.UnreadCount"
+                        disabled="@(Model.UnreadCount <= 0)">
+                    <i class="bi bi-check2-all"></i>
+                    <span>تعليم الكل كمقروء</span>
+                </button>
+            </div>
+        </header>
+
+        <nav class="owner-notification-center-tabs-wrap" aria-label="تصنيفات الإشعارات">
+            <div class="owner-notification-center-tabs" data-owner-notification-tabs>
+                <a href="@FilterUrl("all")" class="owner-notification-center-tab @ActiveClass("all")" data-owner-notification-tab data-filter="all">
+                    <i class="bi bi-grid-fill"></i><span>الكل</span><b id="ownerNotificationCenterAllCount">@Model.TotalCount</b>
+                </a>
+                <a href="@FilterUrl("unread")" class="owner-notification-center-tab @ActiveClass("unread")" data-owner-notification-tab data-filter="unread">
+                    <i class="bi bi-circle-fill"></i><span>غير المقروء</span><b id="ownerNotificationCenterUnreadTab">@Model.UnreadCount</b>
+                </a>
+                <a href="@FilterUrl("booking")" class="owner-notification-center-tab @ActiveClass("booking")" data-owner-notification-tab data-filter="booking">
+                    <i class="bi bi-calendar2-check-fill"></i><span>الحجوزات</span><b id="ownerNotificationCenterBookingCount">@Model.BookingCount</b>
+                </a>
+                <a href="@FilterUrl("payment")" class="owner-notification-center-tab @ActiveClass("payment")" data-owner-notification-tab data-filter="payment">
+                    <i class="bi bi-wallet2"></i><span>الدفع والاسترداد</span><b id="ownerNotificationCenterPaymentCount">@Model.PaymentCount</b>
+                </a>
+                <a href="@FilterUrl("review")" class="owner-notification-center-tab @ActiveClass("review")" data-owner-notification-tab data-filter="review">
+                    <i class="bi bi-star-fill"></i><span>التقييمات</span><b id="ownerNotificationCenterReviewCount">@Model.ReviewCount</b>
+                </a>
+                <a href="@FilterUrl("message")" class="owner-notification-center-tab @ActiveClass("message")" data-owner-notification-tab data-filter="message">
+                    <i class="bi bi-chat-dots-fill"></i><span>الرسائل</span><b id="ownerNotificationCenterMessageCount">@Model.MessageCount</b>
+                </a>
+                <a href="@FilterUrl("report")" class="owner-notification-center-tab @ActiveClass("report")" data-owner-notification-tab data-filter="report">
+                    <i class="bi bi-shield-check"></i><span>البلاغات</span><b id="ownerNotificationCenterReportCount">@Model.ReportCount</b>
+                </a>
+            </div>
+        </nav>
+
+        <section class="owner-notification-center-panel" id="ownerNotificationCenterPanel">
+            <div class="owner-notification-center-panel__head">
+                <div>
+                    <span>الإشعارات</span>
+                    <h2 id="ownerNotificationCenterSectionTitle">@SectionTitle()</h2>
+                </div>
+                <span class="owner-notification-center-result-count" id="ownerNotificationCenterResultCount">
+                    <i class="bi bi-collection-fill"></i>
+                    @Model.FilteredCount نتيجة
+                </span>
+            </div>
+
+            <div class="owner-notification-center-loading" id="ownerNotificationCenterLoading" hidden>
+                <span></span><strong>جاري تحديث الإشعارات...</strong>
+            </div>
+
+            <div class="owner-notification-center-list" id="ownerNotificationCenterList" aria-live="polite">
+                @if (Model.Items.Count > 0)
+                {
+                    @for (int index = 0; index < Model.Items.Count; index++)
+                    {
+                        var item = Model.Items[index];
+                        var isFocused = Model.FocusNotificationId > 0 && Model.FocusNotificationId == item.NotificationId;
+                        <a href="@item.OpenUrl"
+                           class="owner-notification-center-item @(!item.IsRead ? "is-unread" : string.Empty) @(isFocused ? "is-focused" : string.Empty)"
+                           data-owner-notification-center-item
+                           data-notification-id="@item.NotificationId"
+                           data-tone="@TypeTone(item.NotificationType)"
+                           style="--onc-delay:@(Math.Min(index * 34, 238))ms">
+                            <span class="owner-notification-center-item__icon"><i class="bi @TypeIcon(item.NotificationType)"></i></span>
+                            <span class="owner-notification-center-item__content">
+                                <span class="owner-notification-center-item__top">
+                                    <span class="owner-notification-center-item__title-wrap">
+                                        <strong>@item.NotificationTitle</strong>
+                                        @if (!item.IsRead)
+                                        {
+                                            <span class="owner-notification-center-item__dot" aria-label="غير مقروء"></span>
+                                        }
+                                    </span>
+                                    <span class="owner-notification-center-item__type">@TypeLabel(item.NotificationType)</span>
+                                </span>
+                                <span class="owner-notification-center-item__text">@item.NotificationText</span>
+                                <span class="owner-notification-center-item__meta"><i class="bi bi-clock"></i>@DateText(item.CreatedAt)</span>
+                            </span>
+                            <span class="owner-notification-center-item__arrow"><i class="bi bi-chevron-left"></i></span>
+                        </a>
+                    }
+                }
+                else
+                {
+                    <div class="owner-notification-center-empty">
+                        <span><i class="bi bi-bell-slash"></i></span>
+                        <h3>لا توجد إشعارات في هذا القسم</h3>
+                        <p>كل شيء هادئ الآن. جرّب قسمًا آخر أو اعرض جميع الإشعارات.</p>
+                        @if (Model.Filter != "all")
+                        {
+                            <a href="@FilterUrl("all")" data-owner-notification-tab data-filter="all"><i class="bi bi-grid-fill"></i>عرض الكل</a>
+                        }
+                    </div>
+                }
+            </div>
+
+            <nav class="owner-notification-center-pagination"
+                 id="ownerNotificationCenterPagination"
+                 aria-label="صفحات الإشعارات"
+                 hidden="@(Model.TotalPages <= 1)">
+                @if (Model.TotalPages > 1)
+                {
+                    <button type="button" class="owner-notification-center-pagination__arrow" data-owner-notification-page="@(Model.CurrentPage - 1)" disabled="@(!Model.HasPreviousPage)">
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                    <div class="owner-notification-center-pagination__pages">
+                        @for (int pageNumber = 1; pageNumber <= Model.TotalPages; pageNumber++)
+                        {
+                            if (pageNumber == 1 || pageNumber == Model.TotalPages || Math.Abs(pageNumber - Model.CurrentPage) <= 1)
+                            {
+                                <button type="button" class="@(pageNumber == Model.CurrentPage ? "active" : string.Empty)" data-owner-notification-page="@pageNumber">@pageNumber</button>
+                            }
+                            else if (pageNumber == Model.CurrentPage - 2 || pageNumber == Model.CurrentPage + 2)
+                            {
+                                <span>…</span>
+                            }
+                        }
+                    </div>
+                    <button type="button" class="owner-notification-center-pagination__arrow" data-owner-notification-page="@(Model.CurrentPage + 1)" disabled="@(!Model.HasNextPage)">
+                        <i class="bi bi-chevron-left"></i>
+                    </button>
+                }
+            </nav>
+        </section>
+    </div>
+</section>
+
+@section Scripts {
+    <script src="~/js/owner/owner-notification-center.js" asp-append-version="true"></script>
+}

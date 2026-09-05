@@ -1,0 +1,862 @@
+@using System
+@using System.Collections.Generic
+@using System.Globalization
+@using System.Linq
+@using YemenGuide.Core.DTOs.Owner
+
+@model InvoicesReportsTabDto
+
+@{
+    var pageModel = Model ?? new InvoicesReportsTabDto();
+    var filter = pageModel.Filter ?? new FinancialReportFilterDto();
+    var summary = pageModel.Summary ?? new FinancialReportSummaryDto();
+    var reconciliation = pageModel.Reconciliation ?? new FinancialReconciliationDto();
+    var capabilities = pageModel.Capabilities ?? new FinancialReportCapabilitiesDto();
+    var documents = pageModel.Documents ?? new List<FinancialDocumentItemDto>();
+    var rows = pageModel.ReportRows ?? new List<FinancialReportRowDto>();
+    var numberCulture = CultureInfo.GetCultureInfo("en-US");
+
+    var reportType = string.IsNullOrWhiteSpace(filter.ReportType)
+        ? OwnerFinancialReportTypes.Comprehensive
+        : filter.ReportType;
+
+    var isComprehensive = string.Equals(reportType, OwnerFinancialReportTypes.Comprehensive, StringComparison.OrdinalIgnoreCase);
+    var isBookings = string.Equals(reportType, OwnerFinancialReportTypes.Bookings, StringComparison.OrdinalIgnoreCase);
+    var isPayments = string.Equals(reportType, OwnerFinancialReportTypes.Payments, StringComparison.OrdinalIgnoreCase);
+    var isCommissions = string.Equals(reportType, OwnerFinancialReportTypes.Commissions, StringComparison.OrdinalIgnoreCase);
+    var isRefunds = string.Equals(reportType, OwnerFinancialReportTypes.Refunds, StringComparison.OrdinalIgnoreCase);
+    var isTransactions = string.Equals(reportType, OwnerFinancialReportTypes.Transactions, StringComparison.OrdinalIgnoreCase);
+    var isDocuments = string.Equals(reportType, OwnerFinancialReportTypes.Documents, StringComparison.OrdinalIgnoreCase);
+
+    var totalPages = Math.Max(0, pageModel.TotalPages);
+    var currentPage = Math.Max(1, pageModel.PageNumber);
+    if (totalPages > 0 && currentPage > totalPages) currentPage = totalPages;
+
+    var firstPage = Math.Max(1, currentPage - 2);
+    var lastPage = Math.Min(totalPages, firstPage + 4);
+    firstPage = Math.Max(1, lastPage - 4);
+
+    string Money(decimal value)
+    {
+        var format = decimal.Truncate(value) == value ? "N0" : "N2";
+        return $"{value.ToString(format, numberCulture)} {pageModel.Currency}";
+    }
+
+    string Number(int value) => value.ToString("N0", numberCulture);
+
+    string DateInput(DateTime? value) => value?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty;
+
+    string DateText(DateTime? value, bool withTime = false)
+    {
+        if (!value.HasValue) return "—";
+        return value.Value.ToString(withTime ? "dd/MM/yyyy - hh:mm tt" : "dd/MM/yyyy", numberCulture);
+    }
+
+    string StatusClass(string? value)
+    {
+        var normalized = value?.Trim().ToLowerInvariant() ?? string.Empty;
+        if (normalized.Contains("completed") || normalized.Contains("confirmed") || normalized.Contains("approved") || normalized.Contains("charged") || normalized.Contains("released") || normalized == "paid") return "is-success";
+        if (normalized.Contains("pending") || normalized.Contains("processing") || normalized.Contains("review") || normalized.Contains("held") || normalized.Contains("partial")) return "is-warning";
+        if (normalized.Contains("failed") || normalized.Contains("rejected") || normalized.Contains("cancelled") || normalized.Contains("expired") || normalized.Contains("debt") || normalized.Contains("suspended")) return "is-danger";
+        return "is-neutral";
+    }
+
+    string ReportIcon(string? value) => value switch
+    {
+        OwnerFinancialReportTypes.Comprehensive => "bi-grid-1x2-fill",
+        OwnerFinancialReportTypes.Bookings => "bi-calendar2-check-fill",
+        OwnerFinancialReportTypes.Payments => "bi-wallet2",
+        OwnerFinancialReportTypes.Commissions => "bi-percent",
+        OwnerFinancialReportTypes.Refunds => "bi-arrow-counterclockwise",
+        OwnerFinancialReportTypes.Transactions => "bi-arrow-left-right",
+        OwnerFinancialReportTypes.Documents => "bi-file-earmark-text-fill",
+        _ => "bi-bar-chart-line-fill"
+    };
+
+    string ReportShortLabel(string? value) => value switch
+    {
+        OwnerFinancialReportTypes.Comprehensive => "الشامل",
+        OwnerFinancialReportTypes.Bookings => "الحجوزات",
+        OwnerFinancialReportTypes.Payments => "المدفوعات",
+        OwnerFinancialReportTypes.Commissions => "العمولات",
+        OwnerFinancialReportTypes.Refunds => "الاستردادات",
+        OwnerFinancialReportTypes.Transactions => "الحركات",
+        OwnerFinancialReportTypes.Documents => "المستندات",
+        _ => "تقرير"
+    };
+
+    string DocumentIcon(string? value) => value switch
+    {
+        OwnerFinancialDocumentTypes.BookingInvoice => "bi-receipt-cutoff",
+        OwnerFinancialDocumentTypes.DepositReceipt => "bi-credit-card-2-front",
+        OwnerFinancialDocumentTypes.CollectionReceipt => "bi-cash-coin",
+        OwnerFinancialDocumentTypes.RefundReceipt => "bi-arrow-counterclockwise",
+        OwnerFinancialDocumentTypes.TopUpReceipt => "bi-wallet2",
+        OwnerFinancialDocumentTypes.BookingSettlement => "bi-file-earmark-spreadsheet",
+        _ => "bi-file-earmark-text"
+    };
+
+    var kpis = new List<FinancialReportMetricDto>();
+
+    if (isBookings)
+    {
+        kpis.Add(new FinancialReportMetricDto { Label = "إجمالي الحجوزات", Value = Number(summary.BookingCount), Hint = "حجز ضمن الفترة", Tone = "Primary" });
+        kpis.Add(new FinancialReportMetricDto { Label = "قيمة الحجوزات", Value = Money(summary.TotalBookingValue), Hint = summary.DiscountedBookingsCount > 0 ? $"خصومات {Money(summary.TotalDiscountAmount)}" : "بعد الخصومات", Tone = "Info" });
+        kpis.Add(new FinancialReportMetricDto { Label = "الإيراد الفعلي", Value = Money(summary.ActualRevenue), Hint = "بعد استبعاد أثر الإلغاءات", Tone = "Success" });
+    }
+    else if (isPayments)
+    {
+        kpis.Add(new FinancialReportMetricDto { Label = "مدفوع إلكترونيًا", Value = Money(summary.TotalPaidOnline), Hint = "المبالغ المعتمدة فقط", Tone = "Primary" });
+        kpis.Add(new FinancialReportMetricDto { Label = "محصل في المنشأة", Value = Money(summary.TotalCollectedAtProperty), Hint = "تحصيل فعلي داخل المنشأة", Tone = "Success" });
+        kpis.Add(new FinancialReportMetricDto { Label = "المتبقي", Value = Money(summary.TotalRemainingAtProperty), Hint = $"نسبة التحصيل {summary.CollectionRate.ToString("0.##", numberCulture)}%", Tone = summary.TotalRemainingAtProperty > 0 ? "Warning" : "Neutral" });
+    }
+    else if (isCommissions)
+    {
+        kpis.Add(new FinancialReportMetricDto { Label = "العمولة المحتسبة", Value = Money(summary.TotalCommission), Hint = "حسب لقطة نسبة العمولة", Tone = "Primary" });
+        kpis.Add(new FinancialReportMetricDto { Label = "المخصومة فعليًا", Value = Money(summary.TotalCommissionCharged), Hint = "المثبتة كخصم نهائي", Tone = "Success" });
+        kpis.Add(new FinancialReportMetricDto { Label = "المعادة / الدين", Value = $"{Money(summary.TotalCommissionReleased)} / {Money(summary.TotalCommissionDebt)}", Hint = "تحرير العمولة مقابل مديونية العمولة", Tone = summary.TotalCommissionDebt > 0 ? "Warning" : "Info" });
+    }
+    else if (isRefunds)
+    {
+        kpis.Add(new FinancialReportMetricDto { Label = "المطلوب استرداده", Value = Money(summary.RequestedRefundAmount), Hint = $"طلبات مفتوحة {Number(summary.OpenRefundsCount)}", Tone = "Warning" });
+        kpis.Add(new FinancialReportMetricDto { Label = "المسترد المكتمل", Value = Money(summary.TotalRefunded), Hint = $"عمليات مكتملة {Number(summary.CompletedRefundsCount)}", Tone = "Success" });
+        kpis.Add(new FinancialReportMetricDto { Label = "حصة المنشأة", Value = Money(summary.TotalOwnerShare), Hint = $"رسوم الإلغاء {Money(summary.TotalCancellationFees)}", Tone = "Primary" });
+    }
+    else if (isTransactions)
+    {
+        kpis.Add(new FinancialReportMetricDto { Label = "الحركات المكتملة", Value = Number(summary.CompletedTransactionsCount), Hint = "حركات مثبتة", Tone = "Success" });
+        kpis.Add(new FinancialReportMetricDto { Label = "الشحن المكتمل", Value = Money(summary.TotalTopUps), Hint = $"المعلق {Money(summary.TotalPendingTopUps)}", Tone = "Primary" });
+        kpis.Add(new FinancialReportMetricDto { Label = "الدين الحالي", Value = Money(summary.CurrentDebt), Hint = "رصيد مديونية العمولة", Tone = summary.CurrentDebt > 0 ? "Warning" : "Neutral" });
+    }
+    else if (isDocuments)
+    {
+        kpis.Add(new FinancialReportMetricDto { Label = "عدد المستندات", Value = Number(summary.DocumentsCount), Hint = "المستندات المطابقة للفلاتر", Tone = "Primary" });
+        kpis.Add(new FinancialReportMetricDto { Label = "قيمة المستندات", Value = Money(summary.TotalDocumentValue), Hint = "إجمالي القيمة الأساسية", Tone = "Info" });
+        kpis.Add(new FinancialReportMetricDto { Label = "فواتير وتسويات", Value = Number(summary.BookingInvoicesCount + summary.SettlementStatementsCount), Hint = "مستندات الحجز والتسوية", Tone = "Success" });
+    }
+    else
+    {
+        kpis.Add(new FinancialReportMetricDto { Label = "قيمة الحجوزات", Value = Money(summary.TotalBookingValue), Hint = $"{Number(summary.BookingCount)} حجز", Tone = "Primary" });
+        kpis.Add(new FinancialReportMetricDto { Label = "إجمالي المحصل", Value = Money(summary.TotalActualCollected), Hint = $"المتبقي {Money(summary.TotalRemainingAtProperty)}", Tone = "Info" });
+        kpis.Add(new FinancialReportMetricDto { Label = "صافي المالك", Value = Money(summary.NetRevenue), Hint = "بعد أثر العمولة والاستردادات المسجلة", Tone = "Success" });
+    }
+
+    var advancedFilterCount = new[]
+    {
+        capabilities.ShowDateScope && !string.IsNullOrWhiteSpace(filter.DateScope),
+        capabilities.ShowDocumentType && !string.IsNullOrWhiteSpace(filter.DocumentType),
+        capabilities.ShowPaymentChannel && !string.IsNullOrWhiteSpace(filter.PaymentChannel) && !string.Equals(filter.PaymentChannel, OwnerFinancialPaymentChannels.All, StringComparison.OrdinalIgnoreCase),
+        capabilities.ShowBookingId && filter.BookingId.HasValue,
+        capabilities.ShowCustomerId && filter.CustomerId.HasValue,
+        capabilities.ShowBookingState && !string.IsNullOrWhiteSpace(filter.BookingState),
+        capabilities.ShowPaymentStatus && !string.IsNullOrWhiteSpace(filter.PaymentStatus),
+        capabilities.ShowCommissionStatus && !string.IsNullOrWhiteSpace(filter.CommissionStatus),
+        capabilities.ShowRefundStatus && !string.IsNullOrWhiteSpace(filter.RefundStatus),
+        capabilities.ShowTransactionType && !string.IsNullOrWhiteSpace(filter.TransactionType),
+        capabilities.ShowTransactionStatus && !string.IsNullOrWhiteSpace(filter.TransactionStatus),
+        capabilities.ShowReferenceNumber && !string.IsNullOrWhiteSpace(filter.ReferenceNumber)
+    }.Count(value => value);
+}
+
+<link rel="stylesheet"
+      href="~/css/owner/financials/owner-financial-invoices-reports.css"
+      asp-append-version="true" />
+
+<section class="ofir-editorial"
+         data-owner-financial-partial="reports"
+         data-load-url="@Url.Content("~/Owner/Financials/InvoicesReports")"
+         data-print-url="@Url.Content("~/Owner/Financials/InvoicesReports/Print")"
+         data-excel-url="@Url.Content("~/Owner/Financials/InvoicesReports/Export/Excel")"
+         data-active-report-type="@reportType"
+         dir="rtl">
+
+    <header class="ofir-editorial__header">
+        <div class="ofir-editorial__identity">
+            <span class="ofir-editorial__mark" aria-hidden="true">
+                <i class="bi @ReportIcon(reportType)"></i>
+            </span>
+
+            <div>
+                <span class="ofir-editorial__kicker">مركز التقارير المالية</span>
+                <h2>@pageModel.ReportTitle</h2>
+                <p>@pageModel.ReportDescription</p>
+            </div>
+        </div>
+
+        <div class="ofir-editorial__header-actions">
+            <button type="submit"
+                    form="ownerFinancialReportsFilterForm"
+                    formaction="@Url.Content("~/Owner/Financials/InvoicesReports/Print")"
+                    formmethod="get"
+                    formtarget="_blank"
+                    name="ExportFormat"
+                    value="Print"
+                    class="ofir-editorial__action is-print">
+                <i class="bi bi-printer"></i>
+                <span>طباعة التقرير</span>
+            </button>
+
+            <button type="submit"
+                    form="ownerFinancialReportsFilterForm"
+                    formaction="@Url.Content("~/Owner/Financials/InvoicesReports/Export/Excel")"
+                    formmethod="get"
+                    name="ExportFormat"
+                    value="Excel"
+                    class="ofir-editorial__action is-excel">
+                <i class="bi bi-file-earmark-excel"></i>
+                <span>Excel</span>
+            </button>
+        </div>
+    </header>
+
+    <nav class="ofir-editorial__report-nav" aria-label="أنواع التقارير">
+        @foreach (var option in pageModel.ReportTypeOptions)
+        {
+            var optionValue = option.Value;
+            var selected = string.Equals(optionValue, reportType, StringComparison.OrdinalIgnoreCase);
+
+            <button type="button"
+                class="ofir-editorial__report-tab @(selected ? "is-active" : string.Empty)"
+                data-ofir-report-chip
+                data-report-type="@optionValue"
+                aria-pressed="@(selected ? "true" : "false")">
+                <i class="bi @ReportIcon(optionValue)"></i>
+                <span>@ReportShortLabel(optionValue)</span>
+            </button>
+        }
+    </nav>
+
+    <form id="ownerFinancialReportsFilterForm"
+          class="ofir-editorial__filter-card"
+          method="get"
+          action="@Url.Content("~/Owner/Financials/InvoicesReports")"
+          data-ofir-filter-form
+          novalidate>
+
+        <input type="hidden" name="PlaceId" value="@(filter.PlaceId?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)" />
+        <input type="hidden" name="ReportType" value="@reportType" data-ofir-report-type />
+        <input type="hidden" name="PageNumber" value="1" data-ofir-page-number />
+
+        <div class="ofir-editorial__filter-head">
+            <div>
+                <span><i class="bi bi-sliders"></i></span>
+                <div>
+                    <strong>تخصيص التقرير</strong>
+                    <small>الفلاتر الظاهرة فقط هي الأكثر استخدامًا</small>
+                </div>
+            </div>
+
+            <div class="ofir-editorial__quick-periods" aria-label="اختصارات الفترة">
+                <button type="button" data-ofir-range="today">اليوم</button>
+                <button type="button" data-ofir-range="7days">7 أيام</button>
+                <button type="button" data-ofir-range="month">هذا الشهر</button>
+                <button type="button" data-ofir-range="all">كل الفترة</button>
+            </div>
+        </div>
+
+        <div class="ofir-editorial__filter-main">
+            <label class="ofir-editorial__field">
+                <span>من</span>
+                <div>
+                    <i class="bi bi-calendar3"></i>
+                    <input type="date" name="FromDate" value="@DateInput(filter.FromDate)" data-ofir-from-date />
+                </div>
+            </label>
+
+            <label class="ofir-editorial__field">
+                <span>إلى</span>
+                <div>
+                    <i class="bi bi-calendar3"></i>
+                    <input type="date" name="ToDate" value="@DateInput(filter.ToDate)" data-ofir-to-date />
+                </div>
+            </label>
+
+            @if (capabilities.ShowSearch)
+            {
+                <label class="ofir-editorial__field is-search">
+                    <span>بحث سريع</span>
+                    <div>
+                        <i class="bi bi-search"></i>
+                        <input type="search"
+                           name="Search"
+                           value="@filter.Search"
+                           maxlength="100"
+                           autocomplete="off"
+                           placeholder="اسم العميل، رقم الحجز أو المرجع" />
+                    </div>
+                </label>
+            }
+
+            <button type="submit" class="ofir-editorial__apply">
+                <i class="bi bi-arrow-repeat"></i>
+                تحديث التقرير
+            </button>
+        </div>
+
+        <div class="ofir-editorial__validation" data-ofir-validation-for="dateRange"></div>
+        <div class="ofir-editorial__filter-alert" data-ofir-filter-alert hidden></div>
+
+        <details class="ofir-editorial__advanced" @(advancedFilterCount > 0 ? "open" : null)>
+            <summary>
+                <span>
+                    <i class="bi bi-tune"></i>
+                    فلاتر متقدمة
+                    @if (advancedFilterCount > 0)
+                    {
+                        <b>@advancedFilterCount</b>
+                    }
+                </span>
+                <i class="bi bi-chevron-down"></i>
+            </summary>
+
+            <div class="ofir-editorial__advanced-grid">
+                @if (capabilities.ShowDateScope)
+                {
+                    <label class="ofir-editorial__field">
+                        <span>التاريخ المعتمد</span>
+                        <div class="is-select">
+                            <i class="bi bi-calendar-event"></i>
+                            <select name="DateScope">
+                                @foreach (var option in pageModel.DateScopeOptions)
+                                {
+                                    <option value="@option.Value" selected="@(option.IsSelected ? "selected" : null)">@option.Label</option>
+                                }
+                            </select>
+                        </div>
+                    </label>
+                }
+
+                @if (capabilities.ShowDocumentType)
+                {
+                    <label class="ofir-editorial__field">
+                        <span>نوع المستند</span>
+                        <div class="is-select">
+                            <i class="bi bi-file-earmark-text"></i>
+                            <select name="DocumentType">
+                                <option value="">كل المستندات</option>
+                                @foreach (var option in pageModel.DocumentTypeOptions)
+                                {
+                                    <option value="@option.Value" selected="@(option.IsSelected ? "selected" : null)">@option.Label</option>
+                                }
+                            </select>
+                        </div>
+                    </label>
+                }
+
+                @if (capabilities.ShowPaymentChannel)
+                {
+                    <label class="ofir-editorial__field">
+                        <span>قناة التحصيل</span>
+                        <div class="is-select">
+                            <i class="bi bi-wallet2"></i>
+                            <select name="PaymentChannel">
+                                @foreach (var option in pageModel.PaymentChannelOptions)
+                                {
+                                    <option value="@option.Value" selected="@(option.IsSelected ? "selected" : null)">@option.Label</option>
+                                }
+                            </select>
+                        </div>
+                    </label>
+                }
+
+                @if (capabilities.ShowBookingState)
+                {
+                    <label class="ofir-editorial__field">
+                        <span>حالة الحجز</span>
+                        <div class="is-select">
+                            <i class="bi bi-calendar2-check"></i>
+                            <select name="BookingState">
+                                <option value="">كل الحالات</option>
+                                @foreach (var option in pageModel.BookingStateOptions)
+                                {
+                                    <option value="@option.Value" selected="@(option.IsSelected ? "selected" : null)">@option.Label</option>
+                                }
+                            </select>
+                        </div>
+                    </label>
+                }
+
+                @if (capabilities.ShowPaymentStatus)
+                {
+                    <label class="ofir-editorial__field">
+                        <span>حالة الدفع</span>
+                        <div class="is-select">
+                            <i class="bi bi-credit-card"></i>
+                            <select name="PaymentStatus">
+                                <option value="">كل الحالات</option>
+                                @foreach (var option in pageModel.PaymentStatusOptions)
+                                {
+                                    <option value="@option.Value" selected="@(option.IsSelected ? "selected" : null)">@option.Label</option>
+                                }
+                            </select>
+                        </div>
+                    </label>
+                }
+
+                @if (capabilities.ShowCommissionStatus)
+                {
+                    <label class="ofir-editorial__field">
+                        <span>حالة العمولة</span>
+                        <div class="is-select">
+                            <i class="bi bi-percent"></i>
+                            <select name="CommissionStatus">
+                                <option value="">كل الحالات</option>
+                                @foreach (var option in pageModel.CommissionStatusOptions)
+                                {
+                                    <option value="@option.Value" selected="@(option.IsSelected ? "selected" : null)">@option.Label</option>
+                                }
+                            </select>
+                        </div>
+                    </label>
+                }
+
+                @if (capabilities.ShowRefundStatus)
+                {
+                    <label class="ofir-editorial__field">
+                        <span>حالة الاسترداد</span>
+                        <div class="is-select">
+                            <i class="bi bi-arrow-counterclockwise"></i>
+                            <select name="RefundStatus">
+                                <option value="">كل الحالات</option>
+                                @foreach (var option in pageModel.RefundStatusOptions)
+                                {
+                                    <option value="@option.Value" selected="@(option.IsSelected ? "selected" : null)">@option.Label</option>
+                                }
+                            </select>
+                        </div>
+                    </label>
+                }
+
+                @if (capabilities.ShowTransactionType)
+                {
+                    <label class="ofir-editorial__field">
+                        <span>نوع الحركة</span>
+                        <div class="is-select">
+                            <i class="bi bi-arrow-left-right"></i>
+                            <select name="TransactionType">
+                                <option value="">كل الحركات</option>
+                                @foreach (var option in pageModel.TransactionTypeOptions)
+                                {
+                                    <option value="@option.Value" selected="@(option.IsSelected ? "selected" : null)">@option.Label</option>
+                                }
+                            </select>
+                        </div>
+                    </label>
+                }
+
+                @if (capabilities.ShowTransactionStatus)
+                {
+                    <label class="ofir-editorial__field">
+                        <span>حالة الحركة</span>
+                        <div class="is-select">
+                            <i class="bi bi-check2-circle"></i>
+                            <select name="TransactionStatus">
+                                <option value="">كل الحالات</option>
+                                @foreach (var option in pageModel.TransactionStatusOptions)
+                                {
+                                    <option value="@option.Value" selected="@(option.IsSelected ? "selected" : null)">@option.Label</option>
+                                }
+                            </select>
+                        </div>
+                    </label>
+                }
+
+                @if (capabilities.ShowBookingId)
+                {
+                    <label class="ofir-editorial__field">
+                        <span>رقم الحجز</span>
+                        <div>
+                            <i class="bi bi-hash"></i>
+                            <input type="number" min="1" name="BookingId" value="@(filter.BookingId?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)" />
+                        </div>
+                    </label>
+                }
+
+                @if (capabilities.ShowCustomerId)
+                {
+                    <label class="ofir-editorial__field">
+                        <span>رقم العميل</span>
+                        <div>
+                            <i class="bi bi-person"></i>
+                            <input type="number" min="1" name="CustomerId" value="@(filter.CustomerId?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)" />
+                        </div>
+                    </label>
+                }
+
+                @if (capabilities.ShowReferenceNumber)
+                {
+                    <label class="ofir-editorial__field">
+                        <span>المرجع المالي</span>
+                        <div>
+                            <i class="bi bi-upc-scan"></i>
+                            <input type="text" maxlength="80" name="ReferenceNumber" value="@filter.ReferenceNumber" />
+                        </div>
+                    </label>
+                }
+
+                <label class="ofir-editorial__field is-page-size">
+                    <span>عدد النتائج</span>
+                    <div class="is-select">
+                        <i class="bi bi-list-ol"></i>
+                        <select name="PageSize">
+                            <option value="10" selected="@(pageModel.PageSize == 10 ? "selected" : null)">10</option>
+                            <option value="25" selected="@(pageModel.PageSize == 25 ? "selected" : null)">25</option>
+                            <option value="50" selected="@(pageModel.PageSize == 50 ? "selected" : null)">50</option>
+                        </select>
+                    </div>
+                </label>
+            </div>
+
+            <footer class="ofir-editorial__advanced-footer">
+                <button type="button" data-ofir-clear-filters>
+                    <i class="bi bi-eraser"></i>
+                    مسح الفلاتر
+                </button>
+            </footer>
+        </details>
+    </form>
+
+    <section class="ofir-editorial__kpis" aria-label="ملخص التقرير">
+        @foreach (var metric in kpis.Take(3))
+        {
+            var tone = metric.Tone?.Trim().ToLowerInvariant() ?? "neutral";
+            <article class="ofir-editorial__kpi is-@tone">
+                <div class="ofir-editorial__kpi-icon" aria-hidden="true">
+                    @if (tone == "success")
+                    {
+                        <i class="bi bi-graph-up-arrow"></i>
+                    }
+                    else if (tone == "warning")
+                    {
+                        <i class="bi bi-exclamation-circle"></i>
+                    }
+                    else if (tone == "primary")
+                    {
+                        <i class="bi bi-stars"></i>
+                    }
+                    else
+                    {
+                        <i class="bi bi-bar-chart-line"></i>
+                    }
+                </div>
+                <div>
+                    <small>@metric.Label</small>
+                    <strong>@metric.Value</strong>
+                    @if (!string.IsNullOrWhiteSpace(metric.Hint))
+                    {
+                        <span>@metric.Hint</span>
+                    }
+                </div>
+            </article>
+        }
+    </section>
+
+    @if (reconciliation.IsApplicable)
+    {
+        <section class="ofir-editorial__reconciliation @(reconciliation.IsBalanced ? "is-balanced" : "has-issues")">
+            <div class="ofir-editorial__reconciliation-state">
+                <span><i class="bi @(reconciliation.IsBalanced ? "bi-shield-check" : "bi-exclamation-triangle")"></i></span>
+                <div>
+                    <small>سلامة المطابقة المالية</small>
+                    <strong>@reconciliation.StatusLabel</strong>
+                </div>
+            </div>
+
+            <div class="ofir-editorial__reconciliation-checks">
+                <span class="@(reconciliation.CollectionMismatchCount == 0 ? "is-ok" : "is-bad")">
+                    <i class="bi @(reconciliation.CollectionMismatchCount == 0 ? "bi-check2" : "bi-x-lg")"></i>
+                    التحصيل
+                </span>
+                <span class="@(reconciliation.RefundFundingMismatchCount == 0 ? "is-ok" : "is-bad")">
+                    <i class="bi @(reconciliation.RefundFundingMismatchCount == 0 ? "bi-check2" : "bi-x-lg")"></i>
+                    الاستردادات
+                </span>
+                <span class="@(reconciliation.PriceMismatchCount == 0 ? "is-ok" : "is-bad")">
+                    <i class="bi @(reconciliation.PriceMismatchCount == 0 ? "bi-check2" : "bi-x-lg")"></i>
+                    السعر والخصم
+                </span>
+            </div>
+
+            <small class="ofir-editorial__reconciliation-count">
+                @Number(reconciliation.CheckedRecords) سجل تم فحصه
+            </small>
+        </section>
+    }
+
+    <section class="ofir-editorial__results">
+        <header class="ofir-editorial__results-head">
+            <div>
+                <span class="ofir-editorial__results-icon"><i class="bi @ReportIcon(reportType)"></i></span>
+                <div>
+                    <small>النتائج التفصيلية</small>
+                    <h3>@pageModel.ReportTitle</h3>
+                    <p>
+                        @if (pageModel.TotalCount > 0)
+                        {
+                            <text>عرض @pageModel.FirstItemNumber–@pageModel.LastItemNumber من @Number(pageModel.TotalCount)</text>
+                        }
+                        else
+                        {
+                            <text>لا توجد سجلات ضمن الفلاتر الحالية</text>
+                        }
+                    </p>
+                </div>
+            </div>
+
+            @if (totalPages > 0)
+            {
+                <span class="ofir-editorial__page-label">صفحة @currentPage من @totalPages</span>
+            }
+        </header>
+
+        @if (!pageModel.HasRows)
+        {
+            <div class="ofir-editorial__empty">
+                <span><i class="bi bi-inbox"></i></span>
+                <h4>لا توجد نتائج مطابقة</h4>
+                <p>جرّب توسيع الفترة أو مسح بعض الفلاتر.</p>
+            </div>
+        }
+        else if (isDocuments)
+        {
+            <div class="ofir-editorial__documents-grid">
+                @foreach (var document in documents)
+                {
+                    var documentUrl = Url.Action(
+                    "PrintDocument",
+                    "OwnerFinancialInvoicesReports",
+                    new { area = "Owner", documentType = document.DocumentType, sourceId = document.SourceId }) ?? string.Empty;
+
+                    <article class="ofir-editorial__document-card">
+                        <header>
+                            <span class="ofir-editorial__document-icon"><i class="bi @DocumentIcon(document.DocumentType)"></i></span>
+                            <div>
+                                <small>@document.DocumentTypeLabel</small>
+                                <strong dir="ltr">@document.DocumentNumber</strong>
+                            </div>
+                            <span class="ofir-editorial__status @StatusClass(document.RecordStatus)">@document.RecordStatusLabel</span>
+                        </header>
+
+                        <div class="ofir-editorial__document-amount">
+                            <small>قيمة المستند</small>
+                            <strong>@Money(document.PrimaryAmount)</strong>
+                        </div>
+
+                        <dl>
+                            <div><dt>العميل</dt><dd>@document.CustomerName</dd></div>
+                            <div><dt>المنشأة</dt><dd>@document.PlaceName</dd></div>
+                            <div><dt>التاريخ</dt><dd>@DateText(document.DocumentDate)</dd></div>
+                            <div><dt>الحجز</dt><dd>@(document.BookingId.HasValue ? "#" + document.BookingId.Value : "—")</dd></div>
+                        </dl>
+
+                        <footer>
+                            <button type="button"
+                            data-ofir-open-document
+                            data-document-url="@documentUrl"
+                            data-document-title="@document.DocumentTypeLabel">
+                                <i class="bi bi-eye"></i>
+                                معاينة
+                            </button>
+                            <a href="@documentUrl" target="_blank" rel="noopener">
+                                <i class="bi bi-printer"></i>
+                                طباعة
+                            </a>
+                        </footer>
+                    </article>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="ofir-editorial__ledger-wrap">
+                <table class="ofir-editorial__ledger">
+                    <thead>
+                        <tr>
+                            @if (isBookings)
+                            {
+                                <th>الحجز والعميل</th>
+                                <th>الإقامة والحالة</th>
+                                <th>قبل الخصم</th>
+                                <th>الخصم</th>
+                                <th>القيمة النهائية</th>
+                                <th>المحصل</th>
+                                <th>الإيراد</th>
+                            }
+                            else if (isPayments)
+                            {
+                                <th>الحجز والعميل</th>
+                                <th>الحالة والقناة</th>
+                                <th>إلكتروني</th>
+                                <th>في المنشأة</th>
+                                <th>إجمالي المحصل</th>
+                                <th>المتبقي</th>
+                                <th>المرجع</th>
+                            }
+                            else if (isCommissions)
+                            {
+                                <th>الحجز والمنشأة</th>
+                                <th>قيمة الحجز</th>
+                                <th>المحتسبة</th>
+                                <th>المخصومة</th>
+                                <th>المعادة</th>
+                                <th>الدين</th>
+                                <th>الحالة</th>
+                            }
+                            else if (isRefunds)
+                            {
+                                <th>الاسترداد والحجز</th>
+                                <th>العميل</th>
+                                <th>المطلوب</th>
+                                <th>المسترد</th>
+                                <th>المحتفظ به</th>
+                                <th>عمولة المنصة</th>
+                                <th>الحالة</th>
+                            }
+                            else if (isTransactions)
+                            {
+                                <th>الحركة</th>
+                                <th>المرجع</th>
+                                <th>المبلغ</th>
+                                <th>المتاح قبل/بعد</th>
+                                <th>المحجوز قبل/بعد</th>
+                                <th>الدين قبل/بعد</th>
+                                <th>الحالة والتاريخ</th>
+                            }
+                            else
+                            {
+                                <th>الحجز والعميل</th>
+                                <th>الحالة</th>
+                                <th>قيمة الحجز</th>
+                                <th>المحصل</th>
+                                <th>المتبقي</th>
+                                <th>العمولة</th>
+                                <th>صافي المالك</th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in rows)
+                        {
+                            <tr>
+                                @if (isBookings)
+                                {
+                                    <td><strong>#@row.BookingId</strong><span>@row.CustomerName</span><small>@row.PlaceName</small></td>
+                                    <td><strong>@DateText(row.BookingStartDate) — @DateText(row.BookingEndDate)</strong><span class="ofir-editorial__status @StatusClass(row.BookingState)">@row.BookingStateLabel</span></td>
+                                    <td class="is-money">@Money(row.OriginalTotalPrice)</td>
+                                    <td class="is-money is-coral">@Money(row.DiscountAmount)</td>
+                                    <td class="is-money is-strong">@Money(row.TotalPrice)</td>
+                                    <td class="is-money is-mint">@Money(row.ActualCollectedAmount)</td>
+                                    <td class="is-money is-primary">@Money(row.ActualRevenue)</td>
+                                }
+                                else if (isPayments)
+                                {
+                                    <td><strong>#@row.BookingId</strong><span>@row.CustomerName</span><small>@row.PlaceName</small></td>
+                                    <td><span class="ofir-editorial__status @StatusClass(row.PaymentStatus)">@row.PaymentStatusLabel</span><small>@row.PaymentChannelLabel</small></td>
+                                    <td class="is-money">@Money(row.ActualPaidOnline)</td>
+                                    <td class="is-money">@Money(row.ActualCollectedAtProperty)</td>
+                                    <td class="is-money is-mint">@Money(row.ActualCollectedAmount)</td>
+                                    <td class="is-money @(row.RemainingAmount > 0 ? "is-coral" : string.Empty)">@Money(row.RemainingAmount)</td>
+                                    <td><strong dir="ltr">@(row.ReferenceNumber ?? "—")</strong><small>@DateText(row.RecordDate, true)</small></td>
+                                }
+                                else if (isCommissions)
+                                {
+                                    <td><strong>#@row.BookingId</strong><span>@row.PlaceName</span></td>
+                                    <td class="is-money">@Money(row.TotalPrice)</td>
+                                    <td class="is-money">@Money(row.PlatformCommission)</td>
+                                    <td class="is-money is-primary">@Money(row.CommissionCharged)</td>
+                                    <td class="is-money is-mint">@Money(row.CommissionReleased)</td>
+                                    <td class="is-money @(row.CommissionDebt > 0 ? "is-coral" : string.Empty)">@Money(row.CommissionDebt)</td>
+                                    <td><span class="ofir-editorial__status @StatusClass(row.CommissionStatus)">@row.CommissionStatusLabel</span><small>@DateText(row.CommissionDate, true)</small></td>
+                                }
+                                else if (isRefunds)
+                                {
+                                    <td><strong>@row.RecordNumber</strong><span>حجز #@row.BookingId</span><small>@row.PlaceName</small></td>
+                                    <td><strong>@row.CustomerName</strong><small>@DateText(row.RequestedAt, true)</small></td>
+                                    <td class="is-money">@Money(row.RequestedRefundAmount)</td>
+                                    <td class="is-money is-mint">@Money(row.RefundAmount)</td>
+                                    <td class="is-money">@Money(row.OwnerShare)</td>
+                                    <td class="is-money">@Money(row.PlatformCommission)</td>
+                                    <td><span class="ofir-editorial__status @StatusClass(row.Status)">@row.StatusLabel</span><small>@(row.ProcessedAt.HasValue ? DateText(row.ProcessedAt, true) : "بانتظار الإكمال")</small></td>
+                                }
+                                else if (isTransactions)
+                                {
+                                    <td><strong>@row.RecordNumber</strong><span>@row.TransactionTypeLabel</span><small>@row.PlaceName</small></td>
+                                    <td><strong dir="ltr">@(row.ReferenceNumber ?? "—")</strong><small>@(row.BookingId.HasValue ? "حجز #" + row.BookingId.Value : "بدون حجز")</small></td>
+                                    <td class="is-money is-primary">@Money(row.PrimaryAmount)</td>
+                                    <td><small>قبل @Money(row.AvailableBalanceBefore)</small><strong>بعد @Money(row.AvailableBalanceAfter)</strong></td>
+                                    <td><small>قبل @Money(row.HeldBalanceBefore)</small><strong>بعد @Money(row.HeldBalanceAfter)</strong></td>
+                                    <td><small>قبل @Money(row.DebtBefore)</small><strong>بعد @Money(row.DebtAfter)</strong></td>
+                                    <td><span class="ofir-editorial__status @StatusClass(row.Status)">@row.StatusLabel</span><small>@DateText(row.RecordDate, true)</small></td>
+                                }
+                                else
+                                {
+                                    <td><strong>#@row.BookingId</strong><span>@row.CustomerName</span><small>@row.PlaceName</small></td>
+                                    <td><span class="ofir-editorial__status @StatusClass(row.BookingState)">@row.BookingStateLabel</span><small>@row.PaymentStatusLabel</small></td>
+                                    <td class="is-money">@Money(row.TotalPrice)</td>
+                                    <td class="is-money is-mint">@Money(row.ActualCollectedAmount)</td>
+                                    <td class="is-money @(row.RemainingAmount > 0 ? "is-coral" : string.Empty)">@Money(row.RemainingAmount)</td>
+                                    <td class="is-money">@Money(row.CommissionCharged)</td>
+                                    <td class="is-money is-primary">@Money(row.NetOwnerAmount)</td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        @if (totalPages > 1)
+        {
+            <nav class="ofir-editorial__pagination" aria-label="صفحات التقرير">
+                <button type="button" data-ofir-page="@(currentPage - 1)" disabled="@(currentPage <= 1 ? "disabled" : null)">
+                    <i class="bi bi-chevron-right"></i><span>السابق</span>
+                </button>
+
+                <div>
+                    @for (var pageNumber = firstPage; pageNumber <= lastPage; pageNumber++)
+                    {
+                        <button type="button"
+                        data-ofir-page="@pageNumber"
+                        class="@(pageNumber == currentPage ? "is-active" : string.Empty)"
+                        aria-current="@(pageNumber == currentPage ? "page" : null)">
+                            @pageNumber
+                        </button>
+                    }
+                </div>
+
+                <button type="button" data-ofir-page="@(currentPage + 1)" disabled="@(currentPage >= totalPages ? "disabled" : null)">
+                    <span>التالي</span><i class="bi bi-chevron-left"></i>
+                </button>
+            </nav>
+        }
+    </section>
+
+    <dialog class="ofir-editorial__dialog" data-ofir-document-dialog aria-labelledby="ownerFinancialDocumentPreviewTitle">
+        <div class="ofir-editorial__dialog-shell">
+            <header>
+                <div>
+                    <span><i class="bi bi-file-earmark-check"></i></span>
+                    <div>
+                        <small>معاينة المستند</small>
+                        <h3 id="ownerFinancialDocumentPreviewTitle">المستند المالي</h3>
+                    </div>
+                </div>
+                <button type="button" data-ofir-close-dialog aria-label="إغلاق"><i class="bi bi-x-lg"></i></button>
+            </header>
+
+            <div class="ofir-editorial__frame-wrap">
+                <div class="ofir-editorial__frame-loading" data-ofir-frame-loading>
+                    <span></span><p>جارٍ تجهيز المستند…</p>
+                </div>
+                <iframe title="معاينة المستند المالي" data-ofir-document-frame></iframe>
+            </div>
+
+            <footer>
+                <a href="#" target="_blank" rel="noopener" data-ofir-open-document-new-tab>
+                    <i class="bi bi-box-arrow-up-left"></i>فتح في نافذة مستقلة
+                </a>
+                <button type="button" data-ofir-close-dialog>إغلاق</button>
+            </footer>
+        </div>
+    </dialog>
+</section>

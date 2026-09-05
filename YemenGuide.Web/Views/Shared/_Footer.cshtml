@@ -1,0 +1,469 @@
+﻿@inject YemenGuide.Data.AppDbContext _context
+
+@{
+    var settings = _context.SystemSettings.FirstOrDefault();
+
+    string siteName = settings?.SiteName ?? "YemenGuide";
+    string siteDesc = settings?.SiteDescription
+        ?? "اكتشف أرقى الوجهات وأفضل الأماكن في اليمن، واحجز بثقة وسهولة.";
+
+    string logoPath = settings?.LogoPath ?? "/images/logo1.png";
+    string supportPhone = settings?.SupportPhone ?? "+967 7XX XXX XXX";
+    string contactEmail = settings?.ContactEmail ?? "info@yemenguide.ye";
+
+    string fbLink = settings?.FacebookLink;
+    string xLink = settings?.TwitterLink;
+    string instaLink = settings?.InstagramLink;
+    string waLink = settings?.WhatsAppNumber;
+
+    DateTime promotionsToday = DateTime.Today;
+
+    bool hasActivePromotions = _context.Promotions.Any(promotion =>
+        promotion.IsActive == true &&
+        (promotion.Status == "Active" ||
+         promotion.Status == "Scheduled") &&
+        promotion.StartDate <= promotionsToday &&
+        promotion.EndDate >= promotionsToday &&
+        promotion.Place.Status == "Active");
+}
+
+<footer class="custom-footer yg-horizon-dock-footer"
+        id="yemenGuideFooter"
+        aria-label="تذييل دليلك اليمني">
+
+    <!-- ========================================================= -->
+    <!-- CINEMATIC BACKGROUND — decorative only                    -->
+    <!-- ========================================================= -->
+    <div class="yg-footer-canvas" aria-hidden="true">
+
+        <span class="yg-footer-top-light"></span>
+
+        <span class="yg-footer-topography yg-footer-topography--a"></span>
+        <span class="yg-footer-topography yg-footer-topography--b"></span>
+
+        <span class="yg-footer-aurora yg-footer-aurora--cyan"></span>
+        <span class="yg-footer-aurora yg-footer-aurora--orange"></span>
+        <span class="yg-footer-aurora yg-footer-aurora--micro"></span>
+
+        <span class="yg-footer-orbit yg-footer-orbit--a"></span>
+        <span class="yg-footer-orbit yg-footer-orbit--b"></span>
+
+        <span class="yg-footer-star yg-footer-star--01"></span>
+        <span class="yg-footer-star yg-footer-star--02"></span>
+        <span class="yg-footer-star yg-footer-star--03"></span>
+        <span class="yg-footer-star yg-footer-star--04"></span>
+        <span class="yg-footer-star yg-footer-star--05"></span>
+        <span class="yg-footer-star yg-footer-star--06"></span>
+        <span class="yg-footer-star yg-footer-star--07"></span>
+        <span class="yg-footer-star yg-footer-star--08"></span>
+        <span class="yg-footer-star yg-footer-star--09"></span>
+        <span class="yg-footer-star yg-footer-star--10"></span>
+
+        <span class="yg-footer-dust yg-footer-dust--a"></span>
+        <span class="yg-footer-dust yg-footer-dust--b"></span>
+
+        <span class="yg-footer-comet"></span>
+        <span class="yg-footer-glass-sweep"></span>
+    </div>
+
+    <div class="container yg-footer-container">
+
+        <!-- ========================================================= -->
+        <!-- MAIN HORIZON DOCK                                         -->
+        <!-- ========================================================= -->
+        <div class="yg-footer-dock">
+
+            <!-- BRAND -->
+            <div class="yg-footer-brand-zone">
+
+                <a asp-controller="Home"
+                   asp-action="Index"
+                   class="yg-footer-brand"
+                   aria-label="@siteName">
+
+                    <span class="yg-footer-brand-mark" aria-hidden="true">
+                        <span class="yg-footer-brand-ring yg-footer-brand-ring--outer"></span>
+                        <span class="yg-footer-brand-ring yg-footer-brand-ring--inner"></span>
+                        <span class="yg-footer-brand-spark"></span>
+
+                        <img src="@logoPath"
+                             alt=""
+                             class="yg-footer-brand-logo"
+                             onerror="this.src='/images/logo1.png'">
+                    </span>
+
+                    <span class="yg-footer-brand-text">
+                        <span class="yg-footer-kicker">YemenGuide</span>
+                        <strong>@siteName</strong>
+                    </span>
+
+                </a>
+
+                <p class="yg-footer-description">
+                    @siteDesc
+                </p>
+
+                <div class="yg-footer-mini-journey" aria-label="رحلة الحجز">
+                    <span class="yg-footer-journey-node is-cyan">
+                        <i class="bi bi-compass"></i>
+                        <b>اكتشف</b>
+                    </span>
+
+                    <span class="yg-footer-journey-track" aria-hidden="true">
+                        <span></span>
+                    </span>
+
+                    <span class="yg-footer-journey-node">
+                        <i class="bi bi-heart"></i>
+                        <b>اختر</b>
+                    </span>
+
+                    <span class="yg-footer-journey-track" aria-hidden="true">
+                        <span></span>
+                    </span>
+
+                    <span class="yg-footer-journey-node is-orange">
+                        <i class="bi bi-check2-circle"></i>
+                        <b>احجز</b>
+                    </span>
+                </div>
+
+            </div>
+
+
+            <!-- NAVIGATION -->
+            <nav class="yg-footer-nav-zone"
+                 aria-label="روابط التذييل">
+
+                <span class="yg-footer-zone-label">
+                    وجهتك تبدأ من هنا
+                </span>
+
+                <div class="yg-footer-nav-pills">
+
+                    <a asp-controller="Home"
+                       asp-action="Index"
+                       class="yg-footer-nav-pill">
+                        <i class="bi bi-house-door"></i>
+                        <span>الرئيسية</span>
+                    </a>
+
+                    <a href="/Places/Search"
+                       class="yg-footer-nav-pill">
+                        <i class="bi bi-geo-alt"></i>
+                        <span>استكشف</span>
+                    </a>
+
+                    @if (hasActivePromotions)
+                    {
+                        <a href="/#offers-section"
+                           class="yg-footer-nav-pill is-offer">
+                            <i class="bi bi-fire"></i>
+                            <span>العروض</span>
+                        </a>
+                    }
+
+                    <a href="/Home/Contact"
+                       class="yg-footer-nav-pill">
+                        <i class="bi bi-headset"></i>
+                        <span>تواصل معنا</span>
+                    </a>
+
+                </div>
+
+            </nav>
+
+
+            <!-- ACTIONS / SOCIAL -->
+            <div class="yg-footer-action-zone">
+
+                <span class="yg-footer-zone-label">
+                    كن جزءًا من الدليل
+                </span>
+
+                <a href="/Account/Login?role=owner"
+                   class="yg-footer-owner-cta">
+                    <span class="yg-footer-owner-cta-icon">
+                        <i class="bi bi-plus-lg"></i>
+                    </span>
+
+                    <span class="yg-footer-owner-cta-copy">
+                        <small>لأصحاب المنشآت</small>
+                        <strong>أضف منشأتك</strong>
+                    </span>
+
+                    <i class="bi bi-arrow-up-left yg-footer-owner-arrow"></i>
+                    <span class="yg-footer-owner-shine" aria-hidden="true"></span>
+                </a>
+
+                @if (!string.IsNullOrEmpty(fbLink) ||
+                     !string.IsNullOrEmpty(xLink) ||
+                     !string.IsNullOrEmpty(instaLink) ||
+                     !string.IsNullOrEmpty(waLink))
+                {
+                    <div class="yg-footer-social-row"
+                         aria-label="شبكات التواصل">
+
+                        @if (!string.IsNullOrEmpty(fbLink))
+                        {
+                            <a href="@fbLink"
+                               target="_blank"
+                               rel="noopener noreferrer"
+                               title="فيسبوك"
+                               aria-label="فيسبوك">
+                                <i class="bi bi-facebook"></i>
+                            </a>
+                        }
+
+                        @if (!string.IsNullOrEmpty(xLink))
+                        {
+                            <a href="@xLink"
+                               target="_blank"
+                               rel="noopener noreferrer"
+                               title="إكس"
+                               aria-label="إكس">
+                                <i class="bi bi-twitter-x"></i>
+                            </a>
+                        }
+
+                        @if (!string.IsNullOrEmpty(instaLink))
+                        {
+                            <a href="@instaLink"
+                               target="_blank"
+                               rel="noopener noreferrer"
+                               title="إنستقرام"
+                               aria-label="إنستقرام">
+                                <i class="bi bi-instagram"></i>
+                            </a>
+                        }
+
+                        @if (!string.IsNullOrEmpty(waLink))
+                        {
+                            <a href="@waLink"
+                               target="_blank"
+                               rel="noopener noreferrer"
+                               title="واتساب"
+                               aria-label="واتساب">
+                                <i class="bi bi-whatsapp"></i>
+                            </a>
+                        }
+
+                    </div>
+                }
+
+            </div>
+
+        </div>
+
+
+        <!-- ========================================================= -->
+        <!-- CONTACT STRIP                                              -->
+        <!-- ========================================================= -->
+        <div class="yg-footer-contact-strip">
+
+            <div class="yg-footer-contact-item">
+                <span class="yg-footer-contact-icon">
+                    <i class="bi bi-geo-alt-fill"></i>
+                </span>
+
+                <span>
+                    <small>نحن هنا</small>
+                    <strong>صنعاء، الجمهورية اليمنية</strong>
+                </span>
+            </div>
+
+            <a href="tel:@supportPhone"
+               class="yg-footer-contact-item">
+                <span class="yg-footer-contact-icon">
+                    <i class="bi bi-telephone-fill"></i>
+                </span>
+
+                <span>
+                    <small>اتصل بنا</small>
+                    <strong dir="ltr">@supportPhone</strong>
+                </span>
+            </a>
+
+            <a href="mailto:@contactEmail"
+               class="yg-footer-contact-item">
+                <span class="yg-footer-contact-icon is-orange">
+                    <i class="bi bi-envelope-fill"></i>
+                </span>
+
+                <span>
+                    <small>راسلنا</small>
+                    <strong>@contactEmail</strong>
+                </span>
+            </a>
+
+            <a asp-controller="Account"
+               asp-action="Login"
+               class="yg-footer-login-link">
+                <i class="bi bi-box-arrow-in-right"></i>
+                <span>تسجيل الدخول</span>
+            </a>
+
+        </div>
+
+
+        <!-- ========================================================= -->
+        <!-- BOTTOM SIGNATURE BAR                                       -->
+        <!-- ========================================================= -->
+        <div class="yg-footer-bottom-bar">
+
+            <div class="yg-footer-copyright">
+                <span class="yg-footer-status-dot" aria-hidden="true"></span>
+
+                <span>
+                    &copy; @DateTime.Now.Year @siteName.
+                    جميع الحقوق محفوظة.
+                </span>
+            </div>
+
+            <div class="yg-footer-bottom-signature"
+                 aria-hidden="true">
+                <span></span>
+                <b>اكتشف اليمن بطريقتك</b>
+                <span></span>
+            </div>
+
+            <a href="/Home/Contact"
+               class="yg-footer-support-link">
+                <i class="bi bi-shield-check"></i>
+                <span>الدعم والمساعدة</span>
+            </a>
+
+        </div>
+
+    </div>
+
+
+    <!-- ========================================================= -->
+    <!-- Tiny visual interaction — no external JS needed            -->
+    <!-- ========================================================= -->
+    <script>
+        (() => {
+            const footer = document.getElementById('yemenGuideFooter');
+
+            if (!footer || footer.dataset.horizonReady === 'true') {
+                return;
+            }
+
+            footer.dataset.horizonReady = 'true';
+
+            const setPointer = (clientX, clientY) => {
+                const rect = footer.getBoundingClientRect();
+
+                if (!rect.width || !rect.height) {
+                    return;
+                }
+
+                const x = Math.max(
+                    0,
+                    Math.min(
+                        100,
+                        ((clientX - rect.left) / rect.width) * 100
+                    )
+                );
+
+                const y = Math.max(
+                    0,
+                    Math.min(
+                        100,
+                        ((clientY - rect.top) / rect.height) * 100
+                    )
+                );
+
+                footer.style.setProperty(
+                    '--yg-footer-pointer-x',
+                    `${x}%`
+                );
+
+                footer.style.setProperty(
+                    '--yg-footer-pointer-y',
+                    `${y}%`
+                );
+            };
+
+            const finePointer = window.matchMedia(
+                '(hover:hover) and (pointer:fine)'
+            );
+
+            if (finePointer.matches) {
+                footer.addEventListener(
+                    'pointermove',
+                    (event) => {
+                        setPointer(
+                            event.clientX,
+                            event.clientY
+                        );
+                    },
+                    { passive: true }
+                );
+
+                footer.addEventListener(
+                    'pointerleave',
+                    () => {
+                        footer.style.setProperty(
+                            '--yg-footer-pointer-x',
+                            '72%'
+                        );
+
+                        footer.style.setProperty(
+                            '--yg-footer-pointer-y',
+                            '28%'
+                        );
+                    },
+                    { passive: true }
+                );
+            }
+
+            footer.addEventListener(
+                'touchmove',
+                (event) => {
+                    const touch =
+                        event.touches &&
+                        event.touches[0];
+
+                    if (!touch) {
+                        return;
+                    }
+
+                    setPointer(
+                        touch.clientX,
+                        touch.clientY
+                    );
+                },
+                { passive: true }
+            );
+
+            if (
+                'IntersectionObserver' in window
+            ) {
+                const observer =
+                    new IntersectionObserver(
+                        (entries) => {
+                            entries.forEach(
+                                (entry) => {
+                                    footer.classList.toggle(
+                                        'is-footer-visible',
+                                        entry.isIntersecting
+                                    );
+                                }
+                            );
+                        },
+                        {
+                            threshold: 0.08
+                        }
+                    );
+
+                observer.observe(footer);
+            } else {
+                footer.classList.add(
+                    'is-footer-visible'
+                );
+            }
+        })();
+    </script>
+
+</footer>

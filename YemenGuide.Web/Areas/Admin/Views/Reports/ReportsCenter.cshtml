@@ -1,0 +1,325 @@
+@using System
+@using System.Linq
+@using YemenGuide.Core.Constants
+@using YemenGuide.Core.DTOs.Admin
+@model AdminReportsCenterDto
+
+@{
+    ViewData["Title"] = "مركز البلاغات والقضايا";
+    Layout = "~/Areas/Admin/Views/Shared/_AdminLayout.cshtml";
+
+    var activeScope = AdminReportValues.NormalizeScope(Model.Reports.Filter.Scope);
+
+    string StatusTone(string? status)
+    {
+        if (ReportConstants.EqualsState(status, ReportConstants.Statuses.Pending)) return "new";
+        if (ReportConstants.EqualsState(status, ReportConstants.Statuses.InReview)) return "review";
+        if (ReportConstants.EqualsState(status, ReportConstants.Statuses.WaitingForReporter) ||
+            ReportConstants.EqualsState(status, ReportConstants.Statuses.WaitingForReportedParty)) return "waiting";
+        if (ReportConstants.EqualsState(status, ReportConstants.Statuses.Escalated)) return "escalated";
+        if (ReportConstants.EqualsState(status, ReportConstants.Statuses.Resolved)) return "resolved";
+        if (ReportConstants.EqualsState(status, ReportConstants.Statuses.Rejected)) return "rejected";
+        if (ReportConstants.EqualsState(status, ReportConstants.Statuses.Closed)) return "closed";
+        if (ReportConstants.EqualsState(status, ReportConstants.Statuses.Withdrawn)) return "withdrawn";
+        return "neutral";
+    }
+
+    string PriorityTone(string? priority)
+    {
+        if (ReportConstants.EqualsState(priority, ReportConstants.Priorities.Urgent)) return "urgent";
+        if (ReportConstants.EqualsState(priority, ReportConstants.Priorities.High)) return "high";
+        if (ReportConstants.EqualsState(priority, ReportConstants.Priorities.Low)) return "low";
+        return "normal";
+    }
+
+    int ScopeCount(string scope) => scope switch
+    {
+        AdminReportValues.ScopeCustomerAgainstOwner => Model.Summary.CustomerAgainstOwnerCount,
+        AdminReportValues.ScopeOwnerAgainstCustomer => Model.Summary.OwnerAgainstCustomerCount,
+        AdminReportValues.ScopePlatform => Model.Summary.PlatformCount,
+        _ => Model.Summary.TotalCount
+    };
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/admin/admin-reports.css" asp-append-version="true" />
+}
+
+    <div class="ar-page ar-center-page ar-v3"
+     id="adminReportsCenter"
+     data-list-url="@Url.Action("ReportsList", "Reports", new { area = "Admin" })"
+     data-summary-url="@Url.Action("ReportsSummary", "Reports", new { area = "Admin" })"
+     data-details-url-base="/Admin/Reports/Details/"
+     data-active-tab="@Model.ActiveTab"
+     data-active-scope="@activeScope"
+     data-current-page="@Model.Reports.CurrentPage"
+     data-page-size="@Model.Reports.PageSize"
+     dir="rtl">
+
+        <section class="ar-v3-hero" aria-labelledby="reportsCenterTitle">
+            <div class="ar-v3-hero__copy">
+                <span class="ar-v3-kicker"><i class="bi bi-shield-check"></i> إدارة البلاغات</span>
+                <h1 id="reportsCenterTitle">مركز البلاغات</h1>
+                <p>فرز واضح بين <strong>بلاغات العملاء على الملاك</strong> و<strong>بلاغات الملاك على العملاء</strong>، ثم الحالة داخل كل مسار.</p>
+            </div>
+            <div class="ar-v3-hero__stats">
+                <article><small>كل القضايا</small><strong data-summary="totalCount">@Model.Summary.TotalCount</strong></article>
+                <article><small>جديدة</small><strong data-summary="newCount">@Model.Summary.NewCount</strong></article>
+                <article><small>تحتاج إجراء</small><strong data-summary="actionCount">@Model.Summary.ActionCount</strong></article>
+                <article class="is-danger"><small>عاجلة</small><strong data-summary="urgentOpenCount">@Model.Summary.UrgentOpenCount</strong></article>
+            </div>
+        </section>
+
+        <section class="ar-primary-paths" aria-label="المسارات الرئيسية للقضايا">
+            <h2 class="visually-hidden">المسارات الرئيسية للقضايا</h2>
+
+            <div class="ar-primary-paths__rail" role="tablist" aria-label="فرز القضايا حسب المبلّغ والمبلّغ ضده">
+            @foreach (var scope in AdminReportValues.Scopes)
+            {
+                var isActiveScope = activeScope == scope;
+                var scopeDescription = scope == AdminReportValues.ScopeCustomerAgainstOwner
+                ? "قضايا رفعها عميل على مالك أو منشأة"
+                : scope == AdminReportValues.ScopeOwnerAgainstCustomer
+                ? "قضايا رفعها مالك على عميل"
+                : scope == AdminReportValues.ScopePlatform
+                ? "بلاغات المنصة والمشكلات التقنية"
+                : "عرض جميع القضايا";
+
+                <button type="button"
+                    class="ar-primary-path @(isActiveScope ? "is-active" : "")"
+                    data-report-scope="@scope"
+                    role="tab"
+                    aria-selected="@(isActiveScope ? "true" : "false")"
+                    aria-label="@AdminReportValues.GetScopeLabel(scope) — @scopeDescription"
+                    title="@scopeDescription">
+                    <span class="ar-primary-path__icon" aria-hidden="true">
+                        <i class="bi @AdminReportValues.GetScopeIcon(scope)"></i>
+                    </span>
+
+                    <span class="ar-primary-path__label">
+                        @AdminReportValues.GetScopeLabel(scope)
+                    </span>
+
+                    <b class="ar-primary-path__count" data-scope-count="@scope">
+                        @ScopeCount(scope)
+                    </b>
+                </button>
+            }
+        </div>
+    </section>
+
+    <section class="ar-v3-toolbar" aria-label="حالات وفلترة البلاغات">
+        <div class="ar-status-tabs" role="tablist" aria-label="حالة القضية">
+            @foreach (var tab in Model.Tabs)
+            {
+                <button type="button"
+                    class="ar-status-tab @(Model.ActiveTab == tab.Key ? "is-active" : "")"
+                    data-report-tab="@tab.Key"
+                    role="tab"
+                    aria-selected="@(Model.ActiveTab == tab.Key ? "true" : "false")">
+                    <span>@tab.Label</span>
+                </button>
+            }
+        </div>
+
+        <div class="ar-v3-search-row">
+            <div class="ar-search-wrap">
+                <i class="bi bi-search"></i>
+                <input type="search"
+                       id="reportsSearch"
+                       value="@Model.Reports.Filter.Search"
+                       maxlength="150"
+                       autocomplete="off"
+                       placeholder="رقم القضية، اسم العميل أو المالك، المنشأة أو العنوان..."
+                       aria-label="البحث في البلاغات" />
+                <button type="button" class="ar-search-clear" data-clear-search aria-label="مسح البحث">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+
+            <button type="button" class="ar-filter-toggle" id="reportsFilterToggle"
+                    aria-expanded="false" aria-controls="reportsFiltersPanel">
+                <i class="bi bi-sliders2"></i>
+                <span>فلاتر إضافية</span>
+                <b data-active-filter-count hidden>0</b>
+            </button>
+        </div>
+    </section>
+
+    @if (Model.Summary.OverdueCount > 0)
+    {
+        <div class="ar-attention ar-attention--compact" id="overdueBanner">
+            <span class="ar-attention__icon"><i class="bi bi-alarm-fill"></i></span>
+            <div><strong>@Model.Summary.OverdueCount قضية تجاوزت مهلة الرد</strong><p>يمكن عرضها مباشرة من الفلاتر.</p></div>
+            <button type="button" class="ar-text-action" data-show-overdue>عرض المتأخرة <i class="bi bi-arrow-left"></i></button>
+        </div>
+    }
+
+    <section class="ar-filter-panel" id="reportsFiltersPanel" hidden>
+        <div class="ar-filter-panel__head">
+            <div><span>فلترة إضافية</span><h2>حدد النتائج بدون زحمة في الصفحة</h2></div>
+            <button type="button" class="ar-icon-button" data-close-filters aria-label="إغلاق الفلاتر"><i class="bi bi-x-lg"></i></button>
+        </div>
+
+        <div class="ar-filter-grid">
+            <label class="ar-field">
+                <span>الحالة</span>
+                <select id="filterStatus">
+                    <option value="">كل الحالات</option>
+                    @foreach (var status in ReportConstants.Statuses.All)
+                    {
+                        <option value="@status" selected="@(string.Equals(Model.Reports.Filter.Status, status, StringComparison.OrdinalIgnoreCase) ? "selected" : null)">@AdminReportValues.GetAdminStatusLabel(status)</option>
+                    }
+                </select>
+            </label>
+
+            <label class="ar-field">
+                <span>نوع البلاغ</span>
+                <select id="filterType">
+                    <option value="">كل الأنواع</option>
+                    @foreach (var type in ReportConstants.Types.All)
+                    {
+                        <option value="@type" selected="@(string.Equals(Model.Reports.Filter.ReportType, type, StringComparison.OrdinalIgnoreCase) ? "selected" : null)">@AdminReportValues.GetReportTypeLabel(type, null)</option>
+                    }
+                </select>
+            </label>
+
+            <label class="ar-field">
+                <span>الأولوية</span>
+                <select id="filterPriority">
+                    <option value="">كل الأولويات</option>
+                    @foreach (var priority in ReportConstants.Priorities.All)
+                    {
+                        <option value="@priority" selected="@(string.Equals(Model.Reports.Filter.Priority, priority, StringComparison.OrdinalIgnoreCase) ? "selected" : null)">@AdminReportValues.GetPriorityLabel(priority)</option>
+                    }
+                </select>
+            </label>
+
+            <label class="ar-field"><span>من تاريخ</span><input type="date" id="filterDateFrom" value="@(Model.Reports.Filter.DateFrom?.ToString("yyyy-MM-dd"))" /></label>
+            <label class="ar-field"><span>إلى تاريخ</span><input type="date" id="filterDateTo" value="@(Model.Reports.Filter.DateTo?.ToString("yyyy-MM-dd"))" /></label>
+
+            <label class="ar-check-card">
+                <input type="checkbox" id="filterOverdue" checked="@(Model.Reports.Filter.IsOverdueOnly ? "checked" : null)" />
+                <span class="ar-check-card__box"><i class="bi bi-check-lg"></i></span>
+                <span><strong>متأخرة فقط</strong><small>تجاوزت مهلة الرد المحددة</small></span>
+            </label>
+        </div>
+
+        <div class="ar-filter-actions">
+            <button type="button" class="ar-button ar-button--ghost" data-reset-filters><i class="bi bi-arrow-counterclockwise"></i> إعادة الضبط</button>
+            <button type="button" class="ar-button ar-button--primary" data-apply-filters><i class="bi bi-check2-circle"></i> تطبيق الفلاتر</button>
+        </div>
+    </section>
+
+    <section class="ar-results-head ar-results-head--v3">
+        <div>
+            <span class="ar-eyebrow ar-eyebrow--soft" id="reportsScopeTitle">@AdminReportValues.GetScopeLabel(activeScope)</span>
+            <h2 id="reportsSectionTitle">@Model.Tabs.FirstOrDefault(t => t.Key == Model.ActiveTab)?.Label</h2>
+        </div>
+        <div class="ar-results-count"><span>النتائج</span><strong id="reportsResultCount">@Model.Reports.FilteredCount</strong></div>
+    </section>
+
+    <div class="ar-loading" id="reportsLoading" hidden aria-live="polite"><span></span><span></span><span></span><b>جاري تحديث القضايا...</b></div>
+
+    <section class="ar-cases-grid ar-cases-grid--v3" id="reportsList" aria-live="polite">
+        @if (Model.Reports.Items.Count > 0)
+        {
+            @foreach (var item in Model.Reports.Items)
+            {
+                var statusTone = StatusTone(item.Status);
+                var priorityTone = PriorityTone(item.Priority);
+
+                <article class="ar-case-card ar-case-card--v3 @(item.NeedsAdminAction ? "needs-action" : "")" data-report-id="@item.ReportId">
+                    <div class="ar-case-card__top">
+                        <div class="ar-case-number"><span>القضية</span><strong>@item.ReportNumber</strong></div>
+                        <div class="ar-case-badges"><span class="ar-status ar-status--@statusTone">@item.StatusLabel</span><span class="ar-priority ar-priority--@priorityTone">@item.PriorityLabel</span></div>
+                    </div>
+
+                    <div class="ar-case-card__heading ar-case-card__heading--v3">
+                        <span class="ar-case-kind">@item.ScenarioLabel</span>
+                        <h3>@item.Title</h3>
+                        <small>@item.ReferenceLabel @(!string.IsNullOrWhiteSpace(item.PlaceName) ? $"· {item.PlaceName}" : string.Empty)</small>
+                    </div>
+
+                    <div class="ar-mini-direction">
+                        <div class="ar-mini-person is-reporter">
+                            <small>المبلّغ</small><strong>@item.ReporterName</strong><span>@item.ReporterRoleLabel</span>
+                        </div>
+                        <div class="ar-mini-arrow"><span>ضد</span><i class="bi bi-arrow-left"></i></div>
+                        <div class="ar-mini-person is-against @(item.AgainstUserId.HasValue ? "" : "is-empty")">
+                            <small>المبلّغ ضده</small><strong>@item.AgainstUserName</strong><span>@item.AgainstUserRoleLabel</span>
+                            @if (item.AgainstUserId.HasValue)
+                            {
+                                var hasPreviousRecord =
+                                    item.AgainstUserPreviousCasesCount > 0 ||
+                                    item.AgainstUserWarningCount > 0 ||
+                                    item.AgainstUserConfirmedViolationsCount > 0;
+
+                                <div class="ar-mini-record @(hasPreviousRecord ? "has-record" : "is-clean")">
+                                    @if (item.AgainstUserPreviousCasesCount > 0)
+                                    {
+                                        <em><i class="bi bi-clock-history"></i> @item.AgainstUserPreviousCasesCount سوابق</em>
+                                    }
+                                    @if (item.AgainstUserWarningCount > 0)
+                                    {
+                                        <em><i class="bi bi-exclamation-triangle-fill"></i> @item.AgainstUserWarningCount تحذير</em>
+                                    }
+                                    @if (item.AgainstUserConfirmedViolationsCount > 0)
+                                    {
+                                        <em><i class="bi bi-shield-fill-exclamation"></i> @item.AgainstUserConfirmedViolationsCount مخالفة مثبتة</em>
+                                    }
+                                    @if (!hasPreviousRecord)
+                                    {
+                                        <em><i class="bi bi-shield-check"></i> سجل نظيف</em>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    @if (item.IsOverdue || item.NeedsAdminAction || !string.IsNullOrWhiteSpace(item.RequiredActionLabel))
+                    {
+                        <div class="ar-case-alert @(item.IsOverdue ? "is-overdue" : "")">
+                            <i class="bi @(item.IsOverdue ? "bi-alarm-fill" : "bi-lightning-charge-fill")"></i>
+                            <div>
+                                <strong>@(item.IsOverdue ? "انتهت مهلة الرد" : item.NeedsAdminAction ? "تحتاج إجراء من الإدارة" : item.RequiredActionLabel)</strong>
+                                @if (!string.IsNullOrWhiteSpace(item.RequiredActionLabel) && !item.NeedsAdminAction)
+                                {
+                                    <small>@item.RequiredActionLabel</small>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    <div class="ar-case-card__footer">
+                        <div class="ar-case-flags">
+                            @if (item.HasEvidence)
+                            {
+                                <span><i class="bi bi-paperclip"></i> يوجد دليل</span>
+                            }
+                            <span><i class="bi bi-clock-history"></i> @item.UpdatedAt.ToString("yyyy/MM/dd")</span>
+                        </div>
+                        <a class="ar-open-case" asp-area="Admin" asp-controller="Reports" asp-action="ReportDetails" asp-route-id="@item.ReportId">فتح القضية <i class="bi bi-arrow-left"></i></a>
+                    </div>
+                </article>
+            }
+        }
+        else
+        {
+            <div class="ar-empty-state"><span><i class="bi bi-inbox"></i></span><h3>لا توجد قضايا هنا</h3><p>غيّر المسار أو الحالة أو الفلاتر.</p></div>
+        }
+    </section>
+
+    <nav class="ar-pagination" id="reportsPagination" aria-label="صفحات النتائج">
+        @if (Model.Reports.TotalPages > 1)
+        {
+            <button type="button" data-page="@(Model.Reports.CurrentPage - 1)" disabled="@(!Model.Reports.HasPreviousPage)"><i class="bi bi-chevron-right"></i> السابق</button>
+            <span>صفحة <strong>@Model.Reports.CurrentPage</strong> من <strong>@Model.Reports.TotalPages</strong></span>
+            <button type="button" data-page="@(Model.Reports.CurrentPage + 1)" disabled="@(!Model.Reports.HasNextPage)">التالي <i class="bi bi-chevron-left"></i></button>
+        }
+    </nav>
+</div>
+
+@section Scripts {
+    <script src="~/js/admin/admin-reports.js" asp-append-version="true"></script>
+}

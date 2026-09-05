@@ -1,0 +1,292 @@
+@model IEnumerable<YemenGuide.Core.DTOs.Customer.PlaceSearchResultDto>
+@using System
+@using System.Linq
+@using System.Collections.Generic
+@using System.Text.Json
+
+@{
+    ViewData["Title"] = "المفضلة";
+    ViewData["HideFooter"] = true;
+    Layout = "~/Views/Shared/_Layout.cshtml";
+
+    var favoritePlaces = Model?.ToList() ?? new List<YemenGuide.Core.DTOs.Customer.PlaceSearchResultDto>();
+    var favoriteCount = favoritePlaces.Count;
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/customer/customer-sidebar.css" asp-append-version="true" />
+    @* نفس عائلة بطاقة البحث المعتمدة، مع تخصيص صفحة المفضلة في الملف التالي. *@
+    <link rel="stylesheet" href="~/css/customer/Search.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/customer/customer-favorites.css" asp-append-version="true" />
+}
+
+    <div class="customer-dashboard-layout favorites-luxury-shell" dir="rtl">
+        <partial name="_CustomerSidebar" />
+
+        <main class="customer-main-content favorites-main-content">
+            <div class="favorites-ambient favorites-ambient-one" aria-hidden="true"></div>
+            <div class="favorites-ambient favorites-ambient-two" aria-hidden="true"></div>
+
+            <div class="favorites-wrapper container-fluid px-3 px-md-4 px-xl-5">
+
+                @* ============================================================= *@
+                @* HERO *@
+                @* ============================================================= *@
+                <section class="favorites-hero favorites-reveal is-visible">
+                    <span class="favorites-hero-grid" aria-hidden="true"></span>
+                    <span class="favorites-hero-glow favorites-hero-glow-one" aria-hidden="true"></span>
+                    <span class="favorites-hero-glow favorites-hero-glow-two" aria-hidden="true"></span>
+
+                    <div class="favorites-hero-copy">
+                        <div class="favorites-eyebrow">
+                            <span class="favorites-eyebrow-icon"><i class="bi bi-heart-fill"></i></span>
+                            <span>اختياراتك محفوظة هنا</span>
+                        </div>
+
+                        <h1>
+                            أماكنك <span>المفضلة</span>
+                        </h1>
+
+                        <p>
+                            ارجع للأماكن التي أعجبتك، تابع عروضها، وافتح تفاصيلها وقت ما تحب.
+                        </p>
+                    </div>
+
+                    <div class="favorites-counter-card" aria-label="عدد الأماكن المحفوظة">
+                        <span class="favorites-counter-orbit" aria-hidden="true"></span>
+                        <span class="favorites-counter-icon"><i class="bi bi-heart-fill"></i></span>
+                        <span class="favorites-counter-copy">
+                            <strong id="favoritesCount">@favoriteCount</strong>
+                            <small id="favoritesCountLabel">@(favoriteCount == 1 ? "مكان محفوظ" : "أماكن محفوظة")</small>
+                    </span>
+                </div>
+            </section>
+
+            @* ============================================================= *@
+            @* عنوان الشبكة *@
+            @* ============================================================= *@
+            <section class="favorites-section-heading @(favoriteCount == 0 ? "d-none" : "")" id="favoritesSectionHeading">
+                <div>
+                    <span class="favorites-section-kicker"><i class="bi bi-stars"></i> قائمتك الخاصة</span>
+                    <h2>كل ما أعجبك <span>في مكان واحد</span></h2>
+                </div>
+
+                <a href="/Places/Search" class="favorites-explore-mini">
+                    <span>استكشف المزيد</span>
+                    <i class="bi bi-arrow-left"></i>
+                </a>
+            </section>
+
+            @* ============================================================= *@
+            @* البطاقات *@
+            @* ============================================================= *@
+            <div class="row g-4 favorites-grid @(favoriteCount == 0 ? "d-none" : "")"
+                 id="favoritesGrid">
+
+                @for (int cardIndex = 0; cardIndex < favoritePlaces.Count; cardIndex++)
+                {
+                    var place = favoritePlaces[cardIndex];
+
+                    string detailsUrl = place.HasActivePromotion && place.ActivePromotionId.HasValue
+                    ? $"/Places/Details/{place.PlaceId}?promotionId={place.ActivePromotionId.Value}"
+                    : $"/Places/Details/{place.PlaceId}";
+
+                    string categoryName = string.IsNullOrWhiteSpace(place.CategoryName)
+                    ? "عام"
+                    : place.CategoryName!;
+
+                    string cityName = string.IsNullOrWhiteSpace(place.CityName)
+                    ? "اليمن"
+                    : place.CityName!;
+
+                    var extraImages = place.GalleryImages != null
+                    ? place.GalleryImages
+                    .Where(image =>
+                    !string.IsNullOrWhiteSpace(image) &&
+                    !string.Equals(image, place.MainImage, StringComparison.OrdinalIgnoreCase))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList()
+                    : new List<string>();
+
+                    var displayImages = new List<string>();
+                    displayImages.AddRange(extraImages.Take(3));
+                    while (displayImages.Count < 3)
+                    {
+                        displayImages.Add(string.Empty);
+                    }
+
+                    <div class="col-12 col-md-6 col-xl-4 featured-wow-stage search-featured-stage favorite-card-wrapper"
+                     id="fav-card-@place.PlaceId"
+                     data-favorite-stage
+                     style="--featured-delay:@(cardIndex * 70)ms;">
+
+                        <article class="app-card-vip luxury-edition featured-wow-card search-featured-card favorites-featured-card"
+                             data-favorite-card
+                             data-search-card>
+
+                            <span class="featured-wow-depth" aria-hidden="true"></span>
+                            <span class="featured-wow-spotlight" aria-hidden="true"></span>
+                            <span class="featured-wow-shine" aria-hidden="true"></span>
+
+                            <div class="featured-wow-media">
+                                <a href="@detailsUrl"
+                               class="featured-wow-main-link"
+                               aria-label="عرض تفاصيل @place.Name">
+
+                                    <div class="luxury-grid featured-wow-gallery favorites-smart-gallery"
+                                     data-images="@JsonSerializer.Serialize(extraImages)">
+
+                                        <div class="grid-img-large featured-wow-main-image">
+                                            @if (!string.IsNullOrWhiteSpace(place.MainImage) &&
+                                           place.MainImage != "/images/places/default-main.jpg")
+                                            {
+                                                <img src="@place.MainImage"
+                                             class="featured-main-photo"
+                                             alt="@place.Name"
+                                             loading="lazy" />
+                                            }
+                                            else
+                                            {
+                                                <div class="featured-wow-placeholder search-featured-placeholder favorites-placeholder">
+                                                    <i class="bi bi-image"></i>
+                                                </div>
+                                            }
+                                        </div>
+
+                                        <div class="grid-img-small-group featured-wow-thumbs favorites-thumbs"
+                                         aria-label="صور إضافية لـ @place.Name">
+                                            @for (int i = 0; i < 3; i++)
+                                            {
+                                                <div class="grid-img-small featured-wow-thumb favorites-thumb"
+                                             style="--thumb-index:@i;">
+                                                    @if (!string.IsNullOrWhiteSpace(displayImages[i]))
+                                                    {
+                                                        <img src="@displayImages[i]"
+                                                 class="magic-image"
+                                                 alt="صورة إضافية لـ @place.Name"
+                                                 loading="lazy"
+                                                 data-original="@displayImages[i]" />
+                                                    }
+                                                    else
+                                                    {
+                                                        <div class="featured-wow-thumb-empty favorites-thumb-empty">
+                                                            <i class="bi bi-image"></i>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                </a>
+
+                                <div class="featured-wow-topbar search-featured-topbar favorites-topbar">
+                                    <button class="btn-favorite-app featured-wow-favorite favorites-remove-button active"
+                                        type="button"
+                                        data-remove-favorite
+                                        data-place-id="@place.PlaceId"
+                                        aria-pressed="true"
+                                        title="إزالة من المفضلة"
+                                        aria-label="إزالة @place.Name من المفضلة">
+                                        <i class="bi bi-heart-fill"></i>
+                                    </button>
+                                </div>
+
+                                <div class="featured-wow-rating favorites-rating"
+                                 aria-label="التقييم @place.Rating من 5">
+                                    <span class="featured-wow-rating-star"><i class="bi bi-star-fill"></i></span>
+                                    <span class="featured-wow-rating-copy">
+                                        <strong>@place.Rating.ToString("0.0")</strong>
+                                        <small>@place.ReviewsCount تقييم</small>
+                                    </span>
+                                </div>
+
+                                <div class="featured-wow-identity favorites-identity">
+                                    <a href="@detailsUrl" class="featured-wow-identity-main">
+                                        <div class="featured-wow-name-row">
+                                            <h3>@place.Name</h3>
+                                            <i class="bi bi-patch-check-fill"></i>
+                                        </div>
+
+                                        <div class="featured-wow-meta">
+                                            <span><i class="bi bi-grid-fill"></i>@categoryName</span>
+                                            <span><i class="bi bi-geo-alt-fill"></i>@cityName</span>
+                                        </div>
+                                    </a>
+
+                                    @if (place.HasActivePromotion && place.ActivePromotionId.HasValue)
+                                    {
+                                        <a class="featured-wow-offer-inline favorites-offer-inline"
+                                   href="@detailsUrl"
+                                   title="@place.ActivePromotionTitle"
+                                   aria-label="عرض متاح في @place.Name">
+                                            <span class="featured-wow-offer-inline-glow" aria-hidden="true"></span>
+                                            <span class="featured-wow-offer-inline-icon" aria-hidden="true">
+                                                <i class="bi bi-fire"></i>
+                                            </span>
+                                            <span class="featured-wow-offer-inline-copy">
+                                                <strong>عرض متاح</strong>
+                                                <small>@(place.PromotionOfferText ?? place.PromotionDiscountText) · @place.PromotionTargetLabel</small>
+                                            </span>
+                                            <i class="bi bi-arrow-left featured-wow-offer-inline-arrow" aria-hidden="true"></i>
+                                        </a>
+                                    }
+                                </div>
+                            </div>
+
+                            <div class="featured-wow-footer search-featured-footer favorites-card-footer">
+                                <div class="featured-wow-trust search-featured-info favorites-saved-info">
+                                    <span class="featured-wow-trust-icon favorites-saved-icon">
+                                        <i class="bi bi-heart-fill"></i>
+                                    </span>
+                                    <span>
+                                        <strong>محفوظ لديك</strong>
+                                        <small>ضمن قائمتك المفضلة</small>
+                                    </span>
+                                </div>
+
+                                <a href="@detailsUrl" class="featured-wow-action favorites-details-action">
+                                    <span>اكتشف المكان</span>
+                                    <i class="bi bi-arrow-left"></i>
+                                </a>
+                            </div>
+                        </article>
+                    </div>
+                }
+            </div>
+
+            @* ============================================================= *@
+            @* الحالة الفارغة — موجودة دائماً لعرضها بعد حذف آخر بطاقة *@
+            @* ============================================================= *@
+            <section id="emptyFavState"
+                     class="favorites-empty-state @(favoriteCount > 0 ? "d-none" : "")"
+                     aria-live="polite">
+
+                <div class="favorites-empty-visual" aria-hidden="true">
+                    <span class="favorites-empty-card favorites-empty-card-one"></span>
+                    <span class="favorites-empty-card favorites-empty-card-two"></span>
+                    <span class="favorites-empty-card favorites-empty-card-three"></span>
+                    <span class="favorites-empty-heart">
+                        <i class="bi bi-heart"></i>
+                    </span>
+                </div>
+
+                <div class="favorites-empty-copy">
+                    <span class="favorites-empty-kicker">ابدأ قائمتك الخاصة</span>
+                    <h2>قائمتك تنتظر <span>اختياراتك</span></h2>
+                    <p>احفظ الأماكن التي تعجبك، وستجدها هنا جاهزة للرجوع إليها في أي وقت.</p>
+
+                    <a href="/Places/Search" class="favorites-empty-action">
+                        <span>استكشف الأماكن</span>
+                        <i class="bi bi-compass-fill"></i>
+                    </a>
+                </div>
+            </section>
+        </div>
+    </main>
+</div>
+
+@section Scripts {
+    <script src="~/lib/sweetalert2/sweetalert2.js"></script>
+    <script src="~/js/customer/customer-favorites.js" asp-append-version="true"></script>
+    <script src="~/js/customer/customer-sidebar.js" asp-append-version="true"></script>
+}

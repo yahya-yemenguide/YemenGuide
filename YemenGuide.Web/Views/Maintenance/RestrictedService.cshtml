@@ -1,0 +1,255 @@
+﻿@model YemenGuide.Web.Maintenance.MaintenanceState
+@using System.Linq
+@{
+    Layout = null;
+
+    string siteName =
+        string.IsNullOrWhiteSpace(Model.SiteName)
+            ? "دليلك اليمني"
+            : Model.SiteName;
+
+    string logoPath =
+        string.IsNullOrWhiteSpace(Model.LogoPath)
+            ? "/images/logo1.png"
+            : Model.LogoPath;
+
+    string faviconPath =
+        string.IsNullOrWhiteSpace(Model.FaviconPath)
+            ? "/favicon.ico"
+            : Model.FaviconPath;
+
+    string restrictionMode =
+        ViewData["RestrictionMode"]?.ToString()
+        ?? "Partial";
+
+    string serviceName =
+        ViewData["ServiceName"]?.ToString()
+        ?? "هذه الخدمة";
+
+    string serviceMessage =
+        ViewData["ServiceMessage"]?.ToString()
+        ?? "هذه الخدمة متوقفة مؤقتًا أثناء أعمال الصيانة.";
+
+    string serviceIcon =
+        ViewData["ServiceIcon"]?.ToString()
+        ?? "bi-tools";
+
+    string returnUrl =
+        ViewData["ReturnUrl"]?.ToString()
+        ?? "/";
+
+    bool isReadOnly =
+        string.Equals(
+            restrictionMode,
+            "ReadOnly",
+            StringComparison.OrdinalIgnoreCase);
+
+    string endUtcIso =
+        Model.EndAtUtc?.ToString("O")
+        ?? string.Empty;
+}
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1, viewport-fit=cover" />
+
+    <meta name="robots"
+          content="noindex, nofollow" />
+
+    <meta name="theme-color"
+          content="#061b31" />
+
+    <title>
+        @(isReadOnly ? "التصفح فقط" : $"{serviceName} متوقفة مؤقتًا")
+        | @siteName
+    </title>
+
+    <link rel="icon"
+          type="image/x-icon"
+          href="@faviconPath" />
+
+    <link rel="stylesheet"
+          href="/lib/bootstrap-icons/bootstrap-icons.css" />
+
+    <link rel="stylesheet"
+          href="/css/shared/maintenance.css"
+          asp-append-version="true" />
+</head>
+
+<body class="yg-maintenance yg-maintenance--restricted"
+      data-maintenance-root
+      data-logo-src="@logoPath"
+      data-end-utc="@endUtcIso">
+
+    <div class="yg-maintenance-bg"
+         aria-hidden="true">
+        <div class="yg-maintenance-bg__base"></div>
+        <div class="yg-maintenance-bg__aurora yg-maintenance-bg__aurora--one"></div>
+        <div class="yg-maintenance-bg__aurora yg-maintenance-bg__aurora--two"></div>
+        <div class="yg-maintenance-bg__aurora yg-maintenance-bg__aurora--three"></div>
+        <div class="yg-maintenance-bg__mesh"></div>
+
+        <img class="yg-maintenance-bg__watermark"
+             src="@logoPath"
+             alt=""
+             aria-hidden="true" />
+    </div>
+
+    <main class="yg-maintenance-shell yg-maintenance-shell--restricted">
+
+        <header class="yg-maintenance-topbar">
+            <div class="yg-brand">
+                <span class="yg-brand__emblem">
+                    <span class="yg-brand__orbit yg-brand__orbit--outer"></span>
+                    <span class="yg-brand__orbit yg-brand__orbit--inner"></span>
+
+                    <img src="@logoPath"
+                         alt="شعار @siteName"
+                         class="yg-brand__logo" />
+                </span>
+
+                <span class="yg-brand__copy">
+                    <strong>@siteName</strong>
+
+                    @if (!string.IsNullOrWhiteSpace(Model.SiteDescription))
+                    {
+                        <small>@Model.SiteDescription</small>
+                    }
+                </span>
+            </div>
+
+            <div class="yg-maintenance-status yg-maintenance-status--warning">
+                <span class="yg-maintenance-status__pulse"></span>
+                <span>
+                    @(isReadOnly ? "وضع التصفح فقط" : "إيقاف جزئي")
+                </span>
+            </div>
+        </header>
+
+        <section class="yg-restricted-stage">
+
+            <article class="yg-restricted-card">
+                <div class="yg-restricted-visual"
+                     aria-hidden="true">
+                    <span class="yg-restricted-visual__ring yg-restricted-visual__ring--one"></span>
+                    <span class="yg-restricted-visual__ring yg-restricted-visual__ring--two"></span>
+                    <span class="yg-restricted-visual__glow"></span>
+
+                    <span class="yg-restricted-visual__icon">
+                        <i class="bi @serviceIcon"></i>
+                    </span>
+                </div>
+
+                <div class="yg-restricted-kicker">
+                    <i class="bi bi-tools"></i>
+                    <span>
+                        @(isReadOnly
+                            ? "يمكنك مواصلة التصفح"
+                            : "الصيانة الجزئية مفعلة")
+                    </span>
+                </div>
+
+                <h1>
+                    @(isReadOnly
+                        ? "المنصة متاحة للتصفح فقط"
+                        : $"{serviceName} متوقفة مؤقتًا")
+                </h1>
+
+                <p class="yg-restricted-message">
+                    @serviceMessage
+                </p>
+
+                <div class="yg-restricted-info">
+                    <div class="yg-restricted-info__item">
+                        <span class="yg-restricted-info__icon">
+                            <i class="bi bi-eye"></i>
+                        </span>
+
+                        <span>
+                            <strong>التصفح مستمر</strong>
+                            <small>
+                                بقية الصفحات والبيانات المتاحة تعمل طبيعيًا.
+                            </small>
+                        </span>
+                    </div>
+
+                    <div class="yg-restricted-info__item">
+                        <span class="yg-restricted-info__icon">
+                            <i class="bi bi-shield-check"></i>
+                        </span>
+
+                        <span>
+                            <strong>لم تُنفذ العملية</strong>
+                            <small>
+                                تم إيقاف الطلب قبل حفظ أي تغيير في النظام.
+                            </small>
+                        </span>
+                    </div>
+                </div>
+
+                @if (Model.EndAtUtc.HasValue)
+                {
+                    <div class="yg-restricted-countdown">
+                        <span class="yg-restricted-countdown__icon">
+                            <i class="bi bi-clock-history"></i>
+                        </span>
+
+                        <span>
+                            <small>الوقت المتوقع للعودة</small>
+
+                            <strong data-maintenance-countdown-inline
+                                    data-end-utc="@endUtcIso">
+                                جاري الحساب...
+                            </strong>
+                        </span>
+                    </div>
+                }
+
+                <div class="yg-restricted-actions">
+                    <a href="@returnUrl"
+                       class="yg-action yg-action--primary">
+                        <i class="bi bi-arrow-right"></i>
+                        <span>العودة</span>
+                    </a>
+
+                    <a href="/"
+                       class="yg-action yg-action--glass">
+                        <i class="bi bi-house-door"></i>
+                        <span>الصفحة الرئيسية</span>
+                    </a>
+
+                    <button type="button"
+                            class="yg-action yg-action--glass"
+                            data-maintenance-refresh>
+                        <i class="bi bi-arrow-clockwise"></i>
+                        <span>إعادة المحاولة</span>
+                    </button>
+                </div>
+            </article>
+        </section>
+
+        <footer class="yg-maintenance-footer">
+            <div class="yg-maintenance-footer__meta">
+                <span>
+                    <i class="bi bi-lock-fill"></i>
+                    اتصال آمن
+                </span>
+
+                <span class="yg-maintenance-footer__dot"></span>
+
+                <span>@siteName</span>
+
+                <span class="yg-maintenance-footer__dot"></span>
+
+                <span>هذا الإيقاف مؤقت</span>
+            </div>
+        </footer>
+    </main>
+
+    <script src="/js/shared/maintenance.js"
+            asp-append-version="true"
+            defer></script>
+</body>
+</html>

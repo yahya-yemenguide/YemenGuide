@@ -1,0 +1,183 @@
+﻿@using YemenGuide.Core.DTOs.Admin
+@model AdminFinancialReportPrintDto
+
+@{
+    Layout = null;
+    var report = Model?.Report ?? new AdminFinancialReportExportDto();
+    var autoPrint = Model?.AutoPrint ?? false;
+}
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@report.Title</title>
+    <link rel="stylesheet"
+          href="~/css/admin/financials/admin-financial-print.css"
+          asp-append-version="true" />
+</head>
+<body class="afp afp--report">
+    <div class="afp-toolbar no-print">
+        <button type="button" onclick="window.print()">
+            <i class="bi bi-printer"></i>
+            طباعة
+        </button>
+        <button type="button" onclick="window.close()">إغلاق</button>
+    </div>
+
+    <main class="afp-page">
+        <header class="afp-header">
+            <div class="afp-brand">
+                @if (!string.IsNullOrWhiteSpace(report.PlatformLogoPath))
+                {
+                    <img src="@report.PlatformLogoPath"
+                         alt="@report.PlatformName"
+                         class="afp-brand__logo" />
+                }
+                else
+                {
+                    <div class="afp-brand__logo afp-brand__logo--placeholder">
+                        <span>DY</span>
+                    </div>
+                }
+
+                <div>
+                    <strong>@report.PlatformName</strong>
+                    <span>الإدارة المالية</span>
+                </div>
+            </div>
+
+            <div class="afp-document-meta">
+                <small>تقرير مالي رسمي</small>
+                <strong>@report.Title</strong>
+                <span>@report.PeriodLabel</span>
+            </div>
+        </header>
+
+        <section class="afp-title-block">
+            <div>
+                <span class="afp-eyebrow">@report.DateScopeLabel</span>
+                <h1>@report.Title</h1>
+                <p>@report.Subtitle</p>
+            </div>
+
+            <div class="afp-generated-box">
+                <div>
+                    <small>تاريخ الإنشاء</small>
+                    <strong>@report.GeneratedAt.ToString("yyyy/MM/dd HH:mm")</strong>
+                </div>
+                <div>
+                    <small>أُنشئ بواسطة</small>
+                    <strong>@(string.IsNullOrWhiteSpace(report.GeneratedByName) ? "الإدارة المالية" : report.GeneratedByName)</strong>
+                </div>
+                <div>
+                    <small>إجمالي السجلات</small>
+                    <strong>@report.TotalAvailableRows</strong>
+                </div>
+            </div>
+        </section>
+
+        @if (!string.IsNullOrWhiteSpace(report.FilterDescription))
+        {
+            <section class="afp-filter-note">
+                <strong>نطاق التقرير:</strong>
+                <span>@report.FilterDescription</span>
+            </section>
+        }
+
+        @if (report.Metrics.Count > 0)
+        {
+            <section class="afp-metrics">
+                @foreach (var metric in report.Metrics.Take(6))
+                {
+                    <article>
+                        <small>@metric.Label</small>
+                        <strong>@metric.Value</strong>
+                        @if (!string.IsNullOrWhiteSpace(metric.Hint))
+                        {
+                            <span>@metric.Hint</span>
+                        }
+                    </article>
+                }
+            </section>
+        }
+
+        @for (var sectionIndex = 0;
+              sectionIndex < report.Sections.Count;
+              sectionIndex++)
+        {
+            var reportSection = report.Sections[sectionIndex];
+
+            <section class="afp-section">
+                <div class="afp-section__head">
+                    <div>
+                        <span>القسم @(sectionIndex + 1)</span>
+                        <h2>@reportSection.Title</h2>
+                        @if (!string.IsNullOrWhiteSpace(reportSection.Description))
+                        {
+                            <p>@reportSection.Description</p>
+                        }
+                    </div>
+                    <strong>@reportSection.Rows.Count سجل</strong>
+                </div>
+
+                @if (reportSection.Rows.Count == 0)
+                {
+                    <div class="afp-empty">لا توجد بيانات في هذا القسم.</div>
+                }
+                else
+                {
+                    <table class="afp-table">
+                        <thead>
+                            <tr>
+                                @foreach (var column in reportSection.Columns)
+                                {
+                                    <th>@column.Label</th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in reportSection.Rows)
+                            {
+                                <tr>
+                                    @for (var cellIndex = 0;
+                                          cellIndex < reportSection.Columns.Count;
+                                          cellIndex++)
+                                    {
+                                        var cell = row.TypedCells.Count > cellIndex
+                                            ? row.TypedCells[cellIndex]
+                                            : null;
+
+                                        <td>@(cell?.Text ?? "—")</td>
+                                    }
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </section>
+        }
+
+        <footer class="afp-footer">
+            <div>
+                <strong>@report.PlatformName</strong>
+                <span>مستند مولد إلكترونيًا من الإدارة المالية.</span>
+            </div>
+            <div>
+                <span>@report.GeneratedAt.ToString("yyyy/MM/dd HH:mm")</span>
+                <span>@report.Currency</span>
+            </div>
+        </footer>
+    </main>
+
+    @if (autoPrint)
+    {
+        <script>
+            window.addEventListener("load", function () {
+                window.print();
+            });
+        </script>
+    }
+</body>
+</html>

@@ -1,0 +1,1532 @@
+@using System
+
+@{
+    ViewData["Title"] = "إدارة الحجوزات";
+    Layout = "~/Areas/Owner/Views/Shared/_OwnerLayout.cshtml";
+
+    var pendingCount =
+        Convert.ToInt32(ViewBag.PendingCount ?? 0);
+
+    var manualPendingCount =
+        Convert.ToInt32(ViewBag.ManualPendingCount ?? 0);
+
+    var awaitingPaymentCount =
+        Convert.ToInt32(ViewBag.AwaitingPaymentCount ?? 0);
+
+    var paymentReviewCount =
+        Convert.ToInt32(ViewBag.PaymentReviewCount ?? 0);
+
+    var activeCount =
+        Convert.ToInt32(ViewBag.ActiveCount ?? 0);
+
+    var historyCount =
+        Convert.ToInt32(ViewBag.HistoryCount ?? 0);
+
+    var promotionBookingCount =
+        Convert.ToInt32(ViewBag.PromotionBookingCount ?? 0);
+}
+
+@section Styles {
+    <link rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/intl-tel-input@23.0.4/build/css/intlTelInput.css" />
+
+    <link rel="stylesheet"
+      href="~/css/owner/reservation-styles.css"
+      asp-append-version="true" />
+
+    <link rel="stylesheet"
+      href="~/css/owner/calendar-manager.css"
+      asp-append-version="true" />
+}
+
+    @*
+    يستخدمه reservation-actions.js عند إرسال طلبات POST.
+*@
+    <form id="ownerReservationAntiForgeryForm"
+      class="d-none"
+      aria-hidden="true">
+        @Html.AntiForgeryToken()
+    </form>
+
+    <div class="owner-reservations-page"
+     data-reservation-ui-version="4-promotions-luxury3d"
+     dir="rtl">
+
+        <div class="container-fluid
+                reservation-page-container">
+
+            <!-- =========================================================
+                 رأس الصفحة
+                 ========================================================= -->
+
+            <header class="reservation-page-header compact-main-header">
+
+                <div class="reservation-header-main">
+
+                    <div class="reservation-page-icon">
+                        <i class="bi bi-calendar2-check-fill"></i>
+                    </div>
+
+                    <div class="reservation-header-copy">
+
+                        <div class="reservation-title-line">
+
+                            <h2 class="reservation-page-title">
+                                إدارة الحجوزات
+                            </h2>
+
+                            <span class="reservation-live-badge">
+                                <span class="live-dot"></span>
+                                مركز العمليات
+                            </span>
+
+                        </div>
+
+                        <p class="reservation-page-description">
+                            راجع الطلبات والمدفوعات والحجوزات المؤكدة،
+                            مع إبراز الحجوزات التي تمت بعروض وأسعارها الأصلية والنهائية.
+                        </p>
+
+                    </div>
+
+                </div>
+
+                <button type="button"
+                    class="reservation-refresh-btn"
+                    title="تحديث بيانات الحجوزات"
+                    data-reservation-refresh="true">
+
+                    <i class="bi bi-arrow-clockwise"></i>
+
+                    <span>
+                        تحديث
+                    </span>
+
+                </button>
+
+            </header>
+
+            <!-- =========================================================
+                 شريط الملخص المصغر
+                 ========================================================= -->
+
+            <section class="reservation-mini-overview"
+                 aria-label="ملخص حالات الحجوزات">
+
+                <div class="mini-overview-scroll">
+
+                    <div class="mini-overview-item warning">
+
+                        <span class="mini-overview-icon">
+                            <i class="bi bi-hourglass-split"></i>
+                        </span>
+
+                        <div class="mini-overview-copy">
+
+                            <span class="mini-overview-label">
+                                يحتاج موافقة
+                            </span>
+
+                            <strong class="mini-overview-number">
+                                @manualPendingCount
+                            </strong>
+
+                        </div>
+
+                    </div>
+
+                    <div class="mini-overview-divider"></div>
+
+                    <div class="mini-overview-item info">
+
+                        <span class="mini-overview-icon">
+                            <i class="bi bi-wallet2"></i>
+                        </span>
+
+                        <div class="mini-overview-copy">
+
+                            <span class="mini-overview-label">
+                                بانتظار الدفع
+                            </span>
+
+                            <strong class="mini-overview-number">
+                                @awaitingPaymentCount
+                            </strong>
+
+                        </div>
+
+                    </div>
+
+                    <div class="mini-overview-divider"></div>
+
+                    <div class="mini-overview-item success">
+
+                        <span class="mini-overview-icon">
+                            <i class="bi bi-file-earmark-check"></i>
+                        </span>
+
+                        <div class="mini-overview-copy">
+
+                            <span class="mini-overview-label">
+                                مراجعة حوالة
+                            </span>
+
+                            <strong class="mini-overview-number">
+                                @paymentReviewCount
+                            </strong>
+
+                        </div>
+
+                    </div>
+
+                    <div class="mini-overview-divider"></div>
+
+                    <div class="mini-overview-item active">
+
+                        <span class="mini-overview-icon">
+                            <i class="bi bi-calendar-check"></i>
+                        </span>
+
+                        <div class="mini-overview-copy">
+
+                            <span class="mini-overview-label">
+                                حجوزات نشطة
+                            </span>
+
+                            <strong class="mini-overview-number">
+                                @activeCount
+                            </strong>
+
+                        </div>
+
+                    </div>
+
+                    <div class="mini-overview-divider"></div>
+
+                    <div class="mini-overview-item promotion">
+
+                        <span class="mini-overview-icon">
+                            <i class="bi bi-stars"></i>
+                        </span>
+
+                        <div class="mini-overview-copy">
+
+                            <span class="mini-overview-label">
+                                تمت بعروض
+                            </span>
+
+                            <strong class="mini-overview-number">
+                                @promotionBookingCount
+                            </strong>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </section>
+
+            <!-- =========================================================
+                 التبويبات الرئيسية
+                 الأسماء محفوظة لتوافق JavaScript
+                 ========================================================= -->
+
+            <nav class="custom-tabs-container"
+             aria-label="أقسام إدارة الحجوزات">
+
+                <button type="button"
+                    id="pending-requests-tab-button"
+                    class="tab-btn active"
+                    data-target="pending-requests-tab"
+                    aria-controls="pending-requests-panel"
+                    aria-selected="true">
+
+                    <span class="tab-icon-wrap">
+                        <i class="bi bi-inbox-fill"></i>
+                    </span>
+
+                    <span class="tab-label">
+                        الطلبات الجديدة
+                    </span>
+
+                    <span class="reservation-tab-count">
+                        @pendingCount
+                    </span>
+
+                </button>
+
+                <button type="button"
+                    id="active-reservations-tab-button"
+                    class="tab-btn"
+                    data-target="active-reservations-tab"
+                    aria-controls="active-reservations-panel"
+                    aria-selected="false">
+
+                    <span class="tab-icon-wrap">
+                        <i class="bi bi-calendar-check-fill"></i>
+                    </span>
+
+                    <span class="tab-label">
+                        الحجوزات النشطة
+                    </span>
+
+                    <span class="reservation-tab-count">
+                        @activeCount
+                    </span>
+
+                </button>
+
+                <button type="button"
+                    id="reservation-history-tab-button"
+                    class="tab-btn"
+                    data-target="reservation-history-tab"
+                    aria-controls="reservation-history-panel"
+                    aria-selected="false">
+
+                    <span class="tab-icon-wrap">
+                        <i class="bi bi-archive-fill"></i>
+                    </span>
+
+                    <span class="tab-label">
+                        سجل الحجوزات
+                    </span>
+
+                    <span class="reservation-tab-count">
+                        @historyCount
+                    </span>
+
+                </button>
+
+                <button type="button"
+                    id="calendar-manager-tab-button"
+                    class="tab-btn"
+                    data-target="calendar-manager-tab"
+                    aria-controls="calendar-manager-panel"
+                    aria-selected="false">
+
+                    <span class="tab-icon-wrap">
+                        <i class="bi bi-calendar3-range-fill"></i>
+                    </span>
+
+                    <span class="tab-label">
+                        التقويم والتوفر
+                    </span>
+
+                </button>
+
+            </nav>
+
+            <!-- =========================================================
+                 المحتوى المحمّل بواسطة AJAX
+                 ========================================================= -->
+
+            <main class="reservation-content-shell">
+
+                <!-- الطلبات الجديدة -->
+
+                <section id="pending-requests-panel"
+                     class="tab-pane-content
+                            pending-requests-tab"
+                     role="tabpanel"
+                     aria-labelledby="pending-requests-tab-button"
+                     aria-label="الطلبات الجديدة"
+                     style="display:block;">
+
+                    <div class="reservation-initial-loader">
+
+                        <div class="reservation-loader-ring">
+                            <span></span>
+                        </div>
+
+                        <h6>
+                            جاري تحميل الطلبات الجديدة
+                        </h6>
+
+                        <p>
+                            تتم مزامنة الطلبات وحالات الدفع.
+                        </p>
+
+                    </div>
+
+                </section>
+
+                <!-- الحجوزات النشطة -->
+
+                <section id="active-reservations-panel"
+                     class="tab-pane-content
+                            active-reservations-tab"
+                     role="tabpanel"
+                     aria-labelledby="active-reservations-tab-button"
+                     aria-label="الحجوزات النشطة"
+                     style="display:none;">
+                </section>
+
+                <!-- سجل الحجوزات -->
+
+                <section id="reservation-history-panel"
+                     class="tab-pane-content
+                            reservation-history-tab"
+                     role="tabpanel"
+                     aria-labelledby="reservation-history-tab-button"
+                     aria-label="سجل الحجوزات"
+                     style="display:none;">
+                </section>
+
+                <!-- التقويم والتوفر -->
+
+                <section id="calendar-manager-panel"
+                     class="tab-pane-content
+                            calendar-manager-tab"
+                     role="tabpanel"
+                     aria-labelledby="calendar-manager-tab-button"
+                     aria-label="التقويم والتوفر"
+                     style="display:none;">
+                </section>
+
+            </main>
+
+        </div>
+
+    </div>
+
+    <!-- =============================================================
+         مودال تفاصيل الحجز
+         ============================================================= -->
+
+    <div class="modal fade"
+     id="premiumCenterModal"
+     tabindex="-1"
+     aria-labelledby="modalBookingTitle"
+     aria-hidden="true"
+     role="dialog"
+     data-bs-backdrop="static"
+     data-bs-keyboard="true"
+     data-bs-focus="false"
+     dir="rtl">
+
+        <div class="modal-dialog
+                modal-dialog-centered
+                modal-dialog-scrollable
+                modal-xl">
+
+            <div class="modal-content
+                    glass-modal-premium">
+
+                <!-- =====================================================
+                     رأس المودال
+                     ===================================================== -->
+
+                <div class="modal-header
+                        reservation-modal-header">
+
+                    <div class="modal-heading-wrap">
+
+                        <div class="reservation-modal-title-icon">
+                            <i class="bi bi-receipt-cutoff"></i>
+                        </div>
+
+                        <div class="modal-title-copy">
+
+                            <h5 class="modal-title"
+                            id="modalBookingTitle">
+                                تفاصيل الحجز
+                            </h5>
+
+                            <div class="modal-state-badges">
+
+                                <span id="modalBookingState"
+                                  class="badge
+                                         badge-glass-info
+                                         rounded-pill">
+
+                                    حالة الحجز
+
+                                </span>
+
+                                <span id="modalPaymentState"
+                                  class="badge
+                                         badge-glass-warning
+                                         rounded-pill">
+
+                                    حالة الدفع
+
+                                </span>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <button type="button"
+                        class="btn-close reservation-modal-close"
+                        data-bs-dismiss="modal"
+                        aria-label="إغلاق">
+                    </button>
+
+                </div>
+
+                <!-- =====================================================
+                     جسم المودال
+                     ===================================================== -->
+
+                <div class="modal-body
+                        reservation-modal-body">
+
+                    <div class="row g-4">
+
+                        <!-- =============================================
+                             بيانات الحجز والعميل
+                             ============================================= -->
+
+                        <div class="col-12 col-xl-7">
+
+                            <section class="reservation-modal-section">
+
+                                <div class="reservation-section-title">
+
+                                    <span class="section-title-icon">
+                                        <i class="bi bi-person-badge-fill"></i>
+                                    </span>
+
+                                    <div>
+
+                                        <h6>
+                                            معلومات الحجز والنزيل
+                                        </h6>
+
+                                        <p>
+                                            البيانات الأساسية للوحدة والفترة والضيوف.
+                                        </p>
+
+                                    </div>
+
+                                </div>
+
+                                <div class="row g-3 mt-1">
+
+                                    <!-- اسم العميل -->
+
+                                    <div class="col-12 col-md-6">
+
+                                        <div class="info-glass-card
+                                                reservation-modal-info-card">
+
+                                            <span class="reservation-info-icon">
+                                                <i class="bi bi-person-fill"></i>
+                                            </span>
+
+                                            <div class="modal-info-copy">
+
+                                                <small>
+                                                    اسم العميل
+                                                </small>
+
+                                                <strong id="modalCustomerName">
+                                                    --
+                                                </strong>
+
+                                            </div>
+
+                                        </div>
+
+                                    </div>
+
+                                    <!-- الهاتف -->
+
+                                    <div class="col-12 col-md-6">
+
+                                        <div class="info-glass-card
+                                                reservation-modal-info-card">
+
+                                            <span class="reservation-info-icon">
+                                                <i class="bi bi-telephone-fill"></i>
+                                            </span>
+
+                                            <div class="modal-info-copy">
+
+                                                <small>
+                                                    رقم التواصل
+                                                </small>
+
+                                                <strong id="modalCustomerPhone"
+                                                    dir="ltr">
+                                                    --
+                                                </strong>
+
+                                            </div>
+
+                                        </div>
+
+                                    </div>
+
+                                    <!-- الوحدة -->
+
+                                    <div class="col-12">
+
+                                        <div class="info-glass-card
+                                                reservation-modal-info-card">
+
+                                            <span class="reservation-info-icon">
+                                                <i class="bi bi-door-open-fill"></i>
+                                            </span>
+
+                                            <div class="modal-info-copy">
+
+                                                <small id="modalUnitType">
+                                                    الغرفة أو الباقة
+                                                </small>
+
+                                                <strong id="modalUnitName">
+                                                    --
+                                                </strong>
+
+                                            </div>
+
+                                        </div>
+
+                                    </div>
+
+                                    <!-- أرقام الغرف الفعلية والطوابق -->
+
+                                    <div class="col-12"
+                                     id="modalAssignedRoomsCard"
+                                     style="display:none;">
+
+                                        <div class="info-glass-card
+                                                reservation-modal-info-card
+                                                assigned-rooms-modal-card">
+
+                                            <span class="reservation-info-icon assigned-room-icon">
+                                                <i class="bi bi-key-fill"></i>
+                                            </span>
+
+                                            <div class="modal-info-copy">
+
+                                                <small>
+                                                    الغرف الفعلية والطوابق
+                                                </small>
+
+                                                <strong id="modalAssignedRooms">
+                                                    --
+                                                </strong>
+
+                                            </div>
+
+                                        </div>
+
+                                    </div>
+
+                                    <!-- البداية -->
+
+                                    <div class="col-12 col-md-6">
+
+                                        <div class="info-glass-card
+                                                reservation-modal-info-card">
+
+                                            <span class="reservation-info-icon success">
+                                                <i class="bi bi-calendar-plus-fill"></i>
+                                            </span>
+
+                                            <div class="modal-info-copy">
+
+                                                <small>
+                                                    تاريخ البداية
+                                                </small>
+
+                                                <strong id="modalStartDate">
+                                                    --
+                                                </strong>
+
+                                            </div>
+
+                                        </div>
+
+                                    </div>
+
+                                    <!-- النهاية -->
+
+                                    <div class="col-12 col-md-6">
+
+                                        <div class="info-glass-card
+                                                reservation-modal-info-card">
+
+                                            <span class="reservation-info-icon danger">
+                                                <i class="bi bi-calendar-minus-fill"></i>
+                                            </span>
+
+                                            <div class="modal-info-copy">
+
+                                                <small>
+                                                    تاريخ النهاية
+                                                </small>
+
+                                                <strong id="modalEndDate">
+                                                    --
+                                                </strong>
+
+                                            </div>
+
+                                        </div>
+
+                                    </div>
+
+                                </div>
+
+                                <!-- =========================================
+                                     تفاصيل العدد والضيوف
+                                     ========================================= -->
+
+                                <div class="reservation-modal-mini-grid">
+
+                                    <div class="modal-mini-stat">
+
+                                        <span class="modal-mini-stat-icon">
+                                            <i class="bi bi-collection"></i>
+                                        </span>
+
+                                        <div>
+                                            <small>
+                                                عدد الوحدات
+                                            </small>
+
+                                            <strong id="modalQuantity">
+                                                --
+                                            </strong>
+                                        </div>
+
+                                    </div>
+
+                                    <div class="modal-mini-stat">
+
+                                        <span class="modal-mini-stat-icon">
+                                            <i class="bi bi-person-fill"></i>
+                                        </span>
+
+                                        <div>
+                                            <small>
+                                                البالغون
+                                            </small>
+
+                                            <strong id="modalAdults">
+                                                --
+                                            </strong>
+                                        </div>
+
+                                    </div>
+
+                                    <div class="modal-mini-stat">
+
+                                        <span class="modal-mini-stat-icon">
+                                            <i class="bi bi-emoji-smile-fill"></i>
+                                        </span>
+
+                                        <div>
+                                            <small>
+                                                الأطفال
+                                            </small>
+
+                                            <strong id="modalChildren">
+                                                --
+                                            </strong>
+                                        </div>
+
+                                    </div>
+
+                                </div>
+
+                                <!-- =========================================
+                                     نوع الحجز وتجهيز القاعة
+                                     ========================================= -->
+
+                                <div class="row g-3 mt-0">
+
+                                    <div class="col-12 col-md-6">
+
+                                        <div class="info-glass-card
+                                                reservation-modal-info-card">
+
+                                            <span class="reservation-info-icon">
+                                                <i class="bi bi-bookmark-fill"></i>
+                                            </span>
+
+                                            <div class="modal-info-copy">
+
+                                                <small>
+                                                    نوع الحجز
+                                                </small>
+
+                                                <strong id="modalBookingType">
+                                                    --
+                                                </strong>
+
+                                            </div>
+
+                                        </div>
+
+                                    </div>
+
+                                    <div class="col-12 col-md-6">
+
+                                        <div class="info-glass-card
+                                                reservation-modal-info-card">
+
+                                            <span class="reservation-info-icon">
+                                                <i class="bi bi-grid-3x3-gap-fill"></i>
+                                            </span>
+
+                                            <div class="modal-info-copy">
+
+                                                <small>
+                                                    تجهيز القاعة
+                                                </small>
+
+                                                <strong id="modalSeatingSetup">
+                                                    غير محدد
+                                                </strong>
+
+                                            </div>
+
+                                        </div>
+
+                                    </div>
+
+                                    <!-- الخدمات الإضافية -->
+
+                                    <div class="col-12">
+
+                                        <div class="info-glass-card
+                                                reservation-services-card">
+
+                                            <div class="services-card-heading">
+
+                                                <span class="reservation-info-icon warning">
+                                                    <i class="bi bi-stars"></i>
+                                                </span>
+
+                                                <div class="modal-info-copy">
+
+                                                    <small>
+                                                        الخدمات الإضافية
+                                                    </small>
+
+                                                    <strong id="modalServices">
+                                                        لا توجد خدمات إضافية
+                                                    </strong>
+
+                                                </div>
+
+                                            </div>
+
+                                        </div>
+
+                                    </div>
+
+                                    <!-- تاريخ إنشاء الطلب -->
+
+                                    <div class="col-12 col-md-6">
+
+                                        <div class="info-glass-card
+                                                reservation-modal-info-card">
+
+                                            <span class="reservation-info-icon">
+                                                <i class="bi bi-clock-history"></i>
+                                            </span>
+
+                                            <div class="modal-info-copy">
+
+                                                <small>
+                                                    تاريخ إنشاء الطلب
+                                                </small>
+
+                                                <strong id="modalCreatedAt">
+                                                    --
+                                                </strong>
+
+                                            </div>
+
+                                        </div>
+
+                                    </div>
+
+                                    <!-- مهلة الدفع -->
+
+                                    <div class="col-12 col-md-6">
+
+                                        <div class="info-glass-card
+                                                reservation-modal-info-card">
+
+                                            <span class="reservation-info-icon warning">
+                                                <i class="bi bi-stopwatch-fill"></i>
+                                            </span>
+
+                                            <div class="modal-info-copy">
+
+                                                <small>
+                                                    مهلة الدفع
+                                                </small>
+
+                                                <strong id="modalPaymentTimer">
+                                                    غير مطلوبة
+                                                </strong>
+
+                                            </div>
+
+                                        </div>
+
+                                    </div>
+
+
+
+                                    <!-- المواعيد التشغيلية -->
+
+                                    <div class="col-12">
+
+                                        <div class="reservation-operational-panel"
+                                         id="modalOperationalPanel">
+
+                                            <div class="reservation-operational-panel-header">
+
+                                                <span class="reservation-info-icon info">
+                                                    <i class="bi bi-clock-fill"></i>
+                                                </span>
+
+                                                <div>
+                                                    <small>المواعيد التشغيلية والإجراءات</small>
+                                                    <strong id="modalActionAvailabilityText">
+                                                        سيتم تحديد توفر الإجراءات حسب موعد الحجز.
+                                                    </strong>
+                                                </div>
+
+                                            </div>
+
+                                            <div class="reservation-operational-grid">
+
+                                                <div class="reservation-operational-item">
+                                                    <span>بداية التنفيذ</span>
+                                                    <strong id="modalOperationalStartAt">--</strong>
+                                                </div>
+
+                                                <div class="reservation-operational-item">
+                                                    <span>نهاية التنفيذ</span>
+                                                    <strong id="modalOperationalEndAt">--</strong>
+                                                </div>
+
+                                                <div class="reservation-operational-item">
+                                                    <span>يتاح عدم الحضور</span>
+                                                    <strong id="modalNoShowAvailableAt">--</strong>
+                                                </div>
+
+                                                <div class="reservation-operational-item">
+                                                    <span>مهلة السماح</span>
+                                                    <strong id="modalNoShowGraceMinutes">--</strong>
+                                                </div>
+
+                                            </div>
+
+                                        </div>
+
+                                    </div>
+
+                                    <!-- سبب الرفض -->
+
+                                    <div class="col-12"
+                                     id="rejectionReasonRow"
+                                     style="display:none;">
+
+                                        <div class="info-glass-card
+                                                reservation-rejection-card">
+
+                                            <div class="services-card-heading">
+
+                                                <span class="reservation-info-icon danger">
+                                                    <i class="bi bi-exclamation-octagon-fill"></i>
+                                                </span>
+
+                                                <div class="modal-info-copy">
+
+                                                    <small id="modalReasonLabel">
+                                                        سبب الرفض أو الملاحظة
+                                                    </small>
+
+                                                    <strong id="modalRejectionReason">
+                                                        --
+                                                    </strong>
+
+                                                </div>
+
+                                            </div>
+
+                                        </div>
+
+                                    </div>
+
+                                    <!-- آخر رفض لإثبات الدفع -->
+
+                                    <div class="col-12"
+                                     id="modalPaymentProofRejectionRow"
+                                     style="display:none;">
+
+                                        <div class="reservation-proof-rejection-card">
+
+                                            <div class="reservation-proof-rejection-heading">
+
+                                                <span class="reservation-info-icon danger">
+                                                    <i class="bi bi-file-earmark-x-fill"></i>
+                                                </span>
+
+                                                <div>
+                                                    <small>آخر رفض لإثبات الدفع</small>
+                                                    <strong id="modalPaymentProofRejectionReason">--</strong>
+                                                </div>
+
+                                            </div>
+
+                                            <div class="reservation-proof-rejection-meta">
+                                                <span>
+                                                    <i class="bi bi-clock-history"></i>
+                                                    <b>تاريخ الرفض:</b>
+                                                    <strong id="modalPaymentProofRejectedAt">--</strong>
+                                                </span>
+
+                                                <span>
+                                                    <i class="bi bi-arrow-repeat"></i>
+                                                    <b>عدد مرات الرفض:</b>
+                                                    <strong id="modalPaymentProofReviewCount">0</strong>
+                                                </span>
+                                            </div>
+
+                                        </div>
+
+                                    </div>
+
+                                    <!-- معلومات إغلاق الحجز -->
+
+                                    <div class="col-12"
+                                     id="modalClosureSection"
+                                     style="display:none;">
+
+                                        <div class="reservation-closure-card">
+
+                                            <div class="reservation-closure-heading">
+                                                <span class="reservation-info-icon warning">
+                                                    <i class="bi bi-lock-fill"></i>
+                                                </span>
+
+                                                <div>
+                                                    <small>معلومات الإغلاق</small>
+                                                    <strong id="modalClosureTitle">تم إغلاق الحجز</strong>
+                                                </div>
+                                            </div>
+
+                                            <div class="reservation-closure-grid">
+                                                <div>
+                                                    <span>منفذ الإغلاق</span>
+                                                    <strong id="modalClosedBy">--</strong>
+                                                </div>
+
+                                                <div>
+                                                    <span>تاريخ الإغلاق</span>
+                                                    <strong id="modalClosedAt">--</strong>
+                                                </div>
+
+                                                <div>
+                                                    <span>آخر تغيير للحالة</span>
+                                                    <strong id="modalLastStatusChangedAt">--</strong>
+                                                </div>
+                                            </div>
+
+                                            <div class="reservation-closure-reason"
+                                             id="modalClosureReasonRow"
+                                             style="display:none;">
+                                                <span id="modalClosureReasonLabel">سبب الإغلاق</span>
+                                                <strong id="modalClosureReason">--</strong>
+                                            </div>
+
+                                        </div>
+
+                                    </div>
+
+
+                                </div>
+
+                            </section>
+
+                        </div>
+
+                        <!-- =============================================
+                             البيانات المالية
+                             ============================================= -->
+
+                        <div class="col-12 col-xl-5">
+
+                            <section class="reservation-modal-section
+                                        reservation-payment-section">
+
+                                <div class="reservation-section-title">
+
+                                    <span class="section-title-icon">
+                                        <i class="bi bi-credit-card-fill"></i>
+                                    </span>
+
+                                    <div>
+
+                                        <h6>
+                                            تفاصيل الدفع
+                                        </h6>
+
+                                        <p>
+                                            نوع الدفع والمبلغ المعتمد والمتبقي وإشعار الحوالة.
+                                        </p>
+
+                                    </div>
+
+                                </div>
+
+                                <!-- العرض المطبق على الحجز -->
+
+                                <div id="modalPromotionSection"
+                                 class="reservation-promotion-spotlight"
+                                 style="display:none;"
+                                 aria-live="polite"
+                                 data-promo-tilt>
+
+                                    <span class="reservation-promotion-orbit orbit-one"></span>
+                                    <span class="reservation-promotion-orbit orbit-two"></span>
+
+                                    <div class="reservation-promotion-spotlight-head">
+
+                                        <span class="reservation-promotion-emblem">
+                                            <i class="bi bi-stars"></i>
+                                        </span>
+
+                                        <div class="reservation-promotion-copy">
+                                            <small>العرض المطبق على الحجز</small>
+                                            <strong id="modalPromotionTitle">
+                                                عرض خاص
+                                            </strong>
+                                        </div>
+
+                                        <span id="modalPromotionDiscountLabel"
+                                          class="reservation-promotion-value-badge">
+                                            عرض مطبّق
+                                        </span>
+
+                                    </div>
+
+                                    <div class="reservation-promotion-price-journey">
+
+                                        <div class="promotion-journey-price original">
+                                            <span>السعر قبل العرض</span>
+                                            <strong id="modalPromotionOriginalPrice">--</strong>
+                                        </div>
+
+                                        <div class="promotion-journey-arrow">
+                                            <span></span>
+                                            <i class="bi bi-arrow-left"></i>
+                                        </div>
+
+                                        <div class="promotion-journey-price final">
+                                            <span>السعر النهائي</span>
+                                            <strong id="modalPromotionFinalPrice">--</strong>
+                                        </div>
+
+                                    </div>
+
+                                    <div class="reservation-promotion-saving-line">
+
+                                        <div class="promotion-saving-main">
+                                            <i class="bi bi-tag-fill"></i>
+                                            <span>خصم العرض</span>
+                                            <strong id="modalPromotionDiscountAmount">--</strong>
+                                        </div>
+
+                                        <div class="promotion-saving-main">
+                                            <i class="bi bi-gem"></i>
+                                            <span>التوفير النهائي</span>
+                                            <strong id="modalPromotionSavings">--</strong>
+                                        </div>
+
+                                        <div id="modalPromotionCodeRow"
+                                         class="promotion-code-chip"
+                                         style="display:none;">
+                                            <span>الكود المستخدم</span>
+                                            <code id="modalPromotionCode">--</code>
+                                        </div>
+
+                                    </div>
+
+                                </div>
+
+                                <!-- المبالغ -->
+
+                                <div class="reservation-financial-summary">
+
+                                    <div class="financial-summary-row">
+
+                                        <span>
+                                            مدفوع إلكترونيًا
+                                        </span>
+
+                                        <strong id="modalAmountOnline"
+                                            class="text-success">
+                                            --
+                                        </strong>
+
+                                    </div>
+
+                                    <div class="financial-summary-row">
+
+                                        <span>
+                                            المتبقي عند المنشأة
+                                        </span>
+
+                                        <strong id="modalAmountProperty"
+                                            class="text-danger">
+                                            --
+                                        </strong>
+
+                                    </div>
+
+                                    <div class="financial-summary-row"
+                                     id="modalOnlinePaymentTypeRow">
+
+                                        <span>
+                                            نوع الدفع الإلكتروني
+                                        </span>
+
+                                        <strong class="text-sky">
+                                            --
+                                        </strong>
+
+                                    </div>
+
+                                    <div class="financial-summary-row"
+                                     id="modalExpectedOnlineRow">
+
+                                        <span>
+                                            المبلغ المطلوب في الحوالة
+                                        </span>
+
+                                        <strong class="text-success">
+                                            --
+                                        </strong>
+
+                                    </div>
+
+                                    <div class="financial-summary-row"
+                                     id="modalExpectedRemainingRow">
+
+                                        <span>
+                                            المتبقي بعد اعتماد الحوالة
+                                        </span>
+
+                                        <strong class="text-warning">
+                                            --
+                                        </strong>
+
+                                    </div>
+
+                                    <div class="financial-summary-row"
+                                     id="modalDepositRow">
+
+                                        <span>
+                                            العربون المطلوب
+                                        </span>
+
+                                        <strong class="text-info">
+                                            --
+                                        </strong>
+
+                                    </div>
+
+                                    <div class="financial-summary-row"
+                                     id="modalPaymentConfirmedRow">
+
+                                        <span>
+                                            حالة اعتماد الدفع
+                                        </span>
+
+                                        <strong class="text-warning">
+                                            --
+                                        </strong>
+
+                                    </div>
+
+                                    <div class="financial-summary-row"
+                                     id="modalTotalCollectedRow">
+
+                                        <span>
+                                            إجمالي المبالغ المحصلة
+                                        </span>
+
+                                        <strong class="text-success">
+                                            --
+                                        </strong>
+
+                                    </div>
+
+                                    <div class="financial-summary-row"
+                                     id="modalCommissionStatusRow">
+
+                                        <span>
+                                            حالة العمولة
+                                        </span>
+
+                                        <strong class="text-muted">
+                                            --
+                                        </strong>
+
+                                    </div>
+
+                                    <div class="financial-summary-row total">
+
+                                        <span>
+                                            إجمالي الحجز
+                                        </span>
+
+                                        <strong id="modalTotalPrice"
+                                            class="text-sky">
+                                            --
+                                        </strong>
+
+                                    </div>
+
+                                </div>
+
+                                <div id="modalPaymentReviewNotice"
+                                 class="reservation-payment-review-notice"
+                                 style="display:none;">
+
+                                    <span class="reservation-payment-review-icon">
+                                        <i class="bi bi-shield-check"></i>
+                                    </span>
+
+                                    <div>
+                                        <strong>راجع المبلغ قبل اعتماد الحوالة</strong>
+                                        <small>
+                                            المبلغ المتوقع:
+                                            <b id="modalPaymentReviewExpected">--</b>
+                                            — يجب أن يطابق المبلغ الظاهر في صورة الحوالة.
+                                        </small>
+                                    </div>
+
+                                </div>
+
+                                <!-- وسيلة الدفع -->
+
+                                <div class="info-glass-card
+                                        payment-method-card">
+
+                                    <div class="payment-method-main">
+
+                                        <span class="reservation-info-icon">
+                                            <i class="bi bi-wallet2"></i>
+                                        </span>
+
+                                        <div class="modal-info-copy">
+
+                                            <small>
+                                                وسيلة الدفع
+                                            </small>
+
+                                            <strong id="modalPaymentMethod">
+                                                --
+                                            </strong>
+
+                                        </div>
+
+                                    </div>
+
+                                    <button type="button"
+                                        id="quickViewReceiptBtn"
+                                        class="view-docs-btn"
+                                        style="display:none;">
+
+                                        <i class="bi bi-eye-fill"></i>
+
+                                        <span>
+                                            معاينة الإشعار
+                                        </span>
+
+                                    </button>
+
+                                </div>
+
+                                <!-- الرقم المرجعي -->
+
+                                <div class="info-glass-card
+                                        reservation-modal-info-card">
+
+                                    <span class="reservation-info-icon">
+                                        <i class="bi bi-hash"></i>
+                                    </span>
+
+                                    <div class="modal-info-copy">
+
+                                        <small>
+                                            الرقم المرجعي
+                                        </small>
+
+                                        <strong id="modalTransferRef">
+                                            غير متوفر
+                                        </strong>
+
+                                    </div>
+
+                                </div>
+
+
+
+                                <!-- ملخص الاسترداد -->
+
+                                <div class="reservation-refund-card"
+                                 id="modalRefundSection"
+                                 style="display:none;">
+
+                                    <div class="reservation-refund-header">
+
+                                        <div class="reservation-refund-title">
+                                            <i class="bi bi-arrow-counterclockwise"></i>
+                                            <span>ملخص الاسترداد</span>
+                                        </div>
+
+                                        <span class="reservation-refund-status"
+                                          id="modalRefundStatus">
+                                            لا يوجد طلب
+                                        </span>
+
+                                    </div>
+
+                                    <div class="reservation-refund-grid">
+
+                                        <div class="reservation-refund-item">
+                                            <span>المبلغ المدفوع إلكترونيًا</span>
+                                            <strong id="modalRefundDeposit">0 ريال</strong>
+                                        </div>
+
+                                        <div class="reservation-refund-item">
+                                            <span>الغرامة</span>
+                                            <strong id="modalRefundFee">0 ريال</strong>
+                                        </div>
+
+                                        <div class="reservation-refund-item">
+                                            <span>مبلغ الاسترداد</span>
+                                            <strong id="modalRefundAmount">0 ريال</strong>
+                                        </div>
+
+                                        <div class="reservation-refund-item">
+                                            <span>حصة المالك</span>
+                                            <strong id="modalRefundOwnerShare">0 ريال</strong>
+                                        </div>
+
+                                        <div class="reservation-refund-item">
+                                            <span>تاريخ الطلب</span>
+                                            <strong id="modalRefundRequestedAt">--</strong>
+                                        </div>
+
+                                        <div class="reservation-refund-item">
+                                            <span>تاريخ المعالجة</span>
+                                            <strong id="modalRefundProcessedAt">--</strong>
+                                        </div>
+
+                                    </div>
+
+                                    <div class="reservation-refund-reason"
+                                     id="modalRefundReasonRow"
+                                     style="display:none;">
+                                        <span>سبب الاسترداد:</span>
+                                        <strong id="modalRefundReason">--</strong>
+                                    </div>
+
+                                    <div class="reservation-refund-reason"
+                                     id="modalRefundNotesRow"
+                                     style="display:none;">
+                                        <span>ملاحظات المعالجة:</span>
+                                        <strong id="modalRefundNotes">--</strong>
+                                    </div>
+
+                                </div>
+
+                                <!-- تنبيه -->
+
+                                <div class="reservation-payment-note">
+
+                                    <i class="bi bi-shield-check"></i>
+
+                                    <span>
+                                        لا تعتمد الدفع إلا بعد مطابقة الصورة
+                                        والرقم المرجعي مع حساب الاستقبال.
+                                    </span>
+
+                                </div>
+
+                            </section>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <!-- =====================================================
+                     تذييل المودال والإجراءات
+                     ===================================================== -->
+
+                <div class="modal-footer
+                        reservation-modal-footer">
+
+                    <div class="modal-action-stack">
+
+                        <div id="modalActionNotice"
+                         class="reservation-action-notice"
+                         style="display:none;"
+                         role="status"
+                         aria-live="polite">
+                        </div>
+
+                        <div id="modalActionButtons"
+                         class="modal-action-buttons">
+                        </div>
+
+                    </div>
+
+                    <button type="button"
+                        class="modal-close-button"
+                        data-bs-dismiss="modal">
+
+                        <i class="bi bi-x-lg"></i>
+
+                        <span>
+                            إغلاق
+                        </span>
+
+                    </button>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    @section Scripts {
+    <script src="~/lib/sweetalert2/sweetalert2.js"
+        asp-append-version="true"></script>
+
+    <script src="~/lib/fullcalendar/index.global.min.js"
+        asp-append-version="true"></script>
+
+    <script src="~/lib/fullcalendar/ar.global.min.js"
+        asp-append-version="true"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/intl-tel-input@23.0.4/build/js/intlTelInput.min.js"></script>
+
+    <script src="~/js/owner/calendar-manager.js"
+        asp-append-version="true"></script>
+
+    <script src="~/js/owner/reservation-actions.js"
+        asp-append-version="true"></script>
+}

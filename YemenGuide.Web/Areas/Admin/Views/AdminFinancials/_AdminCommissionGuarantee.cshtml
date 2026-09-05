@@ -1,0 +1,592 @@
+﻿@using YemenGuide.Core.DTOs.Admin
+@model AdminCommissionGuaranteePageDto
+
+@{
+    var accountPage = Model?.Accounts ?? new AdminCommissionAccountPageDto();
+    var summary = accountPage.Summary ?? new AdminCommissionAccountSummaryDto();
+    var filter = Model?.Filter ?? new AdminCommissionGuaranteeFilterDto();
+    var currency = string.IsNullOrWhiteSpace(Model?.Currency)
+        ? "ريال يمني"
+        : Model.Currency;
+
+    var canManage =
+        ViewData["CanManageCommissionAccounts"] is bool allowed &&
+        allowed;
+
+    string Money(decimal value) => $"{value:N0} {currency}";
+
+    string AccountStatusLabel(string? status) =>
+        (status ?? string.Empty).Trim() switch
+        {
+            AdminCommissionAccountStatuses.Active => "نشط",
+            AdminCommissionAccountStatuses.LowBalance => "رصيد منخفض",
+            AdminCommissionAccountStatuses.InDebt => "عليه دين",
+            AdminCommissionAccountStatuses.Suspended => "موقوف",
+            AdminCommissionAccountStatuses.NeedsTopUp => "يحتاج شحن",
+            _ => "غير محدد"
+        };
+
+    string AccountTone(string? status) =>
+        (status ?? string.Empty).Trim() switch
+        {
+            AdminCommissionAccountStatuses.Active => "success",
+            AdminCommissionAccountStatuses.LowBalance => "warning",
+            AdminCommissionAccountStatuses.InDebt => "danger",
+            AdminCommissionAccountStatuses.Suspended => "muted",
+            AdminCommissionAccountStatuses.NeedsTopUp => "info",
+            _ => "neutral"
+        };
+}
+
+<section class="acg"
+         data-commission-guarantee-root
+         data-details-url="@Url.Action("Details", "AdminCommissionGuarantee", new { area = "Admin" })"
+         data-booking-url="@Url.Action("BookingDetails", "AdminCommissionGuarantee", new { area = "Admin" })">
+
+    <header class="acg-section-head">
+        <div>
+            <span class="acg-section-head__eyebrow">حساب كل منشأة في مكان واحد</span>
+            <h2 class="acg-section-head__title">العمولات والضمان</h2>
+            <p class="acg-section-head__text">
+                راقب الرصيد المتاح والمحجوز والدين وحالة حساب الضمان،
+                ثم افتح التفاصيل عند الحاجة فقط.
+            </p>
+        </div>
+
+        <div class="acg-summary-mini">
+            <div>
+                <small>إجمالي الحسابات</small>
+                <strong>@summary.TotalCount</strong>
+            </div>
+            <span></span>
+            <div>
+                <small>حسابات سليمة</small>
+                <strong>@summary.ActiveCount</strong>
+            </div>
+        </div>
+    </header>
+
+    <div class="acg-balance-row">
+        <article class="acg-balance-card acg-balance-card--available">
+            <span class="acg-balance-card__icon"><i class="bi bi-wallet2"></i></span>
+            <div>
+                <small>إجمالي الرصيد المتاح</small>
+                <strong>@Money(summary.TotalAvailableBalance)</strong>
+            </div>
+        </article>
+
+        <article class="acg-balance-card acg-balance-card--held">
+            <span class="acg-balance-card__icon"><i class="bi bi-lock"></i></span>
+            <div>
+                <small>إجمالي الرصيد المحجوز</small>
+                <strong>@Money(summary.TotalHeldBalance)</strong>
+            </div>
+        </article>
+
+        <article class="acg-balance-card acg-balance-card--debt">
+            <span class="acg-balance-card__icon"><i class="bi bi-exclamation-triangle"></i></span>
+            <div>
+                <small>إجمالي الدين</small>
+                <strong>@Money(summary.TotalDebtAmount)</strong>
+            </div>
+        </article>
+    </div>
+
+    <form class="acg-toolbar"
+          method="get"
+          action="@Url.Action("Index", "AdminCommissionGuarantee", new { area = "Admin" })"
+          data-acg-filter-form>
+
+        <div class="acg-search">
+            <i class="bi bi-search"></i>
+            <input type="search"
+                   name="Search"
+                   value="@filter.Search"
+                   placeholder="ابحث باسم المنشأة أو رقمها..." />
+        </div>
+
+        <div class="acg-filter-group" role="group" aria-label="حالة حساب الضمان">
+            <button type="button"
+                    class="acg-filter-chip @(string.IsNullOrWhiteSpace(filter.AccountStatus) && filter.HasDebt != true && filter.IsLowBalance != true && filter.IsBookingSuspended != true ? "is-active" : null)"
+                    data-acg-quick-filter="all">
+                الكل
+                <span>@summary.TotalCount</span>
+            </button>
+
+            <button type="button"
+                    class="acg-filter-chip @(filter.AccountStatus == AdminCommissionAccountStatuses.Active ? "is-active" : null)"
+                    data-acg-quick-filter="status"
+                    data-value="@AdminCommissionAccountStatuses.Active">
+                نشط
+                <span>@summary.ActiveCount</span>
+            </button>
+
+            <button type="button"
+                    class="acg-filter-chip @(filter.IsLowBalance == true ? "is-active" : null)"
+                    data-acg-quick-filter="low">
+                منخفض
+                <span>@summary.LowBalanceCount</span>
+            </button>
+
+            <button type="button"
+                    class="acg-filter-chip @(filter.HasDebt == true ? "is-active" : null)"
+                    data-acg-quick-filter="debt">
+                مديون
+                <span>@summary.InDebtCount</span>
+            </button>
+
+            <button type="button"
+                    class="acg-filter-chip @(filter.IsBookingSuspended == true ? "is-active" : null)"
+                    data-acg-quick-filter="suspended">
+                موقوف
+                <span>@summary.SuspendedCount</span>
+            </button>
+        </div>
+
+        <div class="acg-toolbar__selectors">
+            <select name="OwnerId" aria-label="المالك">
+                <option value="">كل الملاك</option>
+                @foreach (var owner in accountPage.Owners)
+                {
+                    <option value="@owner.OwnerId"
+                            selected="@(filter.OwnerId == owner.OwnerId ? "selected" : null)">
+                        @owner.OwnerName
+                    </option>
+                }
+            </select>
+
+            <select name="PlaceId" aria-label="المنشأة">
+                <option value="">كل المنشآت</option>
+                @foreach (var place in accountPage.Places)
+                {
+                    <option value="@place.PlaceId"
+                            selected="@(filter.PlaceId == place.PlaceId ? "selected" : null)">
+                        @place.PlaceName
+                    </option>
+                }
+            </select>
+
+            <select name="PageSize" aria-label="عدد الصفوف">
+                @foreach (var size in new[] { 10, 25, 50 })
+                {
+                    <option value="@size"
+                            selected="@(filter.PageSize == size ? "selected" : null)">
+                        @size صف
+                    </option>
+                }
+            </select>
+        </div>
+
+        <button type="submit" class="acg-btn acg-btn--primary">
+            <i class="bi bi-funnel"></i>
+            تطبيق
+        </button>
+    </form>
+
+    <section class="acg-table-card">
+        <div class="acg-table-card__head">
+            <div>
+                <h3>حسابات المنشآت</h3>
+                <p>@accountPage.Result.Pagination.TotalCount حساب مطابق للفلاتر الحالية</p>
+            </div>
+            <span class="acg-table-card__hint">
+                اضغط «التفاصيل» لعرض العمولات والحركات والسياسات
+            </span>
+        </div>
+
+        @if (accountPage.Result.Items.Count == 0)
+        {
+            <div class="acg-empty">
+                <span class="acg-empty__icon"><i class="bi bi-shield-check"></i></span>
+                <h4>لا توجد حسابات مطابقة</h4>
+                <p>غيّر الفلاتر أو جرّب البحث باسم منشأة أخرى.</p>
+            </div>
+        }
+        else
+        {
+            <div class="acg-table-wrap">
+                <table class="acg-table">
+                    <thead>
+                        <tr>
+                            <th>المنشأة والمالك</th>
+                            <th>المتاح</th>
+                            <th>المحجوز</th>
+                            <th>الدين</th>
+                            <th>الحالة</th>
+                            <th>آخر نشاط</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var account in accountPage.Result.Items)
+                        {
+                            <tr data-account-id="@account.PlaceCommissionAccountId">
+                                <td>
+                                    <div class="acg-place">
+                                        <div class="acg-place__media">
+                                            @if (!string.IsNullOrWhiteSpace(account.PlaceImageUrl))
+                                            {
+                                                <img src="@account.PlaceImageUrl" alt="" loading="lazy" />
+                                            }
+                                            else
+                                            {
+                                                <span><i class="bi bi-building"></i></span>
+                                            }
+                                        </div>
+                                        <div class="acg-place__text">
+                                            <strong>@account.PlaceName</strong>
+                                            <small>
+                                                @account.OwnerName
+                                                <span>•</span>
+                                                #@account.PlaceId
+                                            </small>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td><span class="acg-money acg-money--positive">@Money(account.AvailableBalance)</span></td>
+                                <td><span class="acg-money">@Money(account.HeldBalance)</span></td>
+                                <td>
+                                    <span class="acg-money @(account.DebtAmount > 0 ? "acg-money--danger" : null)">
+                                        @Money(account.DebtAmount)
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="acg-status acg-status--@AccountTone(account.AccountStatus)">
+                                        <span class="acg-status__dot"></span>
+                                        @AccountStatusLabel(account.AccountStatus)
+                                    </span>
+                                </td>
+                                <td>
+                                    @if (account.LastTransactionAt.HasValue)
+                                    {
+                                        <div class="acg-last-activity">
+                                            <strong>@account.LastTransactionAt.Value.ToString("yyyy/MM/dd")</strong>
+                                            <small>@account.LastTransactionAt.Value.ToString("HH:mm")</small>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="acg-muted">لا يوجد نشاط</span>
+                                    }
+                                </td>
+                                <td>
+                                    <button type="button"
+                                            class="acg-details-btn"
+                                            data-acg-details
+                                            data-account-id="@account.PlaceCommissionAccountId">
+                                        التفاصيل
+                                        <i class="bi bi-arrow-left"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="acg-pagination"
+                 data-acg-pagination
+                 data-page="@accountPage.Result.Pagination.PageNumber"
+                 data-total-pages="@accountPage.Result.Pagination.TotalPages">
+                <button type="button"
+                        class="acg-page-btn"
+                        data-acg-page="@(accountPage.Result.Pagination.PageNumber - 1)"
+                        disabled="@(!accountPage.Result.Pagination.HasPreviousPage ? "disabled" : null)">
+                    <i class="bi bi-chevron-right"></i>
+                </button>
+
+                <span>
+                    صفحة
+                    <strong>@accountPage.Result.Pagination.PageNumber</strong>
+                    من
+                    <strong>@accountPage.Result.Pagination.TotalPages</strong>
+                </span>
+
+                <button type="button"
+                        class="acg-page-btn"
+                        data-acg-page="@(accountPage.Result.Pagination.PageNumber + 1)"
+                        disabled="@(!accountPage.Result.Pagination.HasNextPage ? "disabled" : null)">
+                    <i class="bi bi-chevron-left"></i>
+                </button>
+            </div>
+        }
+    </section>
+
+    <div class="acg-modal" data-acg-details-modal aria-hidden="true">
+        <div class="acg-modal__backdrop" data-acg-close></div>
+
+        <div class="acg-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="acgDetailsTitle">
+            <header class="acg-modal__header">
+                <div class="acg-modal__identity">
+                    <span class="acg-modal__avatar" data-acg-place-avatar>
+                        <i class="bi bi-building"></i>
+                    </span>
+                    <div>
+                        <span class="acg-modal__eyebrow">ملف حساب الضمان</span>
+                        <h3 id="acgDetailsTitle" data-acg-place-name>تفاصيل المنشأة</h3>
+                        <p data-acg-owner-name></p>
+                    </div>
+                </div>
+
+                <button type="button" class="acg-modal__close" data-acg-close aria-label="إغلاق">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </header>
+
+            <div class="acg-modal__body">
+                <div class="acg-modal-loading" data-acg-details-loading>
+                    <span class="acg-spinner"></span>
+                    <strong>جارٍ تحميل الملف المالي...</strong>
+                </div>
+
+                <div class="acg-details" data-acg-details-content hidden>
+                    <div class="acg-details__statusbar">
+                        <span class="acg-status" data-acg-account-status></span>
+                        <span class="acg-details__id" data-acg-account-id-label></span>
+                    </div>
+
+                    <div class="acg-details__balances">
+                        <article>
+                            <small>الرصيد المتاح</small>
+                            <strong data-acg-available></strong>
+                        </article>
+                        <article>
+                            <small>المحجوز</small>
+                            <strong data-acg-held></strong>
+                        </article>
+                        <article>
+                            <small>الدين</small>
+                            <strong data-acg-debt></strong>
+                        </article>
+                    </div>
+
+                    <section class="acg-detail-section">
+                        <div class="acg-detail-section__head">
+                            <div>
+                                <span>ملخص العمولة</span>
+                                <h4>حركة العمولة على الحساب</h4>
+                            </div>
+                        </div>
+
+                        <div class="acg-commission-metrics">
+                            <div><small>إجمالي الشحن</small><strong data-acg-total-topups></strong></div>
+                            <div><small>المحجوز</small><strong data-acg-total-held></strong></div>
+                            <div><small>المخصوم</small><strong data-acg-total-charged></strong></div>
+                            <div><small>المحرر</small><strong data-acg-total-released></strong></div>
+                            <div><small>دين مسجل</small><strong data-acg-total-debt-registered></strong></div>
+                            <div><small>دين مسدد</small><strong data-acg-total-debt-paid></strong></div>
+                        </div>
+                    </section>
+
+                    <section class="acg-detail-section">
+                        <div class="acg-detail-section__head">
+                            <div>
+                                <span>آخر الحجوزات</span>
+                                <h4>أحدث عمولات الحجوزات</h4>
+                            </div>
+                            <span class="acg-detail-section__count" data-acg-related-bookings></span>
+                        </div>
+                        <div class="acg-commission-list" data-acg-recent-commissions></div>
+                    </section>
+
+                    <section class="acg-detail-section">
+                        <div class="acg-detail-section__head">
+                            <div>
+                                <span>السجل المالي</span>
+                                <h4>آخر الحركات</h4>
+                            </div>
+                            <span class="acg-detail-section__count" data-acg-transactions-count></span>
+                        </div>
+                        <div class="acg-movement-list" data-acg-recent-transactions></div>
+                    </section>
+                </div>
+            </div>
+
+            <footer class="acg-modal__footer">
+                <button type="button" class="acg-btn acg-btn--ghost" data-acg-close>إغلاق</button>
+
+                @if (canManage)
+                {
+                    <div class="acg-modal__footer-actions">
+                        <button type="button" class="acg-btn acg-btn--soft" data-acg-open-policy>
+                            <i class="bi bi-sliders"></i>
+                            سياسة الحساب
+                        </button>
+
+                        <button type="button" class="acg-btn acg-btn--primary" data-acg-open-status>
+                            <i class="bi bi-power"></i>
+                            تغيير الحالة
+                        </button>
+                    </div>
+                }
+            </footer>
+        </div>
+    </div>
+
+    @if (canManage)
+    {
+        <div class="acg-modal acg-modal--compact" data-acg-policy-modal aria-hidden="true">
+            <div class="acg-modal__backdrop" data-acg-policy-close></div>
+
+            <div class="acg-modal__dialog" role="dialog" aria-modal="true">
+                <form method="post"
+                      action="@Url.Action("UpdatePolicy", "AdminCommissionGuarantee", new { area = "Admin" })"
+                      data-acg-policy-form>
+                    @Html.AntiForgeryToken()
+
+                    <header class="acg-modal__header">
+                        <div>
+                            <span class="acg-modal__eyebrow">إعداد خاص بالمنشأة</span>
+                            <h3>سياسة حساب الضمان</h3>
+                            <p>غيّر فقط ما يحتاج استثناءً عن الإعدادات العامة.</p>
+                        </div>
+                        <button type="button" class="acg-modal__close" data-acg-policy-close>
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </header>
+
+                    <div class="acg-form-body">
+                        <input type="hidden" name="PlaceCommissionAccountId" data-acg-policy-account-id />
+                        <input type="hidden" name="PlaceId" data-acg-policy-place-id />
+
+                        <div class="acg-policy-row">
+                            <div>
+                                <strong>السماح بالدين</strong>
+                                <small>استخدم القيمة العامة أو حدد قيمة خاصة.</small>
+                            </div>
+                            <label class="acg-switch-line">
+                                <input type="checkbox"
+                                       name="UseGlobalAllowNegativeBalance"
+                                       value="true"
+                                       data-acg-use-global-negative />
+                                <span>استخدام العام</span>
+                            </label>
+                            <select name="AllowNegativeBalance" data-acg-negative-value>
+                                <option value="">—</option>
+                                <option value="true">مسموح</option>
+                                <option value="false">غير مسموح</option>
+                            </select>
+                        </div>
+
+                        <div class="acg-policy-row">
+                            <div>
+                                <strong>حد الدين</strong>
+                                <small>الحد الأقصى المسموح به لهذا الحساب.</small>
+                            </div>
+                            <label class="acg-switch-line">
+                                <input type="checkbox"
+                                       name="UseGlobalDebtLimit"
+                                       value="true"
+                                       data-acg-use-global-debt />
+                                <span>استخدام العام</span>
+                            </label>
+                            <input type="number" name="DebtLimit" min="0" step="0.01" data-acg-debt-limit />
+                        </div>
+
+                        <div class="acg-policy-row">
+                            <div>
+                                <strong>حد انخفاض الرصيد</strong>
+                                <small>يبدأ عنده تنبيه انخفاض الرصيد.</small>
+                            </div>
+                            <label class="acg-switch-line">
+                                <input type="checkbox"
+                                       name="UseGlobalLowBalanceThreshold"
+                                       value="true"
+                                       data-acg-use-global-low />
+                                <span>استخدام العام</span>
+                            </label>
+                            <input type="number"
+                                   name="LowBalanceThreshold"
+                                   min="0"
+                                   step="0.01"
+                                   data-acg-low-limit />
+                        </div>
+
+                        <div class="acg-form-field">
+                            <label for="acgPolicyReason">سبب التعديل</label>
+                            <textarea id="acgPolicyReason"
+                                      name="Reason"
+                                      rows="3"
+                                      maxlength="500"
+                                      required
+                                      placeholder="اكتب سببًا واضحًا يوثق هذا التغيير..."></textarea>
+                        </div>
+                    </div>
+
+                    <footer class="acg-modal__footer">
+                        <button type="button" class="acg-btn acg-btn--ghost" data-acg-policy-close>إلغاء</button>
+                        <button type="submit" class="acg-btn acg-btn--primary">حفظ السياسة</button>
+                    </footer>
+                </form>
+            </div>
+        </div>
+
+        <div class="acg-modal acg-modal--compact" data-acg-status-modal aria-hidden="true">
+            <div class="acg-modal__backdrop" data-acg-status-close></div>
+
+            <div class="acg-modal__dialog" role="dialog" aria-modal="true">
+                <form method="post"
+                      action="@Url.Action("ChangeStatus", "AdminCommissionGuarantee", new { area = "Admin" })"
+                      data-acg-status-form>
+                    @Html.AntiForgeryToken()
+
+                    <header class="acg-modal__header">
+                        <div>
+                            <span class="acg-modal__eyebrow">إجراء إداري موثق</span>
+                            <h3>تغيير حالة الحساب</h3>
+                            <p>التغيير لا يعدل الأرصدة؛ بل يغيّر حالة حساب الضمان.</p>
+                        </div>
+                        <button type="button" class="acg-modal__close" data-acg-status-close>
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </header>
+
+                    <div class="acg-form-body">
+                        <input type="hidden" name="PlaceCommissionAccountId" data-acg-status-account-id />
+                        <input type="hidden" name="PlaceId" data-acg-status-place-id />
+
+                        <div class="acg-status-choice">
+                            <label>
+                                <input type="radio"
+                                       name="TargetStatus"
+                                       value="@AdminCommissionAccountStatuses.Active"
+                                       required />
+                                <span>
+                                    <i class="bi bi-check-circle"></i>
+                                    <strong>تنشيط الحساب</strong>
+                                    <small>إعادة الحساب إلى الحالة النشطة.</small>
+                                </span>
+                            </label>
+
+                            <label>
+                                <input type="radio"
+                                       name="TargetStatus"
+                                       value="@AdminCommissionAccountStatuses.Suspended"
+                                       required />
+                                <span>
+                                    <i class="bi bi-pause-circle"></i>
+                                    <strong>إيقاف الحساب</strong>
+                                    <small>تعليق الحساب وفق السياسة المالية.</small>
+                                </span>
+                            </label>
+                        </div>
+
+                        <div class="acg-form-field">
+                            <label for="acgStatusReason">سبب الإجراء</label>
+                            <textarea id="acgStatusReason"
+                                      name="Reason"
+                                      rows="3"
+                                      maxlength="500"
+                                      required></textarea>
+                        </div>
+                    </div>
+
+                    <footer class="acg-modal__footer">
+                        <button type="button" class="acg-btn acg-btn--ghost" data-acg-status-close>إلغاء</button>
+                        <button type="submit" class="acg-btn acg-btn--primary">تأكيد الإجراء</button>
+                    </footer>
+                </form>
+            </div>
+        </div>
+    }
+</section>

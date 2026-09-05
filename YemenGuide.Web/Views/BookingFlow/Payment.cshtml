@@ -1,0 +1,1863 @@
+﻿@using System
+@using System.Collections.Generic
+@using System.Linq
+@using YemenGuide.Core.Entities
+@using YemenGuide.Core.Constants
+
+@model YemenGuide.Core.Entities.Booking
+
+@{
+    ViewData["Title"] = "إتمام الدفع";
+    ViewData["HideFooter"] = true;
+
+    var financialRecord =
+        Model.FinancialRecord;
+
+    var totalPrice =
+        Model.TotalPrice;
+
+    var depositAmount =
+        financialRecord?.DepositAmount ?? 0m;
+
+    var remainingAmount =
+        financialRecord?.AmountToPayAtProperty
+        ?? Math.Max(0m, totalPrice - depositAmount);
+
+    var discountAmount =
+        Math.Max(0m, Model.DiscountAmount);
+
+    var originalTotalPrice =
+        Model.OriginalTotalPrice > 0m
+            ? Model.OriginalTotalPrice
+            : totalPrice + discountAmount;
+
+
+    var displayCurrency =
+        ViewBag.DisplayCurrency as string ??
+        "ريال يمني";
+
+    var displayCurrencyCode =
+        ViewBag.DisplayCurrencyCode as string ??
+        "YER";
+
+    var totalPriceDisplay =
+        ViewBag.TotalPriceDisplay is decimal totalPriceDisplayValue
+            ? totalPriceDisplayValue
+            : totalPrice;
+
+    decimal DisplayAmount(decimal amountInYer)
+    {
+        if (totalPrice > 0m)
+        {
+            return Math.Round(
+                amountInYer * totalPriceDisplay / totalPrice,
+                displayCurrencyCode == "YER" ? 0 : 2,
+                MidpointRounding.AwayFromZero);
+        }
+
+        return amountInYer;
+    }
+
+    string FormatDisplayAmount(decimal amountInYer)
+    {
+        var value = DisplayAmount(amountInYer);
+
+        return displayCurrencyCode switch
+        {
+            "USD" => $"${value:N2}",
+            "SAR" => $"{value:N2} ر.س",
+            _ => $"{value:N0} ر.ي"
+        };
+    }
+
+    var totalPriceText =
+        ViewBag.TotalPriceText as string ??
+        FormatDisplayAmount(totalPrice);
+
+    var depositAmountText =
+        ViewBag.DepositAmountText as string ??
+        FormatDisplayAmount(depositAmount);
+
+    var remainingAmountText =
+        ViewBag.RemainingAmountText as string ??
+        FormatDisplayAmount(remainingAmount);
+
+    var zeroAmountText =
+        FormatDisplayAmount(0m);
+
+    var selectedOnlinePaymentType =
+        string.Equals(
+            financialRecord?.OnlinePaymentType,
+            FinancialOnlinePaymentTypes.Full,
+            StringComparison.OrdinalIgnoreCase)
+            ? FinancialOnlinePaymentTypes.Full
+            : FinancialOnlinePaymentTypes.Deposit;
+
+    var isFullPaymentInitially =
+        string.Equals(
+            selectedOnlinePaymentType,
+            FinancialOnlinePaymentTypes.Full,
+            StringComparison.OrdinalIgnoreCase);
+
+    var selectedPaymentAmountText =
+        isFullPaymentInitially
+            ? totalPriceText
+            : depositAmountText;
+
+    var selectedRemainingAmountText =
+        isFullPaymentInitially
+            ? zeroAmountText
+            : remainingAmountText;
+
+    var originalTotalPriceText =
+        FormatDisplayAmount(originalTotalPrice);
+
+    var discountAmountText =
+        FormatDisplayAmount(discountAmount);
+
+    var hasPromotion =
+        Model.PromotionId.HasValue &&
+        Model.PromotionId.Value > 0 &&
+        discountAmount > 0m;
+
+    var promotionTitle =
+        !string.IsNullOrWhiteSpace(Model.PromotionTitleSnapshot)
+            ? Model.PromotionTitleSnapshot!.Trim()
+            : "عرض محفوظ مع الحجز";
+
+    var promotionCode =
+        Model.PromotionCodeSnapshot?.Trim() ?? string.Empty;
+
+    var promotionDiscountValue =
+        Math.Max(0m, Model.DiscountValueSnapshot ?? 0m);
+
+    var promotionDiscountType =
+        Model.DiscountTypeSnapshot?.Trim() ?? string.Empty;
+
+    var fixedPromotionDiscountText =
+        ViewBag.PromotionDiscountValueText as string ??
+        $"{promotionDiscountValue:N0} ر.ي";
+
+    var promotionDiscountLabel =
+        string.Equals(promotionDiscountType, "Percentage", StringComparison.OrdinalIgnoreCase) && promotionDiscountValue > 0m
+            ? $"خصم {promotionDiscountValue:N0}%"
+            : string.Equals(promotionDiscountType, "FixedAmount", StringComparison.OrdinalIgnoreCase) && promotionDiscountValue > 0m
+                ? $"خصم {fixedPromotionDiscountText}"
+                : "عرض مطبّق";
+
+    var placeName =
+        Model.Place?.PlaceNameAndDesc
+        ?? "المنشأة";
+
+    var placeImage =
+        !string.IsNullOrWhiteSpace(Model.Place?.CoverImage)
+            ? Model.Place.CoverImage
+            : "/images/bg1.jpg";
+
+    var categoryName =
+        Model.Place?.Category?.CategoryName
+        ?? "منشأة";
+
+    var bookingNumber =
+        Model.BookingId.ToString("D6");
+
+    var timerExpiredAt =
+        Model.TimerExpiredAt;
+
+    var timerExpiredAtIso =
+        timerExpiredAt.HasValue
+            ? timerExpiredAt.Value.ToString("O")
+            : string.Empty;
+
+    var timerText =
+        timerExpiredAt.HasValue
+            ? timerExpiredAt.Value.ToString(
+                "yyyy-MM-dd - hh:mm tt")
+            : "غير محدد";
+
+    var isRoomBooking =
+        Model.RoomId.HasValue &&
+        Model.Room != null;
+
+    var bookedItemName =
+        isRoomBooking
+            ? Model.Room?.RoomType
+              ?? Model.Room?.RoomNumber
+              ?? "غرفة محجوزة"
+            : Model.Package?.PackageName
+              ?? "باقة حجز";
+
+    var bookedItemDescription =
+        isRoomBooking
+            ? Model.Room?.Description
+              ?? "وحدة فندقية محجوزة"
+            : Model.Package?.TimeFrame
+              ?? "باقة منشأة محجوزة";
+
+    var bookingTypeTitle =
+        isRoomBooking
+            ? "حجز غرفة أو وحدة"
+            : "حجز باقة أو قاعة";
+
+    var assignedRoomUnits =
+        Model.BookingRoomUnits?
+            .Where(assignment =>
+                assignment.RoomUnit != null &&
+                (
+                    string.Equals(
+                        assignment.AssignmentStatus,
+                        "Held",
+                        StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(
+                        assignment.AssignmentStatus,
+                        "Confirmed",
+                        StringComparison.OrdinalIgnoreCase)
+                ))
+            .OrderBy(assignment =>
+                assignment.RoomUnit.FloorNumber)
+            .ThenBy(assignment =>
+                assignment.RoomUnit.RoomNumber)
+            .ToList()
+        ?? new List<BookingRoomUnit>();
+
+    var assignedRoomLabels =
+        assignedRoomUnits
+            .Select(assignment =>
+            {
+                var floorLabel =
+                    !string.IsNullOrWhiteSpace(
+                        assignment.RoomUnit.FloorLabel)
+                        ? assignment.RoomUnit.FloorLabel!.Trim()
+                        : $"الطابق {assignment.RoomUnit.FloorNumber}";
+
+                return $"{assignment.RoomUnit.RoomNumber} — {floorLabel}";
+            })
+            .ToList();
+
+    var startDateText =
+        Model.StartDate.ToString("yyyy-MM-dd");
+
+    var endDateText =
+        Model.EndDate.HasValue
+            ? Model.EndDate.Value.ToString("yyyy-MM-dd")
+            : startDateText;
+
+    var bookingPeriod =
+        Model.EndDate.HasValue &&
+        Model.EndDate.Value.Date != Model.StartDate.Date
+            ? $"{startDateText} إلى {endDateText}"
+            : startDateText;
+
+    var ownerWallets =
+    Model.Place?
+        .Owner?
+        .OwnerWallets?
+        .Where(wallet =>
+            wallet.IsActive == true &&
+            wallet.Wallet != null &&
+            wallet.Wallet.IsActive == true)
+        .OrderBy(wallet =>
+            wallet.Wallet!.WalletName)
+        .ToList()
+    ?? new List<OwnerWallet>();
+
+    var hasWallets =
+        ownerWallets.Any();
+
+    var paymentStatus =
+        Model.PaymentStatus
+        ?? "Unpaid";
+
+    var bookingState =
+        Model.BookingState
+        ?? "AwaitingPayment";
+
+    var hasPaymentProofRejection =
+        !string.IsNullOrWhiteSpace(
+            Model.PaymentProofRejectionReason);
+
+    var paymentProofRejectedAtText =
+        Model.PaymentProofRejectedAt.HasValue
+            ? Model.PaymentProofRejectedAt.Value.ToString(
+                "yyyy-MM-dd - hh:mm tt")
+            : string.Empty;
+
+    var paymentPageTitle =
+        hasPaymentProofRejection
+            ? "ارفع إثبات دفع جديد"
+            : "اختر طريقة الدفع وأكمل الحوالة";
+
+    var paymentPageDescription =
+        hasPaymentProofRejection
+            ? "راجع سبب رفض الإثبات السابق، ثم اختر طريقة الدفع ومحفظة الاستقبال وارفع صورة جديدة وواضحة."
+            : "اختر بين دفع العربون أو دفع كامل قيمة الحجز، ثم حوّل المبلغ المحدد بالضبط وارفع إشعار الحوالة للمراجعة.";
+}
+
+@section Styles {
+    <link rel="stylesheet"
+      href="~/css/customer/Payment.css"
+      asp-append-version="true" />
+}
+
+    <main id="paymentPage"
+      data-has-promotion="@hasPromotion.ToString().ToLowerInvariant()"
+      class="payment-page"
+      dir="rtl"
+      data-booking-id="@Model.BookingId"
+      data-booking-state="@bookingState"
+      data-payment-status="@paymentStatus"
+      data-expire-at="@timerExpiredAtIso"
+      data-deposit-amount="@depositAmount"
+      data-deposit-amount-text="@depositAmountText"
+      data-total-price-text="@totalPriceText"
+      data-remaining-amount-text="@remainingAmountText"
+      data-zero-amount-text="@zeroAmountText"
+      data-initial-payment-type="@selectedOnlinePaymentType"
+      data-proof-rejected="@hasPaymentProofRejection.ToString().ToLowerInvariant()"
+      data-proof-review-count="@Model.PaymentProofReviewCount">
+
+        @Html.AntiForgeryToken()
+
+        <!-- زخارف الخلفية -->
+        <span class="payment-page-orb payment-page-orb-one"
+          aria-hidden="true">
+        </span>
+
+        <span class="payment-page-orb payment-page-orb-two"
+          aria-hidden="true">
+        </span>
+
+        <span class="payment-page-grid"
+          aria-hidden="true">
+        </span>
+
+        <div class="payment-shell">
+
+            <!-- =============================================================
+                 01. رأس الصفحة
+                 ============================================================= -->
+            <header class="payment-header">
+
+                <div class="payment-header-navigation">
+
+                    <nav class="payment-breadcrumb"
+                     aria-label="مسار التنقل">
+
+                        <a asp-controller="Home"
+                       asp-action="Index">
+                            الرئيسية
+                        </a>
+
+                        <i class="bi bi-chevron-left"></i>
+
+                        <a asp-controller="Places"
+                       asp-action="BookingDetails"
+                       asp-route-id="@Model.BookingId">
+                            تفاصيل الحجز
+                        </a>
+
+                        <i class="bi bi-chevron-left"></i>
+
+                        <span>
+                            إتمام الدفع
+                        </span>
+                    </nav>
+
+                    <a asp-controller="Places"
+                   asp-action="BookingDetails"
+                   asp-route-id="@Model.BookingId"
+                   class="payment-back-button">
+
+                        <i class="bi bi-arrow-right"></i>
+
+                        <span>
+                            تفاصيل الحجز
+                        </span>
+                    </a>
+                </div>
+
+                <div class="payment-header-content">
+
+                    <div class="payment-header-title-wrap">
+
+                        <span class="payment-header-icon">
+
+                            <i class="bi bi-shield-lock-fill"></i>
+                        </span>
+
+                        <div class="payment-header-copy">
+
+                            <span class="payment-header-eyebrow">
+
+                                <i class="bi bi-stars"></i>
+
+                                بوابة دفع آمنة
+                            </span>
+
+                            <h1>
+                                @paymentPageTitle
+                            </h1>
+
+                            <p>
+                                @paymentPageDescription
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="payment-booking-number">
+
+                        <small>
+                            رقم الحجز
+                        </small>
+
+                        <strong>
+                            #@bookingNumber
+                        </strong>
+
+                        <span>
+
+                            <i class="bi bi-patch-check-fill"></i>
+
+                            حجز موثق
+                        </span>
+                    </div>
+                </div>
+
+                <!-- مراحل الحجز -->
+                <div class="payment-steps"
+                 aria-label="مراحل إتمام الحجز">
+
+                    <div class="payment-step is-completed">
+
+                        <span class="payment-step-number">
+
+                            <i class="bi bi-check-lg"></i>
+                        </span>
+
+                        <div>
+                            <small>المرحلة الأولى</small>
+                            <strong>اختيار الحجز</strong>
+                        </div>
+                    </div>
+
+                    <span class="payment-step-connector is-completed">
+                    </span>
+
+                    <div class="payment-step is-completed">
+
+                        <span class="payment-step-number">
+
+                            <i class="bi bi-check-lg"></i>
+                        </span>
+
+                        <div>
+                            <small>المرحلة الثانية</small>
+                            <strong>إنشاء الحجز</strong>
+                        </div>
+                    </div>
+
+                    <span class="payment-step-connector is-active">
+                    </span>
+
+                    <div class="payment-step is-active"
+                     aria-current="step">
+
+                        <span class="payment-step-number">
+                            3
+                        </span>
+
+                        <div>
+                            <small>المرحلة الحالية</small>
+                            <strong>اختيار الدفع</strong>
+                        </div>
+                    </div>
+
+                    <span class="payment-step-connector">
+                    </span>
+
+                    <div class="payment-step">
+
+                        <span class="payment-step-number">
+                            4
+                        </span>
+
+                        <div>
+                            <small>المرحلة الأخيرة</small>
+                            <strong>مراجعة الدفع</strong>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+        @if (hasPaymentProofRejection)
+        {
+            <section class="payment-rejection-alert"
+                 role="alert"
+                 aria-labelledby="paymentRejectionTitle">
+
+                <span class="payment-rejection-icon">
+                    <i class="bi bi-file-earmark-x-fill"></i>
+                </span>
+
+                <div class="payment-rejection-copy">
+                    <small>يلزم تصحيح إثبات الدفع</small>
+
+                    <h2 id="paymentRejectionTitle">
+                        لم يتم اعتماد الإثبات السابق
+                    </h2>
+
+                    <p>
+                        @Model.PaymentProofRejectionReason
+                    </p>
+
+                    <div class="payment-rejection-meta">
+                        @if (!string.IsNullOrWhiteSpace(paymentProofRejectedAtText))
+                        {
+                            <span>
+                                <i class="bi bi-calendar2-x"></i>
+                                آخر رفض: @paymentProofRejectedAtText
+                            </span>
+                        }
+
+                        <span>
+                            <i class="bi bi-arrow-repeat"></i>
+                            عدد مرات الرفض: @Math.Max(1, Model.PaymentProofReviewCount)
+                        </span>
+                    </div>
+                </div>
+
+                <span class="payment-rejection-action">
+                    <i class="bi bi-cloud-arrow-up-fill"></i>
+                    ارفع صورة جديدة وواضحة
+                </span>
+
+            </section>
+        }
+
+        <!-- =============================================================
+             02. مؤقت الدفع
+             ============================================================= -->
+        <section id="paymentTimerCard"
+                 class="payment-timer-card"
+                 aria-labelledby="paymentTimerHeading">
+
+            <div class="payment-timer-main">
+
+                <span class="payment-timer-icon">
+
+                    <i class="bi bi-hourglass-split"></i>
+                </span>
+
+                <div class="payment-timer-copy">
+
+                    <small>
+                        الوقت المتبقي لإتمام الدفع
+                    </small>
+
+                    <h2 id="paymentTimerHeading">
+                        احجز موعدك قبل انتهاء المهلة
+                    </h2>
+
+                    <p>
+                        سيبقى الحجز محفوظًا لك مؤقتًا حتى تُرسل إثبات الدفع قبل انتهاء الوقت المحدد.
+                    </p>
+                </div>
+            </div>
+
+            <div class="payment-countdown"
+                 role="timer"
+                 aria-live="polite">
+
+                <div class="payment-countdown-unit">
+
+                    <strong id="countdownHours">
+                        00
+                    </strong>
+
+                    <span>
+                        ساعة
+                    </span>
+                </div>
+
+                <span class="payment-countdown-separator">
+                    :
+                </span>
+
+                <div class="payment-countdown-unit">
+
+                    <strong id="countdownMinutes">
+                        00
+                    </strong>
+
+                    <span>
+                        دقيقة
+                    </span>
+                </div>
+
+                <span class="payment-countdown-separator">
+                    :
+                </span>
+
+                <div class="payment-countdown-unit">
+
+                    <strong id="countdownSeconds">
+                        00
+                    </strong>
+
+                    <span>
+                        ثانية
+                    </span>
+                </div>
+            </div>
+
+            <div class="payment-timer-deadline">
+
+                <i class="bi bi-calendar2-check"></i>
+
+                <span>
+                    تنتهي المهلة:
+                </span>
+
+                <strong id="paymentDeadlineText">
+                    @timerText
+                </strong>
+            </div>
+        </section>
+
+        <!-- =============================================================
+             03. المحتوى الأساسي
+             ============================================================= -->
+        <div class="payment-content-grid">
+
+            <!-- العمود الرئيسي -->
+            <div class="payment-main-column">
+
+                @if (hasPromotion)
+                {
+                    <section class="payment-card payment-promotion-card" aria-label="العرض المطبق على الحجز">
+                        <span class="payment-promotion-orb payment-promotion-orb-one" aria-hidden="true"></span>
+                        <span class="payment-promotion-orb payment-promotion-orb-two" aria-hidden="true"></span>
+
+                        <div class="payment-promotion-head">
+                            <span class="payment-promotion-icon">
+                                <i class="bi bi-fire"></i>
+                            </span>
+                            <div>
+                                <small>ميزة محفوظة مع حجزك</small>
+                                <h2>تم تطبيق العرض بنجاح</h2>
+                            </div>
+                            <span class="payment-promotion-badge">@promotionDiscountLabel</span>
+                        </div>
+
+                        <div class="payment-promotion-body">
+                            <div class="payment-promotion-copy">
+                                <strong>@promotionTitle</strong>
+                                <span>الخصم محفوظ داخل الحجز ولن يتغير إذا انتهى العرض لاحقًا.</span>
+                                @if (!string.IsNullOrWhiteSpace(promotionCode))
+                                {
+                                    <span class="payment-promotion-code">
+                                        <i class="bi bi-ticket-perforated"></i>
+                                        <span>الكود</span>
+                                        <strong dir="ltr">@promotionCode</strong>
+                                    </span>
+                                }
+                            </div>
+
+                            <div class="payment-promotion-money">
+                                <span class="payment-promotion-before">
+                                    <small>قبل العرض</small>
+                                    <del>@originalTotalPriceText</del>
+                                </span>
+                                <span class="payment-promotion-saving">
+                                    <small>وفرت</small>
+                                    <strong>-@discountAmountText</strong>
+                                </span>
+                                <span class="payment-promotion-final">
+                                    <small>الإجمالي النهائي</small>
+                                    <strong>@totalPriceText</strong>
+                                </span>
+                            </div>
+                        </div>
+                    </section>
+                }
+
+                <!-- =========================================================
+                     اختيار طريقة الدفع
+                     ========================================================= -->
+                <section class="payment-card payment-type-card"
+                         aria-labelledby="paymentTypeHeading">
+
+                    <div class="payment-card-heading">
+
+                        <div class="payment-heading-title">
+
+                            <span class="payment-heading-icon payment-type-heading-icon">
+                                <i class="bi bi-credit-card-2-front-fill"></i>
+                            </span>
+
+                            <div>
+                                <small>
+                                    اختر المبلغ الذي تريد تحويله
+                                </small>
+
+                                <h2 id="paymentTypeHeading">
+                                    كيف تريد إكمال الدفع؟
+                                </h2>
+                            </div>
+                        </div>
+
+                        <span class="payment-section-badge payment-type-secure-badge">
+                            <i class="bi bi-shield-check"></i>
+                            اختيار واضح وآمن
+                        </span>
+                    </div>
+
+                    <div class="payment-type-body">
+
+                        <div class="payment-type-options"
+                             role="radiogroup"
+                             aria-labelledby="paymentTypeHeading">
+
+                            <input type="radio"
+                                   class="payment-type-radio"
+                                   id="paymentTypeDeposit"
+                                   name="paymentTypeChoice"
+                                   value="@FinancialOnlinePaymentTypes.Deposit"
+                                   @(isFullPaymentInitially ? null : "checked") />
+
+                            <label class="payment-type-option payment-type-option-deposit"
+                                   for="paymentTypeDeposit">
+
+                                <span class="payment-type-check">
+                                    <i class="bi bi-check-lg"></i>
+                                </span>
+
+                                <span class="payment-type-option-icon">
+                                    <i class="bi bi-wallet2"></i>
+                                </span>
+
+                                <span class="payment-type-option-copy">
+                                    <span class="payment-type-kicker">
+                                        الأكثر مرونة
+                                    </span>
+
+                                    <strong>
+                                        دفع العربون فقط
+                                    </strong>
+
+                                    <small>
+                                        ثبّت الحجز الآن، وادفع المتبقي لدى المنشأة.
+                                    </small>
+                                </span>
+
+                                <span class="payment-type-money">
+                                    <small>تحوّل الآن</small>
+                                    <strong>@depositAmountText</strong>
+                                </span>
+
+                                <span class="payment-type-foot">
+                                    <span>
+                                        <i class="bi bi-shop"></i>
+                                        المتبقي لدى المنشأة
+                                    </span>
+
+                                    <strong>
+                                        @remainingAmountText
+                                    </strong>
+                                </span>
+                            </label>
+
+                            <input type="radio"
+                                   class="payment-type-radio"
+                                   id="paymentTypeFull"
+                                   name="paymentTypeChoice"
+                                   value="@FinancialOnlinePaymentTypes.Full"
+                                   @(isFullPaymentInitially ? "checked" : null) />
+
+                            <label class="payment-type-option payment-type-option-full"
+                                   for="paymentTypeFull">
+
+                                <span class="payment-type-check">
+                                    <i class="bi bi-check-lg"></i>
+                                </span>
+
+                                <span class="payment-type-option-icon">
+                                    <i class="bi bi-patch-check-fill"></i>
+                                </span>
+
+                                <span class="payment-type-option-copy">
+                                    <span class="payment-type-kicker">
+                                        بدون مبلغ متبقٍ
+                                    </span>
+
+                                    <strong>
+                                        دفع كامل قيمة الحجز
+                                    </strong>
+
+                                    <small>
+                                        سدّد قيمة الحجز كاملة الآن ولن يتبقى عليك دفع لدى المنشأة.
+                                    </small>
+                                </span>
+
+                                <span class="payment-type-money">
+                                    <small>تحوّل الآن</small>
+                                    <strong>@totalPriceText</strong>
+                                </span>
+
+                                <span class="payment-type-foot is-full">
+                                    <span>
+                                        <i class="bi bi-check-circle-fill"></i>
+                                        المتبقي لدى المنشأة
+                                    </span>
+
+                                    <strong>
+                                        @zeroAmountText
+                                    </strong>
+                                </span>
+                            </label>
+                        </div>
+
+                        <div class="payment-type-note">
+                            <span>
+                                <i class="bi bi-info-circle-fill"></i>
+                            </span>
+
+                            <p>
+                                لا تكتب مبلغًا يدويًا. اختر أحد الخيارين فقط،
+                                ثم حوّل المبلغ الظاهر بالضبط دون زيادة أو نقص.
+                            </p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- المبلغ المطلوب حسب الاختيار -->
+                <section class="payment-card payment-deposit-card">
+
+                    <div class="payment-card-heading">
+
+                        <div class="payment-heading-title">
+
+                            <span class="payment-heading-icon">
+                                <i class="bi bi-cash-stack"></i>
+                            </span>
+
+                            <div>
+                                <small>
+                                    المبلغ المطلوب الآن
+                                </small>
+
+                                <h2 id="paymentSelectedTypeTitle">
+                                    @(isFullPaymentInitially ? "كامل قيمة الحجز" : "قيمة العربون")
+                                </h2>
+                            </div>
+                        </div>
+
+                        <span class="payment-required-badge">
+
+                            <i class="bi bi-lightning-charge-fill"></i>
+
+                            <span id="paymentSelectedTypeBadge">
+                                @(isFullPaymentInitially ? "دفع كامل" : "مطلوب للتأكيد")
+                            </span>
+                        </span>
+                    </div>
+
+                    <div class="payment-deposit-body">
+
+                        <div class="payment-deposit-amount">
+
+                            <small id="paymentSelectedAmountIntro">
+                                حوّل المبلغ التالي بالضبط
+                            </small>
+
+                            <div>
+                                <strong id="paymentSelectedAmount">
+                                    @selectedPaymentAmountText
+                                </strong>
+                            </div>
+
+                            <p id="paymentSelectedAmountHint">
+                                @(isFullPaymentInitially
+                                    ? "بعد اعتماد الحوالة لن يتبقى عليك أي مبلغ للدفع لدى المنشأة."
+                                    : "بعد اعتماد العربون يتبقى عليك المبلغ المتبقي، ويتم تحصيله لدى المنشأة.")
+                            </p>
+                        </div>
+
+                        <div class="payment-deposit-security">
+
+                            <span>
+                                <i class="bi bi-shield-check"></i>
+                            </span>
+
+                            <div>
+                                <strong id="paymentSecurityTitle">
+                                    راجع قيمة الحوالة قبل الإرسال
+                                </strong>
+
+                                <small id="paymentSecurityText">
+                                    @(isFullPaymentInitially
+                                        ? $"يجب أن يظهر في إشعار الحوالة مبلغ {totalPriceText} بالضبط."
+                                        : $"يجب أن يظهر في إشعار الحوالة مبلغ {depositAmountText} بالضبط.")
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- المحافظ -->
+                <section class="payment-card payment-wallets-card"
+                         aria-labelledby="walletsHeading">
+
+                    <div class="payment-card-heading">
+
+                        <div class="payment-heading-title">
+
+                            <span class="payment-heading-icon">
+
+                                <i class="bi bi-wallet2"></i>
+                            </span>
+
+                            <div>
+                                <small>
+                                    وسيلة التحويل
+                                </small>
+
+                                <h2 id="walletsHeading">
+                                    اختر محفظة الاستقبال
+                                </h2>
+                            </div>
+                        </div>
+
+                        <span class="payment-section-badge">
+
+                            <i class="bi bi-lock-fill"></i>
+
+                            حسابات موثقة
+                        </span>
+                    </div>
+
+                    @if (hasWallets)
+                    {
+                        <div id="paymentWalletsList"
+                         class="payment-wallets-list">
+
+                            @foreach (var wallet in ownerWallets)
+                            {
+                                var walletName =
+                                wallet.Wallet?.WalletName
+                                ?? "محفظة دفع";
+
+                                var walletLogo =
+                                wallet.Wallet?.LogoPath;
+
+                                var radioId =
+                                $"walletOption{wallet.OwnerWalletId}";
+
+                                <article class="payment-wallet-card">
+
+                                    <input type="radio"
+                                   class="payment-wallet-radio"
+                                   name="OwnerWalletId"
+                                   id="@radioId"
+                                   value="@wallet.OwnerWalletId"
+                                   data-wallet-name="@walletName"
+                                   data-account-number="@wallet.AccountNumber"
+                                   data-beneficiary-name="@wallet.BeneficiaryName"
+                                   required />
+
+                                    <label for="@radioId"
+                                   class="payment-wallet-label">
+
+                                        <span class="payment-wallet-selector">
+
+                                            <i class="bi bi-check-lg"></i>
+                                        </span>
+
+                                        <span class="payment-wallet-brand">
+
+                                            @if (!string.IsNullOrWhiteSpace(walletLogo))
+                                            {
+                                                <span class="payment-wallet-logo">
+
+                                                    <img src="@walletLogo"
+                                             alt="شعار @walletName"
+                                             loading="lazy"
+                                             onerror="this.parentElement.classList.add('is-fallback'); this.remove();" />
+
+                                                    <i class="bi bi-wallet-fill"></i>
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="payment-wallet-logo is-fallback">
+
+                                                    <i class="bi bi-wallet-fill"></i>
+                                                </span>
+                                            }
+
+                                            <span class="payment-wallet-name">
+
+                                                <small>
+                                                    شبكة الدفع
+                                                </small>
+
+                                                <strong>
+                                                    @walletName
+                                                </strong>
+                                            </span>
+                                        </span>
+
+                                        <span class="payment-wallet-details">
+
+                                            <span class="payment-wallet-detail">
+
+                                                <small>
+                                                    اسم المستفيد
+                                                </small>
+
+                                                <strong>
+                                                    @wallet.BeneficiaryName
+                                                </strong>
+                                            </span>
+
+                                            <span class="payment-wallet-detail">
+
+                                                <small>
+                                                    رقم الحساب
+                                                </small>
+
+                                                <strong dir="ltr">
+                                                    @wallet.AccountNumber
+                                                </strong>
+                                            </span>
+                                        </span>
+                                    </label>
+
+                                    <button type="button"
+                                    class="payment-copy-button"
+                                    data-copy-value="@wallet.AccountNumber"
+                                    aria-label="نسخ رقم الحساب">
+
+                                        <i class="bi bi-copy"></i>
+
+                                        <span>
+                                            نسخ الرقم
+                                        </span>
+                                    </button>
+                                </article>
+                            }
+                        </div>
+
+                        <div class="payment-wallet-tip">
+
+                            <i class="bi bi-info-circle-fill"></i>
+
+                            <p>
+                                تأكد أن اسم المستفيد ورقم الحساب مطابقان
+                                للبيانات الظاهرة قبل تنفيذ الحوالة.
+                            </p>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="payment-empty-wallets">
+
+                            <span>
+
+                                <i class="bi bi-wallet-x"></i>
+                            </span>
+
+                            <h3>
+                                لا توجد محفظة استقبال متاحة
+                            </h3>
+
+                            <p>
+                                لم يضف مالك المنشأة حساب استقبال نشطًا حتى الآن.
+                                لا تقم بأي تحويل خارج الحسابات المعروضة في المنصة.
+                            </p>
+
+                            <a asp-controller="Places"
+                           asp-action="BookingDetails"
+                           asp-route-id="@Model.BookingId"
+                           class="payment-empty-wallets-action">
+
+                                <i class="bi bi-arrow-right"></i>
+
+                                العودة إلى تفاصيل الحجز
+                            </a>
+                        </div>
+                    }
+                </section>
+
+                <!-- نموذج إثبات الدفع -->
+                <form id="paymentProofForm"
+                      class="payment-card payment-proof-card"
+                      asp-controller="BookingFlow"
+                      asp-action="SubmitPaymentProof"
+                      method="post"
+                      enctype="multipart/form-data"
+                      novalidate>
+
+                    @Html.AntiForgeryToken()
+
+                    <input type="hidden"
+                           id="paymentBookingIdInput"
+                           name="BookingId"
+                           value="@Model.BookingId" />
+
+                    <input type="hidden"
+                           id="selectedPaymentMethodInput"
+                           name="PaymentMethod"
+                           value="" />
+
+                    <input type="hidden"
+                           id="onlinePaymentTypeInput"
+                           name="OnlinePaymentType"
+                           value="@selectedOnlinePaymentType" />
+
+                    <div class="payment-card-heading">
+
+                        <div class="payment-heading-title">
+
+                            <span class="payment-heading-icon">
+
+                                <i class="bi bi-receipt-cutoff"></i>
+                            </span>
+
+                            <div>
+                                <small>
+                                    إثبات التحويل
+                                </small>
+
+                                <h2>
+                                    @(hasPaymentProofRejection
+                                        ? "ارفع إثباتًا بديلًا"
+                                        : "ارفع إشعار الحوالة")
+                                </h2>
+                            </div>
+                        </div>
+
+                        <span class="payment-section-badge">
+
+                            <i class="bi bi-image-fill"></i>
+
+                            صورة واضحة
+                        </span>
+                    </div>
+
+                    <div class="payment-proof-body">
+
+                        <!-- الرقم المرجعي -->
+                        <div class="payment-field-group">
+
+                            <label for="transferReferenceInput"
+                                   class="payment-field-label">
+
+                                <span>
+
+                                    <i class="bi bi-hash"></i>
+                                </span>
+
+                                <div>
+                                    <strong>
+                                        الرقم المرجعي للحوالة
+                                    </strong>
+
+                                    <small>
+                                        اختياري، لكنه يساعد في سرعة المراجعة
+                                    </small>
+                                </div>
+                            </label>
+
+                            <div class="payment-input-wrap">
+
+                                <i class="bi bi-upc-scan"></i>
+
+                                <input type="text"
+                                       id="transferReferenceInput"
+                                       name="TransferReferenceNumber"
+                                       class="payment-text-input"
+                                       maxlength="100"
+                                       autocomplete="off"
+                                       placeholder="مثال: TRX-4589021"
+                                       dir="ltr" />
+                            </div>
+                        </div>
+
+                        <!-- رفع الصورة -->
+                        <div class="payment-field-group">
+
+                            <label class="payment-field-label">
+
+                                <span>
+
+                                    <i class="bi bi-cloud-arrow-up-fill"></i>
+                                </span>
+
+                                <div>
+                                    <strong>
+                                        صورة إشعار الحوالة
+                                    </strong>
+
+                                    <small>
+                                        JPG أو PNG أو WEBP، بصورة واضحة وكاملة
+                                    </small>
+                                </div>
+                            </label>
+
+                            <div id="paymentUploadZone"
+                                 class="payment-upload-zone"
+                                 tabindex="0"
+                                 role="button"
+                                 aria-label="اختيار صورة إشعار الحوالة">
+
+                                <input type="file"
+                                       id="paymentProofInput"
+                                       name="PaymentProof"
+                                       class="payment-file-input"
+                                       accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                                       required />
+
+                                <div id="paymentUploadPlaceholder"
+                                     class="payment-upload-placeholder">
+
+                                    <span class="payment-upload-icon">
+
+                                        <i class="bi bi-cloud-arrow-up"></i>
+                                    </span>
+
+                                    <h3>
+                                        اسحب صورة الحوالة هنا
+                                    </h3>
+
+                                    <p>
+                                        أو اضغط لاختيار الصورة من جهازك
+                                    </p>
+
+                                    <span class="payment-upload-button">
+
+                                        <i class="bi bi-image"></i>
+
+                                        اختيار صورة
+                                    </span>
+
+                                    <small>
+                                        الحد الأعلى المسموح: 5 ميجابايت
+                                    </small>
+                                </div>
+
+                                <div id="paymentProofPreview"
+                                     class="payment-proof-preview d-none">
+
+                                    <div class="payment-preview-image">
+
+                                        <img id="paymentProofPreviewImage"
+                                             src=""
+                                             alt="معاينة إشعار الحوالة" />
+
+                                        <span class="payment-preview-shade">
+                                        </span>
+                                    </div>
+
+                                    <div class="payment-preview-information">
+
+                                        <span class="payment-preview-success">
+
+                                            <i class="bi bi-check-circle-fill"></i>
+                                        </span>
+
+                                        <div>
+
+                                            <small>
+                                                تم اختيار الصورة
+                                            </small>
+
+                                            <strong id="paymentProofFileName">
+                                                إشعار الحوالة
+                                            </strong>
+
+                                            <span id="paymentProofFileSize">
+                                                0 ميجابايت
+                                            </span>
+                                        </div>
+
+                                        <button type="button"
+                                                id="removePaymentProofButton"
+                                                class="payment-remove-proof-button"
+                                                aria-label="حذف الصورة المختارة">
+
+                                            <i class="bi bi-trash3"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="paymentProofError"
+                                 class="payment-field-error d-none"
+                                 role="alert">
+
+                                <i class="bi bi-exclamation-circle-fill"></i>
+
+                                <span>
+                                    يرجى اختيار صورة إشعار حوالة صحيحة.
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- الإقرار -->
+                        <label class="payment-confirmation-box"
+                               for="paymentConfirmationInput">
+
+                            <input type="checkbox"
+                                   id="paymentConfirmationInput"
+                                   class="payment-confirmation-input"
+                                   required />
+
+                            <span class="payment-confirmation-check">
+
+                                <i class="bi bi-check-lg"></i>
+                            </span>
+
+                            <span class="payment-confirmation-copy">
+
+                                <strong id="paymentConfirmationTitle">
+                                    @(isFullPaymentInitially
+                                        ? "أؤكد أنني حوّلت كامل قيمة الحجز"
+                                        : "أؤكد أنني حوّلت مبلغ العربون كاملًا")
+                                </strong>
+
+                                <small>
+                                    مبلغ
+                                    <b id="paymentConfirmationAmount">@selectedPaymentAmountText</b>
+                                    <span id="paymentConfirmationAfterText">
+                                        @(isFullPaymentInitially
+                                            ? "كاملًا إلى الحساب الذي اخترته، وأن صورة الحوالة صحيحة."
+                                            : "كعربون إلى الحساب الذي اخترته، وأن صورة الحوالة صحيحة.")
+                                    </span>
+                                </small>
+                            </span>
+                        </label>
+
+                        <!-- زر الإرسال -->
+                        <button type="submit"
+                                id="submitPaymentProofButton"
+                                class="payment-submit-button"
+                                @(hasWallets ? null : "disabled")>
+
+                            <span class="payment-submit-copy">
+
+                                <strong>
+                                    @(hasPaymentProofRejection
+                                        ? "إرسال الإثبات الجديد للمراجعة"
+                                        : "إرسال الحوالة للمراجعة")
+                                </strong>
+
+                                <small>
+                                    سيتم إشعار مالك المنشأة فورًا
+                                </small>
+                            </span>
+
+                            <span class="payment-submit-icon">
+
+                                <i class="bi bi-send-check-fill"></i>
+                            </span>
+                        </button>
+
+                        <div class="payment-submit-note">
+
+                            <i class="bi bi-shield-lock-fill"></i>
+
+                            <span>
+                                بيانات الحوالة محفوظة ومحمية داخل المنصة.
+                            </span>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <!-- =========================================================
+                 العمود الجانبي: ملخص الحجز
+                 ========================================================= -->
+            <aside class="payment-side-column">
+
+                <section class="payment-summary-card">
+
+                    <div class="payment-summary-cover">
+
+                        <img src="@placeImage"
+                             alt="صورة @placeName"
+                             loading="eager"
+                             onerror="this.src='/images/bg1.jpg'" />
+
+                        <span class="payment-summary-cover-shade">
+                        </span>
+
+                        <span class="payment-summary-category">
+
+                            <i class="bi bi-building"></i>
+
+                            @categoryName
+                        </span>
+
+                        <span class="payment-summary-secure">
+
+                            <i class="bi bi-patch-check-fill"></i>
+
+                            منشأة موثقة
+                        </span>
+                    </div>
+
+                    <div class="payment-summary-body">
+
+                        <span class="payment-summary-eyebrow">
+                            ملخص الحجز
+                        </span>
+
+                        <h2>
+                            @placeName
+                        </h2>
+
+                        <div class="payment-summary-item-title">
+
+                            <span>
+
+                                <i class="bi @(isRoomBooking ? "bi-door-open-fill" : "bi-stars")"></i>
+                            </span>
+
+                            <div>
+                                <small>
+                                    @bookingTypeTitle
+                                </small>
+
+                                <strong>
+                                    @bookedItemName
+                                </strong>
+
+                                <p>
+                                    @bookedItemDescription
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="payment-summary-information">
+
+                            <div class="payment-summary-info">
+
+                                <span>
+
+                                    <i class="bi bi-calendar3"></i>
+                                </span>
+
+                                <div>
+                                    <small>
+                                        تاريخ الحجز
+                                    </small>
+
+                                    <strong>
+                                        @bookingPeriod
+                                    </strong>
+                                </div>
+                            </div>
+
+                            <div class="payment-summary-info">
+
+                                <span>
+
+                                    <i class="bi bi-people-fill"></i>
+                                </span>
+
+                                <div>
+                                    <small>
+                                        عدد الأشخاص
+                                    </small>
+
+                                    <strong>
+                                        @(Model.AdultsCount + Model.ChildrenCount)
+                                        أشخاص
+                                    </strong>
+                                </div>
+                            </div>
+
+                            <div class="payment-summary-info">
+
+                                <span>
+
+                                    <i class="bi bi-boxes"></i>
+                                </span>
+
+                                <div>
+                                    <small>
+                                        الكمية
+                                    </small>
+
+                                    <strong>
+                                        @Model.Quantity
+                                    </strong>
+                                </div>
+                            </div>
+
+                            @if (isRoomBooking && assignedRoomLabels.Count > 0)
+                            {
+                                <div class="payment-summary-info">
+
+                                    <span>
+                                        <i class="bi bi-door-open-fill"></i>
+                                    </span>
+
+                                    <div>
+                                        <small>
+                                            الغرف المحجوزة مؤقتًا
+                                        </small>
+
+                                        <strong>
+                                            @string.Join("، ", assignedRoomLabels)
+                                        </strong>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        @if (isRoomBooking && assignedRoomLabels.Count > 0)
+                        {
+                            <div class="payment-summary-state">
+
+                                <span>
+                                    <i class="bi bi-shield-lock-fill"></i>
+                                </span>
+
+                                <div>
+                                    <small>
+                                        حالة إسناد الغرف
+                                    </small>
+
+                                    <strong>
+                                        محفوظة لك حتى انتهاء مهلة الدفع
+                                    </strong>
+                                </div>
+                            </div>
+                        }
+
+                        <div class="payment-price-breakdown">
+
+                            @if (hasPromotion)
+                            {
+                                <div class="payment-price-row is-before-promotion">
+                                    <span>الإجمالي قبل العرض</span>
+                                    <strong><del>@originalTotalPriceText</del></strong>
+                                </div>
+
+                                <div class="payment-price-row is-promotion">
+                                    <span>
+                                        <i class="bi bi-fire"></i>
+                                        @promotionTitle
+                                    </span>
+                                    <strong>-@discountAmountText</strong>
+                                </div>
+                            }
+
+                            <div class="payment-price-row @(hasPromotion ? "is-final-after-promotion" : string.Empty)">
+
+                                <span>
+                                    @(hasPromotion ? "الإجمالي بعد العرض" : "إجمالي الحجز")
+                                </span>
+
+                                <strong>
+                                    @totalPriceText
+                                </strong>
+                            </div>
+
+                            <div class="payment-price-row is-deposit">
+
+                                <span id="paymentSummaryPayNowLabel">
+                                    @(isFullPaymentInitially
+                                        ? "المبلغ المطلوب الآن"
+                                        : "العربون المطلوب الآن")
+                                </span>
+
+                                <strong id="paymentSummaryPayNowAmount">
+                                    @selectedPaymentAmountText
+                                </strong>
+                            </div>
+
+                            <div class="payment-price-divider">
+                            </div>
+
+                            <div class="payment-price-row is-remaining">
+
+                                <span>
+                                    المتبقي لدى المنشأة
+                                </span>
+
+                                <strong id="paymentSummaryRemainingAmount">
+                                    @selectedRemainingAmountText
+                                </strong>
+                            </div>
+                        </div>
+
+                        <div class="payment-summary-state">
+
+                            <span>
+
+                                <i class="bi bi-hourglass-split"></i>
+                            </span>
+
+                            <div>
+                                <small>
+                                    حالة الحجز
+                                </small>
+
+                                <strong id="paymentSummaryStateText">
+                                    @(isFullPaymentInitially
+                                        ? "بانتظار إثبات دفع كامل الحجز"
+                                        : "بانتظار إكمال الدفع")
+                                </strong>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- تعليمات -->
+                <section class="payment-instructions-card">
+
+                    <div class="payment-instructions-heading">
+
+                        <span>
+
+                            <i class="bi bi-lightbulb-fill"></i>
+                        </span>
+
+                        <div>
+                            <small>
+                                خطوات آمنة
+                            </small>
+
+                            <h2>
+                                قبل إرسال الحوالة
+                            </h2>
+                        </div>
+                    </div>
+
+                    <ol class="payment-instructions-list">
+
+                        <li>
+
+                            <span>
+                                1
+                            </span>
+
+                            <p>
+                                اختر واحدة من محافظ الاستقبال المعروضة.
+                            </p>
+                        </li>
+
+                        <li>
+
+                            <span>
+                                2
+                            </span>
+
+                            <p id="paymentInstructionAmountText">
+                                @(isFullPaymentInitially
+                                    ? $"حوّل كامل قيمة الحجز ({totalPriceText}) دون زيادة أو نقص."
+                                    : $"حوّل مبلغ العربون ({depositAmountText}) دون زيادة أو نقص.")
+                            </p>
+                        </li>
+
+                        <li>
+
+                            <span>
+                                3
+                            </span>
+
+                            <p>
+                                احتفظ بصورة واضحة لإشعار الحوالة.
+                            </p>
+                        </li>
+
+                        <li>
+
+                            <span>
+                                4
+                            </span>
+
+                            <p>
+                                ارفع الصورة وانتظر مراجعة مالك المنشأة.
+                            </p>
+                        </li>
+                    </ol>
+
+                    <div class="payment-warning-box">
+
+                        <i class="bi bi-exclamation-triangle-fill"></i>
+
+                        <p>
+                            لا تحوّل إلى أي رقم يتم إرساله لك خارج الحسابات
+                            الرسمية الظاهرة في هذه الصفحة.
+                        </p>
+                    </div>
+                </section>
+
+                <!-- الدعم -->
+                <section class="payment-support-card">
+
+                    <span class="payment-support-icon">
+
+                        <i class="bi bi-headset"></i>
+                    </span>
+
+                    <div>
+
+                        <small>
+                            واجهتك مشكلة؟
+                        </small>
+
+                        <strong>
+                            فريق الدعم معك
+                        </strong>
+
+                        <p>
+                            لا تعِد التحويل إذا واجهت مشكلة.
+                            تواصل مع الدعم أولًا.
+                        </p>
+                    </div>
+
+                    <a asp-controller="Home"
+                       asp-action="Contact"
+                       class="payment-support-action">
+
+                        تواصل معنا
+
+                        <i class="bi bi-arrow-left"></i>
+                    </a>
+                </section>
+            </aside>
+        </div>
+
+        <!-- =============================================================
+             04. شريط الثقة
+             ============================================================= -->
+        <section class="payment-trust-bar">
+
+            <div class="payment-trust-item">
+
+                <span>
+
+                    <i class="bi bi-shield-lock-fill"></i>
+                </span>
+
+                <div>
+                    <strong>
+                        بيانات محمية
+                    </strong>
+
+                    <small>
+                        معالجة آمنة للمعلومات
+                    </small>
+                </div>
+            </div>
+
+            <div class="payment-trust-item">
+
+                <span>
+
+                    <i class="bi bi-receipt-cutoff"></i>
+                </span>
+
+                <div>
+                    <strong>
+                        إثبات موثق
+                    </strong>
+
+                    <small>
+                        يتم حفظ إشعار الحوالة
+                    </small>
+                </div>
+            </div>
+
+            <div class="payment-trust-item">
+
+                <span>
+
+                    <i class="bi bi-bell-fill"></i>
+                </span>
+
+                <div>
+                    <strong>
+                        إشعار فوري
+                    </strong>
+
+                    <small>
+                        يصل إلى مالك المنشأة
+                    </small>
+                </div>
+            </div>
+
+            <div class="payment-trust-item">
+
+                <span>
+
+                    <i class="bi bi-person-check-fill"></i>
+                </span>
+
+                <div>
+                    <strong>
+                        مراجعة بشرية
+                    </strong>
+
+                    <small>
+                        قبل اعتماد الدفع
+                    </small>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- نافذة انتهاء المهلة -->
+    <div id="paymentExpiredOverlay"
+         class="payment-expired-overlay d-none"
+         role="dialog"
+         aria-modal="true"
+         aria-labelledby="paymentExpiredTitle">
+
+        <div class="payment-expired-dialog">
+
+            <span class="payment-expired-icon">
+
+                <i class="bi bi-hourglass-bottom"></i>
+            </span>
+
+            <small>
+                انتهت مهلة الدفع
+            </small>
+
+            <h2 id="paymentExpiredTitle">
+                لم يعد الحجز محفوظًا مؤقتًا
+            </h2>
+
+            <p>
+                انتهت المهلة المحددة لإكمال الدفع.
+                يمكنك العودة إلى المنشأة وبدء حجز جديد حسب التوفر.
+            </p>
+
+            <a asp-controller="Places"
+               asp-action="Details"
+               asp-route-id="@Model.PlaceId"
+               class="payment-expired-action">
+
+                <span>
+                    العودة إلى المنشأة
+                </span>
+
+                <i class="bi bi-arrow-left"></i>
+            </a>
+        </div>
+    </div>
+</main>
+
+@section Scripts {
+    <script src="~/lib/sweetalert2/sweetalert2.js"></script>
+
+    <script src="~/js/customer/Payment.js"
+        asp-append-version="true">
+    </script>
+}

@@ -1,0 +1,191 @@
+﻿@model YemenGuide.Core.DTOs.Owner.OwnerChatPageModel
+@using System.Linq
+
+@{
+    ViewData["Title"] = "التواصل والتقييمات";
+    Layout = "~/Areas/Owner/Views/Shared/_OwnerLayout.cshtml";
+
+    var contacts = Model?.ChatContacts ?? new List<YemenGuide.Core.DTOs.Owner.ChatContactDto>();
+    var conversationsCount = contacts.Count;
+    var unreadMessagesCount = contacts.Sum(contact => contact.UnreadCount);
+    var unreadConversationsCount = contacts.Count(contact => contact.UnreadCount > 0);
+
+    var activePlaceId = (int?)ViewBag.ActiveChatPlaceId ?? 0;
+    var hasActivePlace = (bool?)ViewBag.HasActiveChatPlace ?? false;
+    var isChatEnabled = (bool?)ViewBag.IsChatEnabled ?? false;
+    var welcomeMessage = ViewBag.WelcomeMessage as string ?? string.Empty;
+    var offlineReplyEnabled = (bool?)ViewBag.OfflineReplyEnabled ?? false;
+    var offlineMessage = ViewBag.OfflineMessage as string ?? string.Empty;
+    var quickRepliesJson = ViewBag.QuickRepliesJson as string ?? "[]";
+    var emergencyContact = ViewBag.EmergencyContact as string ?? string.Empty;
+
+    var centerStatusText = !hasActivePlace
+        ? "بانتظار تحديد منشأة"
+        : !isChatEnabled
+            ? "الدردشة متوقفة"
+            : "جاهز لاستقبال العملاء";
+
+    var centerStatusClass = !hasActivePlace
+        ? "is-neutral"
+        : !isChatEnabled
+            ? "is-paused"
+            : "is-ready";
+}
+
+@section Styles {
+    <link rel="stylesheet"
+      href="~/css/owner/chat-styles.css"
+      asp-append-version="true" />
+
+    <link rel="stylesheet"
+      href="~/css/owner/owner-reviews-feedback.css"
+      asp-append-version="true" />
+}
+
+    <main class="owner-communications-page"
+      data-owner-communications
+      data-active-place-id="@activePlaceId"
+      data-has-active-place="@hasActivePlace.ToString().ToLowerInvariant()"
+      data-chat-enabled="@isChatEnabled.ToString().ToLowerInvariant()"
+      data-welcome-message="@welcomeMessage"
+      data-offline-reply-enabled="@offlineReplyEnabled.ToString().ToLowerInvariant()"
+      data-offline-message="@offlineMessage"
+      data-quick-replies-json="@quickRepliesJson"
+      data-emergency-contact="@emergencyContact"
+      data-reviews-panel-url="@Url.Action("Panel", "OwnerReviews", new { area = "Owner" })"
+      data-get-messages-url="@Url.Action("GetChatMessages", "Chat", new { area = "Owner" })"
+      data-send-message-url="@Url.Action("SendMessage", "Chat", new { area = "Owner" })"
+      data-edit-message-url="@Url.Action("EditMessage", "Chat", new { area = "Owner" })"
+      data-delete-for-me-url="@Url.Action("DeleteMessageForMe", "Chat", new { area = "Owner" })"
+      data-delete-for-everyone-url="@Url.Action("DeleteMessageForEveryone", "Chat", new { area = "Owner" })"
+      data-clear-chat-url="@Url.Action("ClearChatForMe", "Chat", new { area = "Owner" })">
+
+        <header class="oc-page-head">
+            <div class="oc-page-head__icon" aria-hidden="true">
+                <i class="bi bi-chat-heart"></i>
+            </div>
+
+            <div class="oc-page-head__content">
+                <span class="oc-page-head__eyebrow">
+                    <i class="bi bi-stars"></i>
+                    مركز التواصل
+                </span>
+
+                <h1>الدردشة والتقييمات</h1>
+
+                <p>
+                    تابع رسائل العملاء وتقييماتهم من مساحة واحدة، مرتبطة تلقائيًا
+                    بالمنشأة المحددة في الهيدر.
+                </p>
+            </div>
+
+            <div class="oc-page-head__status @centerStatusClass"
+             aria-label="حالة مركز التواصل">
+                <span class="oc-status-dot" aria-hidden="true"></span>
+                <span>@centerStatusText</span>
+            </div>
+        </header>
+
+        <div class="oc-tabs-shell">
+            <div class="oc-tabs-track"
+             role="tablist"
+             aria-label="أقسام مركز التواصل">
+
+                <button type="button"
+                    class="oc-tab is-active"
+                    role="tab"
+                    id="ownerMessagesTab"
+                    aria-selected="true"
+                    aria-controls="ownerMessagesPane"
+                    data-owner-comm-tab="messages">
+
+                    <span class="oc-tab__icon" aria-hidden="true">
+                        <i class="bi bi-chat-square-text-fill"></i>
+                    </span>
+
+                    <span class="oc-tab__label">الدردشة والرسائل</span>
+
+                    <span class="oc-tab__count @(unreadMessagesCount > 0 ? "has-items" : string.Empty)"
+                      id="totalUnreadBadge"
+                      data-conversations-count="@conversationsCount"
+                      data-unread-conversations-count="@unreadConversationsCount"
+                      title="@(unreadMessagesCount > 0 ? "رسائل غير مقروءة" : "عدد جهات التواصل")">
+                        @(unreadMessagesCount > 0 ? unreadMessagesCount : conversationsCount)
+                </span>
+            </button>
+
+            <button type="button"
+                    class="oc-tab"
+                    role="tab"
+                    id="ownerReviewsTab"
+                    aria-selected="false"
+                    aria-controls="ownerReviewsPane"
+                    data-owner-comm-tab="reviews">
+
+                <span class="oc-tab__icon" aria-hidden="true">
+                    <i class="bi bi-star-fill"></i>
+                </span>
+
+                <span class="oc-tab__label">التقييمات والتعليقات</span>
+
+                <span class="oc-tab__count"
+                      data-owner-reviews-tab-count
+                      title="تقييمات المنشأة المحددة">
+                    0
+                </span>
+            </button>
+        </div>
+    </div>
+
+    <div class="oc-content">
+        <section class="oc-pane oc-pane--messages is-active"
+                 id="ownerMessagesPane"
+                 role="tabpanel"
+                 aria-labelledby="ownerMessagesTab"
+                 data-owner-comm-pane="messages">
+
+            <partial name="_DirectMessages" model="contacts" />
+        </section>
+
+        <section class="oc-pane oc-pane--reviews"
+                 id="ownerReviewsPane"
+                 role="tabpanel"
+                 aria-labelledby="ownerReviewsTab"
+                 data-owner-comm-pane="reviews"
+                 hidden>
+
+            <div class="oc-reviews-host" data-owner-reviews-host>
+                <div class="orv-initial-loader" aria-live="polite">
+                    <div class="orv-loader-mark" aria-hidden="true">
+                        <i class="bi bi-star-fill"></i>
+                    </div>
+
+                    <div>
+                        <strong>جارٍ تجهيز تقييمات المنشأة</strong>
+                        <span>لحظات قليلة فقط...</span>
+                    </div>
+
+                    <div class="orv-loader-dots" aria-hidden="true">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+</main>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="~/lib/signalr/signalr.min.js"></script>
+
+    <script type="module"
+        src="https://cdn.jsdelivr.net/npm/emoji-picker-element@1.21.3/index.js"></script>
+
+    <script src="~/js/owner/chat-actions.js"
+        asp-append-version="true"></script>
+
+    <script src="~/js/owner/owner-reviews-feedback.js"
+        asp-append-version="true"></script>
+}

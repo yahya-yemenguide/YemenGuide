@@ -1,0 +1,410 @@
+@model YemenGuide.Core.DTOs.Admin.AdminEmployeeFormDto
+@using System.Globalization
+
+@{
+    bool isArabic = string.Equals(CultureInfo.CurrentUICulture.TwoLetterISOLanguageName, "ar", StringComparison.OrdinalIgnoreCase);
+    string L(string ar, string en) => isArabic ? ar : en;
+
+    string GroupLabel(string? groupName) =>
+        isArabic ? (groupName ?? string.Empty) : (groupName ?? string.Empty) switch
+        {
+            "لوحة التحكم" => "Dashboard",
+            "إدارة المستخدمين" => "User management",
+            "إدارة المنشآت" => "Place management",
+            "تصنيفات النظام" => "Master data",
+            "الشكاوى والبلاغات" => "Cases & reports",
+            "الإدارة المالية" => "Finance",
+            "إدارة الإعلانات" => "Advertisements",
+            "إعدادات النظام" => "System settings",
+            "الموظفون والصلاحيات" => "Employees & permissions",
+            _ => groupName ?? string.Empty
+        };
+
+    string PermissionLabel(string? key, string? fallback) =>
+        isArabic ? (fallback ?? key ?? string.Empty) : (key ?? string.Empty) switch
+        {
+            "Dashboard.View" => "View dashboard",
+            "Users.View" => "View users",
+            "Users.ViewVerificationDocuments" => "Review verification documents",
+            "Users.ChangeState" => "Change user status",
+            "Users.Delete" => "Delete user",
+            "Places.View" => "View places",
+            "Places.Create" => "Create place",
+            "Places.Edit" => "Edit place",
+            "Places.Review" => "Review place",
+            "Places.ChangeStatus" => "Change place status",
+            "Places.Delete" => "Delete place",
+            "Places.ReassignOwner" => "Reassign place owner",
+            "MasterData.View" => "View master data",
+            "MasterData.ManageCategories" => "Manage categories",
+            "MasterData.ManageCities" => "Manage cities",
+            "Cases.View" => "View cases",
+            "Cases.Create" => "Create case",
+            "Cases.Assign" => "Assign case",
+            "Cases.Manage" => "Manage case",
+            "Cases.Escalate" => "Escalate case",
+            "Cases.Resolve" => "Resolve case",
+            "Cases.Reopen" => "Reopen case",
+            "Finance.View" => "View finance",
+            "Finance.ReviewTopUps" => "Review top-ups",
+            "Finance.ManageCommissionAccounts" => "Manage commission accounts",
+            "Finance.ManagePlatformWallets" => "Manage platform wallets",
+            "Finance.ManageSettings" => "Manage finance settings",
+            "Finance.Reports" => "View finance reports",
+            "Advertisements.View" => "View advertisements",
+            "Advertisements.Review" => "Review advertisements",
+            "Advertisements.ManagePlans" => "Manage advertisement plans",
+            "Advertisements.Control" => "Control advertisements",
+            "Advertisements.Reports" => "View advertisement reports",
+            "Settings.View" => "View system settings",
+            "Settings.ManageGeneral" => "Manage general settings",
+            "Settings.ManagePaymentNetworks" => "Manage payment networks",
+            "Settings.ManageHeroSlides" => "Manage home slides",
+            "Employees.View" => "View employees",
+            "Employees.Create" => "Create employee",
+            "Employees.Edit" => "Edit employee",
+            "Employees.ChangeStatus" => "Change employee status",
+            "Roles.View" => "View roles & permissions",
+            "Roles.Manage" => "Manage roles & permissions",
+            "AuditLogs.View" => "View audit log",
+            _ => fallback ?? key ?? string.Empty
+        };
+
+    string PermissionDescription(string? key, string? description) =>
+        isArabic
+            ? (string.IsNullOrWhiteSpace(description) ? key ?? string.Empty : description)
+            : key ?? string.Empty;
+
+    var title = Model.IsEdit ? L("تعديل الموظف", "Edit employee") : L("إضافة موظف", "Add employee");
+    var employeeNumber = Model.Employee.EmployeeNumber ?? string.Empty;
+}
+
+<div class="employees-drawer-form employee-v7" data-employee-form-shell>
+    <header class="employees-drawer-header employee-v7-header">
+        <div class="employees-drawer-header__icon">
+            <i class="bi @(Model.IsEdit ? "bi-person-gear" : "bi-person-plus-fill")"></i>
+        </div>
+        <div class="employees-drawer-header__copy">
+            <span>@(Model.IsEdit ? L("إدارة حساب الموظف", "Manage employee account") : L("حساب إداري جديد", "New admin account"))</span>
+            <h2>@title</h2>
+            <p>
+                @(Model.IsEdit
+                    ? L("عدّل بيانات الحساب أو غيّر الدور بدون المساس بالرقم الوظيفي وتاريخ التعيين.", "Update account data or change the role without affecting the employee number or hire date.")
+                    : L("ثلاث خطوات قصيرة: الحساب، الدخول المؤقت، ثم الدور والصلاحيات.", "Three short steps: account, temporary access, then role and permissions."))
+            </p>
+        </div>
+        <button type="button" class="employees-drawer-close" data-close-drawer aria-label="@L("إغلاق", "Close")">
+            <i class="bi bi-x-lg"></i>
+        </button>
+    </header>
+
+    @if (Model.IsProtectedSystemAdmin)
+    {
+        <div class="employees-protected-banner">
+            <span><i class="bi bi-shield-fill-check"></i></span>
+            <div>
+                <strong>@L("حساب المدير الرئيسي محمي", "The primary system admin is protected")</strong>
+                <p>@L("هذا الحساب النظامي لا يتم تعديله من شاشة الموظفين.", "This system account cannot be edited from employee management.")</p>
+            </div>
+        </div>
+    }
+
+    <form data-employee-form novalidate>
+        @Html.AntiForgeryToken()
+        @if (Model.Employee.UserId.HasValue)
+        {
+            <input type="hidden" name="UserId" value="@Model.Employee.UserId" />
+        }
+        @if (!string.IsNullOrWhiteSpace(employeeNumber))
+        {
+            <input type="hidden" name="EmployeeNumber" value="@employeeNumber" />
+        }
+
+        <nav class="employee-form-steps" aria-label="@L("خطوات نموذج الموظف", "Employee form steps")">
+            <button type="button" class="employee-form-step" data-form-step-button="1">
+                <span>1</span><strong>@L("الحساب", "Account")</strong>
+            </button>
+            <i></i>
+            <button type="button" class="employee-form-step" data-form-step-button="2">
+                <span>2</span><strong>@L("الدخول المؤقت", "Temporary access")</strong>
+            </button>
+            <i></i>
+            <button type="button" class="employee-form-step" data-form-step-button="3">
+                <span>3</span><strong>@L("الدور", "Role")</strong>
+            </button>
+        </nav>
+
+        <div class="employee-form-body">
+            <!-- 1: الحساب -->
+            <section class="employee-form-page" data-form-page="1">
+                <div class="employee-form-section-heading">
+                    <span><i class="bi bi-person-vcard-fill"></i></span>
+                    <div>
+                        <h3>@L("بيانات الحساب", "Account details")</h3>
+                        <p>@L("نفس قواعد حسابات المنصة: بيانات صحيحة، اسم مستخدم فريد، وبريد وهاتف صالحان.", "Use valid account data: a unique username, valid email, and valid phone number.")</p>
+                    </div>
+                </div>
+
+                @if (Model.IsEdit && !string.IsNullOrWhiteSpace(employeeNumber))
+                {
+                    <div class="employee-v7-system-meta">
+                        <span><i class="bi bi-fingerprint"></i></span>
+                        <div>
+                            <small>@L("الرقم الوظيفي", "Employee number")</small>
+                            <strong dir="ltr">@employeeNumber</strong>
+                        </div>
+                        <em>@L("مولّد تلقائيًا بواسطة النظام", "Generated automatically by the system")</em>
+                    </div>
+                }
+
+                <div class="employee-fields-grid">
+                    <label class="employee-field" data-validation-field="FirstName">
+                        <span>@L("الاسم الأول", "First name") <b>*</b></span>
+                        <div class="employee-control">
+                            <span class="employee-control__icon"><i class="bi bi-person"></i></span>
+                            <input type="text" name="FirstName" value="@Model.Employee.FirstName"
+                                   minlength="2" maxlength="60" autocomplete="given-name"
+                                   placeholder="@L("مثال: أحمد", "Example: Ahmed")" required disabled="@Model.IsProtectedSystemAdmin" />
+                            <span class="employee-control__state" data-field-state="FirstName"></span>
+                        </div>
+                        <small data-field-error="FirstName">@L("حروف فقط، من حرفين إلى 60 حرفًا.", "Letters only, 2 to 60 characters.")</small>
+                    </label>
+
+                    <label class="employee-field" data-validation-field="LastName">
+                        <span>@L("الاسم الأخير", "Last name") <b>*</b></span>
+                        <div class="employee-control">
+                            <span class="employee-control__icon"><i class="bi bi-person"></i></span>
+                            <input type="text" name="LastName" value="@Model.Employee.LastName"
+                                   minlength="2" maxlength="60" autocomplete="family-name"
+                                   placeholder="@L("مثال: محمد", "Example: Ali")" required disabled="@Model.IsProtectedSystemAdmin" />
+                            <span class="employee-control__state" data-field-state="LastName"></span>
+                        </div>
+                        <small data-field-error="LastName">@L("حروف فقط، من حرفين إلى 60 حرفًا.", "Letters only, 2 to 60 characters.")</small>
+                    </label>
+
+                    <label class="employee-field" data-validation-field="Username">
+                        <span>@L("اسم المستخدم", "Username") <b>*</b></span>
+                        <div class="employee-control employee-control--ltr" dir="ltr">
+                            <span class="employee-control__icon"><i class="bi bi-at"></i></span>
+                            <input type="text" name="Username" value="@Model.Employee.Username"
+                                   minlength="3" maxlength="50" autocomplete="username"
+                                   placeholder="employee.name" pattern="[a-zA-Z0-9_.-]{3,50}"
+                                   required disabled="@Model.IsProtectedSystemAdmin" />
+                            <span class="employee-account-status" data-account-status="username"></span>
+                            <span class="employee-control__state" data-field-state="Username"></span>
+                        </div>
+                        <small data-field-error="Username">@L("إنجليزي فقط، بدون مسافات، ويسمح بـ . _ -", "English only, no spaces; . _ - are allowed.")</small>
+                    </label>
+
+                    <label class="employee-field" data-validation-field="ContactInfo">
+                        <span>@L("البريد الإلكتروني", "Email") <b>*</b></span>
+                        <div class="employee-control employee-control--ltr" dir="ltr">
+                            <span class="employee-control__icon"><i class="bi bi-envelope"></i></span>
+                            <input type="email" name="ContactInfo" value="@Model.Employee.ContactInfo"
+                                   maxlength="100" autocomplete="email" placeholder="employee@example.com"
+                                   required disabled="@Model.IsProtectedSystemAdmin" />
+                            <span class="employee-account-status" data-account-status="email"></span>
+                            <span class="employee-control__state" data-field-state="ContactInfo"></span>
+                        </div>
+                        <small data-field-error="ContactInfo">@L("سيُرسل إلى هذا البريد اسم المستخدم وكلمة المرور المؤقتة.", "The username and temporary password will be sent to this email.")</small>
+                    </label>
+
+                    <label class="employee-field employee-field--wide employee-phone-field" data-validation-field="PhoneNumber">
+                        <span>@L("رقم الهاتف", "Phone number") <b>*</b></span>
+                        <div class="employee-phone-control phone-wrapper-ltr" dir="ltr">
+                            <input type="tel" name="PhoneNumber" value="@Model.Employee.PhoneNumber"
+                                   maxlength="20" autocomplete="tel" inputmode="tel"
+                                   required disabled="@Model.IsProtectedSystemAdmin" />
+                            <span class="employee-control__state" data-field-state="PhoneNumber"></span>
+                        </div>
+                        <small data-field-error="PhoneNumber">@L("اختر الدولة ثم أدخل الرقم المحلي؛ رمز الدولة يضاف تلقائيًا.", "Select the country and enter the local number; the country code is added automatically.")</small>
+                    </label>
+                </div>
+            </section>
+
+            <!-- 2: الدخول المؤقت -->
+            <section class="employee-form-page" data-form-page="2">
+                <div class="employee-form-section-heading">
+                    <span><i class="bi bi-key-fill"></i></span>
+                    <div>
+                        <h3>@L("بيانات الدخول المؤقتة", "Temporary sign-in details")</h3>
+                        <p>@L("هذه ليست كلمة المرور الدائمة؛ الموظف سيُجبر على تغييرها عند أول دخول.", "This is not the permanent password; the employee must change it on first sign-in.")</p>
+                    </div>
+                </div>
+
+                @if (Model.IsEdit)
+                {
+                    <div class="employee-v7-password-edit-note">
+                        <span><i class="bi bi-shield-lock-fill"></i></span>
+                        <div>
+                            <strong>@L("كلمة المرور لا تُعدّل من هذا النموذج", "The password is not edited from this form")</strong>
+                            <p>@L("استخدم «إعادة تعيين كلمة المرور» من بطاقة الموظف لإنشاء كلمة مؤقتة جديدة وإجباره على تغييرها.", "Use the password reset action to create a new temporary password and require a change.")</p>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="employee-v7-password-modes" data-password-modes>
+                        <label class="employee-v7-password-mode is-selected" data-password-mode-card="auto">
+                            <input type="radio" name="PasswordMode" value="auto" checked />
+                            <span><i class="bi bi-stars"></i></span>
+                            <div><strong>@L("توليد تلقائي", "Generate automatically")</strong><small>@L("الأفضل والأسرع؛ كلمة قوية وعشوائية.", "Recommended and faster; creates a strong random password.")</small></div>
+                            <i class="bi bi-check-circle-fill"></i>
+                        </label>
+                        <label class="employee-v7-password-mode" data-password-mode-card="manual">
+                            <input type="radio" name="PasswordMode" value="manual" />
+                            <span><i class="bi bi-keyboard"></i></span>
+                            <div><strong>@L("تحديد يدوي", "Enter manually")</strong><small>@L("اكتب كلمة مؤقتة وفق سياسة الأمان.", "Enter a temporary password that follows the security policy.")</small></div>
+                            <i class="bi bi-check-circle-fill"></i>
+                        </label>
+                    </div>
+
+                    <div class="employee-v7-generated-password" data-generated-password-panel>
+                        <div class="employee-v7-generated-password__head">
+                            <span><i class="bi bi-shield-check"></i></span>
+                            <div><strong>@L("كلمة المرور المؤقتة", "Temporary password")</strong><small>@L("ستُرسل إلى البريد ويظهر لك تأكيد بعد إنشاء الحساب.", "It will be emailed and shown in a confirmation after creation.")</small></div>
+                        </div>
+
+                        <label class="employee-field" data-validation-field="TemporaryPassword">
+                            <div class="employee-control employee-control--ltr" dir="ltr">
+                                <span class="employee-control__icon"><i class="bi bi-key"></i></span>
+                                <input type="text" name="TemporaryPassword" minlength="8" maxlength="100"
+                                       autocomplete="new-password" readonly required />
+                                <button type="button" class="employee-inline-action" data-regenerate-password title="@L("توليد كلمة جديدة", "Generate new password")">
+                                    <i class="bi bi-arrow-repeat"></i>
+                                </button>
+                                <button type="button" class="employee-inline-action" data-copy-generated-password title="@L("نسخ", "Copy")">
+                                    <i class="bi bi-copy"></i>
+                                </button>
+                            </div>
+                            <small data-field-error="TemporaryPassword">@L("8 أحرف على الأقل، وتحتوي على حرف إنجليزي ورقم.", "At least 8 characters with an English letter and a number.")</small>
+                        </label>
+                        <input type="hidden" name="ConfirmTemporaryPassword" data-auto-password-confirm />
+                    </div>
+
+                    <div class="employee-v7-manual-password" data-manual-password-panel hidden>
+                        <div class="employee-fields-grid">
+                            <label class="employee-field" data-validation-field="TemporaryPasswordManual">
+                                <span>@L("كلمة المرور المؤقتة", "Temporary password") <b>*</b></span>
+                                <div class="employee-control employee-control--ltr" dir="ltr">
+                                    <span class="employee-control__icon"><i class="bi bi-lock"></i></span>
+                                    <input type="password" data-manual-password minlength="8" maxlength="100"
+                                           autocomplete="new-password" placeholder="@L("8 أحرف على الأقل", "At least 8 characters")" />
+                                    <button type="button" class="employee-inline-action" data-toggle-password><i class="bi bi-eye"></i></button>
+                                </div>
+                                <small>@L("يجب أن تحتوي على حرف إنجليزي ورقم على الأقل.", "Must contain an English letter and a number.")</small>
+                            </label>
+
+                            <label class="employee-field" data-validation-field="ConfirmTemporaryPasswordManual">
+                                <span>@L("تأكيد كلمة المرور", "Confirm password") <b>*</b></span>
+                                <div class="employee-control employee-control--ltr" dir="ltr">
+                                    <span class="employee-control__icon"><i class="bi bi-shield-lock"></i></span>
+                                    <input type="password" data-manual-password-confirm minlength="8" maxlength="100"
+                                           autocomplete="new-password" placeholder="@L("أعد كتابة الكلمة", "Re-enter password")" />
+                                    <button type="button" class="employee-inline-action" data-toggle-password><i class="bi bi-eye"></i></button>
+                                </div>
+                                <small>@L("يجب أن تتطابق الكلمتان تمامًا.", "Both passwords must match exactly.")</small>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="employee-v7-force-change-note">
+                        <i class="bi bi-arrow-clockwise"></i>
+                        <p><strong>@L("أول تسجيل دخول = تغيير إجباري.", "First sign-in = mandatory password change.")</strong> @L("لن يتمكن الموظف من استخدام لوحة الإدارة قبل تعيين كلمة مرور جديدة خاصة به.", "The employee cannot use the admin panel before setting a new private password.")</p>
+                    </div>
+                }
+            </section>
+
+            <!-- 3: الدور -->
+            <section class="employee-form-page" data-form-page="3">
+                <div class="employee-form-section-heading">
+                    <span><i class="bi bi-person-badge-fill"></i></span>
+                    <div>
+                        <h3>@L("الدور والصلاحيات", "Role & permissions")</h3>
+                        <p>@L("اختر دورًا واحدًا. يمكن إلغاء الاختيار بالضغط على الدور المحدد مرة أخرى.", "Select one role. Click the selected role again to clear the selection.")</p>
+                    </div>
+                </div>
+
+                @if (Model.Roles.Count == 0)
+                {
+                    <div class="employee-role-empty">
+                        <i class="bi bi-exclamation-circle"></i>
+                        <strong>@L("لا يوجد دور متاح", "No role available")</strong>
+                        <p>@L("أنشئ دورًا من تبويب «الأدوار والصلاحيات» ثم عد لإضافة الموظف.", "Create a role from Roles & permissions, then return to add the employee.")</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="employee-role-picker employee-role-picker--v7">
+                        <div class="employee-role-picker__list">
+                            @foreach (var role in Model.Roles)
+                            {
+                                var selected = Model.Employee.AdminRoleId == role.AdminRoleId;
+                                <label class="employee-role-choice @(selected ? "is-selected" : "") @(role.IsSystemRole ? "is-system" : "")"
+                                       data-role-choice="@role.AdminRoleId">
+                                    <input type="radio" name="AdminRoleId" value="@role.AdminRoleId"
+                                           checked="@selected" required
+                                           disabled="@(Model.IsProtectedSystemAdmin || (role.IsSystemRole && !selected))" />
+                                    <span class="employee-role-choice__radio"><i class="bi bi-check-lg"></i></span>
+                                    <span class="employee-role-choice__icon"><i class="bi @(role.IsSystemRole ? "bi-shield-fill-check" : "bi-person-badge")"></i></span>
+                                    <span class="employee-role-choice__copy">
+                                        <strong>@role.RoleName</strong>
+                                        <small>@(string.IsNullOrWhiteSpace(role.Description) ? L("بدون وصف", "No description") : role.Description)</small>
+                                        <em>@role.PermissionsCount @L("صلاحية", "permissions")</em>
+                                    </span>
+                                    <template data-role-preview-template>
+                                        @if (role.PermissionGroups.Count == 0)
+                                        {
+                                            <div class="employee-role-preview__empty"><i class="bi bi-info-circle"></i><span>@L("هذا الدور لا يحتوي على صلاحيات نشطة.", "This role has no active permissions.")</span></div>
+                                        }
+                                        else
+                                        {
+                                            @foreach (var group in role.PermissionGroups)
+                                            {
+                                                <section class="employee-role-preview-group">
+                                                    <div><strong>@GroupLabel(group.GroupName)</strong><span>@group.Permissions.Count</span></div>
+                                                    <p>
+                                                        @foreach (var permission in group.Permissions)
+                                                        {
+                                                            <span class="@(permission.IsSensitive ? "is-sensitive" : "")">@PermissionLabel(permission.PermissionKey, permission.PermissionName)</span>
+                                                        }
+                                                    </p>
+                                                </section>
+                                            }
+                                        }
+                                    </template>
+                                </label>
+                            }
+                        </div>
+
+                        <aside class="employee-role-preview">
+                            <div class="employee-role-preview__heading">
+                                <span><i class="bi bi-eye-fill"></i></span>
+                                <div><strong>@L("صلاحيات الموظف", "Employee permissions")</strong><small>@L("معاينة ما سيحصل عليه من الدور المحدد", "Preview inherited permissions")</small></div>
+                            </div>
+                            <div class="employee-role-preview__body" data-role-preview>
+                                <div class="employee-role-preview__empty"><i class="bi bi-hand-index-thumb"></i><span>@L("اختر دورًا لعرض صلاحياته.", "Select a role to preview permissions.")</span></div>
+                            </div>
+                        </aside>
+                    </div>
+                }
+            </section>
+        </div>
+
+        <footer class="employee-form-footer">
+            <button type="button" class="employees-btn employees-btn--ghost" data-form-prev hidden>
+                <i class="bi bi-arrow-right"></i> @L("السابق", "Previous")
+            </button>
+            <div class="employee-form-footer__meta"><span data-step-copy>@L("الخطوة 1 من 3", "Step 1 of 3")</span></div>
+            <div class="employee-form-footer__actions">
+                <button type="button" class="employees-btn employees-btn--soft" data-close-drawer>@L("إلغاء", "Cancel")</button>
+                <button type="button" class="employees-btn employees-btn--primary" data-form-next>
+                    @L("التالي", "Next") <i class="bi bi-arrow-left"></i>
+                </button>
+                <button type="submit" class="employees-btn employees-btn--primary" data-form-submit hidden>
+                    <i class="bi bi-check2-circle"></i> @(Model.IsEdit ? L("حفظ التعديلات", "Save changes") : L("إنشاء الموظف", "Create employee"))
+                </button>
+            </div>
+        </footer>
+    </form>
+</div>

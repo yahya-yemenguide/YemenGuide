@@ -1,0 +1,367 @@
+@using System
+@using System.Collections.Generic
+@using System.Globalization
+@using System.Linq
+@using YemenGuide.Core.DTOs.Owner
+
+@model FinancialReportExportDto
+
+@{
+    Layout = null;
+
+    var pageModel = Model ?? new FinancialReportExportDto();
+    var summary = pageModel.Summary ?? new FinancialReportSummaryDto();
+    var analytics = pageModel.Analytics ?? new ComprehensiveFinancialAnalyticsDto();
+    var reconciliation = pageModel.Reconciliation ?? new FinancialReconciliationDto();
+    var sections = pageModel.Sections ?? new List<FinancialReportExportSectionDto>();
+    var numberCulture = CultureInfo.GetCultureInfo("en-US");
+
+    var mainSection = sections.FirstOrDefault(section =>
+        string.Equals(section.Key, pageModel.ReportType, StringComparison.OrdinalIgnoreCase))
+        ?? new FinancialReportExportSectionDto
+        {
+            Key = pageModel.ReportType,
+            Title = pageModel.Title,
+            Description = pageModel.Subtitle,
+            Columns = pageModel.Columns ?? new List<FinancialReportExportColumnDto>(),
+            Rows = pageModel.Rows ?? new List<FinancialReportExportRowDto>()
+        };
+
+    var analyticsSection = sections.FirstOrDefault(section =>
+        string.Equals(section.Key, "ComprehensiveAnalytics", StringComparison.OrdinalIgnoreCase));
+
+    var reconciliationSection = sections.FirstOrDefault(section =>
+        string.Equals(section.Key, "Reconciliation", StringComparison.OrdinalIgnoreCase));
+
+    var isComprehensive = string.Equals(pageModel.ReportType, OwnerFinancialReportTypes.Comprehensive, StringComparison.OrdinalIgnoreCase);
+    var isBookings = string.Equals(pageModel.ReportType, OwnerFinancialReportTypes.Bookings, StringComparison.OrdinalIgnoreCase);
+    var isPayments = string.Equals(pageModel.ReportType, OwnerFinancialReportTypes.Payments, StringComparison.OrdinalIgnoreCase);
+    var isCommissions = string.Equals(pageModel.ReportType, OwnerFinancialReportTypes.Commissions, StringComparison.OrdinalIgnoreCase);
+    var isRefunds = string.Equals(pageModel.ReportType, OwnerFinancialReportTypes.Refunds, StringComparison.OrdinalIgnoreCase);
+    var isTransactions = string.Equals(pageModel.ReportType, OwnerFinancialReportTypes.Transactions, StringComparison.OrdinalIgnoreCase);
+    var isDocuments = string.Equals(pageModel.ReportType, OwnerFinancialReportTypes.Documents, StringComparison.OrdinalIgnoreCase);
+
+    string Money(decimal value)
+    {
+        var format = decimal.Truncate(value) == value ? "N0" : "N2";
+        return $"{value.ToString(format, numberCulture)} {pageModel.Currency}";
+    }
+
+    string Number(int value) => value.ToString("N0", numberCulture);
+    string DateTimeText(DateTime value) => value.ToString("dd/MM/yyyy - hh:mm tt", numberCulture);
+
+    string CellText(FinancialReportExportSectionDto section, FinancialReportExportRowDto row, string key)
+    {
+        var columns = section.Columns ?? new List<FinancialReportExportColumnDto>();
+        var index = columns.FindIndex(column => string.Equals(column.Key, key, StringComparison.OrdinalIgnoreCase));
+        if (index < 0) return "—";
+
+        var typedCells = row.TypedCells ?? new List<FinancialReportExportCellDto>();
+        var cell = index < typedCells.Count ? typedCells[index] : null;
+
+        if (cell != null)
+        {
+            if (string.Equals(cell.DataType, "Money", StringComparison.OrdinalIgnoreCase) && cell.DecimalValue.HasValue)
+                return Money(cell.DecimalValue.Value);
+
+            if (string.Equals(cell.DataType, "Number", StringComparison.OrdinalIgnoreCase) && cell.IntegerValue.HasValue)
+                return cell.IntegerValue.Value.ToString("N0", numberCulture);
+
+            if (cell.DateValue.HasValue)
+            {
+                var includeTime = string.Equals(cell.DataType, "DateTime", StringComparison.OrdinalIgnoreCase);
+                return cell.DateValue.Value.ToString(includeTime ? "dd/MM/yyyy - hh:mm tt" : "dd/MM/yyyy", numberCulture);
+            }
+
+            if (!string.IsNullOrWhiteSpace(cell.Text)) return cell.Text;
+        }
+
+        var cells = row.Cells ?? new List<string>();
+        return index < cells.Count && !string.IsNullOrWhiteSpace(cells[index]) ? cells[index] : "—";
+    }
+
+    string MoneyCellClass(string key)
+    {
+        return key switch
+        {
+            "NetOwnerAmount" => "is-money is-emphasis",
+            "ActualCollectedAmount" => "is-money is-success",
+            "RefundAmount" => "is-money is-success",
+            "CommissionDebt" => "is-money is-danger",
+            "RemainingAmount" => "is-money",
+            _ => key.Contains("Amount", StringComparison.OrdinalIgnoreCase) ||
+                 key.Contains("Price", StringComparison.OrdinalIgnoreCase) ||
+                 key.Contains("Commission", StringComparison.OrdinalIgnoreCase) ||
+                 key.Contains("Balance", StringComparison.OrdinalIgnoreCase) ||
+                 key.Contains("Debt", StringComparison.OrdinalIgnoreCase)
+                ? "is-money"
+                : string.Empty
+        };
+    }
+
+    List<string> DetailKeys()
+    {
+        if (isBookings) return new List<string> { "BookingId", "CustomerName", "BookingStateLabel", "OriginalTotalPrice", "DiscountAmount", "TotalPrice", "ActualRevenue" };
+        if (isPayments) return new List<string> { "BookingId", "CustomerName", "PaymentStatusLabel", "ActualPaidOnline", "ActualCollectedAtProperty", "ActualCollectedAmount", "RemainingAmount" };
+        if (isCommissions) return new List<string> { "BookingId", "PlaceName", "TotalPrice", "PlatformCommission", "CommissionCharged", "CommissionReleased", "CommissionDebt", "CommissionStatusLabel" };
+        if (isRefunds) return new List<string> { "RecordId", "BookingId", "CustomerName", "RequestedRefundAmount", "RefundAmount", "OwnerShare", "StatusLabel" };
+        if (isTransactions) return new List<string> { "RecordNumber", "TransactionTypeLabel", "PlaceName", "PrimaryAmount", "ReferenceNumber", "StatusLabel", "RecordDate" };
+        if (isDocuments) return new List<string> { "RecordNumber", "RecordTypeLabel", "RecordDate", "CustomerName", "PlaceName", "StatusLabel", "PrimaryAmount" };
+        return new List<string> { "BookingId", "CustomerName", "BookingStateLabel", "TotalPrice", "ActualCollectedAmount", "RemainingAmount", "NetOwnerAmount" };
+    }
+
+    string LabelFor(string key)
+    {
+        var column = (mainSection.Columns ?? new List<FinancialReportExportColumnDto>())
+            .FirstOrDefault(item => string.Equals(item.Key, key, StringComparison.OrdinalIgnoreCase));
+        return column?.Label ?? key;
+    }
+
+    var kpis = new List<FinancialReportMetricDto>();
+    if (isBookings)
+    {
+        kpis.Add(new FinancialReportMetricDto { Label = "إجمالي الحجوزات", Value = Number(summary.BookingCount), Hint = "حجز ضمن الفترة", Tone = "Primary" });
+        kpis.Add(new FinancialReportMetricDto { Label = "قيمة الحجوزات", Value = Money(summary.TotalBookingValue), Hint = "بعد الخصومات", Tone = "Info" });
+        kpis.Add(new FinancialReportMetricDto { Label = "الإيراد الفعلي", Value = Money(summary.ActualRevenue), Hint = "وفق السجلات المالية", Tone = "Success" });
+    }
+    else if (isPayments)
+    {
+        kpis.Add(new FinancialReportMetricDto { Label = "مدفوع إلكترونيًا", Value = Money(summary.TotalPaidOnline), Hint = "مبالغ معتمدة", Tone = "Primary" });
+        kpis.Add(new FinancialReportMetricDto { Label = "في المنشأة", Value = Money(summary.TotalCollectedAtProperty), Hint = "تحصيل فعلي", Tone = "Success" });
+        kpis.Add(new FinancialReportMetricDto { Label = "المتبقي", Value = Money(summary.TotalRemainingAtProperty), Hint = $"تحصيل {summary.CollectionRate.ToString("0.##", numberCulture)}%", Tone = "Warning" });
+    }
+    else if (isCommissions)
+    {
+        kpis.Add(new FinancialReportMetricDto { Label = "العمولة المحتسبة", Value = Money(summary.TotalCommission), Hint = "قيمة العمولة", Tone = "Primary" });
+        kpis.Add(new FinancialReportMetricDto { Label = "المخصومة", Value = Money(summary.TotalCommissionCharged), Hint = "خصم نهائي", Tone = "Success" });
+        kpis.Add(new FinancialReportMetricDto { Label = "الدين", Value = Money(summary.TotalCommissionDebt), Hint = $"المعادة {Money(summary.TotalCommissionReleased)}", Tone = "Warning" });
+    }
+    else if (isRefunds)
+    {
+        kpis.Add(new FinancialReportMetricDto { Label = "المطلوب", Value = Money(summary.RequestedRefundAmount), Hint = "إجمالي المطلوب", Tone = "Warning" });
+        kpis.Add(new FinancialReportMetricDto { Label = "المسترد", Value = Money(summary.TotalRefunded), Hint = "مكتمل فعليًا", Tone = "Success" });
+        kpis.Add(new FinancialReportMetricDto { Label = "حصة المنشأة", Value = Money(summary.TotalOwnerShare), Hint = $"رسوم {Money(summary.TotalCancellationFees)}", Tone = "Primary" });
+    }
+    else if (isTransactions)
+    {
+        kpis.Add(new FinancialReportMetricDto { Label = "الحركات المكتملة", Value = Number(summary.CompletedTransactionsCount), Hint = "حركة مكتملة", Tone = "Success" });
+        kpis.Add(new FinancialReportMetricDto { Label = "الشحن المكتمل", Value = Money(summary.TotalTopUps), Hint = $"معلق {Money(summary.TotalPendingTopUps)}", Tone = "Primary" });
+        kpis.Add(new FinancialReportMetricDto { Label = "الدين الحالي", Value = Money(summary.CurrentDebt), Hint = "وقت إصدار التقرير", Tone = "Warning" });
+    }
+    else if (isDocuments)
+    {
+        kpis.Add(new FinancialReportMetricDto { Label = "المستندات", Value = Number(summary.DocumentsCount), Hint = "مستند مالي", Tone = "Primary" });
+        kpis.Add(new FinancialReportMetricDto { Label = "القيمة", Value = Money(summary.TotalDocumentValue), Hint = "إجمالي قيمة المستندات", Tone = "Info" });
+        kpis.Add(new FinancialReportMetricDto { Label = "فواتير وتسويات", Value = Number(summary.BookingInvoicesCount + summary.SettlementStatementsCount), Hint = "مستند", Tone = "Success" });
+    }
+    else
+    {
+        kpis.Add(new FinancialReportMetricDto { Label = "قيمة الحجوزات", Value = Money(summary.TotalBookingValue), Hint = $"{Number(summary.BookingCount)} حجز", Tone = "Primary" });
+        kpis.Add(new FinancialReportMetricDto { Label = "إجمالي المحصل", Value = Money(summary.TotalActualCollected), Hint = $"المتبقي {Money(summary.TotalRemainingAtProperty)}", Tone = "Info" });
+        kpis.Add(new FinancialReportMetricDto { Label = "صافي المالك", Value = Money(summary.NetRevenue), Hint = "بعد التسويات المسجلة", Tone = "Success" });
+    }
+
+    var detailKeys = DetailKeys();
+}
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>@pageModel.Title - @pageModel.PlatformName</title>
+    <link rel="stylesheet" href="~/lib/bootstrap-icons/font/bootstrap-icons.css" />
+    <link rel="stylesheet" href="~/css/owner/financials/owner-financial-invoices-reports.css" asp-append-version="true" />
+</head>
+<body class="owner-financial-report-print-page">
+
+    <div class="ofir-print-toolbar" data-print-toolbar>
+        <div>
+            <span><i class="bi bi-file-earmark-bar-graph"></i></span>
+            <div><strong>معاينة التقرير</strong><small>@pageModel.Title</small></div>
+        </div>
+        <div>
+            <button type="button" onclick="window.print()"><i class="bi bi-printer"></i>طباعة أو حفظ PDF</button>
+            <button type="button" class="is-secondary" onclick="window.close()"><i class="bi bi-x-lg"></i>إغلاق</button>
+        </div>
+    </div>
+
+    <main class="ofir-print-book">
+        <section class="ofir-print-page">
+            <header class="ofir-print-brandline">
+                <div class="ofir-print-brand">
+                    <span>د</span>
+                    <div><small>منصة الحجوزات والخدمات اليمنية</small><strong>@pageModel.PlatformName</strong></div>
+                </div>
+                <div class="ofir-print-document-code"><small>تاريخ الإصدار</small><strong>@DateTimeText(pageModel.GeneratedAt)</strong></div>
+            </header>
+
+            <div class="ofir-print-title">
+                <small>تقرير مالي رسمي</small>
+                <h1>@pageModel.Title</h1>
+                <p>@pageModel.Subtitle</p>
+            </div>
+
+            <dl class="ofir-print-meta">
+                <div><dt>المنشأة</dt><dd>@pageModel.SelectedPlaceName</dd></div>
+                <div><dt>الفترة</dt><dd>@pageModel.PeriodLabel</dd></div>
+                <div><dt>أساس التاريخ</dt><dd>@(string.IsNullOrWhiteSpace(pageModel.DateScopeLabel) ? "تاريخ السجل" : pageModel.DateScopeLabel)</dd></div>
+                <div><dt>عدد النتائج</dt><dd>@Number(pageModel.TotalAvailableRows)</dd></div>
+            </dl>
+
+            <section class="ofir-print-kpis">
+                @foreach (var metric in kpis.Take(3))
+                {
+                    <article class="ofir-print-kpi is-@(metric.Tone?.ToLowerInvariant() ?? "neutral")">
+                        <small>@metric.Label</small>
+                        <strong>@metric.Value</strong>
+                        <span>@metric.Hint</span>
+                    </article>
+                }
+            </section>
+
+            @if (reconciliation.IsApplicable)
+            {
+                <div class="ofir-print-audit @(reconciliation.IsBalanced ? string.Empty : "has-issues")">
+                    <strong>سلامة المطابقة المالية: @reconciliation.StatusLabel</strong>
+                    <span>@Number(reconciliation.CheckedRecords) سجل تم فحصه • @Number(reconciliation.IssueCount) اختلاف</span>
+                </div>
+            }
+
+            <section class="ofir-print-section">
+                <header class="ofir-print-section-head">
+                    <div><small>نطاق التقرير</small><h2>ملخص الفلاتر المطبقة</h2></div>
+                </header>
+                <div class="ofir-print-mini-grid">
+                    <article class="ofir-print-mini-card"><small>الفلاتر</small><strong>@pageModel.FilterDescription</strong><span>نفس نطاق الشاشة وExcel</span></article>
+                    <article class="ofir-print-mini-card"><small>السجلات</small><strong>@Number(pageModel.TotalAvailableRows)</strong><span>قبل تقسيم الصفحات</span></article>
+                    <article class="ofir-print-mini-card"><small>حالة التصدير</small><strong>@(pageModel.IsTruncated ? "مختصر" : "كامل")</strong><span>@pageModel.SuggestedFileName</span></article>
+                </div>
+            </section>
+
+            <footer class="ofir-print-footer"><span>مولد إلكترونيًا من @pageModel.PlatformName</span><span class="ofir-print-page-number"></span></footer>
+        </section>
+
+        @if ((mainSection.Rows?.Count ?? 0) > 0)
+        {
+            <section class="ofir-print-page">
+                <header class="ofir-print-brandline">
+                    <div class="ofir-print-brand"><span>د</span><div><small>@pageModel.PlatformName</small><strong>@pageModel.Title</strong></div></div>
+                    <div class="ofir-print-document-code"><small>القسم</small><strong>النتائج التفصيلية</strong></div>
+                </header>
+
+                <section class="ofir-print-section">
+                    <header class="ofir-print-section-head">
+                        <div><small>التفاصيل</small><h2>@mainSection.Title</h2><p>@mainSection.Description</p></div>
+                        <span>@Number(mainSection.Rows.Count) صف</span>
+                    </header>
+
+                    <div class="ofir-print-table-wrap">
+                        <table class="ofir-print-table">
+                            <thead><tr>@foreach (var key in detailKeys){<th>@LabelFor(key)</th>}</tr></thead>
+                            <tbody>
+                                @foreach (var row in mainSection.Rows)
+                                {
+                                    <tr>
+                                        @foreach (var key in detailKeys)
+                                        {
+                                            <td class="@MoneyCellClass(key)">@CellText(mainSection, row, key)</td>
+                                        }
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <footer class="ofir-print-footer"><span>@pageModel.PeriodLabel</span><span class="ofir-print-page-number"></span></footer>
+            </section>
+        }
+
+        @if (isComprehensive && (mainSection.Rows?.Count ?? 0) > 0)
+        {
+            <section class="ofir-print-page">
+                <header class="ofir-print-brandline">
+                    <div class="ofir-print-brand"><span>د</span><div><small>التسوية المالية</small><strong>العمولات والاستردادات</strong></div></div>
+                    <div class="ofir-print-document-code"><small>الفترة</small><strong>@pageModel.PeriodLabel</strong></div>
+                </header>
+
+                <section class="ofir-print-section">
+                    <header class="ofir-print-section-head"><div><small>تفصيل مستقل</small><h2>أثر العمولة والاسترداد لكل حجز</h2><p>فصل المعلومات المحاسبية عن جدول الحجوزات الرئيسي لتسهيل المراجعة.</p></div></header>
+                    <div class="ofir-print-table-wrap">
+                        <table class="ofir-print-table">
+                            <thead><tr><th>الحجز</th><th>العميل</th><th>العمولة المخصومة</th><th>الاسترداد المكتمل</th><th>رسوم الإلغاء</th><th>حصة المنشأة</th><th>صافي المالك</th></tr></thead>
+                            <tbody>
+                                @foreach (var row in mainSection.Rows)
+                                {
+                                    <tr>
+                                        <td>@CellText(mainSection, row, "BookingId")</td>
+                                        <td>@CellText(mainSection, row, "CustomerName")</td>
+                                        <td class="is-money">@CellText(mainSection, row, "CommissionCharged")</td>
+                                        <td class="is-money is-success">@CellText(mainSection, row, "RefundAmount")</td>
+                                        <td class="is-money">@CellText(mainSection, row, "CancellationFee")</td>
+                                        <td class="is-money">@CellText(mainSection, row, "OwnerShare")</td>
+                                        <td class="is-money is-emphasis">@CellText(mainSection, row, "NetOwnerAmount")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+                <footer class="ofir-print-footer"><span>قسم تسوية مستقل</span><span class="ofir-print-page-number"></span></footer>
+            </section>
+        }
+
+        @if (isComprehensive || reconciliation.IsApplicable)
+        {
+            <section class="ofir-print-page">
+                <header class="ofir-print-brandline">
+                    <div class="ofir-print-brand"><span>د</span><div><small>التدقيق المالي</small><strong>المطابقة والتسويات</strong></div></div>
+                    <div class="ofir-print-document-code"><small>الحالة العامة</small><strong>@reconciliation.StatusLabel</strong></div>
+                </header>
+
+                @if (isComprehensive)
+                {
+                    <section class="ofir-print-section">
+                        <header class="ofir-print-section-head"><div><small>رصيد الضمان والتسوية</small><h2>ملخص الحركات المستقلة</h2></div></header>
+                        <div class="ofir-print-mini-grid">
+                            <article class="ofir-print-mini-card"><small>شحن مكتمل</small><strong>@Money(analytics.CompletedTopUpsAmount)</strong><span>معلق @Money(analytics.PendingTopUpsAmount)</span></article>
+                            <article class="ofir-print-mini-card"><small>عمولة مخصومة</small><strong>@Money(analytics.CommissionChargedAmount)</strong><span>محررة @Money(analytics.CommissionReleasedAmount)</span></article>
+                            <article class="ofir-print-mini-card"><small>الدين الحالي</small><strong>@Money(analytics.CurrentDebt)</strong><span>المتاح @Money(analytics.CurrentAvailableGuaranteeBalance)</span></article>
+                            <article class="ofir-print-mini-card"><small>استرداد مكتمل</small><strong>@Money(analytics.CompletedRefundAmount)</strong><span>معلق @Money(analytics.PendingRefundAmount)</span></article>
+                            <article class="ofir-print-mini-card"><small>التدفق التشغيلي</small><strong>@Money(analytics.OperationalNetCashFlow)</strong><span>تشغيل المنشأة</span></article>
+                            <article class="ofir-print-mini-card"><small>تدفق الضمان</small><strong>@Money(analytics.GuaranteeNetFlow)</strong><span>حساب ضمان العمولة</span></article>
+                        </div>
+                    </section>
+                }
+
+                @if (reconciliation.IsApplicable)
+                {
+                    <section class="ofir-print-section">
+                        <header class="ofir-print-section-head"><div><small>فحص آلي للاتساق</small><h2>سلامة المطابقة المالية</h2><p>فحص قراءة فقط لا يغيّر أي رصيد أو حركة.</p></div></header>
+                        <div class="ofir-print-reconciliation">
+                            <article class="@(reconciliation.CollectionMismatchCount == 0 ? "is-ok" : "is-bad")"><strong>مطابقة التحصيل</strong><span>@(reconciliation.CollectionMismatchCount == 0 ? "مطابق" : $"{reconciliation.CollectionMismatchCount} اختلاف")</span></article>
+                            <article class="@(reconciliation.RefundFundingMismatchCount == 0 ? "is-ok" : "is-bad")"><strong>تمويل الاستردادات</strong><span>@(reconciliation.RefundFundingMismatchCount == 0 ? "مطابق" : $"{reconciliation.RefundFundingMismatchCount} اختلاف")</span></article>
+                            <article class="@(reconciliation.PriceMismatchCount == 0 ? "is-ok" : "is-bad")"><strong>السعر والخصم</strong><span>@(reconciliation.PriceMismatchCount == 0 ? "مطابق" : $"{reconciliation.PriceMismatchCount} اختلاف")</span></article>
+                            <article class="@(reconciliation.NegativeBalanceCount == 0 ? "is-ok" : "is-bad")"><strong>سلامة الأرصدة</strong><span>@(reconciliation.NegativeBalanceCount == 0 ? "مطابق" : $"{reconciliation.NegativeBalanceCount} اختلاف")</span></article>
+                        </div>
+                    </section>
+                }
+
+                <footer class="ofir-print-footer"><span>الحالة النهائية: @reconciliation.StatusLabel</span><span class="ofir-print-page-number"></span></footer>
+            </section>
+        }
+    </main>
+
+    <script>
+        (() => {
+            'use strict';
+            const query = new URLSearchParams(window.location.search);
+            if (query.get('print') === '1') {
+                window.addEventListener('load', () => window.print(), { once: true });
+            }
+        })();
+    </script>
+</body>
+</html>

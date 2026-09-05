@@ -1,0 +1,209 @@
+﻿@*
+    View: Shared / _CustomerBottomNav.cshtml
+
+    يظهر على الهاتف فقط داخل صفحات لوحة العميل.
+    التنقل العام للموقع يبقى في الهيدر، بينما هذا الشريط خاص بالحساب.
+*@
+
+@{
+    string currentController =
+        ViewContext.RouteData.Values["Controller"]?.ToString() ?? string.Empty;
+
+    string currentAction =
+        ViewContext.RouteData.Values["Action"]?.ToString() ?? string.Empty;
+
+    bool isOverviewActive =
+        currentController.Equals("Overview", StringComparison.OrdinalIgnoreCase) &&
+        currentAction.Equals("Overview", StringComparison.OrdinalIgnoreCase);
+
+    bool isBookingsActive =
+        currentController.Equals("Bookings", StringComparison.OrdinalIgnoreCase) ||
+        currentAction.Equals("MyBookings", StringComparison.OrdinalIgnoreCase);
+
+    bool isMessagesActive =
+        currentController.Equals("Messages", StringComparison.OrdinalIgnoreCase) ||
+        currentAction.Equals("MyMessages", StringComparison.OrdinalIgnoreCase);
+
+    bool isFavoritesActive =
+        currentController.Equals("Favorites", StringComparison.OrdinalIgnoreCase) ||
+        currentAction.Equals("MyFavorites", StringComparison.OrdinalIgnoreCase);
+
+    bool isMoreActive =
+        currentController.Equals("Profile", StringComparison.OrdinalIgnoreCase) ||
+        currentController.Equals("Reports", StringComparison.OrdinalIgnoreCase) ||
+        currentAction.Equals("CustomerProfile", StringComparison.OrdinalIgnoreCase) ||
+        currentAction.Equals("MyReports", StringComparison.OrdinalIgnoreCase);
+}
+
+<nav class="customer-bottom-nav d-md-none"
+     id="customerBottomNav"
+     data-customer-message-indicator="true"
+     data-unread-messages-url="@Url.Action("GetUnreadConversationCount", "Messages")"
+     data-chat-hub-url="/chatHub"
+     data-signalr-script-url="@Url.Content("~/lib/signalr/signalr.min.js")"
+     aria-label="التنقل السريع في حساب العميل">
+
+    <div class="customer-bottom-nav__inner">
+
+        <a href="/Overview/Overview"
+           class="customer-bottom-nav__item @(isOverviewActive ? "is-active" : "")"
+           data-bottom-nav-item="overview"
+           aria-current="@(isOverviewActive ? "page" : null)">
+
+            <span class="customer-bottom-nav__icon">
+                <i class="bi bi-house-door-fill"></i>
+            </span>
+
+            <span class="customer-bottom-nav__label">الرئيسية</span>
+        </a>
+
+        <a href="/Bookings/MyBookings"
+           class="customer-bottom-nav__item @(isBookingsActive ? "is-active" : "")"
+           data-bottom-nav-item="bookings"
+           aria-current="@(isBookingsActive ? "page" : null)">
+
+            <span class="customer-bottom-nav__icon position-relative">
+                <i class="bi bi-calendar-check-fill"></i>
+
+                <span class="customer-bottom-nav__badge"
+                      id="bottomNavBookingsBadge"
+                      data-bottom-nav-badge="bookings"
+                      hidden>
+                    0
+                </span>
+            </span>
+
+            <span class="customer-bottom-nav__label">حجوزاتي</span>
+        </a>
+
+        <a href="/Messages/MyMessages"
+           class="customer-bottom-nav__item @(isMessagesActive ? "is-active" : "")"
+           data-bottom-nav-item="messages"
+           aria-current="@(isMessagesActive ? "page" : null)">
+
+            <span class="customer-bottom-nav__icon position-relative">
+                <i class="bi bi-chat-dots-fill"></i>
+
+                <span class="customer-bottom-nav__badge"
+                      id="bottomNavMessagesBadge"
+                      data-bottom-nav-badge="messages"
+                      data-customer-message-badge="true"
+                      data-count="0"
+                      aria-live="polite"
+                      hidden>
+                    0
+                </span>
+            </span>
+
+            <span class="customer-bottom-nav__label">الدردشة</span>
+        </a>
+
+        <a href="/Favorites/MyFavorites"
+           class="customer-bottom-nav__item @(isFavoritesActive ? "is-active" : "")"
+           data-bottom-nav-item="favorites"
+           aria-current="@(isFavoritesActive ? "page" : null)">
+
+            <span class="customer-bottom-nav__icon">
+                <i class="bi bi-heart-fill"></i>
+            </span>
+
+            <span class="customer-bottom-nav__label">المفضلة</span>
+        </a>
+
+        <button class="customer-bottom-nav__item customer-bottom-nav__more @(isMoreActive ? "is-active" : "")"
+                id="customerBottomMoreButton"
+                type="button"
+                data-bottom-nav-item="more"
+                data-bs-toggle="offcanvas"
+                data-bs-target="#customerMoreSheet"
+                aria-controls="customerMoreSheet"
+                aria-label="فتح المزيد من خيارات الحساب">
+
+            <span class="customer-bottom-nav__icon">
+                <i class="bi bi-grid-fill"></i>
+            </span>
+
+            <span class="customer-bottom-nav__label">المزيد</span>
+        </button>
+    </div>
+</nav>
+
+<div class="offcanvas offcanvas-bottom customer-more-sheet d-md-none"
+     tabindex="-1"
+     id="customerMoreSheet"
+     aria-labelledby="customerMoreSheetTitle">
+
+    <div class="customer-more-sheet__handle"
+         aria-hidden="true">
+    </div>
+
+    <div class="offcanvas-header customer-more-sheet__header">
+        <div>
+            <span class="customer-more-sheet__eyebrow">
+                لوحة العميل
+            </span>
+
+            <h5 class="offcanvas-title customer-more-sheet__title"
+                id="customerMoreSheetTitle">
+                المزيد من خيارات الحساب
+            </h5>
+        </div>
+
+        <button type="button"
+                class="btn-close customer-more-sheet__close"
+                data-bs-dismiss="offcanvas"
+                aria-label="إغلاق">
+        </button>
+    </div>
+
+    <div class="offcanvas-body customer-more-sheet__body">
+
+        <div class="customer-more-sheet__grid">
+
+            <a href="/Profile/CustomerProfile"
+               class="customer-more-sheet__item @(currentController.Equals("Profile", StringComparison.OrdinalIgnoreCase) ? "is-active" : "")">
+
+                <span class="customer-more-sheet__item-icon">
+                    <i class="bi bi-person-gear"></i>
+                </span>
+
+                <span class="customer-more-sheet__item-content">
+                    <strong>الملف الشخصي والإعدادات</strong>
+                    <small>بياناتك وتفضيلات حسابك وأمانه</small>
+                </span>
+
+                <i class="bi bi-chevron-left customer-more-sheet__arrow"></i>
+            </a>
+
+            <a href="/Reports/MyReports"
+               class="customer-more-sheet__item @(currentController.Equals("Reports", StringComparison.OrdinalIgnoreCase) ? "is-active" : "")">
+
+                <span class="customer-more-sheet__item-icon">
+                    <i class="bi bi-shield-exclamation"></i>
+                </span>
+
+                <span class="customer-more-sheet__item-content">
+                    <strong>الشكاوى والبلاغات</strong>
+                    <small>متابعة طلبات الدعم والشكاوى</small>
+                </span>
+
+                <i class="bi bi-chevron-left customer-more-sheet__arrow"></i>
+            </a>
+
+        </div>
+
+        <a asp-controller="Account"
+           asp-action="Logout"
+           class="customer-more-sheet__logout">
+
+            <span class="customer-more-sheet__logout-icon">
+                <i class="bi bi-box-arrow-right"></i>
+            </span>
+
+            <span>
+                <strong>تسجيل الخروج</strong>
+                <small>إنهاء جلسة الحساب الحالية</small>
+            </span>
+        </a>
+    </div>
+</div>

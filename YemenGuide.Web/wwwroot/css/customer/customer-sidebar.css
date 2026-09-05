@@ -1,0 +1,495 @@
+﻿/* =============================================================
+ * CUSTOMER SIDEBAR
+ * Desktop Sidebar + Tablet Icon Rail + Mobile Bottom Navigation Fit
+ * ============================================================= */
+
+/* =============================================================
+ * 1. هيكل صفحات لوحة العميل
+ * ============================================================= */
+.customer-dashboard-layout {
+    width: 100%;
+    max-width: 100%;
+    min-height: calc(100vh - var(--customer-header-height, 85px));
+    margin-top: var(--customer-header-height, 85px);
+    margin-inline: 0;
+    padding-inline: 0;
+    display: flex;
+    align-items: stretch;
+    direction: inherit;
+    box-sizing: border-box;
+    overflow-x: clip;
+}
+
+.customer-main-content {
+    width: calc(100% - 290px);
+    max-width: 100%;
+    min-width: 0;
+    flex: 1 1 auto;
+    margin-inline: 0;
+    padding-bottom: 50px;
+    background: transparent;
+    box-sizing: border-box;
+    overflow-x: clip;
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), margin 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+    .customer-main-content::-webkit-scrollbar {
+        width: 8px;
+    }
+
+    .customer-main-content::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .customer-main-content::-webkit-scrollbar-thumb {
+        background: rgba(0, 166, 218, 0.20);
+        border-radius: 999px;
+    }
+
+/* =============================================================
+ * 2. القائمة الجانبية على الكمبيوتر
+ * ============================================================= */
+.customer-sidebar {
+    position: sticky;
+    inset-block-start: var(--customer-header-height, 85px);
+    width: 290px;
+    height: calc(100vh - var(--customer-header-height, 85px));
+    min-height: 0;
+    flex: 0 0 290px;
+    padding: 20px 15px;
+    overflow: visible;
+    color: #1e293b;
+    background: rgba(255, 255, 255, 0.96);
+    border-inline-end: 1px solid rgba(5, 32, 60, 0.07);
+    box-shadow: -5px 0 22px rgba(5, 32, 60, 0.035);
+    z-index: 100;
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), flex-basis 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.3s ease;
+}
+
+    .customer-sidebar .sidebar-header {
+        min-height: 48px;
+    }
+
+        .customer-sidebar .sidebar-header h4 {
+            color: #05203C !important;
+            white-space: nowrap;
+        }
+
+/* =============================================================
+ * 3. منطقة التمرير
+ * ============================================================= */
+.nav-scroll-area {
+    min-height: 0;
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+    .nav-scroll-area::-webkit-scrollbar {
+        display: none;
+    }
+
+.custom-sidebar-nav {
+    min-height: max-content;
+    flex: 1 0 auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-evenly;
+    gap: 4px;
+    padding: 4px 0 8px;
+}
+
+    /* =============================================================
+ * 4. روابط القائمة
+ * ============================================================= */
+    .custom-sidebar-nav .nav-link,
+    .logout-wrapper .nav-link {
+        position: relative;
+        min-height: 48px;
+        padding: 11px 14px;
+        display: flex;
+        align-items: center;
+        color: #475569;
+        font-size: 0.98rem;
+        font-weight: 750;
+        line-height: 1.4;
+        text-decoration: none;
+        white-space: nowrap;
+        border: 1px solid transparent;
+        border-radius: 12px;
+        transition: color 0.25s ease, background-color 0.25s ease, border-color 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease;
+    }
+
+        .custom-sidebar-nav .nav-link i,
+        .logout-wrapper .nav-link i {
+            width: 28px;
+            flex: 0 0 28px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.24rem;
+            transition: color 0.25s ease, transform 0.25s ease;
+        }
+
+        .custom-sidebar-nav .nav-link.active {
+            color: #0089b5;
+            background: linear-gradient(90deg, rgba(0, 166, 218, 0.045), rgba(0, 166, 218, 0.12));
+            border-color: rgba(0, 166, 218, 0.10);
+            box-shadow: 0 8px 18px rgba(0, 166, 218, 0.07);
+        }
+
+[dir="rtl"] .custom-sidebar-nav .nav-link.active {
+    border-inline-start: 4px solid #00A6DA;
+    border-radius: 8px 0 0 8px;
+}
+
+[dir="ltr"] .custom-sidebar-nav .nav-link.active {
+    border-inline-start: 4px solid #00A6DA;
+    border-radius: 0 8px 8px 0;
+}
+
+.custom-sidebar-nav .nav-link.active i {
+    color: #00A6DA;
+    transform: scale(1.04);
+}
+
+.custom-sidebar-nav .nav-link:hover:not(.active) {
+    color: #05203C;
+    background: rgba(5, 32, 60, 0.035);
+    border-color: rgba(5, 32, 60, 0.045);
+    transform: translateX(-3px);
+}
+
+[dir="ltr"] .custom-sidebar-nav .nav-link:hover:not(.active) {
+    transform: translateX(3px);
+}
+
+/* =============================================================
+ * 5. تسجيل الخروج
+ * ============================================================= */
+.logout-wrapper {
+    background: transparent !important;
+}
+
+    .logout-wrapper .nav-link {
+        color: #dc3545 !important;
+        background: rgba(220, 53, 69, 0.055) !important;
+        border-color: rgba(220, 53, 69, 0.06);
+    }
+
+        .logout-wrapper .nav-link:hover {
+            color: #b42333 !important;
+            background: rgba(220, 53, 69, 0.11) !important;
+            border-color: rgba(220, 53, 69, 0.10);
+            transform: translateX(-3px);
+        }
+
+[dir="ltr"] .logout-wrapper .nav-link:hover {
+    transform: translateX(3px);
+}
+
+/* =============================================================
+ * 6. زر الطي
+ * ============================================================= */
+.sidebar-compact-toggle {
+    position: absolute;
+    inset-block-start: 25px;
+    inset-inline-end: -16px;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #05203C;
+    background: #ffffff;
+    border: 1px solid rgba(5, 32, 60, 0.10);
+    border-radius: 50%;
+    box-shadow: 0 6px 15px rgba(5, 32, 60, 0.12);
+    cursor: pointer;
+    z-index: 1000;
+    transition: color 0.25s ease, background-color 0.25s ease, border-color 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+    .sidebar-compact-toggle:hover {
+        color: #ffffff;
+        background: #00A6DA;
+        border-color: #00A6DA;
+        box-shadow: 0 8px 20px rgba(0, 166, 218, 0.28);
+        transform: scale(1.06);
+    }
+
+    .sidebar-compact-toggle:focus-visible {
+        outline: 3px solid rgba(0, 166, 218, 0.26);
+        outline-offset: 3px;
+    }
+
+.toggle-icon {
+    transition: transform 0.3s ease;
+}
+
+/* =============================================================
+ * 7. الوضع المدمج على الكمبيوتر
+ * ============================================================= */
+.customer-sidebar.sidebar-collapsed {
+    width: 90px;
+    flex-basis: 90px;
+    padding-inline: 10px;
+}
+
+    .customer-sidebar.sidebar-collapsed + .customer-main-content {
+        width: calc(100% - 90px);
+    }
+
+    .customer-sidebar.sidebar-collapsed .sidebar-header .nav-text,
+    .customer-sidebar.sidebar-collapsed .custom-sidebar-nav .nav-text,
+    .customer-sidebar.sidebar-collapsed .logout-wrapper .nav-text {
+        display: none !important;
+    }
+
+    .customer-sidebar.sidebar-collapsed .sidebar-header h4,
+    .customer-sidebar.sidebar-collapsed .custom-sidebar-nav .nav-link,
+    .customer-sidebar.sidebar-collapsed .logout-wrapper .nav-link {
+        justify-content: center !important;
+    }
+
+    .customer-sidebar.sidebar-collapsed .custom-sidebar-nav .nav-link,
+    .customer-sidebar.sidebar-collapsed .logout-wrapper .nav-link {
+        padding-inline: 0 !important;
+    }
+
+        .customer-sidebar.sidebar-collapsed .custom-sidebar-nav .nav-link i,
+        .customer-sidebar.sidebar-collapsed .logout-wrapper .nav-link i {
+            width: auto;
+            flex-basis: auto;
+            margin-inline: 0 !important;
+            font-size: 1.34rem !important;
+        }
+
+        .customer-sidebar.sidebar-collapsed .custom-sidebar-nav .nav-link.active {
+            border-inline-start: 0;
+            border-radius: 12px;
+        }
+
+    .customer-sidebar.sidebar-collapsed .sidebar-compact-toggle .toggle-icon {
+        transform: rotate(180deg);
+    }
+
+/* =============================================================
+ * 8. التابلت: شريط أيقونات ثابت
+ * ============================================================= */
+@media (min-width: 768px) and (max-width: 1199.98px) {
+    .customer-dashboard-layout {
+        min-height: calc(100vh - var(--customer-header-height, 85px));
+    }
+
+    .customer-sidebar,
+    .customer-sidebar.sidebar-collapsed {
+        width: 92px;
+        flex-basis: 92px;
+        padding: 16px 10px;
+    }
+
+        .customer-sidebar + .customer-main-content,
+        .customer-sidebar.sidebar-collapsed + .customer-main-content {
+            width: calc(100% - 92px);
+        }
+
+        .customer-sidebar .sidebar-header {
+            min-height: 44px;
+            margin-bottom: 8px !important;
+            padding-bottom: 10px !important;
+        }
+
+            .customer-sidebar .sidebar-header h4 {
+                justify-content: center !important;
+                font-size: 0 !important;
+            }
+
+                .customer-sidebar .sidebar-header h4 i {
+                    margin: 0 !important;
+                    font-size: 1.35rem !important;
+                }
+
+            .customer-sidebar .sidebar-header .nav-text,
+            .customer-sidebar .custom-sidebar-nav .nav-text,
+            .customer-sidebar .logout-wrapper .nav-text {
+                display: none !important;
+            }
+
+        .customer-sidebar .custom-sidebar-nav {
+            justify-content: space-evenly;
+            gap: 5px;
+        }
+
+            .customer-sidebar .custom-sidebar-nav .nav-link,
+            .customer-sidebar .logout-wrapper .nav-link {
+                min-height: 48px;
+                justify-content: center !important;
+                padding: 10px 0 !important;
+                border-radius: 12px !important;
+            }
+
+                .customer-sidebar .custom-sidebar-nav .nav-link i,
+                .customer-sidebar .logout-wrapper .nav-link i {
+                    width: auto;
+                    flex-basis: auto;
+                    margin: 0 !important;
+                    font-size: 1.30rem !important;
+                }
+
+                .customer-sidebar .custom-sidebar-nav .nav-link.active {
+                    border-inline-start: 0;
+                    border-radius: 12px !important;
+                    box-shadow: inset 0 0 0 1px rgba(0, 166, 218, 0.08);
+                }
+
+        .customer-sidebar .sidebar-compact-toggle {
+            display: none !important;
+        }
+}
+
+/* =============================================================
+ * 9. الهاتف: إلغاء القائمة الجانبية بالكامل
+ * ============================================================= */
+@media (max-width: 767.98px) {
+    .customer-dashboard-layout {
+        min-height: calc(100dvh - var(--customer-mobile-header-height, 72px));
+        margin-top: var(--customer-mobile-header-height, 72px);
+        display: block;
+    }
+
+    .customer-sidebar,
+    .customer-desktop-sidebar {
+        display: none !important;
+    }
+
+        .customer-main-content,
+        .customer-sidebar + .customer-main-content,
+        .customer-sidebar.sidebar-collapsed + .customer-main-content {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0;
+            margin: 0 !important;
+            padding-inline: 0 !important;
+            padding-bottom: 24px;
+            overflow-x: clip;
+            transform: none !important;
+        }
+
+            .customer-main-content > *,
+            .customer-main-content .container,
+            .customer-main-content .container-fluid {
+                max-width: 100%;
+                min-width: 0;
+            }
+}
+
+/* =============================================================
+ * 10. الوضع الليلي
+ * ============================================================= */
+body.dark-mode .customer-sidebar {
+    color: #e5e7eb;
+    background: rgba(30, 30, 45, 0.97);
+    border-inline-end-color: rgba(255, 255, 255, 0.05);
+    box-shadow: -5px 0 24px rgba(0, 0, 0, 0.20);
+}
+
+    body.dark-mode .customer-sidebar .sidebar-header {
+        border-bottom-color: rgba(255, 255, 255, 0.06) !important;
+    }
+
+        body.dark-mode .customer-sidebar .sidebar-header h4 {
+            color: #f8fafc !important;
+        }
+
+body.dark-mode .custom-sidebar-nav .nav-link {
+    color: #a8b3c3;
+}
+
+    body.dark-mode .custom-sidebar-nav .nav-link.active {
+        color: #67d6f4;
+        background: linear-gradient(90deg, rgba(0, 166, 218, 0.08), rgba(0, 166, 218, 0.16));
+        border-color: rgba(0, 166, 218, 0.12);
+        box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
+    }
+
+    body.dark-mode .custom-sidebar-nav .nav-link:hover:not(.active) {
+        color: #f8fafc;
+        background: rgba(255, 255, 255, 0.05);
+        border-color: rgba(255, 255, 255, 0.045);
+    }
+
+body.dark-mode .logout-wrapper {
+    border-top-color: rgba(255, 255, 255, 0.06) !important;
+    background: transparent !important;
+}
+
+    body.dark-mode .logout-wrapper .nav-link {
+        color: #ff8387 !important;
+        background: rgba(255, 90, 95, 0.08) !important;
+        border-color: rgba(255, 90, 95, 0.08);
+    }
+
+        body.dark-mode .logout-wrapper .nav-link:hover {
+            color: #ffadb0 !important;
+            background: rgba(255, 90, 95, 0.14) !important;
+        }
+
+body.dark-mode .sidebar-compact-toggle {
+    color: #f8fafc;
+    background: #2a2a3c;
+    border-color: rgba(255, 255, 255, 0.07);
+    box-shadow: 0 7px 18px rgba(0, 0, 0, 0.28);
+}
+
+    body.dark-mode .sidebar-compact-toggle:hover {
+        color: #ffffff;
+        background: #00A6DA;
+        border-color: #00A6DA;
+    }
+
+/* =============================================================
+ * 11. سهولة الوصول وتقليل الحركة
+ * ============================================================= */
+.custom-sidebar-nav .nav-link:focus-visible,
+.logout-wrapper .nav-link:focus-visible {
+    outline: 3px solid rgba(0, 166, 218, 0.25);
+    outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .customer-sidebar,
+    .customer-main-content,
+    .custom-sidebar-nav .nav-link,
+    .logout-wrapper .nav-link,
+    .sidebar-compact-toggle,
+    .toggle-icon {
+        transition: none !important;
+    }
+}
+
+
+/* =============================================================
+ * 12. حماية نهائية من الانزياح الأفقي داخل لوحة العميل
+ * ============================================================= */
+body.customer-dashboard-page .customer-dashboard-layout,
+body.customer-dashboard-page .customer-main-content {
+    max-width: 100%;
+    min-width: 0;
+}
+
+@media (max-width: 767.98px) {
+    body.customer-dashboard-page .customer-dashboard-layout,
+    body.customer-dashboard-page .customer-main-content {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin-inline: 0 !important;
+        inset-inline: auto !important;
+    }
+}

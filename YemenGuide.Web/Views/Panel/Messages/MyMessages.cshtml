@@ -1,0 +1,697 @@
+﻿@using System
+@using System.Collections.Generic
+@using System.Linq
+@using YemenGuide.Core.DTOs.Customer
+@model CustomerChatPageModel
+
+@functions {
+    private static string BookingStateLabel(string? state)
+    {
+        return (state ?? string.Empty).Trim().ToLowerInvariant() switch
+        {
+            "pending" => "بانتظار المراجعة",
+            "awaitingpayment" => "بانتظار الدفع",
+            "paymentreview" => "مراجعة إثبات الدفع",
+            "confirmed" => "مؤكد",
+            "active" => "نشط",
+            "completed" => "مكتمل",
+            "rejected" => "مرفوض",
+            "cancelled" => "ملغي",
+            "canceled" => "ملغي",
+            "expired" => "منتهي",
+            "noshow" => "عدم حضور",
+            _ => string.IsNullOrWhiteSpace(state) ? "غير محدد" : state.Trim()
+        };
+    }
+
+    private static string BookingStateClass(string? state)
+    {
+        string normalized = (state ?? string.Empty).Trim().ToLowerInvariant();
+
+        return normalized switch
+        {
+            "confirmed" or "active" or "completed" => "is-positive",
+            "pending" or "awaitingpayment" or "paymentreview" => "is-pending",
+            "rejected" or "cancelled" or "canceled" or "expired" or "noshow" => "is-negative",
+            _ => "is-neutral"
+        };
+    }
+
+    private static string FormatContactTime(DateTime? value)
+    {
+        if (!value.HasValue)
+            return string.Empty;
+
+        DateTime local = value.Value;
+        return local.Date == DateTime.Today
+            ? local.ToString("hh:mm tt").Replace("AM", "ص").Replace("PM", "م")
+            : local.Date == DateTime.Today.AddDays(-1)
+                ? "أمس"
+                : local.ToString("dd/MM");
+    }
+}
+
+@{
+    ViewData["Title"] = "المحادثات والرسائل";
+    ViewData["HideFooter"] = true;
+    Layout = "~/Views/Shared/_Layout.cshtml";
+
+    List<CustomerChatContactDto> contacts =
+        Model?.ChatContacts ?? new List<CustomerChatContactDto>();
+
+    int requestedPlaceId = Model?.RequestedPlaceId ?? 0;
+    int requestedOwnerId = Model?.RequestedOwnerId ?? 0;
+    int conversationsCount = contacts.Count(contact => contact.HasPreviousConversation);
+    int bookingPlacesCount = contacts.Count(contact => contact.HasBooking);
+    int unreadConversationsCount = contacts.Count(contact => contact.UnreadCount > 0);
+    int unreadMessagesCount = contacts.Sum(contact => contact.UnreadCount);
+}
+
+@section Styles {
+    <link rel="stylesheet"
+      href="~/css/customer/customer-sidebar.css"
+      asp-append-version="true" />
+
+    <link rel="stylesheet"
+      href="~/css/customer/customer-messages.css"
+      asp-append-version="true" />
+}
+
+    <div class="customer-dashboard-layout">
+        <partial name="~/Views/Shared/_CustomerSidebar.cshtml" />
+
+        <main class="customer-main-content customer-messages-page"
+          data-customer-messages
+          data-open-place-id="@requestedPlaceId"
+          data-open-owner-id="@requestedOwnerId"
+          data-get-messages-url="@Url.Action("GetChatMessages", "Messages")"
+          data-send-message-url="@Url.Action("SendMessage", "Messages")"
+          data-edit-message-url="@Url.Action("EditMessage", "Messages")"
+          data-delete-for-me-url="@Url.Action("DeleteMessageForMe", "Messages")"
+          data-delete-for-everyone-url="@Url.Action("DeleteMessageForEveryone", "Messages")"
+          data-clear-chat-url="@Url.Action("ClearChatForMe", "Messages")"
+          data-unread-count-url="@Url.Action("GetUnreadConversationCount", "Messages")"
+          data-place-details-url="@Url.Action("Details", "Places")"
+          data-booking-details-url="@Url.Action("BookingDetails", "Places")">
+
+            <span id="totalUnreadBadge"
+              class="d-none"
+              data-conversations-count="@contacts.Count"
+              data-unread-conversations-count="@unreadConversationsCount">
+                @(unreadMessagesCount > 0 ? unreadMessagesCount : contacts.Count)
+        </span>
+
+        <div class="owner-chat-shell"
+             id="customerChatShell"
+             data-customer-chat
+             data-mobile-view="contacts"
+             data-active-place-id="@requestedPlaceId"
+             data-chat-enabled="true">
+
+            <form id="customerChatAntiForgeryForm" class="d-none" aria-hidden="true">
+                @Html.AntiForgeryToken()
+            </form>
+
+            <div class="chat-container glass-morphism-card position-relative">
+                <div class="chat-workspace row g-0 h-100" id="chatWorkspace">
+
+                    <!-- =========================================================
+                         قائمة العملاء: الشاشة الأولى على الهاتف
+                         ========================================================= -->
+                    <aside class="chat-sidebar col-lg-4 col-md-5 border-end d-flex flex-column h-100"
+                           id="chatContactsPanel"
+                           aria-label="قائمة محادثات المنشآت">
+
+                        <header class="chat-sidebar-header">
+                            <div class="chat-sidebar-title-row">
+                                <div>
+                                    <span class="chat-sidebar-eyebrow">صندوق الرسائل</span>
+                                    <h2>المنشآت</h2>
+                                </div>
+
+                                <span class="chat-sidebar-total" title="إجمالي جهات التواصل">
+                                    @contacts.Count
+                                </span>
+                            </div>
+
+                            <label class="chat-search-box" for="chatSearchInput">
+                                <i class="bi bi-search" aria-hidden="true"></i>
+                                <input type="search"
+                                       id="chatSearchInput"
+                                       class="form-control glass-input"
+                                       placeholder="ابحث بالمنشأة أو المالك أو رقم الحجز..."
+                                       autocomplete="off" />
+                                <button type="button"
+                                        class="chat-search-clear"
+                                        id="clearChatSearchBtn"
+                                        aria-label="مسح البحث"
+                                        hidden>
+                                    <i class="bi bi-x-lg"></i>
+                                </button>
+                            </label>
+
+                            <div class="chat-filter-scroll" aria-label="تصفية جهات التواصل">
+                                <div class="filter-group" role="group">
+                                    <button type="button"
+                                            class="filter-btn active"
+                                            id="filterAllBtn"
+                                            data-chat-filter="all"
+                                            aria-pressed="true">
+                                        <i class="bi bi-people"></i>
+                                        الكل
+                                        <span>@contacts.Count</span>
+                                    </button>
+
+                                    <button type="button"
+                                            class="filter-btn"
+                                            id="filterUnreadBtn"
+                                            data-chat-filter="unread"
+                                            aria-pressed="false">
+                                        <i class="bi bi-chat-dots"></i>
+                                        غير المقروءة
+                                        <span id="unreadConversationsBadge"
+                                              class="unread-filter-count"
+                                              style="display:@(unreadConversationsCount > 0 ? "inline-grid" : "none")">
+                                            @unreadConversationsCount
+                                        </span>
+                                    </button>
+
+                                    <button type="button"
+                                            class="filter-btn"
+                                            id="filterBookingsBtn"
+                                            data-chat-filter="bookings"
+                                            aria-pressed="false">
+                                        <i class="bi bi-calendar2-check"></i>
+                                        حجوزاتي
+                                        <span>@bookingPlacesCount</span>
+                                    </button>
+
+                                    <button type="button"
+                                            class="filter-btn"
+                                            id="filterConversationsBtn"
+                                            data-chat-filter="conversations"
+                                            aria-pressed="false">
+                                        <i class="bi bi-chat-square-text"></i>
+                                        المحادثات
+                                        <span>@conversationsCount</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </header>
+
+                        <div class="chat-contact-list custom-scrollbar"
+                             id="chatContactList"
+                             role="list">
+
+                            @if (!contacts.Any())
+                            {
+                                <div class="chat-list-state" data-chat-list-state="empty">
+                                    <span class="chat-list-state__icon">
+                                        <i class="bi bi-chat-square-heart"></i>
+                                    </span>
+                                    <strong>لا توجد محادثات بعد</strong>
+                                    <p>ابدأ التواصل من صفحة المنشأة، أو افتح محادثة مرتبطة بأحد حجوزاتك.</p>
+                                </div>
+                            }
+                            else
+                            {
+                                foreach (CustomerChatContactDto contact in contacts)
+                                {
+                                    bool isUnavailable =
+                                    !contact.IsOwnerAccountActive ||
+                                    !contact.CanStartConversation;
+
+                                    string bookingLabel = BookingStateLabel(contact.LatestBookingState);
+                                    string bookingClass = BookingStateClass(contact.LatestBookingState);
+                                    string conversationDomKey = $"{contact.PlaceId}_{contact.OwnerId}";
+
+                                    <article class="chat-contact-card @(contact.UnreadCount > 0 ? "unread" : string.Empty) @(isUnavailable ? "is-unavailable" : string.Empty)"
+                                     role="listitem"
+                                     tabindex="@(isUnavailable ? -1 : 0)"
+                                     aria-label="فتح محادثة @contact.PlaceName مع @contact.OwnerName"
+                                     aria-disabled="@isUnavailable.ToString().ToLowerInvariant()"
+                                     data-id="@contact.OwnerId"
+                                     data-customer-id="@contact.OwnerId"
+                                     data-owner-id="@contact.OwnerId"
+                                     data-name="@contact.OwnerName"
+                                     data-profile="@(contact.ProfileImage ?? string.Empty)"
+                                     data-initial="@contact.InitialLetter"
+                                     data-place-id="@contact.PlaceId"
+                                     data-place-name="@contact.PlaceName"
+                                     data-place-image="@(contact.PlaceImage ?? string.Empty)"
+                                     data-place-details-url="@Url.Action("Details", "Places", new { id = contact.PlaceId })"
+                                     data-chat-enabled="@contact.IsChatEnabled.ToString().ToLowerInvariant()"
+                                     data-unread="@contact.UnreadCount"
+                                     data-last-time="@(contact.LastMessageTime?.ToString("O") ?? string.Empty)"
+                                     data-contact-source="@contact.ContactSource.ToLowerInvariant()"
+                                     data-has-conversation="@contact.HasPreviousConversation.ToString().ToLowerInvariant()"
+                                     data-has-booking="@contact.HasBooking.ToString().ToLowerInvariant()"
+                                     data-can-start="@contact.CanStartConversation.ToString().ToLowerInvariant()"
+                                     data-is-online="@contact.IsOnline.ToString().ToLowerInvariant()"
+                                     data-booking-id="@(contact.LatestBookingId?.ToString() ?? string.Empty)"
+                                     data-booking-state="@(contact.LatestBookingState ?? string.Empty)"
+                                     data-booking-start="@(contact.LatestBookingStartDate?.ToString("O") ?? string.Empty)"
+                                     data-booking-end="@(contact.LatestBookingEndDate?.ToString("O") ?? string.Empty)">
+
+                                        <button type="button"
+                                        class="chat-contact-avatar"
+                                        aria-label="عرض صورة @contact.OwnerName">
+                                            @if (!string.IsNullOrWhiteSpace(contact.ProfileImage))
+                                            {
+                                                <img src="@contact.ProfileImage"
+                                         alt="صورة @contact.OwnerName"
+                                         loading="lazy" />
+                                            }
+                                            else
+                                            {
+                                                <span>@contact.InitialLetter</span>
+                                            }
+
+                                            <span class="contact-presence @(contact.IsOnline ? "is-online" : "is-offline")"
+                                          title="@(contact.IsOnline ? "متصل الآن" : "غير متصل")"></span>
+                                        </button>
+
+                                        <div class="chat-contact-body">
+                                            <div class="chat-contact-line chat-contact-line--top">
+                                                <strong class="chat-contact-name">@contact.PlaceName</strong>
+                                                <time class="contact-time-text"
+                                              id="contactTime_@conversationDomKey"
+                                              datetime="@(contact.LastMessageTime?.ToString("O") ?? string.Empty)">
+                                                    @FormatContactTime(contact.LastMessageTime)
+                                                </time>
+                                            </div>
+
+                                            <div class="chat-contact-line chat-contact-line--message">
+                                                <p id="contactMsg_@conversationDomKey">
+                                                    @(string.IsNullOrWhiteSpace(contact.LastMessage)
+                                                        ? $"ابدأ المحادثة مع {contact.OwnerName}"
+                                                        : contact.LastMessage)
+                                                </p>
+
+                                                <span class="unread-badge"
+                                              aria-label="@contact.UnreadCount رسائل غير مقروءة"
+                                              style="display:@(contact.UnreadCount > 0 ? "inline-grid" : "none")">
+                                                    @contact.UnreadCount
+                                                </span>
+                                            </div>
+
+                                            <div class="chat-contact-meta">
+                                                <span class="contact-source-label" title="مالك المنشأة">
+                                                    <i class="bi bi-person-badge"></i>
+                                                    @contact.OwnerName
+                                                </span>
+
+                                                @if (contact.LatestBookingId.HasValue)
+                                                {
+                                                    <span class="contact-booking-number">
+                                                        <i class="bi bi-calendar2-check"></i>
+                                                        حجز #@contact.LatestBookingId
+                                                    </span>
+                                                    <span class="contact-booking-state @bookingClass">@bookingLabel</span>
+                                                }
+                                                else if (contact.HasPreviousConversation)
+                                                {
+                                                    <span class="contact-new-chat-label">
+                                                        <i class="bi bi-chat-square-text"></i>
+                                                        محادثة سابقة
+                                                    </span>
+                                                }
+                                            </div>
+                                        </div>
+                                    </article>
+                                }
+                            }
+
+                            <div class="chat-list-state d-none"
+                                 id="chatNoFilterResults"
+                                 data-chat-list-state="no-results">
+                                <span class="chat-list-state__icon">
+                                    <i class="bi bi-search"></i>
+                                </span>
+                                <strong>لا توجد نتائج مطابقة</strong>
+                                <p>جرّب تغيير كلمة البحث أو اختيار فلتر آخر.</p>
+                            </div>
+                        </div>
+                    </aside>
+
+                    <!-- =========================================================
+                         شاشة المحادثة: تظهر وحدها على الهاتف بعد اختيار المنشأة
+                         ========================================================= -->
+                    <section class="chat-main-area col-lg-8 col-md-7 d-flex flex-column h-100 position-relative"
+                             id="chatConversationPanel"
+                             aria-label="المحادثة الحالية">
+
+                        <header class="chat-window-header glass-header p-3 border-bottom d-flex justify-content-between align-items-center">
+                            <div class="chat-header-customer">
+                                <button type="button"
+                                        class="mobile-chat-back"
+                                        id="mobileChatBackBtn"
+                                        aria-label="العودة إلى قائمة المنشآت">
+                                    <i class="bi bi-arrow-right"></i>
+                                </button>
+
+                                <button type="button"
+                                        id="activeChatAvatar"
+                                        class="active-chat-avatar"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#avatarZoomModal"
+                                        data-type="text"
+                                        data-content=""
+                                        data-name=""
+                                        data-bg="#00A6DA"
+                                        aria-label="عرض صورة المالك"
+                                        aria-disabled="true">
+                                    <i class="bi bi-person"></i>
+                                </button>
+
+                                <div class="active-chat-identity">
+                                    <div class="active-chat-name-line">
+                                        <h3 id="activeChatName">اختر منشأة</h3>
+                                        <span class="active-chat-live-dot" id="activeChatLiveDot" hidden></span>
+                                    </div>
+                                    <p id="activeChatStatus">اختر منشأة من القائمة لبدء المراسلة</p>
+                                </div>
+                            </div>
+
+                            <div class="chat-header-actions">
+                                <button type="button"
+                                        class="chat-header-action disabled"
+                                        id="headerInfoBtn"
+                                        title="معلومات المنشأة والحجز"
+                                        aria-label="معلومات المنشأة والحجز"
+                                        aria-disabled="true">
+                                    <i class="bi bi-info-circle"></i>
+                                </button>
+
+                                <div class="dropdown">
+                                    <button type="button"
+                                            class="chat-header-action disabled"
+                                            id="headerMenuBtn"
+                                            data-bs-toggle="dropdown"
+                                            aria-expanded="false"
+                                            aria-label="إجراءات المحادثة"
+                                            aria-disabled="true">
+                                        <i class="bi bi-three-dots-vertical"></i>
+                                    </button>
+
+                                    <ul class="dropdown-menu chat-actions-menu shadow-lg border-0 rounded-4">
+                                        <li>
+                                            <a href="#"
+                                               class="dropdown-item disabled"
+                                               id="actionOpenPlace"
+                                               aria-disabled="true"
+                                               tabindex="-1">
+                                                <i class="bi bi-building-check"></i>
+                                                عرض صفحة المنشأة
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <button type="button"
+                                                    class="dropdown-item"
+                                                    id="actionClearChatForMe">
+                                                <i class="bi bi-eraser"></i>
+                                                مسح المحادثة من شاشتي
+                                            </button>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </header>
+
+                        <!-- معلومات آخر حجز للعميل داخل المنشأة المحددة. -->
+                        <div class="active-booking-bar d-none"
+                             id="activeBookingBar"
+                             data-booking-id="">
+                            <button type="button"
+                                    class="active-booking-summary"
+                                    id="activeBookingSummary"
+                                    aria-expanded="false"
+                                    aria-controls="activeBookingDetails">
+                                <span class="active-booking-icon">
+                                    <i class="bi bi-calendar2-check"></i>
+                                </span>
+                                <span class="active-booking-copy">
+                                    <strong id="activeBookingNumber">الحجز</strong>
+                                    <small id="activeBookingStatus">الحالة</small>
+                                </span>
+                                <span class="active-booking-date" id="activeBookingDate"></span>
+                                <i class="bi bi-chevron-down active-booking-chevron"></i>
+                            </button>
+
+                            <div class="active-booking-details"
+                                 id="activeBookingDetails"
+                                 hidden>
+                                <div>
+                                    <span>فترة الحجز</span>
+                                    <strong id="activeBookingDates">—</strong>
+                                </div>
+                                <button type="button"
+                                        class="active-booking-open"
+                                        id="openBookingDetailsBtn"
+                                        data-booking-id="">
+                                    عرض الحجز
+                                    <i class="bi bi-arrow-left"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="chat-messages-area custom-scrollbar"
+                             id="chatMessagesArea"
+                             aria-live="polite"
+                             aria-busy="false">
+
+                            <div class="chat-empty-state"
+                                 id="chatInitialState"
+                                 data-chat-empty-state>
+                                <span class="chat-empty-state__art" aria-hidden="true">
+                                    <i class="bi bi-chat-heart"></i>
+                                    <span></span>
+                                </span>
+
+                                <h3>تواصل مباشرة مع المنشآت</h3>
+                                <p>اختر منشأة من القائمة، وستظهر رسائلك وحجزك المرتبط بها في مساحة واحدة.</p>
+
+                                <div class="chat-welcome-hint">
+                                    <i class="bi bi-shield-check"></i>
+                                    <span>كل محادثة مرتبطة بمنشأة محددة حتى لا تختلط رسائل المالك نفسه بين منشآته.</span>
+                                </div>
+                            </div>
+
+                            <button type="button"
+                                    class="load-older-messages d-none"
+                                    id="loadOlderMessagesBtn">
+                                <i class="bi bi-clock-history"></i>
+                                تحميل رسائل أقدم
+                            </button>
+                        </div>
+
+                        <div id="chatSystemNotice"
+                             class="chat-system-notice"
+                             role="status"
+                             aria-live="polite"
+                             style="display:none;">
+                            <i class="bi bi-info-circle" aria-hidden="true"></i>
+                            <span id="systemNoticeText"></span>
+                        </div>
+
+                        <div class="chat-composer-stack" id="chatComposerStack">
+                            <div id="quickRepliesBar"
+                                 class="quick-replies-bar d-none"
+                                 aria-label="الردود السريعة">
+                                <span class="quick-replies-label">
+                                    <i class="bi bi-lightning-charge-fill"></i>
+                                    ردود سريعة
+                                </span>
+                                <div class="quick-replies-track custom-scrollbar"
+                                     id="quickRepliesTrack"></div>
+                            </div>
+
+                            <div id="replyBox" class="composer-context-card reply-preview-box d-none">
+                                <span class="composer-context-icon">
+                                    <i class="bi bi-reply-fill"></i>
+                                </span>
+                                <div class="composer-context-copy">
+                                    <strong id="replyToName"></strong>
+                                    <span id="replyToText"></span>
+                                </div>
+                                <button type="button"
+                                        id="cancelReplyBtn"
+                                        class="composer-context-close"
+                                        aria-label="إلغاء الرد">
+                                    <i class="bi bi-x-lg"></i>
+                                </button>
+                            </div>
+
+                            <div id="editBox" class="composer-context-card edit-preview-box d-none">
+                                <span class="composer-context-icon">
+                                    <i class="bi bi-pencil-fill"></i>
+                                </span>
+                                <div class="composer-context-copy">
+                                    <strong>تعديل الرسالة</strong>
+                                    <span id="editOriginalText"></span>
+                                </div>
+                                <button type="button"
+                                        id="cancelEditBtn"
+                                        class="composer-context-close"
+                                        aria-label="إلغاء التعديل">
+                                    <i class="bi bi-x-lg"></i>
+                                </button>
+                                <input type="hidden" id="editingMessageId" value="" />
+                            </div>
+
+                            <div id="attachmentsPreviewContainer"
+                                 class="attachments-preview custom-scrollbar d-flex d-none"
+                                 aria-label="الملفات الجاهزة للإرسال"></div>
+
+                            <div class="chat-input-area">
+                                <div class="chat-composer" id="chatComposer">
+                                    <div class="dropdown chat-tool-dropdown">
+                                        <button type="button"
+                                                class="chat-composer-tool emoji-btn"
+                                                id="emojiToggleBtn"
+                                                data-bs-toggle="dropdown"
+                                                data-bs-auto-close="outside"
+                                                aria-expanded="false"
+                                                aria-label="إضافة رمز تعبيري"
+                                                aria-disabled="true">
+                                            <i class="bi bi-emoji-smile"></i>
+                                        </button>
+
+                                        <div class="dropdown-menu emoji-panel border-0 shadow-lg p-0">
+                                            <div class="mobile-sheet-handle" aria-hidden="true"></div>
+                                            <div class="mobile-sheet-title">
+                                                <strong>الرموز التعبيرية</strong>
+                                                <button type="button"
+                                                        class="mobile-sheet-close"
+                                                        data-close-chat-sheet
+                                                        aria-label="إغلاق">
+                                                    <i class="bi bi-x-lg"></i>
+                                                </button>
+                                            </div>
+                                            <emoji-picker id="fullEmojiPicker" class="light"></emoji-picker>
+                                        </div>
+                                    </div>
+
+                                    <div class="dropdown dropup chat-tool-dropdown">
+                                        <button type="button"
+                                                class="chat-composer-tool attach-btn"
+                                                id="attachmentToggleBtn"
+                                                data-bs-toggle="dropdown"
+                                                aria-expanded="false"
+                                                aria-label="إرفاق ملفات"
+                                                aria-disabled="true">
+                                            <i class="bi bi-paperclip"></i>
+                                        </button>
+
+                                        <div class="dropdown-menu attachment-sheet shadow-lg border-0 rounded-4 p-2">
+                                            <div class="mobile-sheet-handle" aria-hidden="true"></div>
+                                            <div class="mobile-sheet-title">
+                                                <strong>إضافة مرفق</strong>
+                                                <button type="button"
+                                                        class="mobile-sheet-close"
+                                                        data-close-chat-sheet
+                                                        aria-label="إغلاق">
+                                                    <i class="bi bi-x-lg"></i>
+                                                </button>
+                                            </div>
+
+                                            <label class="attachment-option">
+                                                <span class="attachment-option__icon is-media">
+                                                    <i class="bi bi-image"></i>
+                                                </span>
+                                                <span>
+                                                    <strong>صور وفيديو</strong>
+                                                    <small>JPG، PNG، WEBP، MP4 والمزيد</small>
+                                                </span>
+                                                <input type="file"
+                                                       id="imageUploadInput"
+                                                       class="d-none"
+                                                       accept="image/*,video/*"
+                                                       multiple />
+                                            </label>
+
+                                            <label class="attachment-option">
+                                                <span class="attachment-option__icon is-file">
+                                                    <i class="bi bi-file-earmark-text"></i>
+                                                </span>
+                                                <span>
+                                                    <strong>مستندات وملفات</strong>
+                                                    <small>PDF، Word، Excel، ZIP وRAR</small>
+                                                </span>
+                                                <input type="file"
+                                                       id="fileUploadInput"
+                                                       class="d-none"
+                                                       accept=".pdf,.doc,.docx,.xls,.xlsx,.zip,.rar"
+                                                       multiple />
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <textarea id="chatMsgInput"
+                                              class="form-control custom-scrollbar"
+                                              rows="1"
+                                              maxlength="4000"
+                                              placeholder="اكتب رسالتك هنا..."
+                                              aria-label="نص الرسالة"
+                                              disabled></textarea>
+
+                                    <button type="button"
+                                            class="chat-send-button disabled"
+                                            id="sendBtn"
+                                            aria-label="إرسال الرسالة"
+                                            aria-disabled="true">
+                                        <span class="chat-send-spinner d-none" aria-hidden="true"></span>
+                                        <i class="bi bi-send-fill" id="sendBtnIcon"></i>
+                                    </button>
+                                </div>
+
+                                <div class="chat-composer-footnote">
+                                    <span id="chatComposerHint">
+                                        اضغط Enter للإرسال وShift + Enter لسطر جديد
+                                    </span>
+                                    <span id="chatCharacterCounter">0 / 4000</span>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+
+            <div class="chat-mobile-overlay" id="chatMobileSheetOverlay" hidden></div>
+        </div>
+
+        <!-- مودال صورة المالك -->
+        <div class="modal fade"
+             id="avatarZoomModal"
+             tabindex="-1"
+             aria-labelledby="modalZoomName"
+             aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered modal-sm">
+                <div class="modal-content chat-avatar-modal">
+                    <div class="modal-header border-0">
+                        <button type="button"
+                                class="btn-close"
+                                data-bs-dismiss="modal"
+                                aria-label="إغلاق"></button>
+                    </div>
+                    <div class="modal-body text-center">
+                        <div id="modalZoomContainer" class="modal-avatar-preview"></div>
+                        <h4 id="modalZoomName"></h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="~/lib/signalr/signalr.min.js"></script>
+
+    <script type="module"
+        src="https://cdn.jsdelivr.net/npm/emoji-picker-element@1.21.3/index.js"></script>
+    <script src="~/js/customer/customer-sidebar.js" asp-append-version="true"></script>
+    <script src="~/js/customer/customer-messages.js"
+        asp-append-version="true"></script>
+}

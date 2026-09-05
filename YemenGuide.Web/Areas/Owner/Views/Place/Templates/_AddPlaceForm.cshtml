@@ -1,0 +1,985 @@
+﻿@{
+    int systemId = ViewBag.BookingSystemId ?? 0;
+    int categoryId = ViewBag.SelectedCategoryId ?? 0;
+    string categoryName = ViewBag.CategoryName ?? "المنشأة";
+    bool isBookingSystem = systemId > 0;
+
+    // 🌟 استقبال بيانات المالك من الكنترولر للتعبئة التلقائية
+    string currentOwnerName = ViewBag.CurrentOwnerName ?? "";
+    string currentOwnerPhone = ViewBag.CurrentOwnerPhone ?? "";
+}
+
+
+<div class="place-wizard-workspace" data-wizard-system="@systemId">
+    <aside class="place-wizard-sidebar" aria-label="خطوات إضافة المنشأة">
+        <div class="place-wizard-sidebar__brand">
+            <span class="place-wizard-sidebar__brand-icon" aria-hidden="true">
+                <i class="bi bi-building-add"></i>
+            </span>
+            <div>
+                <span class="place-wizard-sidebar__eyebrow">مساحة إعداد المنشأة</span>
+                <h4 class="place-wizard-sidebar__title">@categoryName</h4>
+                <p class="place-wizard-sidebar__subtitle">أكمل البيانات خطوة بخطوة، ثم أرسلها للإدارة للمراجعة.</p>
+            </div>
+        </div>
+
+        <ol class="place-wizard-stepper" aria-label="مراحل النموذج">
+            <li class="place-wizard-stepper__item" data-step-target="step_owner">
+                <span class="place-wizard-stepper__marker" aria-hidden="true"><span>1</span><i class="bi bi-check-lg"></i></span>
+                <span class="place-wizard-stepper__copy">
+                    <strong>بيانات المسؤول</strong>
+                    <small>الاسم والصفة وأرقام التواصل</small>
+                </span>
+            </li>
+            <li class="place-wizard-stepper__item" data-step-target="step_general">
+                <span class="place-wizard-stepper__marker" aria-hidden="true"><span>2</span><i class="bi bi-check-lg"></i></span>
+                <span class="place-wizard-stepper__copy">
+                    <strong>البيانات والموقع</strong>
+                    <small>هوية المنشأة والصور والخريطة</small>
+                </span>
+            </li>
+
+            @if (systemId == 1)
+            {
+                <li class="place-wizard-stepper__item" data-step-target="step_rooms">
+                    <span class="place-wizard-stepper__marker" aria-hidden="true"><span>3</span><i class="bi bi-check-lg"></i></span>
+                    <span class="place-wizard-stepper__copy"><strong>أنواع الغرف</strong><small>الأنواع والأسعار والسعات</small></span>
+                </li>
+                <li class="place-wizard-stepper__item" data-step-target="step_suites">
+                    <span class="place-wizard-stepper__marker" aria-hidden="true"><span>4</span><i class="bi bi-check-lg"></i></span>
+                    <span class="place-wizard-stepper__copy"><strong>الأجنحة</strong><small>الأجنحة والغرف الداخلية</small></span>
+                </li>
+                <li class="place-wizard-stepper__item" data-step-target="step_floors">
+                    <span class="place-wizard-stepper__marker" aria-hidden="true"><span>5</span><i class="bi bi-check-lg"></i></span>
+                    <span class="place-wizard-stepper__copy"><strong>الطوابق والوحدات</strong><small>الأرقام وربط كل وحدة بنوعها</small></span>
+                </li>
+                <li class="place-wizard-stepper__item" data-step-target="step_facilities">
+                    <span class="place-wizard-stepper__marker" aria-hidden="true"><span>6</span><i class="bi bi-check-lg"></i></span>
+                    <span class="place-wizard-stepper__copy"><strong>المرافق والوحدات</strong><small>الخدمات والمزايا الإضافية</small></span>
+                </li>
+            }
+            else if (systemId == 2)
+            {
+                <li class="place-wizard-stepper__item" data-step-target="step_chalet_details">
+                    <span class="place-wizard-stepper__marker" aria-hidden="true"><span>3</span><i class="bi bi-check-lg"></i></span>
+                    <span class="place-wizard-stepper__copy"><strong>التفاصيل والباقات</strong><small>المبنى والأسعار والسعة</small></span>
+                </li>
+                <li class="place-wizard-stepper__item" data-step-target="step_chalet_facilities">
+                    <span class="place-wizard-stepper__marker" aria-hidden="true"><span>4</span><i class="bi bi-check-lg"></i></span>
+                    <span class="place-wizard-stepper__copy"><strong>الخدمات والمرافق</strong><small>الترفيه والتكييف والحوش</small></span>
+                </li>
+            }
+            else if (systemId == 3 || systemId == 4)
+            {
+                <li class="place-wizard-stepper__item" data-step-target="step_hall_details">
+                    <span class="place-wizard-stepper__marker" aria-hidden="true"><span>3</span><i class="bi bi-check-lg"></i></span>
+                    <span class="place-wizard-stepper__copy"><strong>القاعة والباقات</strong><small>السعة والمناسبات والأسعار</small></span>
+                </li>
+                <li class="place-wizard-stepper__item" data-step-target="step_hall_facilities">
+                    <span class="place-wizard-stepper__marker" aria-hidden="true"><span>4</span><i class="bi bi-check-lg"></i></span>
+                    <span class="place-wizard-stepper__copy"><strong>التجهيزات والمرافق</strong><small>التكييف والصوت والخدمات</small></span>
+                </li>
+            }
+            else
+            {
+                <li class="place-wizard-stepper__item" data-step-target="step_warnings">
+                    <span class="place-wizard-stepper__marker" aria-hidden="true"><span>3</span><i class="bi bi-check-lg"></i></span>
+                    <span class="place-wizard-stepper__copy"><strong>الإقرار والإرسال</strong><small>مراجعة شروط النشر والاعتماد</small></span>
+                </li>
+            }
+        </ol>
+
+        <div class="place-wizard-sidebar__assurance">
+            <span class="place-wizard-sidebar__assurance-icon" aria-hidden="true"><i class="bi bi-shield-check"></i></span>
+            <div><strong>إدخال آمن ومنظّم</strong><small>لن تُعرض المنشأة للعملاء قبل مراجعة الإدارة.</small></div>
+        </div>
+    </aside>
+
+    <main class="place-wizard-main">
+        <div class="place-wizard-mobile-steps" aria-label="خطوات النموذج على الهاتف">
+            <div class="place-wizard-mobile-steps__track">
+                <span class="place-wizard-mobile-step" data-step-target="step_owner"><b>1</b> المسؤول</span>
+                <span class="place-wizard-mobile-step" data-step-target="step_general"><b>2</b> البيانات</span>
+                @if (systemId == 1)
+                {
+                    <span class="place-wizard-mobile-step" data-step-target="step_rooms"><b>3</b> الغرف</span>
+                    <span class="place-wizard-mobile-step" data-step-target="step_suites"><b>4</b> الأجنحة</span>
+                    <span class="place-wizard-mobile-step" data-step-target="step_floors"><b>5</b> الطوابق</span>
+                    <span class="place-wizard-mobile-step" data-step-target="step_facilities"><b>6</b> المرافق</span>
+                }
+                else if (systemId == 2)
+                {
+                    <span class="place-wizard-mobile-step" data-step-target="step_chalet_details"><b>3</b> التفاصيل</span>
+                    <span class="place-wizard-mobile-step" data-step-target="step_chalet_facilities"><b>4</b> المرافق</span>
+                }
+                else if (systemId == 3 || systemId == 4)
+                {
+                    <span class="place-wizard-mobile-step" data-step-target="step_hall_details"><b>3</b> القاعة</span>
+                    <span class="place-wizard-mobile-step" data-step-target="step_hall_facilities"><b>4</b> التجهيزات</span>
+                }
+                else
+                {
+                    <span class="place-wizard-mobile-step" data-step-target="step_warnings"><b>3</b> الإقرار</span>
+                }
+            </div>
+        </div>
+
+        <header class="place-wizard-hero" aria-label="معلومات الخطوة الحالية">
+            <div class="place-wizard-hero__identity">
+                <span class="place-wizard-hero__icon" aria-hidden="true">
+                    <i class="bi bi-person-vcard" id="wizardCurrentStepIcon"></i>
+                </span>
+                <div class="place-wizard-hero__copy">
+                    <span class="place-wizard-hero__eyebrow" id="wizardStepCounter">الخطوة 1</span>
+                    <h4 class="place-wizard-hero__title" id="wizardCurrentStepLabel">بيانات مسؤول المنشأة</h4>
+                    <p class="place-wizard-hero__subtitle" id="wizardCurrentStepHint">أدخل بيانات الشخص المسؤول وأرقام التواصل المعتمدة.</p>
+                </div>
+            </div>
+
+            <div class="place-wizard-hero__progress-summary">
+                <span class="place-wizard-hero__progress-value" id="wizardProgressPercent">20%</span>
+                <span class="place-wizard-hero__progress-caption">نسبة الإنجاز</span>
+            </div>
+
+            <div class="progress place-wizard-progress__track" role="progressbar" aria-label="نسبة إكمال النموذج">
+                <div class="progress-bar place-wizard-progress__bar" id="formProgressBar" style="width: 15%;"></div>
+            </div>
+        </header>
+
+        <div class="place-wizard-content-scroll">
+            <form id="fullPlaceSurveyForm" class="place-wizard-form text-start" dir="rtl" enctype="multipart/form-data" novalidate>
+                <input type="hidden" name="CategoryId" value="@categoryId" />
+                <input type="hidden" id="selectedSystemId" value="@systemId" />
+
+                <!-- حاوية رسائل الخطأ -->
+                <div id="wizardErrorContainer" class="wizard-error alert alert-danger d-none fw-bold small mb-4 rounded-3 border-0 shadow-sm" role="alert"><i class="bi bi-exclamation-triangle-fill me-2"></i> <span id="wizardErrorText"></span></div>
+
+                <!-- ========================================================================= -->
+                <!-- 👑 الخطوة 1: معلومات المالك (مع التعبئة التلقائية وحقول الهاتف الدولية) -->
+                <!-- ========================================================================= -->
+                <div class="step-section wizard-step-card active" id="step_owner">
+                    <h6 class="form-section-title"><i class="bi bi-person-vcard"></i> بيانات مسؤول المنشأة</h6>
+                    <div class="row g-4">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small text-muted">اسم المالك / المسؤول <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white border-end-0"><i class="bi bi-person text-primary"></i></span>
+                                <input type="text" class="form-control vip-input border-start-0 ps-0" name="OwnerName" value="@currentOwnerName" placeholder="الاسم الرباعي" required>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small text-muted">المهنة أو الصفة الوظيفية <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white border-end-0"><i class="bi bi-briefcase text-primary"></i></span>
+                                <!-- 💡 تمت إزالة onchange من هنا ليعمل من الجافاسكريبت بشكل آمن -->
+                                <select class="form-select vip-input border-start-0 ps-0" id="ownerRoleSelect" name="OwnerRole" required onchange="window.toggleCustomRole(this)">
+                                    <option value="" disabled selected>-- يرجى اختيار صفتك --</option>
+                                    <option value="صاحب المنشأة">صاحب المنشأة (المالك الفعلي)</option>
+                                    <option value="المدير التنفيذي">المدير التنفيذي / الإدارة</option>
+                                    <option value="other">أخرى (تحديد يدوي)...</option>
+                                </select>
+
+                            </div>
+                            <!-- حقل الإدخال اليدوي يظهر فقط عند اختيار "أخرى" -->
+                            <input type="text" id="customOwnerRoleInput" class="form-control vip-input mt-2 d-none animate-fade-in" placeholder="اكتب صفتك الوظيفية هنا...">
+                            <input type="hidden" id="finalOwnerRole" name="FinalOwnerRole">
+                        </div>
+
+                        <!-- حقل رقم الهاتف للمالك (نفس بنية البروفايل) -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small text-muted">رقم هاتف المالك (شخصي) <span class="text-danger">*</span></label>
+                            <div class="premium-input-group-phone phone-wrapper-ltr" dir="ltr">
+                                <input type="tel" id="ownerPhoneDisplay" class="form-control phone-input-vip w-100" value="@currentOwnerPhone" required>
+                                <input type="hidden" name="OwnerPhone" id="ownerPhoneReal">
+                            </div>
+                            <span id="ownerPhoneMsg" class="small mt-1 text-end d-block fw-bold" dir="rtl"></span>
+                        </div>
+
+                        <!-- حقل رقم التواصل للمنشأة (نفس بنية البروفايل) -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small text-muted">رقم هاتف الحجوزات (المنشأة) <span class="text-danger">*</span></label>
+                            <div class="premium-input-group-phone phone-wrapper-ltr" dir="ltr">
+                                <input type="tel" id="contactPhoneDisplay" class="form-control phone-input-vip w-100" required>
+                                <input type="hidden" name="PhoneNumber" id="contactPhoneReal">
+                            </div>
+                            <span id="contactPhoneMsg" class="small mt-1 text-end d-block fw-bold" dir="rtl"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ========================================================================= -->
+                <!-- 🗺️ الخطوة 2: معلومات عامة والخريطة المزدوجة الذكية -->
+                <!-- ========================================================================= -->
+                <div class="step-section wizard-step-card" id="step_general">
+                    <h6 class="form-section-title"><i class="bi bi-info-square"></i> الهوية البصرية والموقع لـ @categoryName</h6>
+                    <div class="row g-4">
+                        <div class="col-md-8">
+                            <label class="form-label fw-bold small text-muted">الاسم التجاري للمنشأة <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control vip-input" name="Name" placeholder="مثال: فندق كورال عدن" required>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold small text-muted">المدينة الجغرافية <span class="text-danger">*</span></label>
+                            <select class="form-select vip-input" name="CityId" required>
+                                <option value="" disabled selected>اختر المدينة</option>
+                                @if (ViewBag.Cities != null)
+                                {
+                                    foreach (var city in ViewBag.Cities)
+                                    {
+                                        <option value="@city.CityId">@city.CityName</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+
+                        <!-- 🗺️ نظام الخريطة المزدوج VIP -->
+                        <div class="col-md-12 mt-4">
+                            <div class="vip-map-container">
+
+                                <!-- 1. البانر الإرشادي الأنيق (مع زر مخفي للتعليمات) -->
+                                <div class="alert map-instruction-banner p-3 mb-4 shadow-sm" style="background: linear-gradient(135deg, #f0fdfa 0%, #e0f2fe 100%); border-right: 4px solid #0284c7;">
+
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <h6 class="fw-black text-dark mb-0 d-flex align-items-center">
+                                            <i class="bi bi-geo-alt-fill fs-4 text-info me-2"></i> تحديد موقع المنشأة
+                                        </h6>
+                                        <button class="btn btn-sm btn-outline-primary rounded-pill fw-bold px-3 py-1" type="button" data-bs-toggle="collapse" data-bs-target="#googleMapHelp" aria-expanded="false">
+                                            <i class="bi bi-question-circle me-1"></i> تعليمات جوجل ماب
+                                        </button>
+                                    </div>
+
+                                    <p class="small text-muted mb-0 ms-4 ps-2">حرك الدبوس الأحمر على الخريطة، أو أدخل الإحداثيات يدوياً.</p>
+
+                                    <div class="collapse mt-3" id="googleMapHelp">
+                                        <div class="bg-white p-3 rounded-3 border">
+                                            <ol class="small text-muted mb-0 ps-3" style="line-height: 1.6;">
+                                                <li>افتح تطبيق (خرائط جوجل) وابحث عن موقع منشأتك.</li>
+                                                <li><strong>اضغط مطولاً</strong> على مكان المبنى حتى يظهر دبوس أحمر.</li>
+                                                <li>ستظهر أرقام (مثال: <span dir="ltr" class="badge bg-light text-dark border">15.3694, 44.1910</span>).</li>
+                                                <li>الرقم الأيسر هو <strong>خط العرض</strong>، والأيمن هو <strong>خط الطول</strong>.</li>
+                                            </ol>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- حقول الإدخال مع رسائل الخطأ المخصصة -->
+                                <div class="row g-3 mb-3">
+                                    <div class="col-md-6">
+                                        <label class="small fw-bold text-muted mb-1"><i class="bi bi-arrows-collapse text-primary me-1"></i> خط العرض (Latitude)</label>
+                                        <input type="text" id="add-lat-display" class="form-control vip-input text-center fw-bold shadow-sm" placeholder="مثال: 15.3694" dir="ltr">
+
+                                        <input type="hidden" id="add-lat" name="Latitude" required>
+
+                                        <div class="form-text small text-muted mt-1"><i class="bi bi-info-circle-fill text-info me-1"></i> في اليمن: يبدأ بـ (12 إلى 19)</div>
+
+                                        <div class="invalid-feedback fw-bold text-end" style="font-size: 0.85rem;">
+                                            <i class="bi bi-exclamation-circle-fill me-1"></i> عذراً، خط العرض المدخل خارج حدود الجمهورية اليمنية (12 إلى 19)!
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <label class="small fw-bold text-muted mb-1"><i class="bi bi-arrows-expand text-primary me-1"></i> خط الطول (Longitude)</label>
+                                        <input type="text" id="add-lng-display" class="form-control vip-input text-center fw-bold shadow-sm" placeholder="مثال: 44.1910" dir="ltr">
+
+                                        <input type="hidden" id="add-lng" name="Longitude" required>
+
+                                        <div class="form-text small text-muted mt-1"><i class="bi bi-info-circle-fill text-info me-1"></i> في اليمن: يبدأ بـ (41 إلى 55)</div>
+
+                                        <div class="invalid-feedback fw-bold text-end" style="font-size: 0.85rem;">
+                                            <i class="bi bi-exclamation-circle-fill me-1"></i> عذراً، خط الطول المدخل خارج حدود الجمهورية اليمنية (41 إلى 55)!
+                                        </div>
+                                    </div>
+
+                                </div>
+
+
+                                <div id="addWizardMap" class="shadow-sm" style="height: 320px; width: 100%; border-radius: 12px; border: 2px solid #eef2f6; overflow: hidden;"></div>
+                                <div class="text-center mt-2">
+                                    <span id="mapSyncStatus" class="badge bg-success bg-opacity-10 text-success rounded-pill px-3 py-2 d-none animate-fade-in"><i class="bi bi-check-circle-fill me-1"></i> تمت مزامنة الإحداثيات بنجاح</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-12">
+                            <label class="form-label fw-bold small text-muted">الموقع بالتفصيل الوصفي <span class="text-danger">*</span></label>
+                            <textarea class="form-control vip-input" name="AddressDetail" rows="2" placeholder="مثال: شارع الستين، بجوار المستشفى الألماني..." required></textarea>
+                        </div>
+
+                        <div class="col-md-12">
+                            <label class="form-label fw-bold small text-muted">نبذة تسويقية عامة عن المنشأة (وصف جذاب)</label>
+                            <textarea class="form-control vip-input" name="Description" rows="3" placeholder="اكتب ما يميز منشأتك لتجذب العملاء..."></textarea>
+                        </div>
+
+                        <!-- صور المنشأة -->
+                        <div class="col-md-12 mt-4">
+                            <div class="p-4 bg-light rounded-4 border border-secondary border-opacity-10">
+                                <h6 class="fw-bold text-dark mb-3"><i class="bi bi-images text-primary me-2"></i> معرض الصور الاحترافي</h6>
+                                <div class="row g-4">
+                                    <div class="col-md-6">
+                                        <label class="form-label fw-bold text-primary small">صورة الغلاف الأساسية (الواجهة) <span class="text-danger">*</span></label>
+                                        <input type="file" name="CoverImageUpload" class="form-control vip-input bg-white" accept="image/*" required>
+                                        <small class="text-muted mt-1 d-block"><i class="bi bi-info-circle"></i> الواجهة الرئيسية للمنشأة في التطبيق.</small>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label fw-bold text-dark small">صور الألبوم الداخلية (اختياري)</label>
+                                        <input type="file" name="GalleryImages" class="form-control vip-input bg-white" multiple accept="image/*">
+                                        <small class="text-muted mt-2 d-block" style="line-height: 1.6;">
+                                            <i class="bi bi-info-circle text-primary"></i> حدد عدة صور معاً (كحد أقصى 10 ميجا).<br>
+                                            <i class="bi bi-lightbulb text-warning"></i> <b>تلميحة:</b> لرفع مجلد كامل، افتحه واضغط <code>Ctrl + A</code> لتحديد جميع الصور.
+                                        </small>
+                                    </div>
+
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ========================================================================= -->
+                <!-- 🏨 الخطوات الديناميكية بحسب نوع المنشأة (غرف، شاليهات، قاعات) -->
+                <!-- ========================================================================= -->
+                @if (systemId == 1) // 🏨 الفنادق
+                {
+                    <div class="step-section wizard-step-card wizard-special-step wizard-special-step--rooms" id="step_rooms">
+                        <h6 class="form-section-title"><i class="bi bi-door-open"></i> أنواع الغرف القابلة للحجز</h6>
+
+                        <div class="hotel-structure-editor" id="hotelRoomTypesEditor">
+                            <div class="hotel-editor-note">
+                                <i class="bi bi-info-circle-fill"></i>
+                                <div><strong>فعّل أنواع الغرف الموجودة في فندقك</strong><small>أدخل بيانات النوع مرة واحدة، ثم ستربط الغرف الفعلية بهذا النوع في خطوة الطوابق.</small></div>
+                            </div>
+                            <div id="hotelRoomTypesList" class="hotel-room-types-list" aria-live="polite"></div>
+
+                            <div class="hotel-custom-type-box">
+                                <div class="hotel-custom-type-box__copy">
+                                    <i class="bi bi-plus-square"></i>
+                                    <div><strong>نوع غرفة أخرى</strong><small>اكتب اسمها وسيتم إضافتها كسويتش بنفس حقول الغرف.</small></div>
+                                </div>
+                                <div class="hotel-custom-type-box__controls">
+                                    <input type="text" id="customHotelRoomTypeName" class="form-control vip-input" maxlength="50" placeholder="مثال: غرفة ديلوكس">
+                                    <button type="button" class="hotel-secondary-button" id="addCustomHotelRoomTypeBtn"><i class="bi bi-plus-lg"></i> إضافة غرفة أخرى</button>
+                                </div>
+                            </div>
+
+                            <div id="hotelRoomTypesEmpty" class="hotel-empty-state"><i class="bi bi-door-open"></i><strong>لم يتم اختيار غرف بعد</strong><span>فعّل نوع غرفة واحدًا على الأقل للمتابعة.</span></div>
+                        </div>
+
+                        @* الحقول القديمة لأنواع الغرف أوقفت نهائياً حتى لا تُرسل مع المحرر الجديد
+                    وتسبب تكراراً أو تعارضاً في Model Binding. *@
+                        @*
+                    <div class="form-check form-switch mb-2">
+                    <input class="form-check-input fs-5 shadow-sm" type="checkbox" name="HasSingleRoom" id="chkSingle" value="true" onchange="document.getElementById('singleBox').style.display = this.checked ? 'block' : 'none';">
+                    <label class="form-check-label fw-bold ms-2 mt-1 text-primary">لدينا غرف مفردة</label>
+                    </div>
+                    <div class="unit-box mb-4" id="singleBox" style="display: none;">
+                    <div class="row g-3">
+                    <div class="col-md-6"><label class="small fw-bold text-muted">الاسم/الرقم <span class="text-danger">*</span></label><input type="text" class="form-control vip-input req-single" name="SingleRoomName" placeholder="مثال: غرفة 101"></div>
+                    <div class="col-md-6"><label class="small fw-bold text-muted">العدد المتاح <span class="text-danger">*</span></label><input type="number" class="form-control vip-input req-single" name="SingleRoomQty" min="0"></div>
+                    <div class="col-md-4"><label class="small fw-bold text-muted">السعر لليلة <span class="text-danger">*</span></label><input type="number" class="form-control vip-input req-single" name="SingleRoomPrice" min="0"></div>
+                    <div class="col-md-4"><label class="small fw-bold text-muted">المساحة</label><input type="text" class="form-control vip-input" name="SingleRoomArea" placeholder="متر مربع"></div>
+                    <div class="col-md-4"><label class="small fw-bold text-muted">تتسع لـ (أشخاص) <span class="text-danger">*</span></label><input type="number" class="form-control vip-input req-single" name="SingleRoomMaxPersons" min="0"></div>
+                    <div class="col-md-12"><label class="small fw-bold text-muted">صور الغرفة (اختياري)</label><input type="file" class="form-control vip-input image-upload" name="SingleRoomImage" accept="image/*" multiple></div>
+                    <div class="col-12">
+                    <label class="small fw-bold text-muted mb-1">مواصفات إضافية (اضغط Enter للإضافة)</label>
+                    <div class="input-group">
+                    <input type="text" class="form-control vip-input bg-white" name="CustomAmenities" placeholder="إطلالة بحرية، بلكونة..." onkeypress="if(event.key === 'Enter') { event.preventDefault(); addDynamicTag(this.nextElementSibling); }">
+                    <button class="btn btn-primary" type="button" onclick="addDynamicTag(this)"><i class="bi bi-plus-lg"></i></button>
+                    </div>
+                    </div>
+                    </div>
+                    </div>
+
+                    <div class="form-check form-switch mb-2">
+                    <input class="form-check-input fs-5 shadow-sm" type="checkbox" name="HasDoubleRoom" id="chkDouble" value="true" onchange="document.getElementById('doubleBox').style.display = this.checked ? 'block' : 'none';">
+                    <label class="form-check-label fw-bold ms-2 mt-1 text-primary">لدينا غرف مزدوجة</label>
+                    </div>
+                    <div class="unit-box mb-4" id="doubleBox" style="display: none;">
+                    <div class="row g-3">
+                    <div class="col-md-6"><label class="small fw-bold text-muted">الاسم/الرقم <span class="text-danger">*</span></label><input type="text" class="form-control vip-input req-double" name="DoubleRoomName" placeholder="مثال: مزدوجة ديلوكس"></div>
+                    <div class="col-md-6"><label class="small fw-bold text-muted">العدد المتاح <span class="text-danger">*</span></label><input type="number" class="form-control vip-input req-double" name="DoubleRoomQty" min="0"></div>
+                    <div class="col-md-4"><label class="small fw-bold text-muted">السعر لليلة <span class="text-danger">*</span></label><input type="number" class="form-control vip-input req-double" name="DoubleRoomPrice" min="0"></div>
+                    <div class="col-md-4"><label class="small fw-bold text-muted">المساحة</label><input type="text" class="form-control vip-input" name="DoubleRoomArea"></div>
+                    <div class="col-md-4"><label class="small fw-bold text-muted">تتسع لـ (أشخاص) <span class="text-danger">*</span></label><input type="number" class="form-control vip-input req-double" name="DoubleRoomMaxPersons" min="0"></div>
+                    <div class="col-md-12"><label class="small fw-bold text-muted">صور الغرفة (اختياري)</label><input type="file" class="form-control vip-input image-upload" name="DoubleRoomImage" accept="image/*" multiple></div>
+                    <div class="col-12">
+                    <label class="small fw-bold text-muted mb-1">مواصفات إضافية</label>
+                    <div class="input-group">
+                    <input type="text" class="form-control vip-input bg-white" name="CustomAmenities" placeholder="إطلالة بحرية، بلكونة..." onkeypress="if(event.key === 'Enter') { event.preventDefault(); addDynamicTag(this.nextElementSibling); }">
+                    <button class="btn btn-primary" type="button" onclick="addDynamicTag(this)"><i class="bi bi-plus-lg"></i></button>
+                    </div>
+                    </div>
+                    </div>
+                    </div>
+
+                    <div class="form-check form-switch mb-2">
+                    <input class="form-check-input fs-5 shadow-sm" type="checkbox" name="HasTwinRoom" id="chkTwin" value="true" onchange="document.getElementById('twinDetails').classList.toggle('d-none', !this.checked)">
+                    <label class="form-check-label fw-bold ms-2 mt-1 text-primary">لدينا غرف توأم</label>
+                    </div>
+                    <div id="twinDetails" class="d-none unit-box mb-4">
+                    <div class="row g-3">
+                    <div class="col-md-6"><label class="small fw-bold text-muted">الاسم/الرقم</label><input type="text" name="TwinRoomName" class="form-control vip-input" placeholder="اسم الغرفة"></div>
+                    <div class="col-md-6"><label class="small fw-bold text-muted">العدد المتاح <span class="text-danger">*</span></label><input type="number" name="TwinRoomQty" class="form-control vip-input req-twin" placeholder="العدد المتاح"></div>
+                    <div class="col-md-4"><label class="small fw-bold text-muted">السعر لليلة <span class="text-danger">*</span></label><input type="number" name="TwinRoomPrice" class="form-control vip-input req-twin" placeholder="السعر (ريال)"></div>
+                    <div class="col-md-4"><label class="small fw-bold text-muted">المساحة</label><input type="text" name="TwinRoomArea" class="form-control vip-input req-twin" placeholder="المساحة"></div>
+                    <div class="col-md-4"><label class="small fw-bold text-muted">تتسع لـ <span class="text-danger">*</span></label><input type="number" name="TwinRoomMaxPersons" class="form-control vip-input req-twin" placeholder="أشخاص"></div>
+                    <div class="col-md-12"><label class="small fw-bold text-muted">صور الغرفة (اختياري)</label><input type="file" class="form-control vip-input image-upload" name="DoubleRoomImage" accept="image/*" multiple></div>
+                    </div>
+                    </div>
+
+                    <div class="form-check form-switch mb-2">
+                    <input class="form-check-input fs-5 shadow-sm" type="checkbox" name="HasTripleRoom" id="chkTriple" value="true" onchange="document.getElementById('tripleDetails').classList.toggle('d-none', !this.checked)">
+                    <label class="form-check-label fw-bold ms-2 mt-1 text-primary">لدينا غرف ثلاثية</label>
+                    </div>
+                    <div id="tripleDetails" class="d-none unit-box mb-4">
+                    <div class="row g-3">
+                    <div class="col-md-6"><label class="small fw-bold text-muted">الاسم/الرقم</label><input type="text" name="TripleRoomName" class="form-control vip-input" placeholder="اسم الغرفة"></div>
+                    <div class="col-md-6"><label class="small fw-bold text-muted">العدد المتاح <span class="text-danger">*</span></label><input type="number" name="TripleRoomQty" class="form-control vip-input req-triple" placeholder="العدد المتاح"></div>
+                    <div class="col-md-4"><label class="small fw-bold text-muted">السعر لليلة <span class="text-danger">*</span></label><input type="number" name="TripleRoomPrice" class="form-control vip-input req-triple" placeholder="السعر (ريال)"></div>
+                    <div class="col-md-4"><label class="small fw-bold text-muted">المساحة</label><input type="text" name="TripleRoomArea" class="form-control vip-input req-triple" placeholder="المساحة"></div>
+                    <div class="col-md-4"><label class="small fw-bold text-muted">تتسع لـ <span class="text-danger">*</span></label><input type="number" name="TripleRoomMaxPersons" class="form-control vip-input req-triple" placeholder="أشخاص"></div>
+                    <div class="col-md-12"><label class="small fw-bold text-muted">صور الغرفة (اختياري)</label><input type="file" class="form-control vip-input image-upload" name="DoubleRoomImage" accept="image/*" multiple></div>
+                    </div>
+                    </div>
+
+                    <div class="form-check form-switch mb-2">
+                    <input class="form-check-input fs-5 shadow-sm" type="checkbox" name="HasStudio" id="chkStudio" value="true" onchange="document.getElementById('studioDetails').classList.toggle('d-none', !this.checked)">
+                    <label class="form-check-label fw-bold ms-2 mt-1 text-primary">لدينا استوديو</label>
+                    </div>
+                    <div id="studioDetails" class="d-none unit-box mb-4">
+                    <div class="row g-3">
+                    <div class="col-md-6"><label class="small fw-bold text-muted">الاسم/الرقم</label><input type="text" name="StudioName" class="form-control vip-input" placeholder="اسم الاستوديو"></div>
+                    <div class="col-md-6"><label class="small fw-bold text-muted">العدد المتاح <span class="text-danger">*</span></label><input type="number" name="StudioQty" class="form-control vip-input req-studio" placeholder="العدد المتاح"></div>
+                    <div class="col-md-4"><label class="small fw-bold text-muted">السعر لليلة <span class="text-danger">*</span></label><input type="number" name="StudioPrice" class="form-control vip-input req-studio" placeholder="السعر (ريال)"></div>
+                    <div class="col-md-4"><label class="small fw-bold text-muted">المساحة</label><input type="text" name="StudioArea" class="form-control vip-input req-studio" placeholder="المساحة"></div>
+                    <div class="col-md-4"><label class="small fw-bold text-muted">تتسع لـ <span class="text-danger">*</span></label><input type="number" name="StudioMaxPersons" class="form-control vip-input req-studio" placeholder="أشخاص"></div>
+                    <div class="col-md-12"><label class="small fw-bold text-muted">صور (اختياري)</label><input type="file" class="form-control vip-input image-upload" name="DoubleRoomImage" accept="image/*" multiple></div>
+                    </div>
+                    </div>
+                    *@
+                    </div>
+
+                    <div class="step-section wizard-step-card wizard-special-step wizard-special-step--suites" id="step_suites">
+                        <h6 class="form-section-title"><i class="bi bi-gem"></i> الأجنحة الفندقية <small>(اختياري)</small></h6>
+
+                        <div class="hotel-structure-editor" id="hotelSuiteTypesEditor">
+                            <div class="hotel-editor-note">
+                                <i class="bi bi-info-circle-fill"></i>
+                                <div><strong>أضف الأجنحة الموجودة في فندقك فقط</strong><small>لكل جناح اسم وعدد غرف داخلية مستقل. يمكنك تجاوز هذه الخطوة إذا لم يكن الفندق يحتوي على أجنحة.</small></div>
+                            </div>
+
+                            <div id="hotelSuiteTypesList" class="hotel-room-types-list" aria-live="polite"></div>
+
+                            <div class="hotel-custom-type-box">
+                                <div class="hotel-custom-type-box__copy">
+                                    <i class="bi bi-gem"></i>
+                                    <div><strong>جناح آخر غير موجود؟</strong><small>اكتب اسمه وسيتم إضافته كسويتش بنفس حقول الأجنحة.</small></div>
+                                </div>
+                                <div class="hotel-custom-type-box__controls">
+                                    <input type="text" id="customHotelSuiteTypeName" class="form-control vip-input" maxlength="50" placeholder="مثال: جناح شهر العسل">
+                                    <button type="button" class="hotel-secondary-button" id="addCustomHotelSuiteTypeBtn"><i class="bi bi-plus-lg"></i> إضافة جناح آخر</button>
+                                </div>
+                            </div>
+
+                            <div id="hotelSuiteTypesEmpty" class="hotel-empty-state">
+                                <i class="bi bi-gem"></i>
+                                <strong>لا توجد أجنحة مفعلة</strong>
+                                <span>هذه الخطوة اختيارية، ويمكنك المتابعة مباشرة إلى الطوابق.</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="step-section wizard-step-card wizard-special-step wizard-special-step--floors" id="step_floors" style="overflow: visible;">
+                        <h6 class="form-section-title"><i class="bi bi-building"></i> الطوابق والوحدات الفعلية</h6>
+                        <div class="hotel-structure-editor" id="hotelFloorsEditor">
+                            <div class="hotel-editor-note">
+                                <i class="bi bi-hash"></i>
+                                <div><strong>رقم قاعدة البيانات يُنشأ تلقائيًا</strong><small>هنا أدخل رقم الغرفة أو الجناح الذي يراه العميل مثل 1 أو 101 أو B01. يمكن إنشاء نطاق كامل ثم تعديل أي رقم يدويًا.</small></div>
+                            </div>
+                            <div class="hotel-floor-sticky-toolbar">
+                                <button type="button" class="hotel-action-button" id="addHotelFloorBtn"><i class="bi bi-layers"></i> إضافة طابق</button>
+                            </div>
+                            <div id="hotelFloorsList" class="hotel-floors-list"></div>
+                            <div id="hotelFloorsEmpty" class="hotel-empty-state"><i class="bi bi-buildings"></i><strong>لم تتم إضافة طوابق بعد</strong><span>أضف طابقًا واحدًا على الأقل وأنشئ وحداته.</span></div>
+                        </div>
+                    </div>
+
+                    @* نموذج الأجنحة القديم موقوف؛ الخطوة الجديدة أعلاه تستخدم نفس محرر الأنواع الحديث. *@
+                    @*
+                <div class="step-section wizard-step-card wizard-special-step wizard-special-step--suites legacy-hotel-step" id="legacy_step_suites">
+                <h6 class="form-section-title"><i class="bi bi-gem"></i> الأجنحة الملكية والخاصة (اختياري)</h6>
+
+                <div class="form-check form-switch mb-2">
+                <input class="form-check-input fs-5 shadow-sm" type="checkbox" name="HasRoyalSuite" id="chkRoyal" value="true" onchange="document.getElementById('royalBox').style.display = this.checked ? 'block' : 'none';">
+                <label class="form-check-label fw-bold ms-2 mt-1 text-warning">أجنحة ملكية (VIP)</label>
+                </div>
+                <div class="unit-box border-warning mb-4" id="royalBox" style="display: none; background: #fffcf5;">
+                <div class="row g-3">
+                <div class="col-md-6"><label class="small fw-bold text-muted">اسم الجناح <span class="text-danger">*</span></label><input type="text" class="form-control vip-input req-royal" name="RoyalSuiteName" placeholder="مثال: الجناح الملكي"></div>
+                <div class="col-md-6"><label class="small fw-bold text-muted">العدد المتاح <span class="text-danger">*</span></label><input type="number" class="form-control vip-input req-royal" name="RoyalSuiteQty" min="0"></div>
+                <div class="col-md-4"><label class="small fw-bold text-muted">عدد الغرف بداخلة <span class="text-danger">*</span></label><input type="number" class="form-control vip-input req-royal" name="RoyalSuiteRoomsCount" min="0"></div>
+                <div class="col-md-4"><label class="small fw-bold text-muted">السعر لليلة <span class="text-danger">*</span></label><input type="number" class="form-control vip-input req-royal" name="RoyalSuitePrice" min="0"></div>
+                <div class="col-md-4"><label class="small fw-bold text-muted">يتسع لـ <span class="text-danger">*</span></label><input type="number" class="form-control vip-input req-royal" name="RoyalSuiteMaxPersons" min="0"></div>
+                <div class="col-md-12"><label class="small fw-bold text-muted">المساحة</label><input type="text" class="form-control vip-input" name="RoyalSuiteArea"></div>
+                <div class="col-md-12"><label class="small fw-bold text-muted">صور الجناح (اختياري)</label><input type="file" class="form-control vip-input image-upload" name="RoyalSuiteImage" accept="image/*" multiple></div>
+                </div>
+                </div>
+
+                <div class="form-check form-switch mb-2">
+                <input class="form-check-input fs-5 shadow-sm" type="checkbox" name="HasFamilySuite" id="chkFamily" value="true" onchange="document.getElementById('familyBox').style.display = this.checked ? 'block' : 'none';">
+                <label class="form-check-label fw-bold ms-2 mt-1 text-warning">أجنحة عائلية</label>
+                </div>
+                <div class="unit-box border-warning mb-4" id="familyBox" style="display: none; background: #fffcf5;">
+                <div class="row g-3">
+                <div class="col-md-6"><label class="small fw-bold text-muted">اسم الجناح <span class="text-danger">*</span></label><input type="text" class="form-control vip-input req-family" name="FamilySuiteName" placeholder="مثال: الجناح العائلي"></div>
+                <div class="col-md-6"><label class="small fw-bold text-muted">العدد المتاح <span class="text-danger">*</span></label><input type="number" class="form-control vip-input req-family" name="FamilySuiteQty" min="0"></div>
+                <div class="col-md-4"><label class="small fw-bold text-muted">عدد الغرف بداخلة <span class="text-danger">*</span></label><input type="number" class="form-control vip-input req-family" name="FamilySuiteRoomsCount" min="0"></div>
+                <div class="col-md-4"><label class="small fw-bold text-muted">السعر لليلة <span class="text-danger">*</span></label><input type="number" class="form-control vip-input req-family" name="FamilySuitePrice" min="0"></div>
+                <div class="col-md-4"><label class="small fw-bold text-muted">يتسع لـ <span class="text-danger">*</span></label><input type="number" class="form-control vip-input req-family" name="FamilySuiteMaxPersons" min="0"></div>
+                <div class="col-md-12"><label class="small fw-bold text-muted">المساحة</label><input type="text" class="form-control vip-input" name="FamilySuiteArea"></div>
+                <div class="col-md-12"><label class="small fw-bold text-muted">صور الجناح (اختياري)</label><input type="file" class="form-control vip-input image-upload" name="FamilySuiteImage" accept="image/*" multiple></div>
+                </div>
+                </div>
+
+                <div class="form-check form-switch mb-2">
+                <input class="form-check-input fs-5 shadow-sm" type="checkbox" id="chkExecutive" name="HasExecutiveSuite" value="true" onchange="document.getElementById('executiveDetails').classList.toggle('d-none', !this.checked)">
+                <label class="form-check-label fw-bold ms-2 mt-1 text-warning">أجنحة تنفيذية</label>
+                </div>
+                <div id="executiveDetails" class="d-none unit-box border-warning mb-4" style="background: #fffcf5;">
+                <div class="row g-3">
+                <div class="col-md-6"><label class="small fw-bold text-muted">اسم الجناح</label><input type="text" name="ExecutiveSuiteName" class="form-control vip-input" placeholder="مثال: جناح كبار الشخصيات"></div>
+                <div class="col-md-6"><label class="small fw-bold text-muted">العدد المتاح <span class="text-danger">*</span></label><input type="number" name="ExecutiveSuiteQty" class="form-control vip-input req-executive" placeholder="العدد المتاح"></div>
+                <div class="col-md-4"><label class="small fw-bold text-muted">السعر لليلة <span class="text-danger">*</span></label><input type="number" name="ExecutiveSuitePrice" class="form-control vip-input req-executive" placeholder="السعر (ريال)"></div>
+                <div class="col-md-4"><label class="small fw-bold text-muted">المساحة</label><input type="text" name="ExecutiveSuiteArea" class="form-control vip-input req-executive" placeholder="المساحة"></div>
+                <div class="col-md-4"><label class="small fw-bold text-muted">يتسع لـ <span class="text-danger">*</span></label><input type="number" name="ExecutiveSuiteMaxPersons" class="form-control vip-input req-executive" placeholder="أشخاص"></div>
+                <div class="col-md-12"><label class="small fw-bold text-muted">صور الجناح (اختياري)</label><input type="file" class="form-control vip-input image-upload" name="RoyalSuiteImage" accept="image/*" multiple></div>
+                </div>
+                </div>
+                </div>
+                *@
+
+                    <div class="step-section wizard-step-card wizard-special-step wizard-special-step--hotel-facilities" id="step_facilities">
+                        <h6 class="form-section-title"><i class="bi bi-stars"></i> المرافق ووسائل الراحة المتوفرة</h6>
+
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input fs-5 shadow-sm" type="checkbox" id="chkHotelChalet" name="HasHotelChalet" value="true" onchange="document.getElementById('hotelChaletDetails').classList.toggle('d-none', !this.checked)">
+                            <label class="form-check-label fw-bold ms-2 mt-1 text-info">شاليهات خاصة للإيجار</label>
+                        </div>
+                        <div id="hotelChaletDetails" class="d-none unit-box mb-4">
+                            <div class="row g-3">
+                                <div class="col-md-6"><label class="small fw-bold text-muted">العدد المتاح <span class="text-danger">*</span></label><input type="number" name="HotelChaletQty" class="form-control vip-input req-hchalet"></div>
+                                <div class="col-md-6"><label class="small fw-bold text-muted">السعر <span class="text-danger">*</span></label><input type="number" name="HotelChaletPrice" class="form-control vip-input req-hchalet"></div>
+                                <div class="col-md-6"><label class="small fw-bold text-muted">المساحة</label><input type="text" name="HotelChaletArea" class="form-control vip-input req-hchalet"></div>
+                                <div class="col-md-6"><label class="small fw-bold text-muted">تتسع لـ <span class="text-danger">*</span></label><input type="number" name="HotelChaletMaxPersons" class="form-control vip-input req-hchalet"></div>
+                            </div>
+                        </div>
+
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input fs-5 shadow-sm" type="checkbox" id="chkHotelHall" name="HasHotelHall" value="true" onchange="document.getElementById('hotelHallDetails').classList.toggle('d-none', !this.checked)">
+                            <label class="form-check-label fw-bold ms-2 mt-1 text-info">قاعات مؤتمرات/مناسبات</label>
+                        </div>
+                        <div id="hotelHallDetails" class="d-none unit-box mb-4">
+                            <div class="row g-3">
+                                <div class="col-md-6"><label class="small fw-bold text-muted">العدد المتاح <span class="text-danger">*</span></label><input type="number" name="HotelHallQty" class="form-control vip-input req-hhall"></div>
+                                <div class="col-md-6"><label class="small fw-bold text-muted">السعر <span class="text-danger">*</span></label><input type="number" name="HotelHallPrice" class="form-control vip-input req-hhall"></div>
+                                <div class="col-md-6"><label class="small fw-bold text-muted">المساحة</label><input type="text" name="HotelHallArea" class="form-control vip-input req-hhall"></div>
+                                <div class="col-md-6"><label class="small fw-bold text-muted">تتسع لـ <span class="text-danger">*</span></label><input type="number" name="HotelHallMaxPersons" class="form-control vip-input req-hhall"></div>
+                            </div>
+                        </div>
+
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input fs-5 shadow-sm" type="checkbox" id="chkTairamana" name="HasTairamana" value="true" onchange="document.getElementById('tairamanaDetails').classList.toggle('d-none', !this.checked)">
+                            <label class="form-check-label fw-bold ms-2 mt-1 text-info">طيرمانات/مجالس</label>
+                        </div>
+                        <div id="tairamanaDetails" class="d-none unit-box mb-4">
+                            <div class="row g-3">
+                                <div class="col-md-6"><label class="small fw-bold text-muted">العدد المتاح <span class="text-danger">*</span></label><input type="number" name="TairamanaQty" class="form-control vip-input req-tairamana"></div>
+                                <div class="col-md-6"><label class="small fw-bold text-muted">السعر <span class="text-danger">*</span></label><input type="number" name="TairamanaPrice" class="form-control vip-input req-tairamana"></div>
+                                <div class="col-md-6"><label class="small fw-bold text-muted">المساحة</label><input type="text" name="TairamanaArea" class="form-control vip-input req-tairamana"></div>
+                                <div class="col-md-6"><label class="small fw-bold text-muted">تتسع لـ <span class="text-danger">*</span></label><input type="number" name="TairamanaMaxPersons" class="form-control vip-input req-tairamana"></div>
+                            </div>
+                        </div>
+
+                        <div class="row g-3 px-2 mt-4 bg-light p-3 rounded-4 border">
+                            <div class="col-4"><div class="form-check custom-checkbox"><input class="form-check-input" type="checkbox" name="SelectedAmenities" value="مسبح كبار"><label class="small fw-bold text-dark">مسبح كبار</label></div></div>
+                            <div class="col-4"><div class="form-check custom-checkbox"><input class="form-check-input" type="checkbox" name="SelectedAmenities" value="مسبح أطفال"><label class="small fw-bold text-dark">مسبح أطفال</label></div></div>
+                            <div class="col-4"><div class="form-check custom-checkbox"><input class="form-check-input" type="checkbox" name="SelectedAmenities" value="جاكوزي"><label class="small fw-bold text-dark">جاكوزي</label></div></div>
+                            <div class="col-12 mt-3">
+                                <label class="small fw-bold text-muted mb-2">مرافق أخرى</label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control vip-input bg-white" name="CustomAmenities" placeholder="اكتب المرفق هنا واضغط الإضافة..." onkeypress="if(event.key === 'Enter') { event.preventDefault(); addDynamicTag(this.nextElementSibling); }">
+                                    <button class="btn btn-primary" type="button" onclick="addDynamicTag(this)"><i class="bi bi-plus-lg"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+
+                else if (systemId == 2) // 🌴 شاليهات ومزارع
+                {
+                    <div class="step-section wizard-step-card wizard-special-step wizard-special-step--chalet-details" id="step_chalet_details">
+                        <h6 class="form-section-title"><i class="bi bi-card-list"></i> تفاصيل ومرافق المبنى</h6>
+                        <div class="row g-4 mb-4">
+                            <div class="col-md-4"><label class="small fw-bold text-muted">عدد الغرف <span class="text-danger">*</span></label><input type="number" min="1" onkeypress="return event.charCode >= 48 && event.charCode <= 57" class="form-control vip-input text-center" name="RoomsCount" value="" required></div>
+                            <div class="col-md-4"><label class="small fw-bold text-muted">عدد الحمامات <span class="text-danger">*</span></label><input type="number" min="1" onkeypress="return event.charCode >= 48 && event.charCode <= 57" class="form-control vip-input text-center" name="BathroomsCount" value="" required></div>
+                            <div class="col-md-4"><label class="small fw-bold text-muted">عدد المطابخ <span class="text-danger">*</span></label><input type="number" min="1" onkeypress="return event.charCode >= 48 && event.charCode <= 57" class="form-control vip-input text-center" name="KitchensCount" value="" required></div>
+                            <div class="col-md-6"><label class="small fw-bold text-muted">عدد المجالس</label><input type="number" min="0" onkeypress="return event.charCode >= 48 && event.charCode <= 57" class="form-control vip-input text-center" name="MajlisCount" value=""></div>
+
+                            <div class="col-md-6"><label class="small fw-bold text-muted">عدد صالات الاستقبال</label><input type="number" min="0" onkeypress="return event.charCode >= 48 && event.charCode <= 57" class="form-control vip-input text-center" name="ReceptionHallsCount" value=""></div>
+                        </div>
+
+                        <div class="mt-4 p-3 border rounded-3 bg-white shadow-sm border-primary border-opacity-25">
+                            <h6 class="fw-bold text-primary mb-3"><i class="bi bi-tags-fill me-2"></i> باقات الحجز والأسعار <span class="text-danger">*</span></h6>
+                            <p class="small text-muted mb-3">يرجى تفعيل باقة واحدة على الأقل وإدخال سعرها.</p>
+
+                            <div class="mb-3 border-bottom pb-2">
+                                <div class="form-check form-switch mb-2">
+                                    <input class="form-check-input fs-5 shadow-sm" type="checkbox" id="chkMorning" onchange="document.getElementById('morning-fields').classList.toggle('d-none')">
+                                    <label class="form-check-label fw-bold mt-1 ms-2 text-dark" for="chkMorning">باقة صباحية (مثال: 9 صباحاً - 12 ظهراً)</label>
+                                </div>
+                                <div id="morning-fields" class="row g-2 d-none ps-4">
+                                    <div class="col-md-6"><input type="number" name="MorningPrice" class="form-control vip-input req-morning" placeholder="سعر الباقة (ريال)"></div>
+                                    <div class="col-md-6"><input type="number" name="MorningCapacity" class="form-control vip-input req-morning" placeholder="تتسع لكم شخص؟"></div>
+                                </div>
+                            </div>
+
+                            <div class="mb-3 border-bottom pb-2">
+                                <div class="form-check form-switch mb-2">
+                                    <input class="form-check-input fs-5 shadow-sm" type="checkbox" id="chkEvening" onchange="document.getElementById('evening-fields').classList.toggle('d-none')">
+                                    <label class="form-check-label fw-bold mt-1 ms-2 text-dark" for="chkEvening">باقة مسائية / مقيل (مثال: 2 عصراً - 10 ليلاً)</label>
+                                </div>
+                                <div id="evening-fields" class="row g-2 d-none ps-4">
+                                    <div class="col-md-6"><input type="number" name="EveningPrice" class="form-control vip-input req-evening" placeholder="سعر الباقة (ريال)"></div>
+                                    <div class="col-md-6"><input type="number" name="EveningCapacity" class="form-control vip-input req-evening" placeholder="تتسع لكم شخص؟"></div>
+                                </div>
+                            </div>
+
+                            <div class="mb-3 border-bottom pb-2">
+                                <div class="form-check form-switch mb-2">
+                                    <input class="form-check-input fs-5 shadow-sm" type="checkbox" id="chkNight" onchange="document.getElementById('night-fields').classList.toggle('d-none')">
+                                    <label class="form-check-label fw-bold mt-1 ms-2 text-dark" for="chkNight">باقة ليلية / سمرة (مثال: 6 مغرب - الصباح)</label>
+                                </div>
+                                <div id="night-fields" class="row g-2 d-none ps-4">
+                                    <div class="col-md-6"><input type="number" name="NightPrice" class="form-control vip-input req-night" placeholder="سعر الباقة (ريال)"></div>
+                                    <div class="col-md-6"><input type="number" name="NightCapacity" class="form-control vip-input req-night" placeholder="تتسع لكم شخص؟"></div>
+                                </div>
+                            </div>
+
+                            <div class="mb-2">
+                                <div class="form-check form-switch mb-2">
+                                    <input class="form-check-input fs-5 shadow-sm" type="checkbox" id="chkFullDay" onchange="document.getElementById('fullday-fields').classList.toggle('d-none')">
+                                    <label class="form-check-label fw-bold mt-1 ms-2 text-dark" for="chkFullDay">باقة يوم كامل</label>
+                                </div>
+                                <div id="fullday-fields" class="row g-2 d-none ps-4">
+                                    <div class="col-md-6"><input type="number" name="FullDayPrice" class="form-control vip-input req-fullday" placeholder="سعر يوم كامل (ريال)"></div>
+                                    <div class="col-md-6"><input type="number" name="FullDayCapacity" class="form-control vip-input req-fullday" placeholder="تتسع لكم شخص؟"></div>
+                                </div>
+                            </div>
+
+                            <!-- محرر الباقات المخصصة الديناميكي: يمكن إضافة أكثر من باقة -->
+                            <section class="custom-packages-builder"
+                                 data-custom-packages-builder
+                                 data-package-example="مثال: باقة عائلية">
+                                <div class="custom-packages-builder__head">
+                                    <div class="custom-packages-builder__title">
+                                        <span class="custom-packages-builder__icon"><i class="bi bi-stars"></i></span>
+                                        <div>
+                                            <strong>باقات أخرى مخصصة</strong>
+                                            <small>أضف أي عدد من الباقات، وسيكون لكل باقة اسمها ووقتها وسعرها وسعتها.</small>
+                                        </div>
+                                    </div>
+                                    <button type="button" class="custom-package-add-button" data-add-custom-package>
+                                        <i class="bi bi-plus-lg"></i>
+                                        إضافة باقة مخصصة
+                                    </button>
+                                </div>
+
+                                <div class="custom-packages-list" data-custom-packages-list aria-live="polite"></div>
+
+                                <div class="custom-packages-empty" data-custom-packages-empty>
+                                    <i class="bi bi-tags"></i>
+                                    <div>
+                                        <strong>لا توجد باقات مخصصة بعد</strong>
+                                        <span>استخدم زر «إضافة باقة مخصصة» إذا لم تناسبك الباقات الأساسية.</span>
+                                    </div>
+                                </div>
+                            </section>
+                        </div>
+                    </div>
+
+
+                    <!-- ✨ الخطوة 4: المرافق ووسائل الراحة -->
+                    <div class="step-section wizard-step-card wizard-special-step wizard-special-step--chalet-facilities" id="step_chalet_facilities">
+                        <h6 class="form-section-title"><i class="bi bi-stars"></i> وسائل الراحة والترفيه</h6>
+
+                        <div class="row g-4">
+                            <!-- 1. الترفيه -->
+                            <div class="col-md-6">
+                                <div class="unit-box h-100 mt-0">
+                                    <label class="small fw-bold text-primary mb-3 border-bottom pb-2 d-block"><i class="bi bi-controller me-1"></i> وسائل الترفيه والألعاب:</label>
+                                    <div class="row g-2 px-2">
+                                        <div class="col-6"><div class="form-check custom-checkbox"><input class="form-check-input" type="checkbox" name="ChaletEntertainment" value="مسبح كبار"><label class="small fw-bold">مسبح كبار</label></div></div>
+                                        <div class="col-6"><div class="form-check custom-checkbox"><input class="form-check-input" type="checkbox" name="ChaletEntertainment" value="ستيم"><label class="small fw-bold">ستيم</label></div></div>
+                                        <div class="col-6"><div class="form-check custom-checkbox"><input class="form-check-input" type="checkbox" name="ChaletEntertainment" value="مسبح اطفال"><label class="small fw-bold">مسبح اطفال</label></div></div>
+                                        <div class="col-6"><div class="form-check custom-checkbox"><input class="form-check-input" type="checkbox" name="ChaletEntertainment" value="جاكوزي"><label class="small fw-bold">جاكوزي</label></div></div>
+                                        <div class="col-6"><div class="form-check custom-checkbox"><input class="form-check-input" type="checkbox" name="ChaletEntertainment" value="ساونا"><label class="small fw-bold">ساونا</label></div></div>
+                                        <div class="col-6"><div class="form-check custom-checkbox"><input class="form-check-input" type="checkbox" name="ChaletEntertainment" value="سينما"><label class="small fw-bold">سينما</label></div></div>
+                                        <div class="col-12"><div class="form-check custom-checkbox"><input class="form-check-input" type="checkbox" name="ChaletEntertainment" value="نظام صوتيات (سماعات)"><label class="small fw-bold">نظام صوتيات (سماعات)</label></div></div>
+                                        <div class="col-6"><div class="form-check custom-checkbox"><input class="form-check-input" type="checkbox" name="ChaletEntertainment" value="شاشات"><label class="small fw-bold">شاشات</label></div></div>
+                                        <div class="col-6"><div class="form-check custom-checkbox"><input class="form-check-input" type="checkbox" name="ChaletEntertainment" value="بلياردو"><label class="small fw-bold">بلياردو</label></div></div>
+                                        <div class="col-6"><div class="form-check custom-checkbox"><input class="form-check-input" type="checkbox" name="ChaletEntertainment" value="شطرنج"><label class="small fw-bold">شطرنج</label></div></div>
+                                        <div class="col-6"><div class="form-check custom-checkbox"><input class="form-check-input" type="checkbox" name="ChaletEntertainment" value="تنس طاولة"><label class="small fw-bold">تنس طاولة</label></div></div>
+                                        <div class="col-6"><div class="form-check custom-checkbox"><input class="form-check-input" type="checkbox" name="ChaletEntertainment" value="لعبة جيم"><label class="small fw-bold">لعبة جيم</label></div></div>
+
+                                        <div class="col-12 mt-3 dynamic-field-container">
+                                            <div class="input-group input-group-sm mb-2">
+                                                <input type="text" class="form-control vip-input" name="CustomChaletEntertainment" placeholder="إضافة ترفيه آخر؟" onkeypress="if(event.key === 'Enter') { event.preventDefault(); addDynamicTag(this.nextElementSibling); }">
+                                                <button class="btn btn-primary shadow-none" type="button" onclick="addDynamicTag(this)"><i class="bi bi-plus-lg"></i></button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 2. الخدمات -->
+                            <div class="col-md-6">
+                                <div class="unit-box h-100 mt-0">
+                                    <label class="small fw-bold text-primary mb-3 border-bottom pb-2 d-block"><i class="bi bi-concierge-bell me-1"></i> الخدمات المجانية والمرافق:</label>
+                                    <div class="row g-2 px-2">
+                                        <div class="col-6"><div class="form-check custom-checkbox"><input class="form-check-input" type="checkbox" name="ChaletServices" value="انترنت مجاني"><label class="small fw-bold">انترنت مجاني</label></div></div>
+                                        <div class="col-6"><div class="form-check custom-checkbox"><input class="form-check-input" type="checkbox" name="ChaletServices" value="بقالة"><label class="small fw-bold">بقالة قريبة</label></div></div>
+                                        <div class="col-6"><div class="form-check custom-checkbox"><input class="form-check-input" type="checkbox" name="ChaletServices" value="كفتيريا"><label class="small fw-bold">كفتيريا</label></div></div>
+                                        <div class="col-12"><div class="form-check custom-checkbox"><input class="form-check-input" type="checkbox" name="ChaletServices" value="موقف سيارات داخلي"><label class="small fw-bold">موقف سيارات داخلي</label></div></div>
+                                        <div class="col-12"><div class="form-check custom-checkbox"><input class="form-check-input" type="checkbox" name="ChaletServices" value="نظافة كاملة بعد حجز"><label class="small fw-bold">نظافة كاملة</label></div></div>
+                                        <div class="col-12 mt-3 dynamic-field-container">
+                                            <div class="input-group input-group-sm mb-2">
+                                                <input type="text" class="form-control vip-input" name="CustomChaletServices" placeholder="إضافة خدمة أخرى؟" onkeypress="if(event.key === 'Enter') { event.preventDefault(); addDynamicTag(this.nextElementSibling); }">
+                                                <button class="btn btn-primary shadow-none" type="button" onclick="addDynamicTag(this)"><i class="bi bi-plus-lg"></i></button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 3. التدفئة والتبريد -->
+                            <div class="col-md-6">
+                                <div class="unit-box h-100 mt-0">
+                                    <label class="small fw-bold text-primary mb-3 border-bottom pb-2 d-block"><i class="bi bi-thermometer-half me-1"></i> التبريد والتدفئة:</label>
+                                    <div class="row g-2 px-2">
+                                        <div class="col-12"><div class="form-check custom-checkbox"><input class="form-check-input" type="checkbox" name="ChaletHVAC" value="مكيف مركزي"><label class="small fw-bold">مكيف مركزي</label></div></div>
+                                        <div class="col-12"><div class="form-check custom-checkbox"><input class="form-check-input" type="checkbox" name="ChaletHVAC" value="مكيف عادي"><label class="small fw-bold">مكيف عادي</label></div></div>
+                                        <div class="col-12"><div class="form-check custom-checkbox"><input class="form-check-input" type="checkbox" name="ChaletHVAC" value="مروحة سقف"><label class="small fw-bold">مروحة سقف</label></div></div>
+                                        <div class="col-12 mt-3 dynamic-field-container">
+                                            <div class="input-group input-group-sm mb-2">
+                                                <input type="text" class="form-control vip-input" name="CustomChaletHVAC" placeholder="أنظمة أخرى؟" onkeypress="if(event.key === 'Enter') { event.preventDefault(); addDynamicTag(this.nextElementSibling); }">
+                                                <button class="btn btn-primary shadow-none" type="button" onclick="addDynamicTag(this)"><i class="bi bi-plus-lg"></i></button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 4. الحوش -->
+                            <div class="col-md-6">
+                                <div class="unit-box h-100 mt-0">
+                                    <label class="small fw-bold text-primary mb-3 border-bottom pb-2 d-block"><i class="bi bi-tree me-1"></i> مرافق الحوش الخارجي:</label>
+                                    <div class="row g-2 px-2">
+                                        <div class="col-6"><div class="form-check custom-checkbox"><input class="form-check-input" type="checkbox" name="ChaletYard" value="حديقة خارجية"><label class="small fw-bold">حديقة خارجية</label></div></div>
+                                        <div class="col-6"><div class="form-check custom-checkbox"><input class="form-check-input" type="checkbox" name="ChaletYard" value="بلكونة"><label class="small fw-bold">بلكونة</label></div></div>
+                                        <div class="col-6"><div class="form-check custom-checkbox"><input class="form-check-input" type="checkbox" name="ChaletYard" value="شواية باربكيو"><label class="small fw-bold">شواية باربكيو</label></div></div>
+                                        <div class="col-6"><div class="form-check custom-checkbox"><input class="form-check-input" type="checkbox" name="ChaletYard" value="ملعب كرة قدم"><label class="small fw-bold">ملعب كرة قدم</label></div></div>
+                                        <div class="col-6"><div class="form-check custom-checkbox"><input class="form-check-input" type="checkbox" name="ChaletYard" value="ملعب كرة طائرة"><label class="small fw-bold">ملعب كرة طائرة</label></div></div>
+                                        <div class="col-6"><div class="form-check custom-checkbox"><input class="form-check-input" type="checkbox" name="ChaletYard" value="العاب اطفال"><label class="small fw-bold">العاب اطفال</label></div></div>
+                                        <div class="col-12 mt-3 dynamic-field-container">
+                                            <div class="input-group input-group-sm mb-2">
+                                                <input type="text" class="form-control vip-input" name="CustomChaletYard" placeholder="إضافة مرفق آخر؟" onkeypress="if(event.key === 'Enter') { event.preventDefault(); addDynamicTag(this.nextElementSibling); }">
+                                                <button class="btn btn-primary shadow-none" type="button" onclick="addDynamicTag(this)"><i class="bi bi-plus-lg"></i></button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+                else if (systemId == 3 || systemId == 4) // ✨ قاعات وصالات
+                {
+                    <div class="step-section wizard-step-card wizard-special-step wizard-special-step--hall-details" id="step_hall_details">
+                        <h6 class="form-section-title"><i class="bi bi-stars"></i> تفاصيل السعة والمساحة</h6>
+                        <div class="row g-4 mb-4">
+                            <div class="col-md-4"><label class="small fw-bold text-muted">مساحة القاعة <span class="text-danger">*</span></label><input type="text" class="form-control vip-input" name="HallArea" placeholder="مثال: 500 متر مربع" required></div>
+                            <div class="col-md-4"><label class="small fw-bold text-muted">السعة (الأشخاص) <span class="text-danger">*</span></label><input type="number" min="1" class="form-control vip-input" name="Capacity" required></div>
+                            <div class="col-md-4"><label class="small fw-bold text-muted">سعة الطاولات</label><input type="number" min="0" class="form-control vip-input" name="HallTablesCapacity"></div>
+                        </div>
+                        <div class="row g-4 mb-4">
+                            <div class="col-md-6">
+                                <div class="unit-box h-100 mt-0">
+                                    <label class="small fw-bold text-primary mb-3 border-bottom pb-2 d-block">المناسبات المسموحة والمخصصة:</label>
+                                    <div class="row g-2 px-2">
+                                        <div class="col-6"><div class="form-check custom-checkbox"><input class="form-check-input" type="checkbox" name="EventTypes" value="أعراس نساء"><label class="small fw-bold">أعراس نساء</label></div></div>
+                                        <div class="col-6"><div class="form-check custom-checkbox"><input class="form-check-input" type="checkbox" name="EventTypes" value="أعراس رجال"><label class="small fw-bold">أعراس رجال</label></div></div>
+                                        <div class="col-6"><div class="form-check custom-checkbox"><input class="form-check-input" type="checkbox" name="EventTypes" value="عزاء"><label class="small fw-bold">عزاء</label></div></div>
+                                        <div class="col-6"><div class="form-check custom-checkbox"><input class="form-check-input" type="checkbox" name="EventTypes" value="حفل تخرج"><label class="small fw-bold">حفل تخرج</label></div></div>
+                                        <div class="col-6"><div class="form-check custom-checkbox"><input class="form-check-input" type="checkbox" name="EventTypes" value="مناسبات شركات"><label class="small fw-bold">مناسبات شركات</label></div></div>
+                                        <div class="col-6"><div class="form-check custom-checkbox"><input class="form-check-input" type="checkbox" name="EventTypes" value="معارض"><label class="small fw-bold">معارض</label></div></div>
+                                        <div class="col-6"><div class="form-check custom-checkbox"><input class="form-check-input" type="checkbox" name="EventTypes" value="حفلات خاصة"><label class="small fw-bold">حفلات خاصة</label></div></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="unit-box h-100 mt-0">
+                                    <label class="small fw-bold text-primary mb-3 border-bottom pb-2 d-block">تجهيزات الجلوس والمقاعد:</label>
+                                    <div class="row g-3 px-2">
+                                        <div class="col-12"><div class="form-check custom-checkbox"><input class="form-check-input fs-5 mt-0" type="checkbox" name="SeatingTypes" value="مجالس"><label class="small fw-bold ms-2 mt-1">نظام مجالس عربية</label></div></div>
+                                        <div class="col-12"><div class="form-check custom-checkbox"><input class="form-check-input fs-5 mt-0" type="checkbox" name="SeatingTypes" value="طاولات وكراسي"><label class="small fw-bold ms-2 mt-1">طاولات ملكية مع كراسي</label></div></div>
+                                        <div class="col-12"><div class="form-check custom-checkbox"><input class="form-check-input fs-5 mt-0" type="checkbox" name="SeatingTypes" value="كراسي فقط"><label class="small fw-bold ms-2 mt-1">ترتيب مسرحي (كراسي فقط)</label></div></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-2 p-3 border rounded-3 bg-white shadow-sm border-primary border-opacity-25">
+                            <h6 class="fw-bold text-primary mb-3"><i class="bi bi-tags-fill me-2"></i> باقات الحجز والأسعار للقاعة <span class="text-danger">*</span></h6>
+                            <p class="small text-muted mb-3">يرجى تفعيل باقة واحدة على الأقل (صباحية، مسائية، إلخ).</p>
+
+                            <div class="mb-3 border-bottom pb-2">
+                                <div class="form-check form-switch mb-2">
+                                    <input class="form-check-input fs-5 shadow-sm" type="checkbox" id="chkMorning" onchange="document.getElementById('morning-fields-hall').classList.toggle('d-none')">
+                                    <label class="form-check-label fw-bold mt-1 ms-2 text-dark" for="chkMorning">باقة صباحية (مثال: 9 صباحاً - 1 ظهراً)</label>
+                                </div>
+                                <div id="morning-fields-hall" class="row g-2 d-none ps-4">
+                                    <div class="col-md-6"><input type="number" name="MorningPrice" class="form-control vip-input req-morning" placeholder="سعر الحجز الصباحي (ريال)"></div>
+                                    <div class="col-md-6"><input type="number" name="MorningCapacity" class="form-control vip-input req-morning" placeholder="العدد الأقصى للحضور"></div>
+                                </div>
+                            </div>
+
+                            <div class="mb-3 border-bottom pb-2">
+                                <div class="form-check form-switch mb-2">
+                                    <input class="form-check-input fs-5 shadow-sm" type="checkbox" id="chkEvening" onchange="document.getElementById('evening-fields-hall').classList.toggle('d-none')">
+                                    <label class="form-check-label fw-bold mt-1 ms-2 text-dark" for="chkEvening">باقة مسائية (مثال: 4 عصراً - 10 ليلاً)</label>
+                                </div>
+                                <div id="evening-fields-hall" class="row g-2 d-none ps-4">
+                                    <div class="col-md-6"><input type="number" name="EveningPrice" class="form-control vip-input req-evening" placeholder="سعر الحجز المسائي (ريال)"></div>
+                                    <div class="col-md-6"><input type="number" name="EveningCapacity" class="form-control vip-input req-evening" placeholder="العدد الأقصى للحضور"></div>
+                                </div>
+                            </div>
+                            <div class="mb-2">
+                                <div class="form-check form-switch mb-2">
+                                    <input class="form-check-input fs-5 shadow-sm" type="checkbox" id="chkNightHall" onchange="document.getElementById('night-fields-hall').classList.toggle('d-none')">
+                                    <label class="form-check-label fw-bold mt-1 ms-2 text-dark" for="chkNightHall">باقة سمرة / ليلية (مثال: 9 مساءً - 3 فجراً)</label>
+                                </div>
+                                <div id="night-fields-hall" class="row g-2 d-none ps-4">
+                                    <div class="col-md-6"><input type="number" name="NightPrice" class="form-control vip-input req-night" placeholder="سعر حجز السمرة (ريال)"></div>
+                                    <div class="col-md-6"><input type="number" name="NightCapacity" class="form-control vip-input req-night" placeholder="العدد الأقصى للحضور"></div>
+                                </div>
+                            </div>
+
+                            <!-- محرر الباقات المخصصة الديناميكي: يمكن إضافة أكثر من باقة -->
+                            <section class="custom-packages-builder"
+                                 data-custom-packages-builder
+                                 data-package-example="مثال: باقة مؤتمرات">
+                                <div class="custom-packages-builder__head">
+                                    <div class="custom-packages-builder__title">
+                                        <span class="custom-packages-builder__icon"><i class="bi bi-stars"></i></span>
+                                        <div>
+                                            <strong>باقات أخرى مخصصة</strong>
+                                            <small>أنشئ باقات إضافية للقاعة، وحدد وقت وسعر وسعة كل باقة بشكل مستقل.</small>
+                                        </div>
+                                    </div>
+                                    <button type="button" class="custom-package-add-button" data-add-custom-package>
+                                        <i class="bi bi-plus-lg"></i>
+                                        إضافة باقة مخصصة
+                                    </button>
+                                </div>
+
+                                <div class="custom-packages-list" data-custom-packages-list aria-live="polite"></div>
+
+                                <div class="custom-packages-empty" data-custom-packages-empty>
+                                    <i class="bi bi-tags"></i>
+                                    <div>
+                                        <strong>لا توجد باقات مخصصة بعد</strong>
+                                        <span>أضف باقة عندما تحتاج إلى وقت أو سعر مختلف عن الباقات الأساسية.</span>
+                                    </div>
+                                </div>
+                            </section>
+
+                        </div>
+                    </div>
+
+                    <div class="step-section wizard-step-card wizard-special-step wizard-special-step--hall-facilities" id="step_hall_facilities">
+                        <h6 class="form-section-title"><i class="bi bi-box-seam"></i> التجهيزات والمرافق المساندة</h6>
+                        <div class="row g-4">
+                            <div class="col-6 col-md-3"><label class="small fw-bold text-muted">دورات المياه</label><input type="number" min="0" class="form-control vip-input text-center" name="HallBathroomsCount"></div>
+                            <div class="col-6 col-md-3"><label class="small fw-bold text-muted">أجهزة التكييف</label><input type="number" min="0" class="form-control vip-input text-center" name="ACsCount"></div>
+                            <div class="col-6 col-md-3"><label class="small fw-bold text-muted">غرف التخزين</label><input type="number" min="0" class="form-control vip-input text-center" name="StorageRoomsCount"></div>
+                            <div class="col-6 col-md-3"><label class="small fw-bold text-muted">غرف التحضير</label><input type="number" min="0" class="form-control vip-input text-center" name="PrivateRoomsCount"></div>
+                            <div class="col-6 col-md-3"><label class="small fw-bold text-muted">المطابخ المركزية</label><input type="number" min="0" class="form-control vip-input text-center" name="KitchensCount"></div>
+                            <div class="col-6 col-md-3"><label class="small fw-bold text-muted">غرف الصلاة</label><input type="number" min="0" class="form-control vip-input text-center" name="PrayerRoomsCount"></div>
+                            <div class="col-6 col-md-3"><label class="small fw-bold text-muted">أنظمة الصوت</label><input type="number" min="0" class="form-control vip-input text-center" name="SpeakersCount"></div>
+                            <div class="col-6 col-md-3"><label class="small fw-bold text-muted">مواقف السيارات</label><input type="number" min="0" class="form-control vip-input text-center" name="ParkingCount"></div>
+
+                            <div class="col-12 mt-4 dynamic-field-container">
+                                <label class="small fw-bold text-muted mb-2">تجهيزات فريدة أخرى غير مذكورة؟</label>
+                                <div class="input-group mb-2">
+                                    <input type="text" class="form-control vip-input" name="CustomHallFacilities" placeholder="اكتب الميزة واضغط الإضافة..." onkeypress="if(event.key === 'Enter') { event.preventDefault(); addDynamicTag(this.nextElementSibling); }">
+                                    <button class="btn btn-primary shadow-none" type="button" onclick="addDynamicTag(this)"><i class="bi bi-plus-lg"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+                else // 🚫 منشآت عامة (مطاعم، معالم...) ليس فيها حجز
+                {
+                    <div class="step-section wizard-step-card wizard-special-step wizard-special-step--warnings" id="step_warnings">
+                        <h6 class="form-section-title"><i class="bi bi-exclamation-triangle-fill text-warning"></i> إرشادات وسياسات العرض</h6>
+                        <div class="alert border-0 p-4 shadow-sm rounded-4" style="background: #fffcf5; border-right: 4px solid #ffc107 !important;">
+                            <h6 class="fw-black text-dark"><i class="bi bi-shield-check text-warning me-2 fs-5"></i> ميثاق استخدام المنصة:</h6>
+                            <ul class="mb-4 mt-3 fw-bold small text-muted lh-lg">
+                                <li>تتعهد بإدخال بيانات صحيحة ومطابقة للواقع للحفاظ على مصداقية المنشأة.</li>
+                                <li>يُمنع استخدام المنصة لنشر محتوى غير لائق أو مخالف للقوانين والآداب العامة.</li>
+                                <li>إدارة المنصة غير مسؤولة عن أي تعاملات مالية مباشرة بينك وبين العملاء للمنشآت غير الداعمة لنظام الحجز.</li>
+                                <li>يحق لإدارة المنصة إيقاف أو حجب المنشأة في حال تلقي شكاوى متكررة من الزوار.</li>
+                            </ul>
+                            <div class="form-check">
+                                <input class="form-check-input fs-5" type="checkbox" id="agreeWarnings" required>
+                                <label class="form-check-label fw-bold mt-1 ms-2 text-dark" for="agreeWarnings">أقر بأنني اطلعت على الشروط وأوافق على الالتزام بها تماماً.</label>
+                            </div>
+                        </div>
+                    </div>
+                }
+
+            </form>
+        </div>
+
+        <!-- ========================================================================= -->
+        <!-- 🚀 شريط ثابت خارج منطقة التمرير -->
+        <!-- ========================================================================= -->
+        <div class="wizard-navigation" aria-label="التنقل بين خطوات النموذج">
+            <button type="button"
+                    class="btn wizard-navigation__button wizard-navigation__button--previous"
+                    id="btnPrevStep"
+                    style="display: none;">
+                <i class="bi bi-arrow-right" aria-hidden="true"></i>
+                <span>الخطوة السابقة</span>
+            </button>
+
+            <div class="wizard-navigation__spacer" aria-hidden="true"></div>
+
+            <button type="button"
+                    class="btn wizard-navigation__button wizard-navigation__button--next"
+                    id="btnNextStep">
+                <span>الاستمرار</span>
+                <i class="bi bi-arrow-left" aria-hidden="true"></i>
+            </button>
+
+            <button type="submit"
+                    class="btn wizard-navigation__button wizard-navigation__button--submit"
+                    id="btnSubmitForm"
+                    form="fullPlaceSurveyForm"
+                    style="display: none;">
+                <i class="bi bi-cloud-arrow-up-fill" aria-hidden="true"></i>
+                <span>رفع واعتماد البيانات</span>
+            </button>
+        </div>
+    </main>
+</div>

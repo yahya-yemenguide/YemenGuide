@@ -1,0 +1,4219 @@
+@using System.Security.Claims
+@using System.Linq
+@using System.Collections.Generic
+@model YemenGuide.Core.DTOs.Customer.PlaceDetailsViewModel
+
+@{
+    ViewData["Title"] = Model.Name;
+    ViewData["HideFooter"] = true;
+
+    string catName = Model.CategoryName ?? "";
+
+    var additionalServiceDisplayPriceTexts =
+        Model.AdditionalServiceDisplayPriceTexts ??
+        new Dictionary<int, string>();
+
+    var packageDisplayPriceTexts =
+        Model.PackageDisplayPriceTexts ??
+        new Dictionary<int, string>();
+
+    string GetServiceDisplayPriceText(int serviceId, decimal fallback)
+    {
+        return additionalServiceDisplayPriceTexts.TryGetValue(
+            serviceId,
+            out var value) &&
+            !string.IsNullOrWhiteSpace(value)
+                ? value
+                : $"{fallback:N0} ر.ي";
+    }
+
+    string GetPackageDisplayPriceText(int packageId, decimal fallback)
+    {
+        return packageDisplayPriceTexts.TryGetValue(
+            packageId,
+            out var value) &&
+            !string.IsNullOrWhiteSpace(value)
+                ? value
+                : $"{fallback:N0} ر.ي";
+    }
+
+    bool isHotel = Model.BookingSystemId == 1;
+    bool isPackageSystem = Model.BookingSystemId == 2;
+    bool isHall = Model.BookingSystemId == 3;
+    bool isBookingPlace = Model.RequiresBooking;
+
+    var currentUserIdClaim =
+        User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+    int currentUserId =
+        int.TryParse(
+            currentUserIdClaim,
+            out int parsedUserId
+        )
+            ? parsedUserId
+            : 0;
+
+    Func<DateTime, string> FormatInstagramTime =
+        (DateTime date) =>
+        {
+            var timeSpan = DateTime.Now - date;
+
+            if (timeSpan.TotalSeconds < 60)
+            {
+                return $"{Math.Max(1, (int)timeSpan.TotalSeconds)} ث";
+            }
+
+            if (timeSpan.TotalMinutes < 60)
+            {
+                return $"{(int)timeSpan.TotalMinutes} د";
+            }
+
+            if (timeSpan.TotalHours < 24)
+            {
+                return $"{(int)timeSpan.TotalHours} س";
+            }
+
+            if (timeSpan.TotalDays < 7)
+            {
+                return $"{(int)timeSpan.TotalDays} ي";
+            }
+
+            return $"{(int)(timeSpan.TotalDays / 7)} أ";
+        };
+
+    string marketingText =
+        Model.MarketingDescription?.Trim() ?? string.Empty;
+
+    string normalizedMarketingText =
+        (marketingText ?? string.Empty)
+            .Trim()
+            .Trim('-', '–', '—', '_', ' ', '\t', '\r', '\n')
+            .Trim();
+
+    bool hasUsefulMarketingText =
+        !string.IsNullOrWhiteSpace(normalizedMarketingText) &&
+        !string.Equals(
+            normalizedMarketingText,
+            "تفاصيل المنشأة",
+            StringComparison.OrdinalIgnoreCase
+        ) &&
+        !string.Equals(
+            normalizedMarketingText,
+            "تفاصيل المكان",
+            StringComparison.OrdinalIgnoreCase
+        );
+
+    string technicalDetails =
+        Model.TechnicalDetails ?? "";
+
+    var technicalInfoGroups =
+        new List<(
+            string Title,
+            string Icon,
+            string AccentClass,
+            List<string> Items
+        )>();
+
+    if (!string.IsNullOrWhiteSpace(technicalDetails))
+    {
+        var technicalLines =
+            technicalDetails
+                .Replace("\r\n", "\n")
+                .Replace("\r", "\n")
+                .Split(
+                    '\n',
+                    StringSplitOptions.RemoveEmptyEntries
+                )
+                .Select(line =>
+                    line.Trim()
+                        .Trim('•', '-', '–', '—'))
+                .Where(line =>
+                    !string.IsNullOrWhiteSpace(line))
+                .ToList();
+
+        foreach (var technicalLine in technicalLines)
+        {
+            int separatorIndex =
+                technicalLine.IndexOf(':');
+
+            string groupTitle =
+                separatorIndex > 0
+                    ? technicalLine
+                        .Substring(0, separatorIndex)
+                        .Trim()
+                    : "تفاصيل إضافية";
+
+            string groupContent =
+                separatorIndex > 0
+                    ? technicalLine
+                        .Substring(separatorIndex + 1)
+                        .Trim()
+                    : technicalLine;
+
+            var groupItems =
+                groupContent
+                    .Split(
+                        new[]
+                        {
+                            " | ",
+                            " - ",
+                            " – ",
+                            " — ",
+                            "،",
+                            ",",
+                            ";",
+                            "؛"
+                        },
+                        StringSplitOptions.RemoveEmptyEntries
+                    )
+                    .Select(item =>
+                        item.Trim()
+                            .Trim('•', '-', '–', '—'))
+                    .Where(item =>
+                        !string.IsNullOrWhiteSpace(item))
+                    .Distinct(
+                        StringComparer.OrdinalIgnoreCase
+                    )
+                    .ToList();
+
+            if (!groupItems.Any())
+            {
+                groupItems.Add(groupContent);
+            }
+
+            string normalizedTitle =
+                groupTitle.Trim();
+
+            string groupIcon;
+            string accentClass;
+
+            if (
+                normalizedTitle.Contains("مبنى") ||
+                normalizedTitle.Contains("المبنى") ||
+                normalizedTitle.Contains("غرف")
+            )
+            {
+                groupIcon = "bi-building";
+                accentClass = "is-building";
+            }
+            else if (
+                normalizedTitle.Contains("ترفيه") ||
+                normalizedTitle.Contains("ألعاب") ||
+                normalizedTitle.Contains("العاب")
+            )
+            {
+                groupIcon = "bi-controller";
+                accentClass = "is-entertainment";
+            }
+            else if (
+                normalizedTitle.Contains("مجانية") ||
+                normalizedTitle.Contains("خدمات")
+            )
+            {
+                groupIcon = "bi-gift";
+                accentClass = "is-services";
+            }
+            else if (
+                normalizedTitle.Contains("تبريد") ||
+                normalizedTitle.Contains("تدفئة") ||
+                normalizedTitle.Contains("تكييف")
+            )
+            {
+                groupIcon = "bi-snow2";
+                accentClass = "is-climate";
+            }
+            else if (
+                normalizedTitle.Contains("حوش") ||
+                normalizedTitle.Contains("حديقة") ||
+                normalizedTitle.Contains("خارجي")
+            )
+            {
+                groupIcon = "bi-tree";
+                accentClass = "is-outdoor";
+            }
+            else
+            {
+                groupIcon = "bi-stars";
+                accentClass = "is-general";
+            }
+
+            technicalInfoGroups.Add(
+                (
+                    groupTitle,
+                    groupIcon,
+                    accentClass,
+                    groupItems
+                )
+            );
+        }
+    }
+
+    string BuildPolicyHtml(
+        IEnumerable<string>? items,
+        string fallback)
+    {
+        var cleanItems =
+            items?
+                .Where(item =>
+                    !string.IsNullOrWhiteSpace(item))
+                .Select(item =>
+                    System.Net.WebUtility.HtmlEncode(item.Trim()))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList() ??
+            new List<string>();
+
+        return cleanItems.Any()
+            ? "🔹 " + string.Join("<br>🔹 ", cleanItems)
+            : fallback;
+    }
+
+    var depositPolicyItems =
+        Model.PolicySections?
+            .Where(section =>
+                section.Key == "deposit")
+            .SelectMany(section =>
+                section.Items) ??
+        Enumerable.Empty<string>();
+
+    var cancellationPolicyItems =
+        Model.PolicySections?
+            .Where(section =>
+                section.Key == "cancellation")
+            .SelectMany(section =>
+                section.Items) ??
+        Enumerable.Empty<string>();
+
+    var securityPolicyItems =
+        Model.PolicySections?
+            .Where(section =>
+                section.Key == "security" ||
+                section.Key == "exceptions" ||
+                section.Key == "terms")
+            .SelectMany(section =>
+                section.Items) ??
+        Enumerable.Empty<string>();
+
+    securityPolicyItems =
+        securityPolicyItems.Concat(
+            Model.DynamicRules ??
+            new List<string>()
+        );
+
+    string policyStr =
+        BuildPolicyHtml(
+            depositPolicyItems,
+            "لم يحدد مالك المنشأة سياسة العربون."
+        );
+
+    string cancelPolicyStr =
+        BuildPolicyHtml(
+            cancellationPolicyItems,
+            "لم يحدد مالك المنشأة سياسة الإلغاء."
+        );
+
+    string securityPolicyStr =
+        BuildPolicyHtml(
+            securityPolicyItems,
+            "لم يحدد مالك المنشأة قوانين إضافية."
+        );
+
+    List<string> availableEvents =
+        Model.EventTypes?
+            .Where(item =>
+                !string.IsNullOrWhiteSpace(item))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList() ??
+        new List<string>();
+
+    List<string> availableSeats =
+        Model.SeatingSetups?
+            .Where(item =>
+                !string.IsNullOrWhiteSpace(item))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList() ??
+        new List<string>();
+
+    var galleryImages =
+        new List<string>();
+
+    if (!string.IsNullOrWhiteSpace(Model.MainImage))
+    {
+        galleryImages.Add(Model.MainImage);
+    }
+
+    if (Model.GalleryImages != null &&
+        Model.GalleryImages.Any())
+    {
+        galleryImages.AddRange(
+            Model.GalleryImages.Where(image =>
+                !string.IsNullOrWhiteSpace(image))
+        );
+    }
+
+    galleryImages = galleryImages
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToList();
+
+    var sideImages = galleryImages
+        .Skip(1)
+        .Take(4)
+        .ToList();
+
+    int hiddenImagesCount =
+        Math.Max(
+            0,
+            galleryImages.Count - 5
+        );
+
+    string checkInTime =
+        !string.IsNullOrWhiteSpace(Model.CheckInTime)
+            ? Model.CheckInTime
+            : "غير محدد";
+
+    string checkOutTime =
+        !string.IsNullOrWhiteSpace(Model.CheckOutTime)
+            ? Model.CheckOutTime
+            : "غير محدد";
+
+    if (checkInTime.Length > 5 &&
+        checkInTime.Contains(':'))
+    {
+        checkInTime = checkInTime.Substring(0, 5);
+    }
+
+    if (checkOutTime.Length > 5 &&
+        checkOutTime.Contains(':'))
+    {
+        checkOutTime = checkOutTime.Substring(0, 5);
+    }
+
+    string operationSystemText =
+        Model.PlacePolicy?.OperationSystemMode switch
+        {
+            "FullDay" => "يوم كامل",
+            "Shifts" => "فترات محددة",
+            "Hourly" => "حجز بالساعة",
+            null or "" => "غير محدد",
+            var value => value
+        };
+
+    bool hasValidCoordinates =
+        Model.HasValidCoordinates;
+
+    var activePromotions =
+        Model.Promotions ??
+        new List<YemenGuide.Core.DTOs.Customer.PlacePromotionDto>();
+
+    bool hasPromotions =
+        activePromotions.Any();
+
+    var highlightedPromotion =
+        activePromotions
+            .FirstOrDefault(promotion =>
+                promotion.IsSelected) ??
+        activePromotions.FirstOrDefault();
+
+    string directionsUrl =
+        hasValidCoordinates
+            ? "https://www.google.com/maps/dir/" +
+              "?api=1&destination=" +
+              Model.Latitude.ToString(
+                  System.Globalization.CultureInfo.InvariantCulture
+              ) +
+              "," +
+              Model.Longitude.ToString(
+                  System.Globalization.CultureInfo.InvariantCulture
+              )
+            : "";
+}
+
+@functions {
+    void RenderCustomerReviewNode(
+        YemenGuide.Core.DTOs.Customer.ReviewDto review,
+        int depth,
+        int currentUserId,
+        Func<DateTime, string> formatTime
+    )
+    {
+        string depthClass =
+            depth > 0
+                ? "review-node-reply me-4 mt-3"
+                : "review-node-root mt-3";
+
+        string initial =
+            string.IsNullOrWhiteSpace(
+                review.UserName
+            )
+                ? "ز"
+                : review.UserName
+                    .Substring(0, 1)
+                    .ToUpper();
+
+        <article class="insta-comment-block review-node-item @depthClass"
+             id="review-block-@review.ReviewId"
+             data-review-id="@review.ReviewId"
+             data-stars="@review.Stars"
+             data-depth="@depth">
+
+            <div class="review-node-layout">
+
+                <div class="review-node-avatar-wrap">
+
+                    @if (
+            !string.IsNullOrWhiteSpace(
+            review.ProfileImage
+            )
+            )
+                    {
+                        <img src="@review.ProfileImage"
+                     class="insta-avatar"
+                     alt="@review.UserName"
+                     loading="lazy" />
+                    }
+                    else
+                    {
+                        <div class="insta-avatar-initial">
+                            @initial
+                        </div>
+                    }
+                </div>
+
+                <div class="review-node-content">
+
+                    <div class="review-node-head">
+
+                        <div class="review-node-main">
+
+                            <div class="review-node-user-row">
+
+                                <strong class="review-node-user">
+                                    @review.UserName
+                                </strong>
+
+                                @if (
+                        depth == 0 &&
+                        review.Stars > 0
+                        )
+                                {
+                                    <span class="review-node-stars">
+
+                                        @for (
+                                   int star = 1;
+                                   star <= 5;
+                                   star++
+                                   )
+                                        {
+                                            <i class="bi @(star <= review.Stars
+                                                ? "bi-star-fill"
+                                                : "bi-star")"></i>
+                                        }
+                                    </span>
+                                }
+                            </div>
+
+                            <p class="insta-text review-node-text">
+
+                                <span class="review-text-content">
+                                    @review.ReviewText
+                                </span>
+                            </p>
+                        </div>
+
+                        <button type="button"
+                            class="insta-heart-btn review-like-button"
+                            onclick="toggleInstaLike(@review.ReviewId)"
+                            aria-label="الإعجاب بالتقييم">
+
+                            <i class="bi @(review.IsLikedByMe
+                                ? "bi-heart-fill text-danger"
+                                : "bi-heart")"
+                           id="heart-icon-@review.ReviewId"></i>
+
+                            <span class="insta-likes-count"
+                              id="likes-count-@review.ReviewId"
+                              style="display:@(review.LikesCount > 0
+                                      ? "block"
+                                      : "none");">
+
+                                @review.LikesCount
+                            </span>
+                        </button>
+                    </div>
+
+                    <div class="insta-meta review-node-meta">
+
+                        <span>
+                            @formatTime(review.CreatedAt)
+                        </span>
+
+                        @if (review.IsEdited)
+                        {
+                            <span>(معدل)</span>
+                        }
+
+                        <button type="button"
+                            data-user-name="@review.UserName"
+                            onclick="prepareInstaReply(
+                                                            @review.ReviewId,
+                                                            this.dataset.userName
+                                                        )">
+
+                            رد
+                        </button>
+
+                        @if (
+                review.UserId ==
+                currentUserId &&
+                currentUserId > 0
+                )
+                        {
+                            <button type="button"
+                            class="review-edit-action"
+                            onclick="editInstaReview(@review.ReviewId)">
+
+                                تعديل
+                            </button>
+
+                            <button type="button"
+                            class="review-delete-action"
+                            onclick="deleteInstaReview(@review.ReviewId)">
+
+                                حذف
+                            </button>
+                        }
+                    </div>
+
+                    @if (
+            review.Replies != null &&
+            review.Replies.Any()
+            )
+                    {
+                        <button type="button"
+                        class="insta-toggle-replies"
+                        id="toggle-btn-@review.ReviewId"
+                        aria-controls="nested-replies-@review.ReviewId"
+                        aria-expanded="false"
+                        onclick="toggleRepliesVisibility(
+                                                            @review.ReviewId,
+                                                            @review.Replies.Count
+                                                        )">
+
+                            <span class="insta-toggle-line"></span>
+
+                            <span id="toggle-text-@review.ReviewId">
+
+                                عرض @review.Replies.Count من الردود
+                            </span>
+                        </button>
+
+                        <div id="nested-replies-@review.ReviewId"
+                     class="nested-replies"
+                     aria-hidden="true"
+                     style="display:none;">
+
+                            @foreach (
+                       var reply in
+                       review.Replies
+                       )
+                            {
+                                RenderCustomerReviewNode(
+                                reply,
+                                depth + 1,
+                                currentUserId,
+                                formatTime
+                                );
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </article>
+    }
+}
+
+@section Styles {
+    <link rel="stylesheet"
+      href="~/css/customer/Details.css"
+      asp-append-version="true" />
+
+
+    <link rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
+}
+
+    <main class="place-details-page"
+      dir="rtl"
+      data-selected-promotion-id="@(Model.SelectedPromotionId?.ToString() ?? "0")"
+      data-attribution-advertisement-id="@(Model.AttributionAdvertisementId?.ToString() ?? string.Empty)"
+      data-attribution-place-id="@Model.PlaceId">
+
+        <input type="hidden"
+           id="selectedPromotionIdInput"
+           value="@(Model.SelectedPromotionId?.ToString() ?? "0")" />
+
+        <div class="place-details-shell">
+
+            <header class="place-heading"
+                aria-labelledby="placePageTitle">
+
+                <nav class="place-breadcrumb"
+                 aria-label="مسار التنقل">
+
+                    <a asp-controller="Home"
+                   asp-action="Index">
+
+                        الرئيسية
+                    </a>
+
+                    <i class="bi bi-chevron-left"></i>
+
+                    <a asp-controller="Places"
+                   asp-action="Search">
+
+                        استكشف
+                    </a>
+
+                    <i class="bi bi-chevron-left"></i>
+
+                    <span>@catName</span>
+                </nav>
+
+                <div class="place-heading-row">
+
+                    <div class="place-heading-copy">
+
+                        <div class="place-title-line">
+
+                            <h1 id="placePageTitle"
+                            class="place-title">
+
+                                @Model.Name
+                            </h1>
+
+                            <div class="place-heading-badges">
+
+                                <span class="place-category-badge">
+
+                                    <i class="bi bi-grid-fill"></i>
+                                    <span>@catName</span>
+                                </span>
+
+                            @if (isBookingPlace)
+                            {
+                                <span class="place-status-badge @(Model.CanBook
+                                ? "is-bookable"
+                                : "is-visit")">
+
+                                    <i class="bi @(Model.CanBook
+                                    ? "bi-calendar2-check-fill"
+                                    : "bi-calendar2-x-fill")"></i>
+
+                                    <span>
+                                        @(Model.CanBook
+                                            ? "متاح للحجز"
+                                            : "الحجز غير متاح")
+                                    </span>
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="place-status-badge is-visit">
+
+                                    <i class="bi bi-door-open-fill"></i>
+                                    <span>متاح للزيارة</span>
+                                </span>
+                            }
+
+                            @if (hasPromotions)
+                            {
+                                <a href="#offersSection"
+                               class="place-offers-badge"
+                               aria-label="عرض عروض المنشأة">
+
+                                    <span class="place-offers-badge-fire">
+                                        <i class="bi bi-fire"></i>
+                                    </span>
+
+                                    <span>
+                                        @(activePromotions.Count == 1
+                                            ? "عرض خاص متاح"
+                                            : $"{activePromotions.Count} عروض متاحة")
+                                    </span>
+                                </a>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="place-meta-row">
+
+                        <button type="button"
+                                class="place-rating-link"
+                                onclick="
+                                    const reviews =
+                                        document.getElementById(
+                                            'reviewsSectionTrigger'
+                                        );
+
+                                    if (reviews) {
+                                        reviews.scrollIntoView({
+                                            behavior: 'smooth',
+                                            block: 'start'
+                                        });
+                                    }
+                                ">
+
+                            <i class="bi bi-star-fill"></i>
+
+                            <strong>
+                                @Model.AverageRating.ToString("0.0")
+                            </strong>
+
+                            <span>
+                                @Model.TotalReviews تقييم
+                            </span>
+                        </button>
+
+                        <span class="place-meta-separator"></span>
+
+                        <div class="place-location-line">
+
+                            <i class="bi bi-geo-alt-fill"></i>
+
+                            <span>@Model.CityName</span>
+
+                            @if (
+                            !string.IsNullOrWhiteSpace(
+                            Model.AddressDetails
+                            )
+                            )
+                            {
+                                <span class="place-address-text">
+                                    — @Model.AddressDetails
+                                </span>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <div class="place-heading-actions"
+                     aria-label="إجراءات المكان">
+
+                    @if (Model.CanContactPlace)
+                    {
+                        <a asp-controller="Messages"
+                       asp-action="MyMessages"
+                       asp-route-placeId="@Model.PlaceId"
+                       asp-route-withOwnerId="@Model.OwnerId"
+                       class="place-round-action place-chat-round-action"
+                       aria-label="التواصل مع المنشأة"
+                       title="التواصل مع @Model.Name">
+
+                            <i class="bi bi-chat-dots-fill"></i>
+                        </a>
+                    }
+                    else
+                    {
+                        <button type="button"
+                            class="place-round-action place-chat-round-action is-disabled"
+                            aria-label="الدردشة غير متاحة"
+                            title="@Model.ChatUnavailableMessage"
+                            disabled>
+
+                            <i class="bi bi-chat-dots"></i>
+                        </button>
+                    }
+
+                    <button type="button"
+                            class="place-round-action"
+                            id="sharePlaceBtn"
+                            aria-label="مشاركة المكان"
+                            title="مشاركة المكان">
+
+                        <i class="bi bi-share-fill"></i>
+                    </button>
+
+                    <button type="button"
+                            class="place-round-action favorite-action @(Model.IsFavorited
+                                ? "is-active"
+                                : "")"
+                            onclick="toggleHeart(
+                                event,
+                                this,
+                                @Model.PlaceId
+                            )"
+                            aria-label="حفظ في المفضلة"
+                            title="حفظ في المفضلة">
+
+                        <i class="@(Model.IsFavorited
+                            ? "bi bi-heart-fill text-danger"
+                            : "bi bi-heart")"
+                           id="favoriteIcon"></i>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <section class="place-gallery is-compact-gallery"
+                 aria-label="صور @Model.Name">
+
+            <div class="place-gallery-grid">
+
+                <button type="button"
+                        class="gallery-main-shot"
+                        onclick="toggleExtendedGallery()"
+                        aria-label="فتح معرض الصور">
+
+                    <img src="@Model.MainImage"
+                         id="mainDisplayImage"
+                         class="main-hero-img"
+                         alt="@Model.Name"
+                         onerror="this.src='/images/bg1.jpg'" />
+
+                    <span class="gallery-main-gradient"></span>
+
+                    <span class="gallery-photo-counter d-md-none">
+
+                        <i class="bi bi-images"></i>
+                        <span>@galleryImages.Count</span>
+                    </span>
+                </button>
+
+                <div class="gallery-side-grid d-none d-md-grid">
+
+                    @for (
+                    int imageIndex = 0;
+                    imageIndex < 4;
+                    imageIndex++
+                    )
+                    {
+                        <div class="gallery-side-cell">
+
+                            @if (
+                           imageIndex <
+                           sideImages.Count
+                           )
+                            {
+                                <button type="button"
+                                class="gallery-side-shot"
+                                onclick="changeMainImage(
+                                            this.querySelector('img')
+                                        )"
+                                aria-label="عرض صورة إضافية">
+
+                                    <img src="@sideImages[imageIndex]"
+                                 class="side-hero-img"
+                                 alt="صورة إضافية لـ @Model.Name"
+                                 loading="lazy"
+                                 onerror="this.src='/images/bg1.jpg'" />
+
+                                    @if (
+                                   imageIndex == 3 &&
+                                   hiddenImagesCount > 0
+                                   )
+                                    {
+                                        <span class="gallery-more-overlay"
+                                  onclick="
+                                                  event.stopPropagation();
+                                                  toggleExtendedGallery();
+                                              ">
+
+                                            <strong>
+                                                +@hiddenImagesCount
+                                            </strong>
+
+                                            <small>
+                                                صور أخرى
+                                            </small>
+                                        </span>
+                                    }
+                                </button>
+                            }
+                            else
+                            {
+                                <div class="gallery-empty-shot"
+                             aria-hidden="true">
+
+                                    <i class="bi bi-image"></i>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+
+            @if (galleryImages.Any())
+            {
+                <button type="button"
+                    class="gallery-open-all"
+                    onclick="toggleExtendedGallery()">
+
+                    <i class="bi bi-grid-3x3-gap-fill"></i>
+                    <span>عرض جميع الصور</span>
+                </button>
+            }
+        </section>
+
+        <section id="extendedGallerySection"
+                 class="extended-gallery-panel"
+                 style="display:none;"
+                 aria-label="جميع صور المكان"
+                 aria-hidden="true">
+
+            <div class="extended-gallery-head">
+
+                <div>
+                    <span class="section-kicker">
+
+                        <i class="bi bi-images"></i>
+                        معرض المكان
+                    </span>
+
+                    <h2>جميع الصور</h2>
+                </div>
+
+                <button type="button"
+                        class="section-close-button"
+                        onclick="toggleExtendedGallery()">
+
+                    <i class="bi bi-x-lg"></i>
+                    <span>إغلاق</span>
+                </button>
+            </div>
+
+            <div class="extended-gallery-track horizontal-scroll"
+                 id="extendedGalleryScroll"
+                 tabindex="0">
+
+                @for (
+                int imageIndex = 0;
+                imageIndex < galleryImages.Count;
+                imageIndex++
+                )
+                {
+                    <button type="button"
+                        class="extended-gallery-item @(imageIndex == 0
+                                ? "is-active"
+                                : "")"
+                        onclick="changeMainImage(
+                                this.querySelector('img')
+                            )">
+
+                        <img src="@galleryImages[imageIndex]"
+                         class="extended-thumb @(imageIndex == 0
+                                ? "active"
+                                : "")"
+                         alt="صورة @(imageIndex + 1) من @Model.Name"
+                         loading="lazy"
+                         onerror="this.src='/images/bg1.jpg'" />
+                    </button>
+                }
+            </div>
+        </section>
+
+        @if (hasPromotions)
+        {
+            <section class="promotion-showcase-section"
+                 id="offersSection"
+                 aria-labelledby="offersSectionTitle">
+
+                <span class="promotion-ambient promotion-ambient-one"
+                  aria-hidden="true"></span>
+
+                <span class="promotion-ambient promotion-ambient-two"
+                  aria-hidden="true"></span>
+
+                <header class="promotion-showcase-header">
+
+                    <div class="promotion-showcase-title">
+
+                        <span class="promotion-kicker">
+                            <i class="bi bi-stars"></i>
+                            فرصة خاصة أثناء زيارتك
+                        </span>
+
+                        <h2 id="offersSectionTitle">
+                            عروض تضيف لمسة أجمل لتجربتك
+                        </h2>
+
+                        <p>
+                            اختر العرض المناسب لك، وسنتحقق من جميع شروطه
+                            والسعر النهائي مرة أخرى عند إكمال الحجز.
+                        </p>
+                    </div>
+
+                    <div class="promotion-showcase-tools">
+
+                        <div class="promotion-showcase-counter"
+                         aria-label="عدد العروض الفعالة">
+
+                            <span>
+                                <i class="bi bi-fire"></i>
+                            </span>
+
+                            <div>
+                                <strong>@activePromotions.Count</strong>
+                                <small>
+                                    @(activePromotions.Count == 1
+                                        ? "عرض فعّال"
+                                        : "عروض فعّالة")
+                                </small>
+                            </div>
+                        </div>
+
+                        @if (activePromotions.Count > 1)
+                        {
+                            <div class="promotion-carousel-nav"
+                         aria-label="التنقل بين العروض">
+
+                                <button type="button"
+                                class="promotion-carousel-button"
+                                id="promotionPreviousButton"
+                                aria-label="العرض السابق">
+
+                                    <i class="bi bi-chevron-right"></i>
+                                </button>
+
+                                <span class="promotion-carousel-position"
+                              aria-live="polite">
+
+                                    <strong id="promotionCurrentIndex">1</strong>
+                                    <span>/</span>
+                                    <strong>@activePromotions.Count</strong>
+                                </span>
+
+                                <button type="button"
+                                class="promotion-carousel-button is-next"
+                                id="promotionNextButton"
+                                aria-label="العرض التالي">
+
+                                    <i class="bi bi-chevron-left"></i>
+                                </button>
+                            </div>
+                        }
+                    </div>
+                </header>
+
+                <div class="promotion-showcase-track horizontal-scroll"
+                 id="promotionShowcaseTrack"
+                 tabindex="0"
+                 role="region"
+                 data-promotion-total="@activePromotions.Count"
+                 aria-describedby="promotionGestureHint"
+                 aria-label="عروض المنشأة — اسحب أو استخدم الأسهم للتنقل">
+
+                    @foreach (var promotion in activePromotions)
+                    {
+                        <article class="promotion-spotlight-card @(promotion.IsSelected ? "is-selected" : "")"
+                         data-promotion-card
+                         data-promotion-id="@promotion.PromotionId"
+                         data-target-anchor="@promotion.TargetAnchor"
+                         data-target-type="@promotion.TargetType"
+                         aria-selected="@(promotion.IsSelected ? "true" : "false")">
+
+                            <div class="promotion-card-media @(promotion.HasImage ? "has-image" : "")">
+
+                                @if (promotion.HasImage)
+                                {
+                                    <img src="@promotion.ImagePath"
+                             alt="@promotion.PromotionTitle"
+                             loading="lazy"
+                             onerror="this.style.display='none'" />
+                                }
+
+                                <span class="promotion-card-media-glow"
+                              aria-hidden="true"></span>
+
+                                <span class="promotion-discount-orb">
+
+                                    <small>عرض</small>
+                                    <strong>@promotion.OfferDisplay</strong>
+                                </span>
+                            </div>
+
+                            <div class="promotion-card-content">
+
+                                <div class="promotion-card-topline">
+
+                                    <span class="promotion-target-pill">
+                                        <i class="bi @promotion.TargetIconClass"></i>
+                                        @promotion.TargetLabel
+                                    </span>
+
+                                    <span class="promotion-time-pill">
+                                        <i class="bi bi-clock-history"></i>
+                                        @promotion.RemainingTimeLabel
+                                    </span>
+                                </div>
+
+                                <h3>@promotion.PromotionTitle</h3>
+
+                                @if (!string.IsNullOrWhiteSpace(promotion.OfferSummary))
+                                {
+                                    <p class="promotion-card-description promotion-offer-summary">
+                                        <i class="bi bi-gift-fill"></i>
+                                        @promotion.OfferSummary
+                                    </p>
+                                    @if (promotion.IsRewardRepeatable && string.Equals(promotion.RewardType, "FreeQuantity", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        <p class="promotion-repeat-note"><i class="bi bi-arrow-repeat"></i> المكافأة تتكرر عند اكتمال كل مجموعة</p>
+                                    }
+                                }
+
+                                @if (!string.IsNullOrWhiteSpace(
+                               promotion.ShortDescription))
+                                {
+                                    <p class="promotion-card-description">
+                                        @promotion.ShortDescription
+                                    </p>
+                                }
+                                else if (!string.IsNullOrWhiteSpace(
+                                promotion.Description))
+                                {
+                                    <p class="promotion-card-description">
+                                        @promotion.Description
+                                    </p>
+                                }
+
+                                @if (promotion.HasEstimatedPrice)
+                                {
+                                    <div class="promotion-price-preview">
+
+                                        <div>
+                                            <small>السعر المرجعي</small>
+                                            <del>
+                                                @promotion.DisplayOriginalPriceText
+                                            </del>
+                                        </div>
+
+                                        <span class="promotion-price-arrow">
+                                            <i class="bi bi-arrow-left"></i>
+                                        </span>
+
+                                        <div class="is-discounted">
+                                            <small>بعد العرض تقديريًا</small>
+                                            <strong>
+                                                @promotion.DisplayEstimatedPriceAfterDiscountText
+                                            </strong>
+                                        </div>
+
+                                        <span class="promotion-save-pill">
+                                            وفّر
+                                            @promotion.DisplayEstimatedDiscountAmountText
+                                        </span>
+                                    </div>
+                                }
+
+                                @if (promotion.Conditions != null &&
+                               promotion.Conditions.Any())
+                                {
+                                    <div class="promotion-condition-list">
+
+                                        @foreach (
+                                       var condition in
+                                       promotion.Conditions.Take(3))
+                                        {
+                                            <span>
+                                                <i class="bi bi-check2"></i>
+                                                @condition
+                                            </span>
+                                        }
+                                    </div>
+                                }
+
+                                <div class="promotion-card-actions">
+
+                                    @if (promotion.IsCodeRequired)
+                                    {
+                                        <button type="button"
+                                    class="promotion-code-pill"
+                                    data-copy-promo-code="@promotion.PromoCode"
+                                    title="نسخ كود الخصم">
+
+                                            <span>كود العرض</span>
+                                            <strong>@promotion.PromoCode</strong>
+                                            <i class="bi bi-copy"></i>
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <span class="promotion-auto-pill">
+                                            <i class="bi bi-magic"></i>
+                                            يطبق تلقائيًا عند تحقق الشروط
+                                        </span>
+                                    }
+
+                                    <button type="button"
+                                    class="promotion-apply-button"
+                                    data-promotion-action
+                                    data-promotion-id="@promotion.PromotionId"
+                                    data-target-type="@promotion.TargetType"
+                                    data-target-anchor="@promotion.TargetAnchor">
+
+                                        <span>
+                                            @(promotion.TargetType == "Room"
+                                                ? "اختر تاريخ الإقامة"
+                                                : promotion.TargetType == "Package"
+                                                ? "شاهد الباقة"
+                                                : promotion.TargetType == "Service"
+                                                ? "شاهد الخدمة"
+                                                : isBookingPlace
+                                                ? "استفد من العرض"
+                                                : "استكشف التفاصيل")
+                                        </span>
+
+                                        <i class="bi bi-arrow-left"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </article>
+                    }
+                </div>
+
+                @if (activePromotions.Count > 1)
+                {
+                    <div class="promotion-gesture-hint"
+                 id="promotionGestureHint">
+
+                        <i class="bi bi-hand-index-thumb"></i>
+                        <span>
+                            اسحب بالماوس أو الإصبع، أو استخدم أسهم لوحة المفاتيح للتنقل بين العروض.
+                        </span>
+                    </div>
+                }
+
+                <div class="promotion-showcase-note">
+                    <i class="bi bi-shield-check"></i>
+                    <span>
+                        السعر الموضح هنا معاينة ذكية فقط؛ التحقق النهائي من
+                        التاريخ والكمية وعدد الأشخاص وحدود الاستخدام يتم عند الحجز.
+                    </span>
+                </div>
+            </section>
+        }
+
+        <section class="place-intro-card"
+                 id="placeOverviewSection">
+
+            <div class="place-intro-main">
+
+                <span class="section-kicker">
+
+                    <i class="bi bi-stars"></i>
+                    تجربة موثوقة
+                </span>
+
+                <h2>
+                    نبذة عن المنشأة
+                </h2>
+
+                @if (hasUsefulMarketingText)
+                {
+                    <p class="place-intro-description">
+                        @normalizedMarketingText
+                    </p>
+                }
+            </div>
+
+        </section>
+
+        <nav class="place-section-nav"
+             aria-label="أقسام صفحة المكان">
+
+            <div class="place-section-nav-track">
+
+                <a href="#placeOverviewSection"
+                   class="place-section-link active">
+                    نظرة عامة
+                </a>
+
+                @if (hasPromotions)
+                {
+                    <a href="#offersSection"
+                   class="place-section-link place-section-link-offers">
+                        <i class="bi bi-fire"></i>
+                        العروض
+                    </a>
+                }
+
+                <a href="#amenitiesSection"
+                   class="place-section-link">
+                    المرافق
+                </a>
+
+                @if (
+                Model.AdditionalServices != null &&
+                Model.AdditionalServices.Any()
+                )
+                {
+                    <a href="#servicesSection"
+                   class="place-section-link">
+                        الخدمات
+                    </a>
+                }
+
+                @if (isBookingPlace)
+                {
+                    <a href="#policies-section"
+                   class="place-section-link">
+                        السياسات
+                    </a>
+                }
+
+
+                @if (
+                (isPackageSystem || isHall) &&
+                Model.Packages != null &&
+                Model.Packages.Any()
+                )
+                {
+                    <a href="#packagesSection"
+                   class="place-section-link">
+                        الباقات
+                    </a>
+                }
+
+                <a href="#locationSection"
+                   class="place-section-link">
+                    الموقع
+                </a>
+
+                <a href="#reviewsSectionTrigger"
+                   class="place-section-link">
+                    التقييمات
+                </a>
+            </div>
+        </nav>
+
+        <div class="place-content-layout">
+
+            <div class="place-content-main">
+
+                @if (
+                technicalInfoGroups.Any()
+                )
+                {
+                    <section class="details-section-card technical-showcase-section"
+                         id="buildingDetailsSection">
+
+                        <div class="section-heading-row technical-showcase-heading">
+
+                            <div>
+                                <span class="section-kicker">
+
+                                    <i class="bi bi-building-check"></i>
+                                    تفاصيل المنشأة
+                                </span>
+
+                                <h2>
+                                    المكان في نظرة مرتبة وواضحة
+                                </h2>
+
+                                <p class="section-heading-description">
+                                    أهم التفاصيل موزعة إلى مجموعات سريعة تساعدك
+                                    على فهم التجربة قبل الحجز.
+                                </p>
+                            </div>
+
+                            <span class="technical-source-badge">
+
+                                <i class="bi bi-patch-check-fill"></i>
+
+                                بيانات المنشأة
+                            </span>
+                        </div>
+
+                        <div class="technical-details-showcase">
+
+                            @foreach (
+                           var technicalGroup in
+                           technicalInfoGroups
+                           )
+                            {
+                                <article class="technical-detail-card @technicalGroup.AccentClass">
+
+                                    <header class="technical-detail-card-head">
+
+                                        <span class="technical-detail-icon">
+
+                                            <i class="bi @technicalGroup.Icon"></i>
+                                        </span>
+
+                                        <div>
+                                            <small>مجموعة معلومات</small>
+
+                                            <h3>
+                                                @technicalGroup.Title
+                                            </h3>
+                                        </div>
+                                    </header>
+
+                                    <ul class="technical-detail-points">
+
+                                        @foreach (
+                                       var technicalItem in
+                                       technicalGroup.Items
+                                       )
+                                        {
+                                            <li>
+
+                                                <i class="bi bi-check2"></i>
+
+                                                <span>
+                                                    @technicalItem
+                                                </span>
+                                            </li>
+                                        }
+                                    </ul>
+                                </article>
+                            }
+                        </div>
+                    </section>
+                }
+
+                @*
+                أنواع الغرف لا تُعرض هنا عمدًا.
+                اختيار الغرفة الفعلي يتم بعد تحديد تاريخ الإقامة في AvailableRooms،
+                حتى لا نكرر نفس الخطوة مرتين ونحافظ على دقة التوفر والأسعار.
+                *@
+
+                <section class="details-section-card"
+                         id="amenitiesSection">
+
+                    <div class="section-heading-row">
+
+                        <div>
+                            <span class="section-kicker">
+
+                                <i class="bi bi-gem"></i>
+                                المزايا
+                            </span>
+
+                            <h2>ما يوفره هذا المكان</h2>
+                        </div>
+
+                        @if (
+                        Model.Amenities != null &&
+                        Model.Amenities.Any()
+                        )
+                        {
+                            <span class="section-count">
+                                @Model.Amenities.Count ميزة
+                            </span>
+                        }
+                    </div>
+
+                    @if (
+                    Model.Amenities != null &&
+                    Model.Amenities.Any()
+                    )
+                    {
+                        <div class="amenities-grid">
+
+                            @foreach (
+                           var amenity in
+                           Model.Amenities
+                           )
+                            {
+                                <div class="amenity-item">
+
+                                    <span class="amenity-icon">
+
+                                        <i class="bi @(string.IsNullOrWhiteSpace(
+                                            amenity.IconClass
+                                        )
+                                            ? "bi-check2"
+                                            : amenity.IconClass)"></i>
+                                    </span>
+
+                                    <span>
+                                        @amenity.AmenityName
+                                    </span>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="section-empty-state">
+
+                            <i class="bi bi-info-circle"></i>
+
+                            <span>
+                                لم يتم تحديد المرافق الأساسية بعد.
+                            </span>
+                        </div>
+                    }
+
+                    @if (
+                    isBookingPlace &&
+                    Model.Spaces != null &&
+                    Model.Spaces.Any()
+                    )
+                    {
+                        <div class="spaces-divider"></div>
+
+                        <div class="subsection-heading">
+
+                            <div>
+                                <i class="bi bi-bounding-box-circles"></i>
+                                <h3>المساحات المتوفرة</h3>
+                            </div>
+
+                            <span>
+                                @Model.Spaces.Count مساحة
+                            </span>
+                        </div>
+
+                        <div class="spaces-grid">
+
+                            @foreach (
+                           var space in
+                           Model.Spaces
+                           )
+                            {
+                                <div class="space-item">
+
+                                    <i class="bi @(string.IsNullOrWhiteSpace(
+                                        space.IconClass
+                                    )
+                                        ? "bi-check-circle"
+                                        : space.IconClass)"></i>
+
+                                    <span>
+                                        @space.SpaceName
+                                    </span>
+                                </div>
+                            }
+                        </div>
+                    }
+                </section>
+
+                <section class="details-section-card services-original-layout"
+                         id="servicesSection">
+
+                    <div class="section-heading-row">
+
+                        <div>
+                            <span class="section-kicker">
+
+                                <i class="bi bi-plus-circle"></i>
+                                إضافات اختيارية
+                            </span>
+
+                            <h2>
+                                خدمات تجعل تجربتك أكثر راحة
+                            </h2>
+                        </div>
+
+                        @if (
+                        Model.AdditionalServices != null &&
+                        Model.AdditionalServices.Any()
+                        )
+                        {
+                            <span class="section-count">
+                                تضاف إلى السعر
+                            </span>
+                        }
+                    </div>
+
+                    @if (
+                    Model.AdditionalServices != null &&
+                    Model.AdditionalServices.Any()
+                    )
+                    {
+                        var additionalServices =
+                        Model.AdditionalServices
+                        .ToList();
+
+                        <div class="services-grid">
+
+                            @for (
+                           int serviceIndex = 0;
+                           serviceIndex <
+                           additionalServices.Count;
+                           serviceIndex++
+                           )
+                            {
+                                var service =
+                                additionalServices[
+                                serviceIndex
+                                ];
+
+                                string serviceImage =
+                                "/images/default-service.jpg";
+
+                                string serviceImagesJson =
+                                "[]";
+
+                                string serviceCheckboxId =
+                                $"additionalService_{serviceIndex}";
+
+                                if (
+                                !string.IsNullOrWhiteSpace(
+                                service.ImageUrl
+                                )
+                                )
+                                {
+                                    var serviceImages =
+                                    service.ImageUrl
+                                    .Split(
+                                    ',',
+                                    StringSplitOptions
+                                    .RemoveEmptyEntries
+                                    )
+                                    .Select(image =>
+                                    image.Trim()
+                                    )
+                                    .Where(image =>
+                                    !string.IsNullOrWhiteSpace(
+                                    image
+                                    )
+                                    )
+                                    .Distinct(
+                                    StringComparer
+                                    .OrdinalIgnoreCase
+                                    )
+                                    .ToList();
+
+                                    if (serviceImages.Any())
+                                    {
+                                        serviceImage =
+                                        serviceImages.First();
+
+                                        serviceImagesJson =
+                                        System.Text.Json
+                                        .JsonSerializer
+                                        .Serialize(
+                                        serviceImages
+                                        );
+                                    }
+                                }
+
+                                var servicePromotion =
+                                activePromotions.FirstOrDefault(promotion =>
+                                promotion.ServiceId == service.ServiceId);
+
+                                <label class="service-choice-card addon-container @(servicePromotion != null ? "has-promotion" : "")"
+                               id="serviceCard-@service.ServiceId"
+                               data-promotion-id="@(servicePromotion?.PromotionId.ToString() ?? "0")"
+                               for="@serviceCheckboxId">
+
+                                    @if (servicePromotion != null)
+                                    {
+                                        <span class="target-promotion-badge is-service">
+                                            <i class="bi bi-fire"></i>
+                                            @servicePromotion.OfferDisplay
+                                        </span>
+                                    }
+
+                                    <input id="@serviceCheckboxId"
+                                   class="addon-checkbox"
+                                   type="checkbox"
+                                   value="@service.Price"
+                                   data-service-id="@service.ServiceId"
+                                   data-name="@service.ServiceName"
+                                   data-img="@serviceImage" />
+
+                                    <span class="service-image-button"
+                                  role="button"
+                                  tabindex="0"
+                                  onclick="openServiceGallery(
+                                              event,
+                                              this
+                                          )"
+                                  onkeydown="
+                                              if (
+                                                  event.key === 'Enter' ||
+                                                  event.key === ' '
+                                              ) {
+                                                  openServiceGallery(
+                                                      event,
+                                                      this
+                                                  );
+                                              }
+                                          "
+                                  data-title="@service.ServiceName"
+                                  data-images='@serviceImagesJson'
+                                  aria-label="عرض صور @service.ServiceName">
+
+                                        <img src="@serviceImage"
+                                     alt="@service.ServiceName"
+                                     loading="lazy"
+                                     onerror="
+                                                 this.onerror = null;
+                                                 this.src = '/images/bg1.jpg';
+                                             " />
+
+                                        <span>
+                                            <i class="bi bi-arrows-fullscreen"></i>
+                                        </span>
+                                    </span>
+
+                                    <span class="service-choice-content">
+
+                                        <span class="service-name">
+                                            @service.ServiceName
+                                        </span>
+
+                                        <span class="service-price">
+
+                                            @if (
+                                           servicePromotion != null &&
+                                           servicePromotion.HasEstimatedPrice
+                                           )
+                                            {
+                                                <del class="target-old-price">
+                                                    @servicePromotion.DisplayOriginalPriceText
+                                                </del>
+
+                                                <strong class="target-new-price">
+                                                    @servicePromotion.DisplayEstimatedPriceAfterDiscountText
+                                                </strong>
+                                            }
+                                            else
+                                            {
+                                                @GetServiceDisplayPriceText(
+                                    service.ServiceId,
+                                    service.Price)
+                                            }
+                                        </span>
+                                    </span>
+
+                                    <span class="service-check"
+                                  aria-hidden="true">
+
+                                        <i class="bi bi-circle text-muted check-icon"></i>
+                                    </span>
+                                </label>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="section-empty-state">
+
+                            <i class="bi bi-info-circle"></i>
+
+                            <span>
+                                لا توجد خدمات إضافية متاحة حاليًا.
+                            </span>
+                        </div>
+                    }
+                </section>
+
+                @if (isBookingPlace)
+                {
+                    <section class="details-section-card"
+                         id="policies-section">
+
+                        <div class="section-heading-row">
+
+                            <div>
+                                <span class="section-kicker">
+
+                                    <i class="bi bi-shield-check"></i>
+                                    الوضوح قبل الحجز
+                                </span>
+
+                                <h2>
+                                    القوانين والسياسات
+                                </h2>
+                            </div>
+                        </div>
+
+                        <div class="accordion policy-accordion"
+                         id="placePoliciesAccordion">
+
+                            <div class="accordion-item">
+
+                                <h3 class="accordion-header"
+                                id="operationPolicyHeading">
+
+                                    <button class="accordion-button"
+                                        type="button"
+                                        data-bs-toggle="collapse"
+                                        data-bs-target="#operationPolicyCollapse"
+                                        aria-expanded="true"
+                                        aria-controls="operationPolicyCollapse">
+
+                                        <span class="accordion-title-icon">
+                                            <i class="bi bi-calendar2-week"></i>
+                                        </span>
+
+                                        <span>
+                                            <strong>
+                                                النظام التشغيلي
+                                            </strong>
+
+                                            <small>
+                                                الدخول والخروج وآلية التشغيل
+                                            </small>
+                                        </span>
+                                    </button>
+                                </h3>
+
+                                <div id="operationPolicyCollapse"
+                                 class="accordion-collapse collapse show"
+                                 aria-labelledby="operationPolicyHeading"
+                                 data-bs-parent="#placePoliciesAccordion">
+
+                                    <div class="accordion-body">
+
+                                        <ul class="policy-list">
+
+                                            <li>
+                                                <i class="bi bi-check-circle-fill"></i>
+
+                                                <span>
+                                                    نظام التشغيل: @operationSystemText
+                                                </span>
+                                            </li>
+
+                                            <li>
+                                                <i class="bi bi-box-arrow-in-left"></i>
+
+                                                <span>
+                                                    وقت الدخول:
+                                                    @checkInTime
+                                                </span>
+                                            </li>
+
+                                            <li>
+                                                <i class="bi bi-box-arrow-right"></i>
+
+                                                <span>
+                                                    وقت الخروج:
+                                                    @checkOutTime
+                                                </span>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="accordion-item">
+
+                                <h3 class="accordion-header"
+                                id="paymentPolicyHeading">
+
+                                    <button class="accordion-button collapsed"
+                                        type="button"
+                                        data-bs-toggle="collapse"
+                                        data-bs-target="#paymentPolicyCollapse"
+                                        aria-expanded="false"
+                                        aria-controls="paymentPolicyCollapse">
+
+                                        <span class="accordion-title-icon">
+                                            <i class="bi bi-wallet2"></i>
+                                        </span>
+
+                                        <span>
+                                            <strong>
+                                                العربون والدفع
+                                            </strong>
+
+                                            <small>
+                                                المبالغ المطلوبة ومهلة السداد
+                                            </small>
+                                        </span>
+                                    </button>
+                                </h3>
+
+                                <div id="paymentPolicyCollapse"
+                                 class="accordion-collapse collapse"
+                                 aria-labelledby="paymentPolicyHeading"
+                                 data-bs-parent="#placePoliciesAccordion">
+
+                                    <div class="accordion-body policy-rich-text">
+
+                                        @Html.Raw(policyStr)
+
+                                        @if (
+                                       Model.PlacePolicy?
+                                       .PaymentTimeout > 0
+                                       )
+                                        {
+                                            <div class="policy-note danger">
+
+                                                <i class="bi bi-stopwatch-fill"></i>
+
+                                                <span>
+                                                    مهلة السداد:
+                                                    @Model.PlacePolicy.PaymentTimeout
+                                                    ساعة من وقت الطلب.
+                                                </span>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="accordion-item">
+
+                                <h3 class="accordion-header"
+                                id="cancelPolicyHeading">
+
+                                    <button class="accordion-button collapsed"
+                                        type="button"
+                                        data-bs-toggle="collapse"
+                                        data-bs-target="#cancelPolicyCollapse"
+                                        aria-expanded="false"
+                                        aria-controls="cancelPolicyCollapse">
+
+                                        <span class="accordion-title-icon">
+
+                                            <i class="bi bi-arrow-counterclockwise"></i>
+                                        </span>
+
+                                        <span>
+                                            <strong>
+                                                سياسة الإلغاء
+                                            </strong>
+
+                                            <small>
+                                                فترة الإلغاء والغرامة المحتملة
+                                            </small>
+                                        </span>
+                                    </button>
+                                </h3>
+
+                                <div id="cancelPolicyCollapse"
+                                 class="accordion-collapse collapse"
+                                 aria-labelledby="cancelPolicyHeading"
+                                 data-bs-parent="#placePoliciesAccordion">
+
+                                    <div class="accordion-body policy-rich-text">
+                                        @Html.Raw(cancelPolicyStr)
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="accordion-item">
+
+                                <h3 class="accordion-header"
+                                id="securityPolicyHeading">
+
+                                    <button class="accordion-button collapsed"
+                                        type="button"
+                                        data-bs-toggle="collapse"
+                                        data-bs-target="#securityPolicyCollapse"
+                                        aria-expanded="false"
+                                        aria-controls="securityPolicyCollapse">
+
+                                        <span class="accordion-title-icon">
+                                            <i class="bi bi-shield-lock"></i>
+                                        </span>
+
+                                        <span>
+                                            <strong>
+                                                قوانين المنشأة
+                                            </strong>
+
+                                            <small>
+                                                التعليمات والتواصل عند الحاجة
+                                            </small>
+                                        </span>
+                                    </button>
+                                </h3>
+
+                                <div id="securityPolicyCollapse"
+                                 class="accordion-collapse collapse"
+                                 aria-labelledby="securityPolicyHeading"
+                                 data-bs-parent="#placePoliciesAccordion">
+
+                                    <div class="accordion-body">
+
+                                        <div class="emergency-contact-row">
+
+                                            <i class="bi bi-telephone-fill"></i>
+
+                                            <div>
+                                                <small>
+                                                    الطوارئ والتواصل
+                                                </small>
+
+                                                <strong dir="ltr">
+
+                                                    @(Model.PlacePolicy != null &&
+                                                        !string.IsNullOrWhiteSpace(
+                                                        Model.PlacePolicy
+                                                        .EmergencyContact
+                                                        )
+                                                        ? Model.PlacePolicy
+                                                        .EmergencyContact
+                                                        : "غير متوفر حاليًا")
+                                                </strong>
+                                            </div>
+                                        </div>
+
+                                        <div class="policy-rich-text mt-3">
+                                            @Html.Raw(securityPolicyStr)
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                }
+
+
+                @if (
+                isPackageSystem ||
+                isHall
+                )
+                {
+                    <section class="details-section-card packages-premium-section"
+                         id="packagesSection">
+
+                        <div class="section-heading-row packages-heading-row">
+
+                            <div>
+                                <span class="section-kicker">
+
+                                    <i class="bi bi-ticket-perforated"></i>
+                                    خيارات الحجز
+                                </span>
+
+                                <h2>
+                                    اختر الباقة الأنسب لمناسبتك
+                                </h2>
+
+                                <p class="section-heading-description">
+                                    اسحب البطاقات أو استخدم الأسهم للتنقل،
+                                    ثم افتح الباقة المناسبة لإكمال التفاصيل.
+                                </p>
+                            </div>
+
+                            @if (
+                           Model.Packages != null &&
+                           Model.Packages.Any()
+                           )
+                            {
+                                <div class="packages-heading-actions">
+
+                                    <span class="section-count">
+
+                                        <i class="bi bi-collection"></i>
+
+                                        @Model.Packages.Count باقة
+                                    </span>
+
+                                    @if (
+                                   Model.Packages.Count > 1
+                                   )
+                                    {
+                                        <div class="packages-navigation"
+                                 aria-label="التنقل بين الباقات">
+
+                                            <button type="button"
+                                        class="packages-nav-button"
+                                        aria-label="الباقة السابقة"
+                                        onclick="
+                                                        const track =
+                                                            document.getElementById(
+                                                                'packagesContainer'
+                                                            );
+
+                                                        if (!track) {
+                                                            return;
+                                                        }
+
+                                                        const cards =
+                                                            Array.from(
+                                                                track.querySelectorAll(
+                                                                    '.package-card'
+                                                                )
+                                                            );
+
+                                                        if (!cards.length) {
+                                                            return;
+                                                        }
+
+                                                        let currentIndex =
+                                                            Number.parseInt(
+                                                                track.dataset.currentIndex || '0',
+                                                                10
+                                                            ) || 0;
+
+                                                        currentIndex =
+                                                            Math.max(
+                                                                0,
+                                                                currentIndex - 1
+                                                            );
+
+                                                        track.dataset.currentIndex =
+                                                            String(currentIndex);
+
+                                                        cards[currentIndex]
+                                                            .scrollIntoView({
+                                                                behavior: 'smooth',
+                                                                block: 'nearest',
+                                                                inline: 'center'
+                                                            });
+                                                    ">
+
+                                                <i class="bi bi-chevron-right"></i>
+                                            </button>
+
+                                            <button type="button"
+                                        class="packages-nav-button is-next"
+                                        aria-label="الباقة التالية"
+                                        onclick="
+                                                        const track =
+                                                            document.getElementById(
+                                                                'packagesContainer'
+                                                            );
+
+                                                        if (!track) {
+                                                            return;
+                                                        }
+
+                                                        const cards =
+                                                            Array.from(
+                                                                track.querySelectorAll(
+                                                                    '.package-card'
+                                                                )
+                                                            );
+
+                                                        if (!cards.length) {
+                                                            return;
+                                                        }
+
+                                                        let currentIndex =
+                                                            Number.parseInt(
+                                                                track.dataset.currentIndex || '0',
+                                                                10
+                                                            ) || 0;
+
+                                                        currentIndex =
+                                                            Math.min(
+                                                                cards.length - 1,
+                                                                currentIndex + 1
+                                                            );
+
+                                                        track.dataset.currentIndex =
+                                                            String(currentIndex);
+
+                                                        cards[currentIndex]
+                                                            .scrollIntoView({
+                                                                behavior: 'smooth',
+                                                                block: 'nearest',
+                                                                inline: 'center'
+                                                            });
+                                                    ">
+
+                                                <i class="bi bi-chevron-left"></i>
+                                            </button>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+
+                        @if (
+                       Model.Packages != null &&
+                       Model.Packages.Any()
+                       )
+                        {
+                            <div class="packages-carousel-shell">
+
+                                <div class="packages-track horizontal-scroll"
+                             id="packagesContainer"
+                             role="region"
+                             tabindex="0"
+                             aria-label="باقات المكان"
+                             data-current-index="0"
+                             onkeydown="
+                                         if (
+                                             event.key !== 'ArrowLeft' &&
+                                             event.key !== 'ArrowRight'
+                                         ) {
+                                             return;
+                                         }
+
+                                         event.preventDefault();
+
+                                         const cards =
+                                             Array.from(
+                                                 this.querySelectorAll(
+                                                     '.package-card'
+                                                 )
+                                             );
+
+                                         if (!cards.length) {
+                                             return;
+                                         }
+
+                                         let currentIndex =
+                                             Number.parseInt(
+                                                 this.dataset.currentIndex || '0',
+                                                 10
+                                             ) || 0;
+
+                                         currentIndex =
+                                             event.key === 'ArrowLeft'
+                                                 ? Math.min(
+                                                     cards.length - 1,
+                                                     currentIndex + 1
+                                                 )
+                                                 : Math.max(
+                                                     0,
+                                                     currentIndex - 1
+                                                 );
+
+                                         this.dataset.currentIndex =
+                                             String(currentIndex);
+
+                                         cards[currentIndex]
+                                             .scrollIntoView({
+                                                 behavior: 'smooth',
+                                                 block: 'nearest',
+                                                 inline: 'center'
+                                             });
+                                     ">
+
+                                    @foreach (
+                                   var package in
+                                   Model.Packages
+                                   )
+                                    {
+                                        var packagePromotion =
+                                        activePromotions.FirstOrDefault(promotion =>
+                                        promotion.PackageId == package.PackageId);
+
+                                        <article class="package-card @(packagePromotion != null ? "has-promotion" : "")"
+                                     id="packageCard-@package.PackageId"
+                                     data-promotion-id="@(packagePromotion?.PromotionId.ToString() ?? "0")">
+
+                                            @if (packagePromotion != null)
+                                            {
+                                                <span class="target-promotion-badge is-package">
+                                                    <i class="bi bi-fire"></i>
+                                                    @packagePromotion.OfferDisplay
+                                                </span>
+                                            }
+
+                                            <div class="package-card-top">
+
+                                                <span class="package-icon">
+                                                    <i class="bi bi-stars"></i>
+                                                </span>
+
+                                                <span class="package-capacity">
+
+                                                    <i class="bi bi-people-fill"></i>
+
+                                                    حتى @package.Capacity شخص
+                                                </span>
+                                            </div>
+
+                                            <div class="package-card-copy">
+
+                                                <span class="package-card-kicker">
+                                                    باقة متاحة للحجز
+                                                </span>
+
+                                                <h3>
+                                                    @package.PackageName
+                                                </h3>
+
+                                                <p>
+                                                    <i class="bi bi-clock-history"></i>
+                                                    @package.TimeFrame
+                                                </p>
+                                            </div>
+
+                                            <div class="package-price-row">
+
+                                                <small>السعر</small>
+
+                                                @if (
+                                               packagePromotion != null &&
+                                               packagePromotion.HasEstimatedPrice
+                                               )
+                                                {
+                                                    <del class="target-old-price">
+                                                        @packagePromotion.DisplayOriginalPriceText
+                                                    </del>
+
+                                                    <strong class="target-new-price">
+                                                        @packagePromotion.DisplayEstimatedPriceAfterDiscountText
+                                                    </strong>
+                                                }
+                                                else
+                                                {
+                                                    <strong>
+                                                        @GetPackageDisplayPriceText(
+                                        package.PackageId,
+                                        package.Price)
+                                                    </strong>
+                                                }
+                                            </div>
+
+                                            <button type="button"
+                                        class="package-select-button"
+                                        data-package-id="@package.PackageId"
+                                        data-package-name="@package.PackageName"
+                                        data-package-price="@GetPackageDisplayPriceText(package.PackageId, package.Price)"
+                                        data-package-capacity="سعة @package.Capacity شخص"
+                                        data-package-time="@package.TimeFrame"
+                                        data-package-max="@package.Capacity"
+                                        data-promotion-id="@(packagePromotion?.PromotionId.ToString() ?? "0")"
+                                        onclick="openPackageModalFromButton(this)"
+                                        disabled="@(!Model.CanBook)"
+                                        aria-disabled="@(!Model.CanBook)">
+
+                                                <span>
+                                                    اختيار الباقة
+                                                </span>
+
+                                                <i class="bi bi-arrow-left"></i>
+                                            </button>
+                                        </article>
+                                    }
+                                </div>
+
+                                @if (
+                               Model.Packages.Count > 1
+                               )
+                                {
+                                    <div class="packages-swipe-hint">
+
+                                        <i class="bi bi-hand-index-thumb"></i>
+
+                                        <span>
+                                            اسحب بالماوس أو الإصبع،
+                                            واستخدم أسهم لوحة المفاتيح.
+                                        </span>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="section-empty-state">
+
+                                <i class="bi bi-calendar-x"></i>
+
+                                <span>
+                                    لا توجد باقات متاحة حاليًا.
+                                </span>
+                            </div>
+                        }
+                    </section>
+                }
+
+                <section class="details-section-card location-section"
+                         id="locationSection">
+
+                    <div class="section-heading-row">
+
+                        <div>
+                            <span class="section-kicker">
+
+                                <i class="bi bi-map"></i>
+                                الوصول للمكان
+                            </span>
+
+                            <h2>الموقع والاتجاهات</h2>
+                        </div>
+
+                        @if (hasValidCoordinates)
+                        {
+                            <a href="@directionsUrl"
+                           target="_blank"
+                           rel="noopener"
+                           class="section-action-link">
+
+                                <span>فتح الاتجاهات</span>
+                                <i class="bi bi-box-arrow-up-left"></i>
+                            </a>
+                        }
+                    </div>
+
+                    <div class="location-address-card">
+
+                        <span>
+                            <i class="bi bi-geo-alt-fill"></i>
+                        </span>
+
+                        <div>
+                            <small>العنوان</small>
+
+                            <strong>
+                                @Model.CityName
+
+                                @if (!string.IsNullOrWhiteSpace(Model.AddressDetails))
+                                {
+                                    <text>— @Model.AddressDetails</text>
+                                }
+                            </strong>
+                        </div>
+                    </div>
+
+                    @if (hasValidCoordinates)
+                    {
+                        <div id="googleMapContainer"
+                         class="place-map-container"
+                         aria-label="خريطة موقع @Model.Name">
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="section-empty-state">
+
+                            <i class="bi bi-geo-alt"></i>
+
+                            <span>
+                                لم يحدد مالك المنشأة موقعًا دقيقًا على الخريطة.
+                            </span>
+                        </div>
+                    }
+                </section>
+
+                <section class="details-section-card reviews-section"
+                         id="reviewsSectionTrigger">
+
+                    <div class="section-heading-row">
+
+                        <div>
+                            <span class="section-kicker">
+
+                                <i class="bi bi-chat-quote"></i>
+                                تجارب حقيقية
+                            </span>
+
+                            <h2>تقييمات العملاء</h2>
+                        </div>
+
+                        <span class="section-count">
+                            @Model.TotalReviews تقييم
+                        </span>
+                    </div>
+
+                    <button type="button"
+                            class="reviews-summary-card"
+                            onclick="toggleReviewsContainer()"
+                            aria-controls="smartReviewsContainer"
+                            aria-expanded="false">
+
+                        <div class="reviews-score-block">
+
+                            <strong>
+                                @Model.AverageRating.ToString("0.0")
+                            </strong>
+
+                            <div class="reviews-stars"
+                                 aria-label="التقييم @Model.AverageRating من خمسة">
+
+                                @for (
+                                int star = 1;
+                                star <= 5;
+                                star++
+                                )
+                                {
+                                    if (
+                                    star <= Math.Round(
+                                    Model.AverageRating
+                                    )
+                                    )
+                                    {
+                                        <i class="bi bi-star-fill"></i>
+                                    }
+                                    else if (
+                                    star - 0.5 <=
+                                    Model.AverageRating
+                                    )
+                                    {
+                                        <i class="bi bi-star-half"></i>
+                                    }
+                                    else
+                                    {
+                                        <i class="bi bi-star"></i>
+                                    }
+                                }
+                            </div>
+
+                            <span>
+                                بناءً على @Model.TotalReviews تجربة
+                            </span>
+                        </div>
+
+                        <div class="reviews-distribution">
+
+                            @for (
+                            int star = 5;
+                            star >= 1;
+                            star--
+                            )
+                            {
+                                int starCount =
+                                Model.StarDistribution != null &&
+                                Model.StarDistribution.ContainsKey(star)
+                                ? Model.StarDistribution[star]
+                                : 0;
+
+                                int totalReviews =
+                                Model.TotalReviews > 0
+                                ? Model.TotalReviews
+                                : 1;
+
+                                int percentage =
+                                (int)Math.Round(
+                                (double)starCount /
+                                totalReviews *
+                                100
+                                );
+
+                                <div class="rating-progress-row">
+
+                                    <span>@star</span>
+
+                                    <div class="rating-progress-track">
+
+                                        <span style="width:@percentage%;"></span>
+                                    </div>
+
+                                    <small>@starCount</small>
+                                </div>
+                            }
+                        </div>
+
+                        <div class="reviews-summary-toggle">
+
+                            <span id="reviewsToggleText">
+                                عرض التقييمات أو إضافة تقييم
+                            </span>
+
+                            <i class="bi bi-chevron-down"
+                               id="reviewsChevronIcon"></i>
+                        </div>
+                    </button>
+
+                    <div id="smartReviewsContainer"
+                         class="smart-reviews-panel"
+                         style="display:none;"
+                         aria-hidden="true">
+
+                        <button type="button"
+                                class="reviews-mobile-backdrop"
+                                onclick="toggleReviewsContainer()"
+                                aria-label="إغلاق التقييمات">
+                        </button>
+
+                        <div class="reviews-panel-frame"
+                             role="dialog"
+                             aria-modal="true"
+                             aria-labelledby="reviewsPanelTitle">
+
+                            <div class="reviews-mobile-header">
+
+                                <div class="reviews-mobile-heading">
+
+                                    <span class="reviews-mobile-icon">
+
+                                        <i class="bi bi-chat-quote-fill"></i>
+                                    </span>
+
+                                    <div>
+                                        <small>
+                                            @Model.TotalReviews تقييم
+                                        </small>
+
+                                        <h3 id="reviewsPanelTitle">
+                                            تقييمات العملاء
+                                        </h3>
+                                    </div>
+                                </div>
+
+                                <button type="button"
+                                        class="reviews-mobile-close"
+                                        onclick="toggleReviewsContainer()"
+                                        aria-label="إغلاق التقييمات">
+
+                                    <i class="bi bi-x-lg"></i>
+                                </button>
+                            </div>
+
+                            <div class="reviews-panel-content">
+
+                                <div class="reviews-scroll-area custom-scrollbar">
+
+                                    <div class="reviews-filter-wrapper">
+
+                                        <div class="reviews-filter-track horizontal-scroll">
+
+                                            <button type="button"
+                                                    class="review-filter-chip active"
+                                                    onclick="filterReviews(
+                                                        'all',
+                                                        this
+                                                    )">
+
+                                                الكل
+                                            </button>
+
+                                            <button type="button"
+                                                    class="review-filter-chip"
+                                                    onclick="filterReviews(
+                                                        'positive',
+                                                        this
+                                                    )">
+
+                                                إيجابية
+                                            </button>
+
+                                            <button type="button"
+                                                    class="review-filter-chip"
+                                                    onclick="filterReviews(
+                                                        'negative',
+                                                        this
+                                                    )">
+
+                                                سلبية
+                                            </button>
+
+                                            @for (
+                                            int filterStar = 5;
+                                            filterStar >= 1;
+                                            filterStar--
+                                            )
+                                            {
+                                                <button type="button"
+                                                    class="review-filter-chip"
+                                                    onclick="filterReviews(
+                                                            '@filterStar',
+                                                            this
+                                                        )">
+
+                                                    @filterStar
+                                                    <i class="bi bi-star-fill"></i>
+                                                </button>
+                                            }
+                                        </div>
+                                    </div>
+
+                                    <div id="noReviewsFilterMessage"
+                                         class="reviews-empty-message d-none">
+
+                                        <i class="bi bi-filter-circle"></i>
+
+                                        <h3>
+                                            لا توجد مراجعات تطابق هذا الفلتر
+                                        </h3>
+                                    </div>
+
+                                    <div class="reviews-list">
+
+                                        @if (
+                                        Model.Reviews != null &&
+                                        Model.Reviews.Any()
+                                        )
+                                        {
+                                            foreach (
+                                            var rootReview in
+                                            Model.Reviews
+                                            )
+                                            {
+                                                RenderCustomerReviewNode(
+                                                rootReview,
+                                                0,
+                                                currentUserId,
+                                                FormatInstagramTime
+                                                );
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <div class="reviews-empty-message">
+
+                                                <i class="bi bi-star-half"></i>
+
+                                                <h3>
+                                                    كن أول من يشارك تجربته
+                                                </h3>
+
+                                                <p>
+                                                    ساعد الآخرين بتقييم هذا
+                                                    المكان بعد زيارته.
+                                                </p>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+
+                                <div class="review-composer">
+
+                                    <div id="reviewStarsArea"
+                                         class="review-composer-top">
+
+                                        <span id="replyingToIndicator">
+                                            ما هو تقييمك للمكان؟
+                                        </span>
+
+                                        <div class="rating-stars"
+                                             dir="ltr"
+                                             id="interactiveStars">
+
+                                            <i class="bi bi-star star-item"
+                                               data-value="1"></i>
+
+                                            <i class="bi bi-star star-item"
+                                               data-value="2"></i>
+
+                                            <i class="bi bi-star star-item"
+                                               data-value="3"></i>
+
+                                            <i class="bi bi-star star-item"
+                                               data-value="4"></i>
+
+                                            <i class="bi bi-star star-item"
+                                               data-value="5"></i>
+                                        </div>
+
+                                        <button type="button"
+                                                class="review-cancel-reply d-none"
+                                                id="cancelReplyBtn"
+                                                onclick="cancelInstaReply()">
+
+                                            <i class="bi bi-x-lg"></i>
+                                            <span>إلغاء</span>
+                                        </button>
+                                    </div>
+
+                                    <div class="review-input-shell">
+
+                                        <div class="dropup review-emoji-wrap">
+
+                                            <button class="review-emoji-button"
+                                                    type="button"
+                                                    data-bs-toggle="dropdown"
+                                                    data-bs-auto-close="outside"
+                                                    aria-label="إضافة رمز تعبيري">
+
+                                                <i class="bi bi-emoji-smile"></i>
+                                            </button>
+
+                                            <div class="dropdown-menu review-emoji-menu">
+
+                                                <emoji-picker id="customerEmojiPicker"
+                                                              class="light">
+                                                </emoji-picker>
+                                            </div>
+                                        </div>
+
+                                        <input type="hidden"
+                                               id="userRatingValue"
+                                               value="0" />
+
+                                        <input type="hidden"
+                                               id="instaParentReviewId"
+                                               value="" />
+
+                                        <input type="hidden"
+                                               id="instaEditModeId"
+                                               value="" />
+
+                                        <input type="text"
+                                               id="instaReplyInput"
+                                               class="review-text-input"
+                                               placeholder="اكتب تقييمك هنا..."
+                                               autocomplete="off" />
+
+                                        <button type="button"
+                                                class="review-publish-button"
+                                                id="instaPostBtn"
+                                                onclick="submitCustomerPost()">
+
+                                            <span>نشر</span>
+                                            <i class="bi bi-send-fill"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <aside class="place-content-aside is-sticky-rail">
+
+                <div class="booking-sticky-wrap">
+
+                    @if (isBookingPlace)
+                    {
+                        <section class="premium-booking-card">
+
+                            <div class="booking-card-head">
+
+                                <div>
+                                    <small>خطوة الحجز</small>
+
+                                    <div class="booking-price-line is-package">
+
+                                        <strong>
+                                            @Model.BookingAvailabilityMessage
+                                        </strong>
+                                    </div>
+                                </div>
+
+                                <div class="booking-rating">
+
+                                    <i class="bi bi-star-fill"></i>
+
+                                    <strong>
+                                        @Model.AverageRating.ToString("0.0")
+                                    </strong>
+
+                                    <span>
+                                        (@Model.TotalReviews)
+                                    </span>
+                                </div>
+                            </div>
+
+                            @if (highlightedPromotion != null)
+                            {
+                                <button type="button"
+                                class="booking-mini-offer"
+                                data-promotion-action
+                                data-promotion-id="@highlightedPromotion.PromotionId"
+                                data-target-anchor="@highlightedPromotion.TargetAnchor">
+
+                                    <span class="booking-mini-offer-icon">
+                                        <i class="bi bi-fire"></i>
+                                    </span>
+
+                                    <span class="booking-mini-offer-copy">
+                                        <small>عرض متاح الآن</small>
+                                        <strong>
+                                            @highlightedPromotion.OfferDisplay
+                                            على @highlightedPromotion.TargetLabel
+                                        </strong>
+                                    </span>
+
+                                    <i class="bi bi-arrow-left"></i>
+                                </button>
+                            }
+
+                            <div class="booking-assurance-list">
+
+                                <div>
+                                    <i class="bi bi-shield-check"></i>
+                                    <span>بيانات الحجز محمية</span>
+                                </div>
+
+                                <div>
+                                    <i class="bi bi-cash-stack"></i>
+                                    <span>لن يتم خصم مبلغ الآن</span>
+                                </div>
+
+                                <div>
+                                    <i class="bi bi-headset"></i>
+                                    <span>دعم ومتابعة للطلب</span>
+                                </div>
+                            </div>
+
+                            @if (isHotel)
+                            {
+                                <button type="button"
+                                data-bs-toggle="modal"
+                                data-bs-target="#datePickerModal"
+                                class="booking-primary-button"
+                                disabled="@(!Model.CanBook)"
+                                aria-disabled="@(!Model.CanBook)">
+
+                                    <span>
+                                        عرض الغرف المتاحة
+                                    </span>
+
+                                    <i class="bi bi-calendar2-check-fill"></i>
+                                </button>
+                            }
+                            else if (
+                            isPackageSystem ||
+                            isHall
+                            )
+                            {
+                                <button type="button"
+                                class="booking-primary-button"
+                                disabled="@(!Model.CanBook)"
+                                aria-disabled="@(!Model.CanBook)"
+                                onclick="
+                                            const packages =
+                                                document.getElementById(
+                                                    'packagesSection'
+                                                );
+
+                                            if (packages) {
+                                                packages.scrollIntoView({
+                                                    behavior: 'smooth',
+                                                    block: 'start'
+                                                });
+                                            }
+                                        ">
+
+                                    <span>
+                                        استعراض الباقات
+                                    </span>
+
+                                    <i class="bi bi-ticket-perforated-fill"></i>
+                                </button>
+                            }
+                            else
+                            {
+                                <a asp-controller="Places"
+                           asp-action="Checkout"
+                           class="booking-primary-button"
+                           data-customer-booking-start>
+
+                                    <span>احجز الآن</span>
+                                    <i class="bi bi-arrow-left"></i>
+                                </a>
+                            }
+
+                            <div class="booking-journey-mini"
+                             aria-label="خطوات إكمال الحجز">
+
+                                <div class="booking-journey-step is-current">
+
+                                    <span>1</span>
+
+                                    <div>
+                                        <small>الآن</small>
+                                        <strong>اختر الباقة</strong>
+                                    </div>
+                                </div>
+
+                                <i class="bi bi-chevron-left"></i>
+
+                                <div class="booking-journey-step">
+
+                                    <span>2</span>
+
+                                    <div>
+                                        <small>بعدها</small>
+                                        <strong>حدد الموعد</strong>
+                                    </div>
+                                </div>
+
+                                <i class="bi bi-chevron-left"></i>
+
+                                <div class="booking-journey-step">
+
+                                    <span>3</span>
+
+                                    <div>
+                                        <small>أخيرًا</small>
+                                        <strong>راجع وأكد</strong>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="booking-policy-note">
+
+                                <i class="bi bi-info-circle-fill"></i>
+
+                                <span>
+                                    راجع السياسات بعناية قبل إرسال طلب
+                                    الحجز.
+                                </span>
+                            </div>
+                        </section>
+                    }
+                    else
+                    {
+                        <section class="premium-visit-card">
+
+                            <span class="visit-card-icon">
+                                <i class="bi bi-door-open-fill"></i>
+                            </span>
+
+                            <small>
+                                مكان مفتوح للزيارة
+                            </small>
+
+                            <h2>
+                                لا يحتاج إلى حجز مسبق
+                            </h2>
+
+                            <p>
+                                استخدم الاتجاهات للوصول إلى المكان بسهولة.
+                            </p>
+
+                            @if (hasValidCoordinates)
+                            {
+                                <a href="@directionsUrl"
+                           target="_blank"
+                           rel="noopener"
+                           class="booking-primary-button visit-button">
+
+                                    <span>
+                                        احصل على الاتجاهات
+                                    </span>
+
+                                    <i class="bi bi-geo-alt-fill"></i>
+                                </a>
+                            }
+                            else
+                            {
+                                <button type="button"
+                                class="booking-primary-button visit-button"
+                                disabled>
+
+                                    <span>
+                                        الموقع غير محدد
+                                    </span>
+
+                                    <i class="bi bi-geo-alt"></i>
+                                </button>
+                            }
+                        </section>
+                    }
+
+                    <section class="place-chat-card @(Model.CanContactPlace
+                        ? "is-available"
+                        : "is-unavailable")"
+                             aria-label="التواصل مع المنشأة">
+
+                        <div class="place-chat-card-icon">
+                            <i class="bi bi-chat-heart-fill"></i>
+                        </div>
+
+                        <div class="place-chat-card-copy">
+                            <small>لديك استفسار قبل الحجز؟</small>
+
+                            <h2>
+                                تواصل مباشرة مع المنشأة
+                            </h2>
+
+                            <p>
+                                @if (Model.CanContactPlace)
+                                {
+                                    <text>
+                                        اسأل @Model.OwnerName عن التوفر والخدمات
+                                        والتفاصيل قبل تأكيد طلبك.
+                                    </text>
+                                }
+                                else
+                                {
+                                    @Model.ChatUnavailableMessage
+                                }
+                            </p>
+                        </div>
+
+                        @if (Model.CanContactPlace)
+                        {
+                            <a asp-controller="Messages"
+                           asp-action="MyMessages"
+                           asp-route-placeId="@Model.PlaceId"
+                           asp-route-withOwnerId="@Model.OwnerId"
+                           class="booking-primary-button place-chat-button">
+
+                                <span>تواصل مع المنشأة</span>
+                                <i class="bi bi-chat-dots-fill"></i>
+                            </a>
+                        }
+                        else
+                        {
+                            <button type="button"
+                                class="booking-primary-button place-chat-button is-disabled"
+                                title="@Model.ChatUnavailableMessage"
+                                disabled>
+
+                                <span>الدردشة غير متاحة</span>
+                                <i class="bi bi-chat-dots"></i>
+                            </button>
+                        }
+                    </section>
+                </div>
+
+            </aside>
+        </div>
+    </div>
+
+    <div class="sticky-bottom-booking d-lg-none">
+
+        <div class="mobile-booking-inner">
+
+            @if (isBookingPlace)
+            {
+                <div class="mobile-booking-price">
+
+                    <small>الحجز</small>
+
+                    <strong>
+                        @Model.BookingAvailabilityMessage
+                    </strong>
+                </div>
+
+                @if (isHotel)
+                {
+                    <button type="button"
+                    data-bs-toggle="modal"
+                    data-bs-target="#datePickerModal"
+                    class="mobile-booking-button"
+                    disabled="@(!Model.CanBook)"
+                    aria-disabled="@(!Model.CanBook)">
+
+                        احجز الآن
+                    </button>
+                }
+                else if (
+                isPackageSystem ||
+                isHall
+                )
+                {
+                    <button type="button"
+                    class="mobile-booking-button"
+                    disabled="@(!Model.CanBook)"
+                    aria-disabled="@(!Model.CanBook)"
+                    onclick="
+                                const packages =
+                                    document.getElementById(
+                                        'packagesSection'
+                                    );
+
+                                if (packages) {
+                                    packages.scrollIntoView({
+                                        behavior: 'smooth',
+                                        block: 'start'
+                                    });
+                                }
+                            ">
+
+                        استعراض الباقات
+                    </button>
+                }
+                else
+                {
+                    <a asp-controller="Places"
+               asp-action="Checkout"
+               class="mobile-booking-button"
+               data-customer-booking-start>
+
+                        احجز الآن
+                    </a>
+                }
+            }
+            else
+            {
+                <div class="mobile-booking-price">
+
+                    <small>حالة الدخول</small>
+
+                    <strong>
+                        <i class="bi bi-door-open-fill"></i>
+                        متاح للزيارة
+                    </strong>
+                </div>
+
+                @if (hasValidCoordinates)
+                {
+                    <a href="@directionsUrl"
+               target="_blank"
+               rel="noopener"
+               class="mobile-booking-button is-directions">
+
+                        الاتجاهات
+                    </a>
+                }
+                else
+                {
+                    <button type="button"
+                    class="mobile-booking-button is-directions"
+                    disabled>
+
+                        الموقع غير محدد
+                    </button>
+                }
+            }
+        </div>
+    </div>
+</main>
+
+@Html.AntiForgeryToken()
+
+
+@if (Model.AttributionAdvertisementId.HasValue)
+{
+    <div id="customerAdvertisementTracking"
+     data-impression-url="@Url.Action("Impression", "CustomerAdvertisements")"
+     data-click-url="@Url.Action("Click", "CustomerAdvertisements")"
+     data-booking-start-url="@Url.Action("BookingStarted", "CustomerAdvertisements")"
+     hidden>
+        @Html.AntiForgeryToken()
+    </div>
+}
+
+<input type="hidden"
+       id="basePriceInput"
+       value="0" />
+
+<input type="hidden"
+       id="placeLat"
+       value="@(Model.Latitude.ToString(System.Globalization.CultureInfo.InvariantCulture))" />
+
+<input type="hidden"
+       id="placeLng"
+       value="@(Model.Longitude.ToString(System.Globalization.CultureInfo.InvariantCulture))" />
+
+<input type="hidden"
+       id="customerAuthenticatedInput"
+       value="@((User.Identity?.IsAuthenticated == true && User.IsInRole("Customer")) ? "true" : "false")" />
+
+<input type="hidden"
+       id="placeIdInput"
+       value="@Model.PlaceId" />
+
+<input type="hidden"
+       id="placeNameInput"
+       value="@Model.Name" />
+
+<input type="hidden"
+       id="placeImageInput"
+       value="@Model.MainImage" />
+
+<input type="hidden"
+       id="placeCategoryInput"
+       value="@catName" />
+
+<input type="hidden"
+       id="systemIdInput"
+       value="@Model.BookingSystemId" />
+
+<input type="hidden"
+       id="placeDepositPolicyInput"
+       value="@policyStr" />
+
+<input type="hidden"
+       id="placeCancelPolicyInput"
+       value="@cancelPolicyStr" />
+
+<input type="hidden"
+       id="placeSecurityPolicyInput"
+       value="@securityPolicyStr" />
+
+<div class="modal fade premium-place-modal"
+     id="datePickerModal"
+     tabindex="-1"
+     aria-labelledby="datePickerModalTitle"
+     aria-hidden="true"
+     dir="rtl">
+
+    <div class="modal-dialog modal-dialog-centered premium-place-modal-dialog premium-date-dialog">
+
+        <div class="modal-content premium-place-modal-content">
+
+            <span class="premium-modal-decoration decoration-one"></span>
+            <span class="premium-modal-decoration decoration-two"></span>
+
+            <div class="premium-modal-mobile-handle"
+                 aria-hidden="true">
+            </div>
+
+            <div class="premium-place-modal-header">
+
+                <div class="premium-modal-heading">
+
+                    <span class="premium-modal-icon">
+
+                        <i class="bi bi-calendar2-week-fill"></i>
+                    </span>
+
+                    <div>
+                        <small>خطوة سريعة</small>
+
+                        <h5 class="modal-title"
+                            id="datePickerModalTitle">
+
+                            اختر فترة الإقامة
+                        </h5>
+
+                        <p>
+                            حدد تاريخ الدخول والخروج لعرض الغرف المتاحة.
+                        </p>
+                    </div>
+                </div>
+
+                <button type="button"
+                        class="premium-modal-close custom-close-btn"
+                        data-bs-dismiss="modal"
+                        aria-label="إغلاق">
+
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+
+            <div class="modal-body premium-place-modal-body">
+
+                <div class="premium-date-grid">
+
+                    <div class="premium-field-group">
+
+                        <label for="startDate"
+                               class="premium-field-label">
+
+                            <span>
+                                <i class="bi bi-box-arrow-in-left"></i>
+                            </span>
+
+                            <span>تاريخ الدخول</span>
+                        </label>
+
+                        <div class="premium-date-input-shell">
+
+                            <input type="text"
+                                   id="startDate"
+                                   class="form-control my-datepicker premium-date-input"
+                                   placeholder="YYYY-MM-DD"
+                                   autocomplete="off"
+                                   readonly />
+
+                            <i class="bi bi-calendar3"></i>
+                        </div>
+                    </div>
+
+                    <div class="premium-field-group">
+
+                        <label for="endDate"
+                               class="premium-field-label">
+
+                            <span>
+                                <i class="bi bi-box-arrow-right"></i>
+                            </span>
+
+                            <span>تاريخ الخروج</span>
+                        </label>
+
+                        <div class="premium-date-input-shell">
+
+                            <input type="text"
+                                   id="endDate"
+                                   class="form-control my-datepicker premium-date-input"
+                                   placeholder="YYYY-MM-DD"
+                                   autocomplete="off"
+                                   readonly />
+
+                            <i class="bi bi-calendar3"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="premium-modal-tip">
+
+                    <i class="bi bi-moon-stars-fill"></i>
+
+                    <span>
+                        يجب أن يفصل بين تاريخ الدخول والخروج ليلة واحدة
+                        على الأقل.
+                    </span>
+                </div>
+
+                <div id="dateWarning"
+                     class="premium-inline-alert is-danger d-none">
+
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+
+                    <span>
+                        تاريخ الخروج يجب أن يكون بعد تاريخ الدخول بليلة
+                        واحدة.
+                    </span>
+                </div>
+            </div>
+
+            <div class="modal-footer premium-place-modal-footer">
+
+                <button type="button"
+                        id="btnSaveDates"
+                        onclick="goToAvailableRooms()"
+                        class="btn btn-secondary premium-modal-primary"
+                        disabled>
+
+                    <span>حفظ ومتابعة</span>
+                    <i class="bi bi-arrow-left"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade premium-place-modal"
+     id="packageDatePickerModal"
+     tabindex="-1"
+     aria-labelledby="packageDatePickerModalTitle"
+     aria-hidden="true"
+     dir="rtl">
+
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable premium-place-modal-dialog premium-package-dialog">
+
+        <div class="modal-content premium-place-modal-content">
+
+            <div class="premium-modal-mobile-handle"
+                 aria-hidden="true">
+            </div>
+
+            <div class="premium-place-modal-header">
+
+                <div class="premium-modal-heading">
+
+                    <span class="premium-modal-icon">
+                        <i class="bi bi-calendar2-heart-fill"></i>
+                    </span>
+
+                    <div>
+                        <small>حجز الباقة</small>
+
+                        <h5 class="modal-title"
+                            id="packageDatePickerModalTitle">
+
+                            اختر يوم الحجز
+                        </h5>
+
+                        <p>
+                            الأيام غير المتاحة ستظهر مغلقة داخل التقويم.
+                        </p>
+                    </div>
+                </div>
+
+                <button type="button"
+                        class="premium-modal-close custom-close-btn"
+                        data-bs-dismiss="modal"
+                        aria-label="إغلاق">
+
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+
+            <div class="modal-body premium-place-modal-body">
+
+                <div class="premium-calendar-card">
+
+                    <div class="premium-calendar-card-head">
+
+                        <span>
+                            <i class="bi bi-calendar-check-fill"></i>
+                        </span>
+
+                        <div>
+                            <strong>حدد اليوم المناسب</strong>
+                            <small>يمكنك اختيار يوم واحد للحجز</small>
+                        </div>
+                    </div>
+
+                    <input type="text"
+                           id="packageInlineCalendar"
+                           aria-label="تقويم الباقة" />
+                </div>
+
+                <div class="premium-selected-package-card">
+
+                    <div class="premium-selected-package-top">
+
+                        <div>
+                            <small>الباقة المختارة</small>
+                            <strong id="modalPkgName">-</strong>
+                        </div>
+
+                        <div class="premium-selected-price">
+
+                            <strong id="modalPkgPrice">-</strong>
+                        </div>
+                    </div>
+
+                    <div class="premium-selected-package-details">
+
+                        <div>
+                            <span>
+                                <i class="bi bi-people-fill"></i>
+                            </span>
+
+                            <div>
+                                <small>السعة</small>
+                                <strong id="modalPkgCap">-</strong>
+                            </div>
+                        </div>
+
+                        <div>
+                            <span>
+                                <i class="bi bi-clock-fill"></i>
+                            </span>
+
+                            <div>
+                                <small>الفترة</small>
+                                <strong id="modalPkgTime">-</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer premium-place-modal-footer">
+
+                <button type="button"
+                        id="btnNextPackage"
+                        onclick="@(isHall
+                            ? "openHallModal()"
+                            : "openAttendanceModal()")"
+                        class="btn btn-info premium-modal-primary disabled"
+                        disabled>
+
+                    <span>التالي</span>
+                    <i class="bi bi-arrow-left"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade premium-place-modal"
+     id="attendanceModal"
+     tabindex="-1"
+     aria-labelledby="attendanceModalTitle"
+     aria-hidden="true"
+     dir="rtl">
+
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable premium-place-modal-dialog premium-attendance-dialog">
+
+        <div class="modal-content premium-place-modal-content">
+
+            <div class="premium-modal-mobile-handle"
+                 aria-hidden="true">
+            </div>
+
+            <div class="premium-place-modal-header">
+
+                <div class="premium-modal-heading">
+
+                    <span class="premium-modal-icon">
+                        <i class="bi bi-people-fill"></i>
+                    </span>
+
+                    <div>
+                        <small>بيانات الحضور</small>
+
+                        <h5 class="modal-title"
+                            id="attendanceModalTitle">
+
+                            من سيحضر الحجز؟
+                        </h5>
+
+                        <p>
+                            حدد نوع الحجز وأعداد الأشخاص بدقة.
+                        </p>
+                    </div>
+                </div>
+
+                <button type="button"
+                        class="premium-modal-close custom-close-btn"
+                        data-bs-dismiss="modal"
+                        aria-label="إغلاق">
+
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+
+            <div class="modal-body premium-place-modal-body">
+
+                <div class="premium-field-group">
+
+                    <label for="bookingTypeSelect"
+                           class="premium-field-label">
+
+                        <span>
+                            <i class="bi bi-person-badge-fill"></i>
+                        </span>
+
+                        <span>نوع الحجز</span>
+                    </label>
+
+                    <div class="premium-select-shell">
+
+                        <select id="bookingTypeSelect"
+                                class="form-select premium-select-input">
+
+                            <option value="family">
+                                عائلة (رجال ونساء)
+                            </option>
+
+                            <option value="men">
+                                شباب فقط
+                            </option>
+
+                            <option value="women">
+                                نساء فقط
+                            </option>
+
+                            <option value="company">
+                                جهة / شركة
+                            </option>
+
+                            <option value="other">
+                                أخرى — اكتب نوع الحجز
+                            </option>
+                        </select>
+
+                        <i class="bi bi-chevron-down"></i>
+                    </div>
+
+                    <div id="bookingTypeOtherWrap"
+                         class="premium-other-booking-field"
+                         hidden
+                         aria-hidden="true">
+
+                        <label for="bookingTypeOtherInput"
+                               class="premium-other-booking-label">
+                            <i class="bi bi-pencil-square"></i>
+                            <span>اكتب نوع الحجز</span>
+                        </label>
+
+                        <div class="premium-other-booking-input-shell">
+                            <i class="bi bi-stars"></i>
+
+                            <input type="text"
+                                   id="bookingTypeOtherInput"
+                                   class="form-control premium-other-booking-input"
+                                   maxlength="50"
+                                   autocomplete="off"
+                                   placeholder="مثال: وفد جامعي، مناسبة خاصة، مجموعة أصدقاء..."
+                                   aria-describedby="bookingTypeOtherHint" />
+
+                            <span id="bookingTypeOtherCounter"
+                                  class="premium-other-booking-counter">
+                                0 / 50
+                            </span>
+                        </div>
+
+                        <small id="bookingTypeOtherHint"
+                               class="premium-other-booking-hint">
+                            اكتب وصفًا مختصرًا وواضحًا لنوع الحجز.
+                        </small>
+                    </div>
+                </div>
+
+                <div class="premium-counter-list">
+
+                    <div class="premium-counter-row">
+
+                        <div class="premium-counter-label">
+
+                            <span>
+                                <i class="bi bi-person-fill"></i>
+                            </span>
+
+                            <div>
+                                <strong>عدد الكبار</strong>
+                                <small>الأشخاص البالغون</small>
+                            </div>
+                        </div>
+
+                        <div class="premium-counter-control"
+                             dir="ltr">
+
+                            <button type="button"
+                                    onclick="smartUpdateCount(
+                                        'adultsCount',
+                                        -1
+                                    )"
+                                    aria-label="إنقاص عدد الكبار">
+
+                                <i class="bi bi-dash-lg"></i>
+                            </button>
+
+                            <input type="text"
+                                   inputmode="numeric"
+                                   id="adultsCount"
+                                   class="form-control no-arrows"
+                                   value="0"
+                                   aria-label="عدد الكبار"
+                                   onfocus="
+                                       if (this.value === '0') {
+                                           this.value = '';
+                                       }
+                                   "
+                                   onblur="
+                                       if (this.value === '') {
+                                           this.value = '0';
+                                       }
+
+                                       syncBookingNumbers(
+                                           'adults'
+                                       );
+                                   "
+                                   oninput="
+                                       this.value =
+                                           this.value.replace(
+                                               /[^0-9]/g,
+                                               ''
+                                           );
+
+                                       syncBookingNumbers(
+                                           'adults'
+                                       );
+                                   " />
+
+                            <button type="button"
+                                    onclick="smartUpdateCount(
+                                        'adultsCount',
+                                        1
+                                    )"
+                                    aria-label="زيادة عدد الكبار">
+
+                                <i class="bi bi-plus-lg"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="premium-counter-row">
+
+                        <div class="premium-counter-label">
+
+                            <span>
+                                <i class="bi bi-person-hearts"></i>
+                            </span>
+
+                            <div>
+                                <strong>عدد الأطفال</strong>
+                                <small>الأطفال ضمن الحجز</small>
+                            </div>
+                        </div>
+
+                        <div class="premium-counter-control"
+                             dir="ltr">
+
+                            <button type="button"
+                                    onclick="smartUpdateCount(
+                                        'childrenCount',
+                                        -1
+                                    )"
+                                    aria-label="إنقاص عدد الأطفال">
+
+                                <i class="bi bi-dash-lg"></i>
+                            </button>
+
+                            <input type="text"
+                                   inputmode="numeric"
+                                   id="childrenCount"
+                                   class="form-control no-arrows"
+                                   value="0"
+                                   aria-label="عدد الأطفال"
+                                   onfocus="
+                                       if (this.value === '0') {
+                                           this.value = '';
+                                       }
+                                   "
+                                   onblur="
+                                       if (this.value === '') {
+                                           this.value = '0';
+                                       }
+
+                                       syncBookingNumbers(
+                                           'children'
+                                       );
+                                   "
+                                   oninput="
+                                       this.value =
+                                           this.value.replace(
+                                               /[^0-9]/g,
+                                               ''
+                                           );
+
+                                       syncBookingNumbers(
+                                           'children'
+                                       );
+                                   " />
+
+                            <button type="button"
+                                    onclick="smartUpdateCount(
+                                        'childrenCount',
+                                        1
+                                    )"
+                                    aria-label="زيادة عدد الأطفال">
+
+                                <i class="bi bi-plus-lg"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="capacityWarning"
+                     class="premium-inline-alert is-danger alert alert-danger d-none">
+
+                    <i class="bi bi-exclamation-circle-fill"></i>
+                    <span id="warningText"></span>
+                </div>
+            </div>
+
+            <div class="modal-footer premium-place-modal-footer">
+
+                <button type="button"
+                        class="btn btn-info premium-modal-primary"
+                        onclick="goToFinalCheckout()">
+
+                    <span>متابعة الحجز</span>
+                    <i class="bi bi-arrow-left"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade premium-place-modal"
+     id="hallBookingModal"
+     tabindex="-1"
+     aria-labelledby="hallBookingModalTitle"
+     aria-hidden="true"
+     dir="rtl">
+
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable premium-place-modal-dialog premium-hall-dialog">
+
+        <div class="modal-content premium-place-modal-content">
+
+            <div class="premium-modal-mobile-handle"
+                 aria-hidden="true">
+            </div>
+
+            <div class="premium-place-modal-header">
+
+                <div class="premium-modal-heading">
+
+                    <span class="premium-modal-icon">
+                        <i class="bi bi-buildings-fill"></i>
+                    </span>
+
+                    <div>
+                        <small>تفاصيل المناسبة</small>
+
+                        <h5 class="modal-title"
+                            id="hallBookingModalTitle">
+
+                            تجهيز القاعة
+                        </h5>
+
+                        <p>
+                            اختر نوع المناسبة وطريقة ترتيب المقاعد.
+                        </p>
+                    </div>
+                </div>
+
+                <button type="button"
+                        class="premium-modal-close custom-close-btn"
+                        data-bs-dismiss="modal"
+                        aria-label="إغلاق">
+
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+
+            <div class="modal-body premium-place-modal-body">
+
+                <div class="premium-field-group">
+
+                    <label for="hallEventTypeSelect"
+                           class="premium-field-label">
+
+                        <span>
+                            <i class="bi bi-balloon-heart-fill"></i>
+                        </span>
+
+                        <span>نوع المناسبة</span>
+                    </label>
+
+                    <div class="premium-select-shell">
+
+                        <select id="hallEventTypeSelect"
+                                class="form-select premium-select-input">
+
+                            @if (availableEvents.Any())
+                            {
+                                foreach (
+                                var eventName in
+                                availableEvents
+                                )
+                                {
+                                    <option value="@eventName">
+                                        @eventName
+                                    </option>
+                                }
+                            }
+                            else
+                            {
+                                <option value="غير محدد">
+                                    غير محدد
+                                </option>
+                            }
+                            <option value="other">
+                                أخرى — اكتب نوع المناسبة
+                            </option>
+                        </select>
+
+                        <i class="bi bi-chevron-down"></i>
+                    </div>
+
+                    <div id="hallEventOtherWrap"
+                         class="premium-other-booking-field"
+                         hidden
+                         aria-hidden="true">
+
+                        <label for="hallEventOtherInput"
+                               class="premium-other-booking-label">
+                            <i class="bi bi-pencil-square"></i>
+                            <span>ما نوع المناسبة؟</span>
+                        </label>
+
+                        <div class="premium-other-booking-input-shell">
+                            <i class="bi bi-stars"></i>
+
+                            <input type="text"
+                                   id="hallEventOtherInput"
+                                   class="form-control premium-other-booking-input"
+                                   maxlength="50"
+                                   autocomplete="off"
+                                   placeholder="مثال: فعالية جامعية، ورشة خاصة، مناسبة عائلية..."
+                                   aria-describedby="hallEventOtherHint" />
+
+                            <span id="hallEventOtherCounter"
+                                  class="premium-other-booking-counter">
+                                0 / 50
+                            </span>
+                        </div>
+
+                        <small id="hallEventOtherHint"
+                               class="premium-other-booking-hint">
+                            اكتب وصفًا مختصرًا وواضحًا لنوع المناسبة.
+                        </small>
+                    </div>
+
+                </div>
+
+                <div class="premium-seating-section">
+
+                    <div class="premium-field-label">
+
+                        <span>
+                            <i class="bi bi-grid-3x3-gap-fill"></i>
+                        </span>
+
+                        <span>ترتيب القاعة</span>
+                    </div>
+
+                    <div class="premium-seating-list">
+
+                        @if (availableSeats.Any())
+                        {
+                            bool isFirstSeat = true;
+
+                            foreach (
+                            var seat in
+                            availableSeats
+                            )
+                            {
+                                string activeSeatClass =
+                                isFirstSeat
+                                ? "border-info active-seating"
+                                : "border-light";
+
+                                string seatIconClass =
+                                isFirstSeat
+                                ? "bi-record-circle text-info"
+                                : "bi-circle text-muted";
+
+                                isFirstSeat = false;
+
+                                <button type="button"
+                                class="seating-option premium-seating-option @activeSeatClass"
+                                data-seat-name="@seat"
+                                onclick="selectSeating(
+                                            this,
+                                            this.dataset.seatName
+                                        )">
+
+                                    <span class="premium-seating-option-icon">
+
+                                        <i class="bi bi-layout-text-window-reverse"></i>
+                                    </span>
+
+                                    <span class="seating-text-value">
+                                        @seat
+                                    </span>
+
+                                    <i class="bi @seatIconClass radio-icon"></i>
+                                </button>
+                            }
+                        }
+                        else
+                        {
+                            <div class="premium-empty-option">
+
+                                <i class="bi bi-info-circle"></i>
+
+                                <span>
+                                    لا توجد خيارات لترتيب القاعة حاليًا.
+                                </span>
+                            </div>
+                        }
+                    
+                        <button type="button"
+                                class="seating-option premium-seating-option border-light"
+                                data-seat-name="other"
+                                onclick="selectSeating(this, this.dataset.seatName)">
+                            <span class="premium-seating-option-icon">
+                                <i class="bi bi-pencil-square"></i>
+                            </span>
+                            <span class="seating-text-value">أخرى</span>
+                            <i class="bi bi-circle text-muted radio-icon"></i>
+                        </button>
+</div>
+                
+
+                    <div id="seatingOtherWrap"
+                         class="premium-other-booking-field mt-3"
+                         hidden
+                         aria-hidden="true">
+                        <label for="seatingOtherInput"
+                               class="premium-other-booking-label">
+                            <i class="bi bi-pencil-square"></i>
+                            <span>اكتب ترتيب القاعة المطلوب</span>
+                        </label>
+
+                        <div class="premium-other-booking-input-shell">
+                            <i class="bi bi-grid-3x3-gap"></i>
+                            <input type="text"
+                                   id="seatingOtherInput"
+                                   class="form-control premium-other-booking-input"
+                                   maxlength="80"
+                                   autocomplete="off"
+                                   placeholder="مثال: طاولات دائرية مع منصة أمامية..."
+                                   aria-describedby="seatingOtherHint" />
+                            <span id="seatingOtherCounter"
+                                  class="premium-other-booking-counter">0 / 80</span>
+                        </div>
+
+                        <small id="seatingOtherHint"
+                               class="premium-other-booking-hint">
+                            وضّح الترتيب المطلوب حتى يصل للمالك كما كتبته.
+                        </small>
+                    </div>
+</div>
+            </div>
+
+            <div class="modal-footer premium-place-modal-footer">
+
+                <button type="button"
+                        class="btn btn-info premium-modal-primary"
+                        onclick="goToFinalCheckoutForHall()">
+
+                    <span>متابعة الحجز</span>
+                    <i class="bi bi-arrow-left"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade service-gallery-modal"
+     id="serviceGalleryModal"
+     tabindex="-1"
+     aria-labelledby="serviceGalleryTitle"
+     aria-hidden="true"
+     dir="rtl">
+
+    <div class="modal-dialog modal-dialog-centered service-gallery-dialog">
+
+        <div class="modal-content service-gallery-content">
+
+            <header class="service-gallery-header">
+
+                <div class="service-gallery-heading">
+
+                    <span>
+                        <i class="bi bi-images"></i>
+                    </span>
+
+                    <div>
+                        <small>
+                            صور الخدمة الإضافية
+                        </small>
+
+                        <h5 id="serviceGalleryTitle"
+                            class="modal-title">
+                            صور الخدمة
+                        </h5>
+                    </div>
+                </div>
+
+                <button type="button"
+                        class="service-gallery-close"
+                        data-bs-dismiss="modal"
+                        aria-label="إغلاق معرض الصور">
+
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </header>
+
+            <div id="serviceGalleryStage"
+                 class="service-gallery-stage">
+
+                <button id="serviceGalleryPrevious"
+                        type="button"
+                        class="service-gallery-navigation service-gallery-previous"
+                        aria-label="الصورة السابقة">
+
+                    <i class="bi bi-chevron-right"></i>
+                </button>
+
+                <div class="service-gallery-image-wrap">
+
+                    <img id="serviceGalleryMainImage"
+                         src=""
+                         alt="صورة الخدمة" />
+
+                    <span id="serviceGalleryCounter"
+                          class="service-gallery-counter">
+                        0 / 0
+                    </span>
+                </div>
+
+                <button id="serviceGalleryNext"
+                        type="button"
+                        class="service-gallery-navigation service-gallery-next"
+                        aria-label="الصورة التالية">
+
+                    <i class="bi bi-chevron-left"></i>
+                </button>
+            </div>
+
+            <div id="serviceGalleryThumbnails"
+                 class="service-gallery-thumbnails"
+                 aria-label="الصور المصغرة">
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/lib/sweetalert2/sweetalert2.js"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+
+    <script type="module"
+        src="https://cdn.jsdelivr.net/npm/emoji-picker-element@1.21.3/index.js">
+    </script>
+
+    <script src="~/js/customer/Details.js"
+        asp-append-version="true">
+    </script>
+
+    @if (Model.AttributionAdvertisementId.HasValue)
+    {
+        <script src="~/js/customer/advertisements.js" asp-append-version="true"></script>
+    }
+
+
+    @if (hasValidCoordinates)
+    {
+        <script async
+        defer
+        src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDsGFrKQykUki-adl_KJKEVlugvx4e3vjM&callback=initMap">
+        </script>
+    }
+}

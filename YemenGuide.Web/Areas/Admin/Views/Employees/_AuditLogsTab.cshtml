@@ -1,0 +1,173 @@
+@model YemenGuide.Core.DTOs.Admin.AdminAuditLogsTabDto
+@using System.Globalization
+@{
+    bool isArabic = string.Equals(CultureInfo.CurrentUICulture.TwoLetterISOLanguageName, "ar", StringComparison.OrdinalIgnoreCase);
+    string L(string ar, string en) => isArabic ? ar : en;
+    string ActionLabel(string? actionType) => actionType switch
+    {
+        "EmployeeCreated" => L("إنشاء موظف", "Employee created"),
+        "EmployeeUpdated" => L("تعديل بيانات موظف", "Employee updated"),
+        "EmployeeStatusChanged" => L("تغيير حالة موظف", "Employee status changed"),
+        "EmployeePasswordReset" => L("إعادة تعيين كلمة مرور موظف (سجل سابق)", "Employee password reset (legacy)"),
+        "EmployeeFirstPasswordChanged" => L("تعيين كلمة المرور الأولى للموظف", "Employee first password set"),
+        "AdminRoleCreated" => L("إنشاء دور وظيفي", "Role created"),
+        "AdminRoleUpdated" => L("تعديل دور وظيفي", "Role updated"),
+        "AdminRoleStatusChanged" => L("تغيير حالة دور وظيفي", "Role status changed"),
+        "CaseCreated" => L("إنشاء قضية إدارية", "Case created"),
+        "CaseInternalNote" => L("إضافة ملاحظة داخلية للقضية", "Internal case note added"),
+        "CaseReviewStarted" => L("بدء مراجعة قضية", "Case review started"),
+        "CaseAssigned" => L("إسناد قضية لموظف", "Case assigned"),
+        "ReporterReplyRequested" => L("طلب توضيح من مقدم القضية", "Reporter reply requested"),
+        "ReportedPartyReplyRequested" => L("طلب رد من الطرف الآخر", "Reported party reply requested"),
+        "CasePriorityChanged" => L("تغيير أولوية قضية", "Case priority changed"),
+        "CaseEscalated" => L("تصعيد قضية", "Case escalated"),
+        "CaseResolved" => L("تسجيل القرار النهائي للقضية", "Case resolved"),
+        "CaseReopened" => L("إعادة فتح قضية", "Case reopened"),
+        _ => L("عملية إدارية", "Administrative action")
+    };
+
+    string EntityLabel(string? entityType) => entityType switch
+    {
+        "User" => L("موظف", "Employee"),
+        "AdminRole" => L("دور وظيفي", "Role"),
+        "Report" => L("قضية إدارية", "Case"),
+        "Place" => L("منشأة", "Place"),
+        "SystemSetting" => L("إعداد نظام", "System setting"),
+        _ => L("سجل إداري", "Administrative record")
+    };
+
+}
+
+<div class="employees-tab-panel" data-panel="audit">
+    <div class="employees-panel-heading">
+        <div>
+            <span class="employees-section-kicker">@L("التوثيق الإداري", "Administrative audit")</span>
+            <h2>@L("سجل العمليات", "Audit log")</h2>
+            <p>@L("من نفّذ العملية، ماذا حدث، ومتى. سجل واضح للمتابعة والمراجعة فقط.", "See who performed each action, what happened, and when.")</p>
+        </div>
+    </div>
+
+    <form class="audit-filter-bar" data-audit-filter autocomplete="off">
+        <label class="employees-search-field">
+            <i class="bi bi-search"></i>
+            <input type="search"
+                   name="Search"
+                   value="@Model.Filter.Search"
+                   placeholder="@L("ابحث باسم الموظف أو نوع العملية أو الوصف...", "Search by employee, action type, or description...")" />
+            <button type="button" data-clear-search aria-label="@L("مسح البحث", "Clear search")">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </label>
+
+        <select name="ActionType" aria-label="@L("نوع العملية", "Action type")">
+            <option value="">@L("كل العمليات", "All actions")</option>
+            @foreach (var action in Model.ActionTypes)
+            {
+                <option value="@action" selected="@(Model.Filter.ActionType == action)">@ActionLabel(action)</option>
+            }
+        </select>
+
+        <select name="IsSuccessful" aria-label="@L("نتيجة العملية", "Action result")">
+            <option value="">@L("كل النتائج", "All results")</option>
+            <option value="true" selected="@(Model.Filter.IsSuccessful == true)">@L("ناجحة", "Successful")</option>
+            <option value="false" selected="@(Model.Filter.IsSuccessful == false)">@L("فاشلة", "Failed")</option>
+        </select>
+
+        <label class="audit-date-field">
+            <span>@L("من", "From")</span>
+            <input type="date"
+                   name="FromDate"
+                   value="@(Model.Filter.FromDate?.ToString("yyyy-MM-dd"))" />
+        </label>
+
+        <label class="audit-date-field">
+            <span>@L("إلى", "To")</span>
+            <input type="date"
+                   name="ToDate"
+                   value="@(Model.Filter.ToDate?.ToString("yyyy-MM-dd"))" />
+        </label>
+
+        <button type="submit" class="employees-btn employees-btn--filter">
+            <i class="bi bi-funnel"></i>
+            @L("تطبيق", "Apply")
+        </button>
+    </form>
+
+    @if (Model.Items.Count == 0)
+    {
+        <div class="employees-empty-state">
+            <span><i class="bi bi-clock-history"></i></span>
+            <h3>@L("لا توجد عمليات", "No actions")</h3>
+            <p>@L("لم يتم العثور على سجلات مطابقة للفلاتر الحالية.", "No audit records match the current filters.")</p>
+        </div>
+    }
+    else
+    {
+        <div class="audit-list">
+            @foreach (var item in Model.Items)
+            {
+                <article class="audit-row @(item.IsSuccessful ? "is-success" : "is-failed")">
+                    <span class="audit-row__marker">
+                        <i class="bi @(item.IsSuccessful ? "bi-check-lg" : "bi-x-lg")"></i>
+                    </span>
+
+                    <div class="audit-row__main">
+                        <div class="audit-row__headline">
+                            <strong>@(string.IsNullOrWhiteSpace(item.UserName) ? L("النظام", "System") : item.UserName)</strong>
+                            @if (!string.IsNullOrWhiteSpace(item.Username))
+                            {
+                                <small dir="ltr">@("@" + item.Username)</small>
+                            }
+                            <span>@ActionLabel(item.ActionType)</span>
+                        </div>
+
+                        <p>@(string.IsNullOrWhiteSpace(item.Description) ? L("بدون وصف إضافي.", "No additional description.") : item.Description)</p>
+
+                        <div class="audit-row__meta">
+                            <span><i class="bi bi-clock"></i>@item.OccurredAt.ToString("yyyy/MM/dd - hh:mm tt", CultureInfo.CurrentCulture)</span>
+                            @if (!string.IsNullOrWhiteSpace(item.EntityType))
+                            {
+                                <span><i class="bi bi-box"></i>@EntityLabel(item.EntityType) @(!string.IsNullOrWhiteSpace(item.EntityId) ? $"#{item.EntityId}" : "")</span>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(item.IpAddress))
+                            {
+                                <span dir="ltr"><i class="bi bi-globe2"></i>@item.IpAddress</span>
+                            }
+                        </div>
+
+                        @if (!item.IsSuccessful && !string.IsNullOrWhiteSpace(item.FailureReason))
+                        {
+                            <div class="audit-row__failure">
+                                <i class="bi bi-exclamation-triangle-fill"></i>
+                                @item.FailureReason
+                            </div>
+                        }
+                    </div>
+
+                    <span class="audit-result-badge @(item.IsSuccessful ? "is-success" : "is-failed")">
+                        @(item.IsSuccessful ? L("ناجحة", "Successful") : L("فاشلة", "Failed"))
+                    </span>
+                </article>
+            }
+        </div>
+    }
+
+    @if (Model.TotalPages > 1)
+    {
+        <nav class="employees-pagination" aria-label="@L("صفحات سجل العمليات", "Audit log pages")">
+            <button type="button"
+                    data-audit-page="@(Model.PageNumber - 1)"
+                    disabled="@(Model.PageNumber <= 1)">
+                <i class="bi @(isArabic ? "bi-chevron-right" : "bi-chevron-left")"></i>
+            </button>
+
+            <span>@L("صفحة", "Page") <strong>@Model.PageNumber</strong> @L("من", "of") <strong>@Model.TotalPages</strong></span>
+
+            <button type="button"
+                    data-audit-page="@(Model.PageNumber + 1)"
+                    disabled="@(Model.PageNumber >= Model.TotalPages)">
+                <i class="bi @(isArabic ? "bi-chevron-left" : "bi-chevron-right")"></i>
+            </button>
+        </nav>
+    }
+</div>

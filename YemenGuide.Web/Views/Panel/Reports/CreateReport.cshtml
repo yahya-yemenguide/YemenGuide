@@ -1,0 +1,480 @@
+@using System
+@using System.Linq
+@using YemenGuide.Core.Constants
+@using YemenGuide.Core.DTOs.Customer
+@model CustomerCreateReportPageDto
+
+@{
+    ViewData["Title"] = "تقديم بلاغ";
+    ViewData["IsCustomerDashboardPage"] = true;
+    ViewData["HideFooter"] = true;
+    Layout = "~/Views/Shared/_Layout.cshtml";
+
+    var form = Model.Form ?? new CustomerCreateReportRequestDto();
+    var selectedReference = Model.SelectedReference;
+
+    var contextType = form.ReviewId.HasValue
+        ? ReportConstants.Types.Review
+        : form.PromotionId.HasValue
+            ? ReportConstants.Types.Promotion
+            : form.AdvertisementId.HasValue
+                ? ReportConstants.Types.Advertisement
+                : string.Empty;
+
+    var hasContextReference = !string.IsNullOrWhiteSpace(contextType);
+    var quickBookings = Model.RecentBookings.Take(5).ToList();
+    var selectedBooking = form.BookingId.HasValue
+        ? Model.RecentBookings.FirstOrDefault(item => item.ReferenceId == form.BookingId.Value)
+          ?? (selectedReference?.ReferenceType == ReportConstants.ReferenceTypes.Booking ? selectedReference : null)
+        : null;
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/customer/customer-sidebar.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/customer/customer-reports.css" asp-append-version="true" />
+}
+
+    <div class="customer-dashboard-layout">
+        <partial name="_CustomerSidebar" />
+
+        <main class="customer-main-content customer-reports-main">
+            <div class="cr-shell cr-shell--create" data-customer-reports-page="create" dir="rtl">
+
+                <header class="cr-create-head">
+                    <div>
+                        <a asp-controller="Reports" asp-action="MyReports" class="cr-back-link">
+                            <i class="bi bi-arrow-right"></i> العودة إلى بلاغاتي
+                        </a>
+                        <div class="cr-eyebrow">
+                            <span class="cr-eyebrow__icon"><i class="bi bi-shield-check"></i></span>
+                            <span>بلاغ جديد</span>
+                        </div>
+                        <h1>احكِ لنا المشكلة بوضوح، والباقي علينا</h1>
+                        <p>نموذج مختصر ومنظم. البلاغ يصل إلى الإدارة أولًا، ولن يُرسل مباشرة إلى الطرف الآخر.</p>
+                    </div>
+
+                    <div class="cr-create-head__trust">
+                        <span><i class="bi bi-lock-fill"></i><b>خاص وآمن</b><small>يصل للإدارة</small></span>
+                        <span><i class="bi bi-link-45deg"></i><b>قضية واحدة</b><small>كل الردود بنفس الرقم</small></span>
+                    </div>
+                </header>
+
+                <div class="cr-progress" aria-label="خطوات إنشاء البلاغ" data-report-progress>
+                    <span class="is-active" data-progress-step="type"><b>1</b><small>نوع المشكلة</small></span>
+                    <i data-progress-line="reference"></i>
+                    <span data-progress-step="reference"><b>2</b><small>المرجع</small></span>
+                    <i data-progress-line="details"></i>
+                    <span data-progress-step="details"><b>3</b><small>التفاصيل</small></span>
+                    <i data-progress-line="evidence"></i>
+                    <span data-progress-step="evidence"><b>4</b><small>الدليل</small></span>
+                </div>
+
+            @if (!ViewData.ModelState.IsValid)
+            {
+                <div class="cr-form-alert" role="alert">
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                    <div>
+                        <strong>راجع البيانات قبل الإرسال</strong>
+                        @Html.ValidationSummary(false, null, new { @class = "cr-validation-summary" })
+                    </div>
+                </div>
+            }
+
+            <form asp-controller="Reports" asp-action="CreateReport" method="post"
+                  enctype="multipart/form-data" class="cr-create-form" data-report-create-form novalidate>
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="RequestKind" value="Report" />
+                <input type="hidden" name="ReviewId" value="@form.ReviewId" />
+                <input type="hidden" name="PromotionId" value="@form.PromotionId" />
+                <input type="hidden" name="AdvertisementId" value="@form.AdvertisementId" />
+
+                <section class="cr-form-section" data-report-step="type">
+                    <div class="cr-form-section__head">
+                        <span class="cr-step-number">01</span>
+                        <div>
+                            <h2>البلاغ متعلق بماذا؟</h2>
+                            <p>اختر أقرب نوع للمشكلة حتى تصل للإدارة بالصورة الصحيحة.</p>
+                        </div>
+                    </div>
+
+                    <div class="cr-type-grid" data-report-types>
+                        @foreach (var type in Model.ReportTypes)
+                        {
+                            var isContextual = type.Value == ReportConstants.Types.Review ||
+                            type.Value == ReportConstants.Types.Promotion ||
+                            type.Value == ReportConstants.Types.Advertisement;
+                            var isAvailable = !isContextual || string.Equals(contextType, type.Value, StringComparison.OrdinalIgnoreCase);
+                            var isChecked = string.Equals(form.ReportType, type.Value, StringComparison.OrdinalIgnoreCase);
+
+                            <label class="cr-type-card @(!isAvailable ? "is-context-only" : string.Empty)"
+                               data-report-type-label="@type.Label">
+                                <input type="radio" name="ReportType" value="@type.Value"
+                                   checked="@(isChecked ? "checked" : null)"
+                                   disabled="@(!isAvailable ? "disabled" : null)" />
+                                <span class="cr-type-card__check"><i class="bi bi-check-lg"></i></span>
+                                <span class="cr-type-card__icon"><i class="bi @type.Icon"></i></span>
+                                <strong>@type.Label</strong>
+                                <small>@type.Description</small>
+                                @if (!isAvailable)
+                                {
+                                    <em><i class="bi bi-link-45deg"></i> من العنصر نفسه</em>
+                                }
+                            </label>
+                        }
+                    </div>
+
+                    <div class="cr-other-inline" data-other-type-panel hidden>
+                        <label for="OtherTypeDescription">اكتب نوع المشكلة</label>
+                        <div class="cr-input-shell">
+                            <i class="bi bi-pencil-square"></i>
+                            <input id="OtherTypeDescription" name="OtherTypeDescription"
+                                   value="@form.OtherTypeDescription" type="text" minlength="3"
+                                   maxlength="@ReportConstants.Limits.OtherDescriptionMaxLength"
+                                   placeholder="مثال: مشكلة في إشعار أو ميزة معينة" />
+                        </div>
+                    </div>
+                </section>
+
+                <section class="cr-form-section cr-form-section--reference" data-report-step="reference">
+                    <div class="cr-form-section__head">
+                        <span class="cr-step-number">02</span>
+                        <div>
+                            <h2>حدد الشيء المرتبط بالمشكلة</h2>
+                            <p>ابحث بسرعة بدل المرور على قائمة طويلة.</p>
+                        </div>
+                    </div>
+
+                    <div class="cr-reference-layout" data-reference-layout>
+                        <aside class="cr-reference-aside" aria-live="polite">
+                            <div class="cr-reference-aside__card">
+                                <div class="cr-reference-aside__head">
+                                    <span><i class="bi bi-bookmark-check"></i></span>
+                                    <div>
+                                        <small>المرجع الحالي</small>
+                                        <strong>اختيارك يظهر هنا</strong>
+                                    </div>
+                                </div>
+
+                                <div class="cr-reference-aside__empty" data-reference-aside-empty>
+                                    <span class="cr-reference-aside__empty-icon"><i class="bi bi-cursor-fill"></i></span>
+                                    <strong data-reference-aside-empty-title>لم تحدد مرجعًا بعد</strong>
+                                    <p data-reference-aside-empty-text>ابحث أو اختر من النتائج السريعة، وبعد الاختيار سنحتفظ بالمرجع هنا بشكل واضح.</p>
+                                </div>
+
+                                <div class="cr-selected-reference cr-selected-reference--aside"
+                                     data-booking-selected @(selectedBooking == null ? "hidden" : null)>
+                                    <span class="cr-selected-reference__icon"><i class="bi bi-check2-circle"></i></span>
+                                    <div class="cr-selected-reference__body">
+                                        <small>تم اختيار الحجز</small>
+                                        <strong data-booking-selected-place>@(selectedBooking?.PlaceName ?? "")</strong>
+                                        <p>
+                                            <b data-booking-selected-number>@(selectedBooking != null ? $"#{selectedBooking.ReferenceId}" : "")</b>
+                                            <span data-booking-selected-date>@(selectedBooking?.Date?.ToString("yyyy/MM/dd") ?? "")</span>
+                                            <span data-booking-selected-status>@(selectedBooking?.Subtitle ?? "")</span>
+                                        </p>
+                                    </div>
+                                    <button type="button" data-booking-change><i class="bi bi-arrow-repeat"></i> تغيير الاختيار</button>
+                                </div>
+
+                                <div class="cr-selected-reference cr-selected-reference--aside"
+                                     data-place-selected @(form.PlaceId.HasValue ? null : "hidden")>
+                                    <span class="cr-selected-reference__icon"><i class="bi bi-check2-circle"></i></span>
+                                    <div class="cr-selected-reference__body">
+                                        <small>تم اختيار المنشأة</small>
+                                        <strong data-place-selected-name>@(selectedReference?.PlaceName ?? selectedReference?.Title ?? "")</strong>
+                                    </div>
+                                    <button type="button" data-place-clear><i class="bi bi-arrow-repeat"></i> تغيير الاختيار</button>
+                                </div>
+
+                                <div class="cr-context-reference cr-context-reference--aside" data-reference-context-summary hidden>
+                                    <span><i class="bi bi-link-45deg"></i></span>
+                                    <div>
+                                        <small>تم الربط تلقائيًا</small>
+                                        <strong>@(selectedReference?.Title ?? "العنصر المرتبط بالبلاغ")</strong>
+                                        @if (!string.IsNullOrWhiteSpace(selectedReference?.Subtitle))
+                                        {
+                                            <p>@selectedReference.Subtitle</p>
+                                        }
+                                    </div>
+                                </div>
+
+                                <div class="cr-reference-aside__note">
+                                    <i class="bi bi-shield-check"></i>
+                                    <span>المرجع يساعد الإدارة على الوصول للمشكلة بسرعة، ولا يتم إرسال البلاغ للطرف الآخر مباشرة.</span>
+                                </div>
+                            </div>
+                        </aside>
+
+                        <div class="cr-reference-main">
+                            <div class="cr-reference-panel" data-reference-panel="Booking" hidden>
+                                <input type="hidden" name="BookingId" value="@form.BookingId" data-booking-id />
+
+                                <div class="cr-reference-picker" data-booking-picker>
+                                    <div class="cr-reference-search-row">
+                                        <div class="cr-input-shell cr-input-shell--search cr-booking-search-shell">
+                                            <i class="bi bi-search"></i>
+                                            <input type="search"
+                                                   placeholder="ابحث برقم الحجز أو اسم المنشأة..."
+                                                   autocomplete="off"
+                                                   data-booking-search-input />
+                                            <span class="cr-search-spinner" data-booking-search-spinner hidden></span>
+                                        </div>
+                                        <button type="button" class="cr-reference-more-button" data-booking-open-browser>
+                                            <i class="bi bi-grid-3x3-gap"></i>
+                                            <span>عرض المزيد</span>
+                                        </button>
+                                    </div>
+
+                                    <div class="cr-booking-live-results" data-booking-live-results hidden></div>
+
+                                    @if (quickBookings.Count == 0)
+                                    {
+                                        <div class="cr-inline-empty" data-booking-quick-list>
+                                            <i class="bi bi-calendar-x"></i>
+                                            <div><strong>لا توجد حجوزات في حسابك</strong><small>يمكنك اختيار نوع بلاغ آخر.</small></div>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="cr-quick-reference-block" data-booking-quick-list>
+                                            <div class="cr-quick-reference-head">
+                                                <div><strong>آخر الحجوزات</strong><small>أظهرنا آخر 5 فقط حتى تبقى الصفحة خفيفة.</small></div>
+                                                <span>@quickBookings.Count</span>
+                                            </div>
+
+                                            <div class="cr-booking-compact-list">
+                                                @foreach (var booking in quickBookings)
+                                                {
+                                                    <button type="button"
+                                                    class="cr-booking-compact-item"
+                                                    data-booking-select
+                                                    data-booking-id-value="@booking.ReferenceId"
+                                                    data-booking-place="@booking.PlaceName"
+                                                    data-booking-date="@(booking.Date?.ToString("yyyy/MM/dd") ?? "")"
+                                                    data-booking-status="@booking.Subtitle">
+                                                        <span class="cr-booking-compact-item__icon"><i class="bi bi-calendar2-check"></i></span>
+                                                        <span class="cr-booking-compact-item__body">
+                                                            <strong>@booking.PlaceName</strong>
+                                                            <small>
+                                                                <b>#@booking.ReferenceId</b>
+                                                                @if (booking.Date.HasValue)
+                                                                {
+                                                                    <em>@booking.Date.Value.ToString("yyyy/MM/dd")</em>
+                                                                }
+                                                                @if (!string.IsNullOrWhiteSpace(booking.Subtitle))
+                                                                {
+                                                                    <em>@booking.Subtitle</em>
+                                                                }
+                                                            </small>
+                                                        </span>
+                                                        <i class="bi bi-chevron-left"></i>
+                                                    </button>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+
+                            <div class="cr-reference-panel" data-reference-panel="Place" hidden>
+                                <input type="hidden" name="PlaceId" value="@form.PlaceId" data-place-id />
+
+                                <div class="cr-place-picker" data-place-picker>
+                                    @if (Model.RelatedPlaces.Count > 0)
+                                    {
+                                        <div class="cr-related-places">
+                                            <small>اقتراحات سريعة من منشآت مرتبطة بحجوزاتك</small>
+                                            <div>
+                                                @foreach (var place in Model.RelatedPlaces.Take(5))
+                                                {
+                                                    <button type="button" data-place-quick="@place.ReferenceId" data-place-name="@place.Title">
+                                                        <i class="bi bi-building"></i><span>@place.Title</span>
+                                                    </button>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+
+                                    <div class="cr-place-search" data-place-search>
+                                        <div class="cr-input-shell cr-input-shell--search">
+                                            <i class="bi bi-search"></i>
+                                            <input type="search" placeholder="ابحث باسم المنشأة..." autocomplete="off" data-place-search-input />
+                                            <span class="cr-search-spinner" data-place-search-spinner hidden></span>
+                                        </div>
+                                        <div class="cr-place-results" data-place-search-results hidden></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="cr-reference-panel" data-reference-panel="Context" hidden>
+                                @if (hasContextReference)
+                                {
+                                    <div class="cr-context-reference cr-context-reference--main-note">
+                                        <span><i class="bi bi-check2-circle"></i></span>
+                                        <div>
+                                            <small>هذا المرجع مربوط تلقائيًا</small>
+                                            <strong>لا تحتاج لاختيار أي شيء إضافي</strong>
+                                            <p>يمكنك الانتقال مباشرة إلى تفاصيل المشكلة.</p>
+                                        </div>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="cr-inline-empty"><i class="bi bi-link-45deg"></i><div><strong>هذا النوع يبدأ من العنصر نفسه</strong><small>افتح التقييم أو العرض أو الإعلان ثم اضغط «إبلاغ» لضمان الربط الصحيح.</small></div></div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="cr-form-section" data-report-step="details">
+                    <div class="cr-form-section__head">
+                        <span class="cr-step-number">03</span>
+                        <div><h2>صف المشكلة باختصار ووضوح</h2><p>اكتب ما حدث، وما الذي تريد من الإدارة مراجعته.</p></div>
+                    </div>
+
+                    <div class="cr-fields-grid">
+                        <div class="cr-field">
+                            <label for="Category">تصنيف المشكلة <small>اختياري</small></label>
+                            <div class="cr-select-shell">
+                                <i class="bi bi-grid-1x2"></i>
+                                <select id="Category" name="Category" data-category-select>
+                                    <option value="">بدون تصنيف إضافي</option>
+                                    @foreach (var category in Model.Categories)
+                                    {
+                                        <option value="@category.Value" selected="@(string.Equals(form.Category, category.Value, StringComparison.OrdinalIgnoreCase) ? "selected" : null)">@category.Label</option>
+                                    }
+                                </select>
+                                <i class="bi bi-chevron-down"></i>
+                            </div>
+                        </div>
+
+                        <div class="cr-field" data-other-category-panel hidden>
+                            <label for="OtherCategoryDescription">اكتب التصنيف</label>
+                            <div class="cr-input-shell">
+                                <i class="bi bi-pencil-square"></i>
+                                <input id="OtherCategoryDescription" name="OtherCategoryDescription" value="@form.OtherCategoryDescription"
+                                       type="text" minlength="3" maxlength="@ReportConstants.Limits.OtherDescriptionMaxLength"
+                                       placeholder="مثال: إساءة في التواصل" />
+                            </div>
+                        </div>
+
+                        <div class="cr-field cr-field--full">
+                            <label for="Title">عنوان مختصر <b>*</b></label>
+                            <div class="cr-input-shell">
+                                <i class="bi bi-type"></i>
+                                <input id="Title" name="Title" value="@form.Title" type="text" minlength="5" maxlength="200"
+                                       autocomplete="off" placeholder="مثال: مشكلة في الحجز بعد الدفع" />
+                            </div>
+                            @Html.ValidationMessage("Title", null, new { @class = "cr-field-error" })
+                        </div>
+
+                        <div class="cr-field cr-field--full">
+                            <div class="cr-field__label-row">
+                                <label for="ReportReason">ماذا حدث؟ <b>*</b></label>
+                                <small data-report-character-count="ReportReason">0 / 4000</small>
+                            </div>
+                            <textarea id="ReportReason" name="ReportReason" minlength="15" maxlength="4000" rows="7"
+                                      placeholder="اكتب التفاصيل بالتسلسل، وما الذي حدث بالضبط...">@form.ReportReason</textarea>
+                            @Html.ValidationMessage("ReportReason", null, new { @class = "cr-field-error" })
+                        </div>
+                    </div>
+                </section>
+
+                <section class="cr-form-section" data-report-step="evidence">
+                    <div class="cr-form-section__head">
+                        <span class="cr-step-number">04</span>
+                        <div><h2>أضف دليلًا إن وجد</h2><p>صورة أو PDF بحد أقصى 5 MB. المرفق اختياري.</p></div>
+                    </div>
+
+                    <label class="cr-upload-zone" data-report-upload-zone>
+                        <input type="file" id="evidenceFile" name="evidenceFile"
+                               accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf"
+                               data-report-evidence-input />
+                        <span class="cr-upload-zone__icon"><i class="bi bi-cloud-arrow-up"></i></span>
+                        <div><strong>اسحب الملف هنا أو اضغط للاختيار</strong><small>JPG · PNG · WEBP · PDF — حتى 5 MB</small></div>
+                        <span class="cr-upload-zone__browse">اختيار ملف</span>
+                    </label>
+                    <div class="cr-upload-preview" data-report-upload-preview hidden></div>
+                </section>
+
+                <section class="cr-final-review" data-final-review-card>
+                    <div class="cr-final-review__head">
+                        <span class="cr-final-review__check"><i class="bi bi-check2"></i></span>
+                        <div>
+                            <small>الخطوة الأخيرة</small>
+                            <h2>راجع الملخص ثم أرسل البلاغ</h2>
+                            <p>سيصل البلاغ إلى إدارة المنصة أولًا، ويمكنك متابعة كل التحديثات لاحقًا داخل نفس القضية.</p>
+                        </div>
+                    </div>
+
+                    <div class="cr-final-review__summary">
+                        <div>
+                            <span><i class="bi bi-grid"></i></span>
+                            <p><small>نوع البلاغ</small><strong data-review-type>—</strong></p>
+                        </div>
+                        <div>
+                            <span><i class="bi bi-link-45deg"></i></span>
+                            <p><small>المرجع</small><strong data-review-reference>لا يحتاج مرجعًا</strong></p>
+                        </div>
+                        <div>
+                            <span><i class="bi bi-paperclip"></i></span>
+                            <p><small>المرفق</small><strong data-review-evidence>بدون مرفق</strong></p>
+                        </div>
+                    </div>
+
+                    <div class="cr-final-review__notice">
+                        <i class="bi bi-shield-lock-fill"></i>
+                        <span>تأكد أن التفاصيل صحيحة. بعد الإرسال يمكنك إضافة توضيحات وأدلة جديدة داخل نفس القضية.</span>
+                    </div>
+
+                    <div class="cr-final-review__actions">
+                        <button type="button" class="cr-review-button" data-review-details>
+                            <i class="bi bi-pencil-square"></i>
+                            مراجعة البيانات
+                        </button>
+                        <button type="submit" class="cr-submit-button">
+                            <span><i class="bi bi-send-fill"></i><b>إرسال البلاغ للإدارة</b></span>
+                            <i class="bi bi-arrow-left"></i>
+                        </button>
+                    </div>
+                </section>
+
+                <div class="cr-booking-browser" data-booking-browser hidden aria-hidden="true">
+                    <div class="cr-booking-browser__backdrop" data-booking-close></div>
+                    <section class="cr-booking-browser__dialog" role="dialog" aria-modal="true" aria-labelledby="bookingBrowserTitle">
+                        <header class="cr-booking-browser__head">
+                            <div>
+                                <small>اختيار سريع</small>
+                                <h2 id="bookingBrowserTitle">ابحث في حجوزاتك</h2>
+                                <p>10 نتائج في كل مرة، بدون إطالة صفحة البلاغ.</p>
+                            </div>
+                            <button type="button" data-booking-close aria-label="إغلاق"><i class="bi bi-x-lg"></i></button>
+                        </header>
+
+                        <div class="cr-booking-browser__search">
+                            <div class="cr-input-shell cr-input-shell--search">
+                                <i class="bi bi-search"></i>
+                                <input type="search" placeholder="رقم الحجز أو اسم المنشأة..." autocomplete="off" data-booking-browser-search />
+                                <span class="cr-search-spinner" data-booking-browser-spinner hidden></span>
+                            </div>
+                        </div>
+
+                        <div class="cr-booking-browser__results" data-booking-browser-results></div>
+
+                        <footer class="cr-booking-browser__footer">
+                            <span data-booking-browser-hint>اختر الحجز المطلوب</span>
+                            <button type="button" data-booking-load-more hidden>
+                                <i class="bi bi-plus-circle"></i> عرض 10 أخرى
+                            </button>
+                        </footer>
+                    </section>
+                </div>
+            </form>
+        </div>
+    </main>
+</div>
+
+@section Scripts {
+    <script src="~/js/customer/customer-reports.js" asp-append-version="true"></script>
+}

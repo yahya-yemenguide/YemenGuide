@@ -1,0 +1,922 @@
+@inject YemenGuide.Data.AppDbContext _context
+@using System.Security.Claims
+@using Microsoft.EntityFrameworkCore
+@using System.Collections.Generic
+@using System.Linq
+
+@{
+    // =========================================================
+    // 1. إعدادات الموقع
+    // =========================================================
+    // الـLayout يمررها عبر ViewData لتجنب استعلام SystemSettings مرة ثانية.
+    // نبقي fallback فقط إذا تم استدعاء الـPartial خارج الـLayout المعتاد.
+    string siteName =
+        ViewData["AdminSiteName"] as string ?? "YemenGuide";
+
+    string logoPath =
+        ViewData["AdminLogoPath"] as string ?? "/images/logo1.png";
+
+    if (!(ViewData["AdminLayoutSettingsLoaded"] as bool? ?? false))
+    {
+        var headerSettings = _context.SystemSettings
+            .AsNoTracking()
+            .OrderBy(s => s.Id)
+            .Select(s => new
+            {
+                s.SiteName,
+                s.LogoPath
+            })
+            .FirstOrDefault();
+
+        siteName =
+            string.IsNullOrWhiteSpace(headerSettings?.SiteName)
+                ? "YemenGuide"
+                : headerSettings.SiteName;
+
+        logoPath =
+            string.IsNullOrWhiteSpace(headerSettings?.LogoPath)
+                ? "/images/logo1.png"
+                : headerSettings.LogoPath;
+    }
+
+    // =========================================================
+    // 2. حالة الواجهة
+    // =========================================================
+    var darkMode =
+        Context.Request.Cookies["darkMode"] == "enabled";
+
+    var uId =
+        User.Identity?.IsAuthenticated == true
+            ? User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "0"
+            : "0";
+
+    var isCompact =
+        Context.Request.Cookies[$"compactMode_{uId}"] == "enabled";
+
+    // =========================================================
+    // 3. المستخدم الحالي + صلاحيات القائمة الجانبية
+    // =========================================================
+    var userIdClaim =
+        User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+    string displayImg = "";
+    string initialLetter = "A";
+
+    bool isSystemAdmin =
+        User.IsInRole("SuperAdmin");
+
+    var adminPermissionKeys =
+        new HashSet<string>(
+            StringComparer.OrdinalIgnoreCase);
+
+    YemenGuide.Core.Entities.User? currentUser = null;
+
+    if (
+        !string.IsNullOrEmpty(userIdClaim) &&
+        int.TryParse(userIdClaim, out int userId)
+    )
+    {
+        currentUser =
+            _context.Users
+                .AsNoTracking()
+                .FirstOrDefault(
+                    u => u.UserId == userId
+                );
+
+        if (currentUser != null)
+        {
+            displayImg =
+                currentUser.ProfileImage ?? "";
+
+            initialLetter =
+                !string.IsNullOrWhiteSpace(currentUser.FullName)
+                    ? currentUser.FullName.Trim().Substring(0, 1).ToUpper()
+                    : "A";
+
+            if (currentUser.AdminRoleId.HasValue)
+            {
+                var adminRole =
+                    _context.AdminRoles
+                        .AsNoTracking()
+                        .FirstOrDefault(
+                            role =>
+                                role.AdminRoleId ==
+                                currentUser.AdminRoleId.Value
+                        );
+
+                if (adminRole?.IsSystemRole == true)
+                {
+                    isSystemAdmin = true;
+                }
+                else
+                {
+                    var permissionKeys =
+                        _context.AdminRolePermissions
+                            .AsNoTracking()
+                            .Where(
+                        link =>
+                            link.AdminRoleId ==
+                                currentUser.AdminRoleId.Value &&
+                            link.AdminPermission.IsActive == true
+                            )
+                            .Select(
+                                link =>
+                                    link.AdminPermission.PermissionKey
+                            )
+                            .ToList();
+
+                    foreach (var key in permissionKeys)
+                    {
+                        if (!string.IsNullOrWhiteSpace(key))
+                        {
+                            adminPermissionKeys.Add(key.Trim());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    bool HasPermission(string key) =>
+        isSystemAdmin ||
+        adminPermissionKeys.Contains(key);
+
+    bool HasPermissionPrefix(string prefix) =>
+        isSystemAdmin ||
+        adminPermissionKeys.Any(
+            key =>
+                key.StartsWith(
+                    prefix,
+                    StringComparison.OrdinalIgnoreCase
+                )
+        );
+
+    bool canDashboard = HasPermission("Dashboard.View");
+
+    bool canEmployees =
+        HasPermissionPrefix("Employees.") ||
+        HasPermissionPrefix("Roles.") ||
+        HasPermissionPrefix("Audit.");
+
+    bool canUsers = HasPermissionPrefix("Users.");
+    bool canPlaces = HasPermissionPrefix("Places.");
+    bool canAdvertisements = HasPermissionPrefix("Advertisements.");
+    bool canCases = HasPermissionPrefix("Cases.");
+    bool canFinance = HasPermissionPrefix("Finance.");
+
+    bool canMasterData =
+        HasPermissionPrefix("MasterData.") ||
+        HasPermissionPrefix("Categories.") ||
+        HasPermissionPrefix("Cities.");
+
+    bool canSettings = HasPermissionPrefix("Settings.");
+
+    bool canAddCategory =
+        isSystemAdmin ||
+        HasPermission("MasterData.ManageCategories");
+
+    bool canAddPlace =
+        isSystemAdmin ||
+        HasPermission("Places.Create");
+
+    bool showQuickActions =
+        canAddCategory ||
+        canUsers ||
+        canAddPlace;
+
+    // =========================================================
+    // 4. الإشعارات
+    // =========================================================
+    // يتم تحميلها من NotificationService عبر AJAX حتى يبقى الهيدر
+    // سريعًا ولا ينفذ استعلامات إشعارات أثناء بناء كل صفحة.
+}
+
+
+<!-- =========================================================
+     القائمة الجانبية
+========================================================== -->
+
+<aside class="dashboard-sidebar @(isCompact ? "sidebar-collapsed" : "")"
+       id="dashboardSidebar"
+       aria-label="القائمة الجانبية للأدمن">
+
+
+    <!-- مشهد بصري ثابت وخفيف: نفس الهوية بدون مؤثرات مستمرة -->
+    <div class="yg-admin-static-sidebar-scene" aria-hidden="true">
+        <span class="yg-admin-static-sidebar-glow"></span>
+    </div>
+
+    <!-- =====================================================
+             رأس القائمة والشعار
+        ====================================================== -->
+
+    <div class="sidebar-header">
+
+        <a class="sidebar-brand"
+           asp-area=""
+           asp-controller="Home"
+           asp-action="Index"
+           title="@siteName">
+
+            <span class="yg-platform-orb" aria-hidden="true">
+                <span class="yg-platform-ring yg-platform-ring-a"></span>
+                <span class="yg-platform-ring yg-platform-ring-b"></span>
+                <span class="yg-platform-star"></span>
+                <img src="@logoPath"
+                     alt="@siteName"
+                     class="sidebar-brand-logo"
+                     data-fallback-src="/images/logo1.png"
+                     height="35" />
+            </span>
+
+            <span class="brand-text">
+                @siteName
+            </span>
+
+        </a>
+
+
+        <!-- زر إغلاق القائمة على الهاتف والتابلت -->
+
+        <button type="button"
+                class="sidebar-close-mobile"
+                id="mobileSidebarClose"
+                aria-label="إغلاق القائمة الجانبية"
+                title="إغلاق القائمة">
+
+            <i class="bi bi-x-lg"
+               aria-hidden="true"></i>
+
+        </button>
+
+    </div>
+
+
+    <!-- =====================================================
+         روابط القائمة الجانبية
+    ====================================================== -->
+
+    <div class="sidebar-menu">
+
+        <ul class="sidebar-nav">
+
+
+            <!-- لوحة المؤشرات -->
+
+            <li class="nav-item @(!canDashboard ? "d-none" : "")">
+
+                <a class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "AdminDashboard" && ViewContext.RouteData.Values["Action"]?.ToString() != "SystemSettings" ? "active" : "")"
+                   asp-area="Admin"
+                   asp-controller="AdminDashboard"
+                   asp-action="DashboardOverview">
+
+                    <i class="bi bi-speedometer2"
+                       aria-hidden="true"></i>
+
+                    <span class="nav-text">
+                        لوحة المؤشرات
+                    </span>
+
+                </a>
+
+            </li>
+
+
+            <!-- الموظفون والأدوار والصلاحيات -->
+
+            <li class="nav-item @(!canEmployees ? "d-none" : "")">
+
+                <a class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "Employees" ? "active" : "")"
+                   asp-area="Admin"
+                   asp-controller="Employees"
+                   asp-action="EmployeeManagement">
+
+                    <i class="bi bi-person-badge-fill"
+                       aria-hidden="true"></i>
+
+                    <span class="nav-text">
+                        الموظفون والصلاحيات
+                    </span>
+
+                </a>
+
+            </li>
+
+
+            <!-- إدارة المستخدمين -->
+
+            <li class="nav-item @(!canUsers ? "d-none" : "")">
+
+                <a class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "Users" ? "active" : "")"
+                   asp-area="Admin"
+                   asp-controller="Users"
+                   asp-action="UserManagement">
+
+                    <i class="bi bi-people"
+                       aria-hidden="true"></i>
+
+                    <span class="nav-text">
+                        إدارة المستخدمين
+                    </span>
+
+                </a>
+
+            </li>
+
+
+            <!-- إدارة الأماكن -->
+
+            <li class="nav-item @(!canPlaces ? "d-none" : "")">
+
+                <a class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "Places" ? "active" : "")"
+                   asp-area="Admin"
+                   asp-controller="Places"
+                   asp-action="PlaceManagement">
+
+                    <i class="bi bi-buildings"
+                       aria-hidden="true"></i>
+
+                    <span class="nav-text">
+                        إدارة الأماكن
+                    </span>
+
+                </a>
+
+            </li>
+
+
+            <!-- إدارة الإعلانات -->
+
+            <li class="nav-item @(!canAdvertisements ? "d-none" : "")">
+
+                <a class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "Advertisements" ? "active" : "")"
+                   asp-area="Admin"
+                   asp-controller="Advertisements"
+                   asp-action="AdvertisementManagement">
+
+                    <i class="bi bi-megaphone-fill"
+                       aria-hidden="true"></i>
+
+                    <span class="nav-text">
+                        إدارة الإعلانات
+                    </span>
+
+                </a>
+
+            </li>
+
+
+            <!-- إدارة الشكاوى والبلاغات -->
+
+            <li class="nav-item @(!canCases ? "d-none" : "")">
+
+                <a class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "Reports" ? "active" : "")"
+                   asp-area="Admin"
+                   asp-controller="Reports"
+                   asp-action="ReportsCenter">
+
+                    <i class="bi bi-flag-fill"
+                       aria-hidden="true"></i>
+
+                    <span class="nav-text">
+                        إدارة الشكاوى والبلاغات
+                    </span>
+
+                </a>
+
+            </li>
+
+
+            <!-- العمليات المالية -->
+
+            <li class="nav-item @(!canFinance ? "d-none" : "")">
+
+                <a class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "AdminFinancials" ? "active" : "")"
+                   asp-area="Admin"
+                   asp-controller="AdminFinancials"
+                   asp-action="ManageAdminFinancials">
+
+                    <i class="bi bi-wallet2"
+                       aria-hidden="true"></i>
+
+                    <span class="nav-text">
+                        العمليات المالية
+                    </span>
+
+                </a>
+
+            </li>
+
+
+            <!-- تصنيفات النظام -->
+
+            <li class="nav-item @(!canMasterData ? "d-none" : "")">
+
+                <a class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "MasterEntities" ? "active" : "")"
+                   asp-area="Admin"
+                   asp-controller="MasterEntities"
+                   asp-action="MasterEntitiesManagement">
+
+                    <i class="bi bi-grid-1x2"
+                       aria-hidden="true"></i>
+
+                    <span class="nav-text">
+                        تصنيفات النظام
+                    </span>
+
+                </a>
+
+            </li>
+
+
+            <!-- إعدادات النظام -->
+
+            <li class="nav-item @(!canSettings ? "d-none" : "")">
+
+                <a class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "Settings" ? "active" : "")"
+                   asp-area="Admin"
+                   asp-controller="Settings"
+                   asp-action="SystemSettings">
+
+                    <i class="bi bi-sliders"
+                       aria-hidden="true"></i>
+
+                    <span class="nav-text">
+                        إعدادات النظام
+                    </span>
+
+                </a>
+
+            </li>
+
+
+            <!-- الملف الشخصي -->
+
+            <li class="nav-item">
+
+                <a class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "Profile" ? "active" : "")"
+                   asp-area="Admin"
+                   asp-controller="Profile"
+                   asp-action="AdminProfile">
+
+                    <i class="bi bi-person-badge"
+                       aria-hidden="true"></i>
+
+                    <span class="nav-text">
+                        حسابي الشخصي
+                    </span>
+
+                </a>
+
+            </li>
+
+        </ul>
+
+    </div>
+
+
+    <!-- =====================================================
+         تسجيل الخروج
+    ====================================================== -->
+
+    <div class="sidebar-footer">
+
+        <a class="nav-link text-danger"
+           asp-area=""
+           asp-controller="Account"
+           asp-action="Logout">
+
+            <i class="bi bi-box-arrow-right"
+               aria-hidden="true"></i>
+
+            <span class="nav-text">
+                تسجيل الخروج
+            </span>
+
+        </a>
+
+    </div>
+
+
+    <!-- =====================================================
+         زر طي القائمة على الكمبيوتر
+    ====================================================== -->
+
+    <button type="button"
+            class="sidebar-compact-toggle d-none d-lg-flex"
+            id="desktopSidebarToggle"
+            aria-label="طي أو توسيع القائمة الجانبية"
+            title="طي أو توسيع القائمة">
+
+        <i class="bi bi-chevron-right toggle-icon"
+           aria-hidden="true"></i>
+
+    </button>
+
+</aside>
+
+<div class="mobile-sidebar-backdrop d-lg-none"
+     id="mobileSidebarBackdrop"
+     aria-hidden="true"></div>
+
+
+<!-- =========================================================
+     الهيدر العلوي
+========================================================== -->
+
+<header class="dashboard-topbar" id="adminGlobalTopbar">
+
+    <div class="yg-admin-static-topbar-scene" aria-hidden="true">
+        <span class="yg-admin-static-topbar-glow"></span>
+    </div>
+
+    <!-- =====================================================
+             زر فتح القائمة على الهاتف
+        ====================================================== -->
+
+    <div class="topbar-left">
+
+        <button type="button"
+                class="sidebar-toggle-mobile d-lg-none"
+                id="mobileSidebarToggle"
+                aria-label="فتح القائمة الجانبية"
+                aria-controls="dashboardSidebar"
+                aria-expanded="false">
+
+            <i class="bi bi-list"
+               aria-hidden="true"></i>
+
+            <span class="yg-mobile-menu-glyph" aria-hidden="true">
+                <span></span><span></span><span></span>
+            </span>
+
+        </button>
+
+    </div>
+
+
+    <!-- =====================================================
+         البحث العام
+    ====================================================== -->
+
+    <div class="topbar-search">
+
+        <div class="search-wrapper">
+
+            <i class="bi bi-search search-icon"
+               aria-hidden="true"></i>
+
+            <input type="text"
+                   class="form-control search-input"
+                   id="globalSearch"
+                   placeholder="ابحث عن فئة، مكان، مستخدم..."
+                   autocomplete="off"
+                   aria-label="البحث العام في لوحة التحكم" />
+
+        </div>
+
+    </div>
+
+
+    <!-- =====================================================
+         الأدوات الموجودة في يمين الهيدر
+    ====================================================== -->
+
+    <div class="topbar-right">
+
+
+        <!-- الإجراءات السريعة -->
+
+        <div class="dropdown quick-actions @(!showQuickActions ? "d-none" : "")">
+
+            <button type="button"
+                    class="btn btn-primary rounded-circle"
+                    data-bs-toggle="dropdown"
+                    aria-expanded="false"
+                    aria-label="فتح قائمة الإجراءات السريعة"
+                    title="إجراءات سريعة">
+
+                <i class="bi bi-plus-lg"
+                   aria-hidden="true"></i>
+
+            </button>
+
+            <ul class="dropdown-menu dropdown-menu-end">
+
+                <li class="@(!canAddCategory ? "d-none" : "")">
+
+                    <a class="dropdown-item"
+                       href="/Admin/Category/CategoryManagement#add-category">
+
+                        <i class="bi bi-tags"
+                           aria-hidden="true"></i>
+
+                        <span>
+                            إضافة فئة جديدة
+                        </span>
+
+                    </a>
+
+                </li>
+
+                <li class="@(!canUsers ? "d-none" : "")">
+
+                    <a class="dropdown-item"
+                       asp-area="Admin"
+                       asp-controller="Users"
+                       asp-action="UserManagement">
+
+                        <i class="bi bi-person-plus"
+                           aria-hidden="true"></i>
+
+                        <span>
+                            إدارة المستخدمين
+                        </span>
+
+                    </a>
+
+                </li>
+
+                <li class="@(!canAddPlace ? "d-none" : "")">
+
+                    <a class="dropdown-item"
+                       href="#">
+
+                        <i class="bi bi-building-add"
+                           aria-hidden="true"></i>
+
+                        <span>
+                            إضافة مكان
+                        </span>
+
+                    </a>
+
+                </li>
+
+            </ul>
+
+        </div>
+
+
+        <!-- =====================================================
+             مركز إشعارات الإدارة
+             يتم تحميل البيانات من الخدمة المشتركة ولا يعتمد على ViewBag.
+        ====================================================== -->
+
+        <div class="dropdown notifications-dropdown admin-notification-center"
+             id="adminNotificationCenter"
+             data-header-endpoint="/Notifications/Header"
+             data-unread-endpoint="/Notifications/UnreadCount"
+             data-mark-read-endpoint="/Notifications/MarkAsRead"
+             data-mark-all-endpoint="/Notifications/MarkAllAsRead">
+
+            <form class="admin-notification-token-form"
+                  aria-hidden="true">
+                @Html.AntiForgeryToken()
+            </form>
+
+            <button type="button"
+                    class="admin-notification-toggle"
+                    id="adminNotificationToggle"
+                    data-bs-toggle="dropdown"
+                    data-bs-auto-close="outside"
+                    aria-expanded="false"
+                    aria-label="فتح مركز الإشعارات"
+                    title="الإشعارات">
+
+                <span class="admin-notification-toggle__halo"
+                      aria-hidden="true"></span>
+
+                <i class="bi bi-bell-fill"
+                   aria-hidden="true"></i>
+
+                <span class="admin-notification-live-dot"
+                      id="adminNotificationLiveDot"
+                      hidden
+                      aria-hidden="true"></span>
+
+                <span class="admin-notification-badge"
+                      id="adminNotificationBadge"
+                      hidden>0</span>
+            </button>
+
+            <div class="dropdown-menu dropdown-menu-end admin-notification-panel"
+                 id="adminNotificationPanel"
+                 aria-labelledby="adminNotificationToggle">
+
+                <div class="admin-notification-panel__head">
+                    <div class="admin-notification-panel__identity">
+                        <span class="admin-notification-panel__mark"
+                              aria-hidden="true">
+                            <i class="bi bi-bell"></i>
+                        </span>
+
+                        <div>
+                            <span class="admin-notification-panel__eyebrow">لوحة الإدارة</span>
+                            <strong>الإشعارات</strong>
+                        </div>
+                    </div>
+
+                    <div class="admin-notification-panel__actions">
+                        <span class="admin-notification-unread-pill"
+                              id="adminNotificationUnreadPill"
+                              hidden>
+                            <b id="adminNotificationUnreadText">0</b>
+                            <span>جديد</span>
+                        </span>
+
+                        <button type="button"
+                                class="admin-notification-icon-action"
+                                id="adminNotificationRefresh"
+                                aria-label="تحديث الإشعارات"
+                                title="تحديث">
+                            <i class="bi bi-arrow-clockwise"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="admin-notification-panel__toolbar">
+                    <span>آخر التحديثات المخصصة لصلاحياتك</span>
+
+                    <button type="button"
+                            class="admin-notification-mark-all"
+                            id="adminNotificationMarkAll"
+                            hidden>
+                        <i class="bi bi-check2-all"></i>
+                        <span>قراءة الكل</span>
+                    </button>
+                </div>
+
+                <div class="admin-notification-progress"
+                     id="adminNotificationProgress"
+                     aria-hidden="true">
+                    <span></span>
+                </div>
+
+                <div class="admin-notification-body"
+                     id="adminNotificationBody"
+                     aria-live="polite"
+                     aria-busy="true">
+
+                    <div class="admin-notification-skeletons"
+                         aria-hidden="true">
+                        @for (var skeletonIndex = 0; skeletonIndex < 4; skeletonIndex++)
+                        {
+                            <div class="admin-notification-skeleton">
+                                <span class="admin-notification-skeleton__icon"></span>
+                                <span class="admin-notification-skeleton__lines">
+                                    <span></span>
+                                    <span></span>
+                                    <span></span>
+                                </span>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div class="admin-notification-panel__foot">
+                    <span id="adminNotificationFootText">تحديث تلقائي</span>
+
+                    <a href="/Admin/Notifications"
+                       class="admin-notification-view-all">
+                        <span>عرض مركز الإشعارات</span>
+                        <i class="bi bi-arrow-left"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <span class="visually-hidden"
+              id="adminNotificationLiveRegion"
+              aria-live="polite"
+              aria-atomic="true"></span>
+
+
+        <!-- قائمة المستخدم -->
+
+        <div class="dropdown user-dropdown">
+
+            <a href="#"
+               class="d-flex align-items-center text-decoration-none dropdown-toggle"
+               data-bs-toggle="dropdown"
+               aria-expanded="false"
+               aria-label="فتح قائمة حساب الأدمن">
+
+                <div class="header-avatar-circle d-flex align-items-center justify-content-center shadow-sm @(string.IsNullOrEmpty(displayImg) ? "is-initial" : "has-image")">
+
+                    @if (!string.IsNullOrEmpty(displayImg))
+                    {
+                        <img src="@displayImg"
+                         alt=""
+                         class="header-avatar-image"
+                         aria-hidden="true" />
+                    }
+
+                    <span class="header-avatar-initial text-white fw-bold small">
+                        @initialLetter
+                    </span>
+
+                </div>
+
+            </a>
+
+
+            <ul class="dropdown-menu dropdown-menu-end">
+
+                <li>
+
+                    <a class="dropdown-item"
+                       href="/Admin/Profile/AdminProfile#personal">
+
+                        <i class="bi bi-person-lines-fill me-2"
+                           aria-hidden="true"></i>
+
+                        <span>
+                            البيانات الشخصية
+                        </span>
+
+                    </a>
+
+                </li>
+
+                <li>
+
+                    <a class="dropdown-item"
+                       href="/Admin/Profile/AdminProfile#settings">
+
+                        <i class="bi bi-sliders me-2"
+                           aria-hidden="true"></i>
+
+                        <span>
+                            تفضيلات النظام والتنبيهات
+                        </span>
+
+                    </a>
+
+                </li>
+
+                <li>
+
+                    <a class="dropdown-item text-danger-hover"
+                       href="/Admin/Profile/AdminProfile#security">
+
+                        <i class="bi bi-shield-lock me-2"
+                           aria-hidden="true"></i>
+
+                        <span>
+                            الأمان ومنطقة الخطر
+                        </span>
+
+                    </a>
+
+                </li>
+
+                <li class="@(!canSettings ? "d-none" : "")">
+                    <hr class="dropdown-divider" />
+                </li>
+
+                <li class="@(!canSettings ? "d-none" : "")">
+
+                    <a class="dropdown-item"
+                       href="/Admin/Settings/SystemSettings">
+
+                        <i class="bi bi-gear-fill me-2"
+                           aria-hidden="true"></i>
+
+                        <span>
+                            إعدادات النظام
+                        </span>
+
+                    </a>
+
+                </li>
+
+                <li>
+                    <hr class="dropdown-divider" />
+                </li>
+
+                <li>
+
+                    <a class="dropdown-item text-danger"
+                       asp-area=""
+                       asp-controller="Account"
+                       asp-action="Logout">
+
+                        <i class="bi bi-box-arrow-right"
+                           aria-hidden="true"></i>
+
+                        <span>
+                            تسجيل الخروج
+                        </span>
+
+                    </a>
+
+                </li>
+
+            </ul>
+
+        </div>
+
+    </div>
+
+</header>

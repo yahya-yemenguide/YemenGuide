@@ -1,0 +1,3521 @@
+-- ==============================================================================
+-- 👑 نظام دليلك اليمني (Dalilak Al-Yamani)
+-- السكربت الهيكلي الموحد والشامل - 41 جدولًا
+--
+-- ملاحظات:
+-- 1) يشغّل هذا السكربت على جهاز لا توجد فيه قاعدة DalilakAlYamaniDB.
+-- 2) تم دمج جميع إضافات ALTER TABLE داخل CREATE TABLE قدر الإمكان.
+-- 3) تم دمج جميع إضافات الحجوزات والحالات والإغلاق ومراجعة إثبات الدفع.
+-- 4) تم دمج نظام العمولات والحسابات المالية بعد التنظيف وإزالة المستندات المالية القديمة.
+-- 5) تم دمج نظام موظفي الإدارة والأدوار والصلاحيات وسجل العمليات.
+-- 6) تم دمج نظام العروض والخصومات.
+-- 7) تم استكمال نظام الإعلانات: التسعير Flat/CPC/CPM، الميزانيات، الاستهداف، الوسائط، الأحداث والإحصاءات.
+-- 8) تم تطوير نظام الشكاوى والبلاغات وربطه بالمحادثات.
+-- 9) تم دمج عمولة الفئات وإمكانية السماح للمالك بإضافة منشآت للفئة.
+-- 10) تم دمج نظام أنواع الغرف والوحدات الفعلية والطوابق.
+-- 11) تم إضافة خصائص الغرف:
+--     AreaSquareMeters / MaxAdults / MaxChildren / BedsCount / BedType /
+--     InternalRoomsCount.
+-- 12) تم ربط الحجز بأكثر من وحدة غرفة من خلال BookingRoomUnits.
+-- 13) تم إضافة حساب تشغيل المنشآت الرسمي PlatformOwnerUserID.
+-- 14) تم استخدام ALTER TABLE فقط للعلاقة الدائرية بين Users و AdminRoles.
+-- 15) تم تقوية نظام العروض: PlaceID إلزامي، أنواع الخصم مقيدة، وتحقق آمن من المنشأة المستهدفة.
+-- 16) تم تبسيط نظام الإعلانات إلى ثلاثة جداول مساندة فقط: AdvertisementMedia / AdvertisementTargets / AdvertisementEvents.
+-- 17) تم تطوير أسعار الصرف: مناطق North/South للمدن، ومتابعة حالة/مصدر/وقت آخر تحديث ومحاولة، مع حذف YertoUsd و YertoSar القديمين.
+-- 18) تم تطوير إعدادات النظام: حدود الصور، الصيانة المتقدمة/الجزئية، وشعار المحفظة الافتراضي.
+-- 19) تم تنظيف النظام المالي: تطوير الاستردادات وحسابات العمولات، إضافة RowVersion، وإزالة جدول المستندات المالية والحقول القديمة.
+-- 20) تم إضافة OnlinePaymentType إلى FinancialRecords لتحديد نوع الدفع الإلكتروني عند الحاجة.
+-- 21) تم توسيع مدة الإعلان اليومية لتسمح بقيمة فعلية من 1 إلى 365 يومًا مع الإبقاء على Weekly/Monthly للتوافق.
+-- 21) تم تطوير نظام العروض لدعم الخصم المباشر والمكافآت الشرطية وربط خدمة المكافأة بالمنشأة.
+-- ==============================================================================
+
+USE master;
+GO
+
+CREATE DATABASE DalilakAlYamaniDB;
+GO
+
+USE DalilakAlYamaniDB;
+GO
+
+-- ==============================================================================
+-- [1] جدول المستخدمين
+-- ==============================================================================
+
+CREATE TABLE dbo.Users
+(
+    UserID INT IDENTITY(1,1) NOT NULL,
+    FullName NVARCHAR(100) NOT NULL,
+    Username NVARCHAR(50) NOT NULL,
+    PasswordHash NVARCHAR(255) NOT NULL,
+    ProfileImage NVARCHAR(255) NULL,
+    ContactInfo NVARCHAR(100) NULL,
+    PhoneNumber NVARCHAR(50) NULL,
+    CreatedAt DATETIME NULL CONSTRAINT DF_Users_CreatedAt DEFAULT GETDATE(),
+    Role NVARCHAR(20) NOT NULL,
+    AccountState NVARCHAR(20) NULL CONSTRAINT DF_Users_AccountState DEFAULT N'Active',
+    IsDarkMode BIT NOT NULL CONSTRAINT DF_Users_IsDarkMode DEFAULT 0,
+    CommercialRegisterDocument NVARCHAR(255) NULL,
+    IdentityDocument NVARCHAR(255) NULL,
+    AuthorizationDocument NVARCHAR(255) NULL,
+    IsOnline BIT NOT NULL CONSTRAINT DF_Users_IsOnline DEFAULT 0,
+    LastSeen DATETIME NULL,
+    WarningCount INT NOT NULL CONSTRAINT DF_Users_WarningCount DEFAULT 0,
+    LastWarningDate DATETIME NULL,
+    IsEmailVerified BIT NOT NULL CONSTRAINT DF_Users_IsEmailVerified DEFAULT 0,
+    VerificationCode NVARCHAR(10) NULL,
+    CodeExpiry DATETIME NULL,
+    Bio NVARCHAR(MAX) NULL,
+    DateOfBirth DATE NULL,
+    Gender NVARCHAR(10) NULL,
+    City NVARCHAR(100) NULL,
+    WalletBalance DECIMAL(18,2) NOT NULL CONSTRAINT DF_Users_WalletBalance DEFAULT 0.00,
+    FacebookUrl NVARCHAR(255) NULL,
+    TwitterUrl NVARCHAR(255) NULL,
+    InstagramUrl NVARCHAR(255) NULL,
+    PreferredCurrency NVARCHAR(50) NOT NULL CONSTRAINT DF_Users_PreferredCurrency DEFAULT N'ريال يمني (قديم)',
+    ReceiveOffers BIT NOT NULL CONSTRAINT DF_Users_ReceiveOffers DEFAULT 1,
+    JobTitle NVARCHAR(100) NULL,
+    IsAgreedToTerms BIT NOT NULL CONSTRAINT DF_Users_IsAgreedToTerms DEFAULT 0,
+    AgreedToTermsDate DATETIME NULL,
+    PreferredLanguage NVARCHAR(10) NOT NULL CONSTRAINT DF_Users_PreferredLanguage DEFAULT N'ar',
+
+    FreeTrialStartedAt DATETIME2 NULL,
+    FreeTrialEndsAt DATETIME2 NULL,
+
+    AdminRoleID INT NULL,
+    EmployeeNumber NVARCHAR(30) NULL,
+    Department NVARCHAR(100) NULL,
+    EmploymentStatus NVARCHAR(20) NULL,
+    HireDate DATE NULL,
+    EndDate DATE NULL,
+    LastLoginAt DATETIME NULL,
+    MustChangePassword BIT NOT NULL CONSTRAINT DF_Users_MustChangePassword DEFAULT 0,
+
+    CONSTRAINT PK_Users
+        PRIMARY KEY CLUSTERED (UserID),
+
+    CONSTRAINT CK_Users_EmploymentStatus
+        CHECK
+        (
+            EmploymentStatus IS NULL
+            OR EmploymentStatus IN
+            (
+                N'Active',
+                N'Suspended',
+                N'OnLeave',
+                N'Terminated'
+            )
+        )
+);
+GO
+
+CREATE UNIQUE INDEX UQ_Users_Username
+ON dbo.Users (Username);
+GO
+
+CREATE UNIQUE INDEX UQ_Users_ContactInfo
+ON dbo.Users (ContactInfo)
+WHERE ContactInfo IS NOT NULL
+AND ContactInfo <> N'';
+GO
+
+CREATE UNIQUE INDEX UQ_Users_PhoneNumber
+ON dbo.Users (PhoneNumber)
+WHERE PhoneNumber IS NOT NULL
+AND PhoneNumber <> N'';
+GO
+
+CREATE UNIQUE INDEX UQ_Users_EmployeeNumber
+ON dbo.Users (EmployeeNumber)
+WHERE EmployeeNumber IS NOT NULL
+AND EmployeeNumber <> N'';
+GO
+
+-- ==============================================================================
+-- [2] جدول أدوار موظفي الإدارة
+-- ==============================================================================
+
+CREATE TABLE dbo.AdminRoles
+(
+    AdminRoleID INT IDENTITY(1,1) NOT NULL,
+    RoleName NVARCHAR(100) NOT NULL,
+    Description NVARCHAR(500) NULL,
+    IsActive BIT NOT NULL
+        CONSTRAINT DF_AdminRoles_IsActive DEFAULT 1,
+    IsSystemRole BIT NOT NULL
+        CONSTRAINT DF_AdminRoles_IsSystemRole DEFAULT 0,
+    CreatedAt DATETIME NOT NULL
+        CONSTRAINT DF_AdminRoles_CreatedAt DEFAULT GETDATE(),
+    CreatedByUserID INT NULL,
+
+    CONSTRAINT PK_AdminRoles
+        PRIMARY KEY CLUSTERED (AdminRoleID),
+
+    CONSTRAINT UQ_AdminRoles_RoleName
+        UNIQUE (RoleName),
+
+    CONSTRAINT FK_AdminRoles_CreatedBy
+        FOREIGN KEY (CreatedByUserID)
+        REFERENCES dbo.Users (UserID)
+);
+GO
+
+ALTER TABLE dbo.Users
+ADD CONSTRAINT FK_Users_AdminRoles
+FOREIGN KEY (AdminRoleID)
+REFERENCES dbo.AdminRoles (AdminRoleID);
+GO
+
+-- ==============================================================================
+-- [3] جدول صلاحيات الإدارة
+-- ==============================================================================
+
+CREATE TABLE dbo.AdminPermissions
+(
+    AdminPermissionID INT IDENTITY(1,1) NOT NULL,
+    PermissionKey NVARCHAR(150) NOT NULL,
+    PermissionName NVARCHAR(150) NOT NULL,
+    PermissionGroup NVARCHAR(100) NOT NULL,
+    Description NVARCHAR(500) NULL,
+    IsSensitive BIT NOT NULL
+        CONSTRAINT DF_AdminPermissions_IsSensitive DEFAULT 0,
+    IsActive BIT NOT NULL
+        CONSTRAINT DF_AdminPermissions_IsActive DEFAULT 1,
+
+    CONSTRAINT PK_AdminPermissions
+        PRIMARY KEY CLUSTERED (AdminPermissionID),
+
+    CONSTRAINT UQ_AdminPermissions_PermissionKey
+        UNIQUE (PermissionKey)
+);
+GO
+
+-- ==============================================================================
+-- [4] جدول ربط أدوار الإدارة بالصلاحيات
+-- ==============================================================================
+
+CREATE TABLE dbo.AdminRolePermissions
+(
+    AdminRoleID INT NOT NULL,
+    AdminPermissionID INT NOT NULL,
+    GrantedAt DATETIME NOT NULL
+        CONSTRAINT DF_AdminRolePermissions_GrantedAt DEFAULT GETDATE(),
+    GrantedByUserID INT NULL,
+
+    CONSTRAINT PK_AdminRolePermissions
+        PRIMARY KEY CLUSTERED
+        (
+            AdminRoleID,
+            AdminPermissionID
+        ),
+
+    CONSTRAINT FK_AdminRolePermissions_AdminRoles
+        FOREIGN KEY (AdminRoleID)
+        REFERENCES dbo.AdminRoles (AdminRoleID)
+        ON DELETE CASCADE,
+
+    CONSTRAINT FK_AdminRolePermissions_AdminPermissions
+        FOREIGN KEY (AdminPermissionID)
+        REFERENCES dbo.AdminPermissions (AdminPermissionID)
+        ON DELETE CASCADE,
+
+    CONSTRAINT FK_AdminRolePermissions_GrantedBy
+        FOREIGN KEY (GrantedByUserID)
+        REFERENCES dbo.Users (UserID)
+);
+GO
+
+-- ==============================================================================
+-- [5] سجل عمليات موظفي الإدارة
+-- ==============================================================================
+
+CREATE TABLE dbo.AdminAuditLogs
+(
+    AdminAuditLogID BIGINT IDENTITY(1,1) NOT NULL,
+    UserID INT NULL,
+    ActionType NVARCHAR(100) NOT NULL,
+    EntityType NVARCHAR(100) NULL,
+    EntityID NVARCHAR(100) NULL,
+    Description NVARCHAR(1000) NULL,
+    OldValuesJson NVARCHAR(MAX) NULL,
+    NewValuesJson NVARCHAR(MAX) NULL,
+    IPAddress NVARCHAR(50) NULL,
+    UserAgent NVARCHAR(500) NULL,
+    OccurredAt DATETIME NOT NULL
+        CONSTRAINT DF_AdminAuditLogs_OccurredAt DEFAULT GETDATE(),
+    IsSuccessful BIT NOT NULL
+        CONSTRAINT DF_AdminAuditLogs_IsSuccessful DEFAULT 1,
+    FailureReason NVARCHAR(500) NULL,
+
+    CONSTRAINT PK_AdminAuditLogs
+        PRIMARY KEY CLUSTERED (AdminAuditLogID),
+
+    CONSTRAINT FK_AdminAuditLogs_Users
+        FOREIGN KEY (UserID)
+        REFERENCES dbo.Users (UserID)
+);
+GO
+
+CREATE INDEX IX_AdminAuditLogs_UserID_OccurredAt
+ON dbo.AdminAuditLogs
+(
+    UserID,
+    OccurredAt DESC
+);
+GO
+
+CREATE INDEX IX_AdminAuditLogs_Entity
+ON dbo.AdminAuditLogs
+(
+    EntityType,
+    EntityID
+);
+GO
+
+-- ==============================================================================
+-- [6] جدول فئات المنشآت
+-- ==============================================================================
+
+CREATE TABLE dbo.Categories
+(
+    CategoryID INT IDENTITY(1,1) NOT NULL,
+    CategoryName NVARCHAR(50) NOT NULL,
+    IconClass NVARCHAR(50) NULL
+        CONSTRAINT DF_Categories_IconClass DEFAULT N'bi-star',
+    HasBookingSystem BIT NOT NULL
+        CONSTRAINT DF_Categories_HasBookingSystem DEFAULT 0,
+    ThemeColor NVARCHAR(20) NULL
+        CONSTRAINT DF_Categories_ThemeColor DEFAULT N'#0d6efd',
+    ImagePath NVARCHAR(MAX) NULL,
+    BookingSystemId INT NOT NULL
+        CONSTRAINT DF_Categories_BookingSystemId DEFAULT 0,
+    CommissionPercentage DECIMAL(5,2) NULL,
+
+    -- 1 = المالك والإدارة يستطيعان إضافة منشآت
+    -- 0 = الإدارة فقط
+    OwnerCanAddPlaces BIT NOT NULL
+        CONSTRAINT DF_Categories_OwnerCanAddPlaces DEFAULT (1),
+
+    CONSTRAINT PK_Categories
+        PRIMARY KEY CLUSTERED (CategoryID),
+
+    CONSTRAINT CK_Categories_CommissionPercentage
+        CHECK
+        (
+            CommissionPercentage IS NULL
+            OR
+            (
+                CommissionPercentage >= 0
+                AND CommissionPercentage <= 100
+            )
+        )
+);
+GO
+
+CREATE UNIQUE INDEX UQ_Categories_CategoryName
+ON dbo.Categories (CategoryName);
+GO
+
+-- ==============================================================================
+-- [7] جدول المدن والمحافظات
+-- ==============================================================================
+
+CREATE TABLE dbo.Cities
+(
+    CityID INT IDENTITY(1,1) NOT NULL,
+    CityName NVARCHAR(50) NOT NULL,
+    ThemeColor NVARCHAR(20) NULL
+        CONSTRAINT DF_Cities_ThemeColor DEFAULT N'#198754',
+
+    -- منطقة سعر الصرف: North = صنعاء / South = عدن
+    ExchangeRateRegion NVARCHAR(10) NULL,
+
+    CONSTRAINT PK_Cities
+        PRIMARY KEY CLUSTERED (CityID),
+
+    CONSTRAINT CK_Cities_ExchangeRateRegion
+        CHECK
+        (
+            ExchangeRateRegion IS NULL
+            OR ExchangeRateRegion IN
+            (
+                N'North',
+                N'South'
+            )
+        )
+);
+GO
+
+CREATE UNIQUE INDEX UQ_Cities_CityName
+ON dbo.Cities (CityName);
+GO
+
+-- ==============================================================================
+-- [8] جدول الأماكن والمنشآت
+-- ==============================================================================
+
+CREATE TABLE dbo.Places
+(
+    PlaceID INT IDENTITY(1,1) NOT NULL,
+    OwnerID INT NULL,
+    CategoryID INT NOT NULL,
+    CityID INT NOT NULL,
+    PlaceNameAndDesc NVARCHAR(MAX) NOT NULL,
+    Description NVARCHAR(MAX) NULL,
+    Coordinates NVARCHAR(100) NULL,
+    Price DECIMAL(18,2) NOT NULL,
+    Status NVARCHAR(20) NOT NULL
+        CONSTRAINT DF_Places_Status DEFAULT N'Pending',
+    IsFeatured BIT NULL
+        CONSTRAINT DF_Places_IsFeatured DEFAULT 0,
+    IsAvailable BIT NOT NULL
+        CONSTRAINT DF_Places_IsAvailable DEFAULT 1,
+    AllowCashOnArrival BIT NOT NULL
+        CONSTRAINT DF_Places_AllowCashOnArrival DEFAULT 1,
+    LogoImage NVARCHAR(255) NULL,
+    PhoneNumber NVARCHAR(50) NULL,
+    EmailAddress NVARCHAR(100) NULL,
+    AddressDetail NVARCHAR(500) NULL,
+    CoverImage NVARCHAR(255) NULL,
+    CheckInTime NVARCHAR(10) NULL,
+    CheckOutTime NVARCHAR(10) NULL,
+    CancellationPolicy NVARCHAR(50) NULL,
+    IsCashOnArrival BIT NOT NULL
+        CONSTRAINT DF_Places_IsCashOnArrival DEFAULT 1,
+    IsDepositRequired BIT NOT NULL
+        CONSTRAINT DF_Places_IsDepositRequired DEFAULT 0,
+    DepositAmount DECIMAL(18,2) NOT NULL
+        CONSTRAINT DF_Places_DepositAmount DEFAULT 0.00,
+    DepositCurrency NVARCHAR(20) NULL
+        CONSTRAINT DF_Places_DepositCurrency DEFAULT N'ريال يمني',
+    DepositPolicy NVARCHAR(MAX) NULL,
+    InsurancePolicy NVARCHAR(MAX) NULL,
+    Terms NVARCHAR(MAX) NULL,
+    FloorsData NVARCHAR(MAX) NULL,
+    RoomsCount INT NULL,
+    SuitesCount INT NULL,
+    RejectionReason NVARCHAR(500) NULL,
+
+    CONSTRAINT PK_Places
+        PRIMARY KEY CLUSTERED (PlaceID),
+
+    CONSTRAINT FK_Places_Owner
+        FOREIGN KEY (OwnerID)
+        REFERENCES dbo.Users (UserID)
+        ON DELETE SET NULL,
+
+    CONSTRAINT FK_Places_Category
+        FOREIGN KEY (CategoryID)
+        REFERENCES dbo.Categories (CategoryID),
+
+    CONSTRAINT FK_Places_City
+        FOREIGN KEY (CityID)
+        REFERENCES dbo.Cities (CityID)
+);
+GO
+
+-- ==============================================================================
+-- [9] جدول أنواع الغرف
+-- ==============================================================================
+
+CREATE TABLE dbo.Rooms
+(
+    RoomID INT IDENTITY(1,1) NOT NULL,
+    PlaceID INT NOT NULL,
+    RoomNumber NVARCHAR(50) NOT NULL,
+    RoomType NVARCHAR(50) NOT NULL,
+    Price DECIMAL(18,2) NOT NULL,
+    ImageUrl NVARCHAR(MAX) NULL,
+    IsAvailable BIT NOT NULL
+        CONSTRAINT DF_Rooms_IsAvailable DEFAULT 1,
+    Description NVARCHAR(500) NULL,
+    Quantity INT NOT NULL
+        CONSTRAINT DF_Rooms_Quantity DEFAULT 1,
+
+    AreaSquareMeters DECIMAL(8,2) NULL,
+
+    MaxAdults INT NOT NULL
+        CONSTRAINT DF_Rooms_MaxAdults DEFAULT (1),
+
+    MaxChildren INT NOT NULL
+        CONSTRAINT DF_Rooms_MaxChildren DEFAULT (0),
+
+    BedsCount INT NULL,
+
+    BedType NVARCHAR(50) NULL,
+
+    InternalRoomsCount INT NULL,
+
+    CONSTRAINT PK_Rooms
+        PRIMARY KEY CLUSTERED (RoomID),
+
+    CONSTRAINT UQ_Rooms_RoomID_PlaceID
+        UNIQUE (RoomID, PlaceID),
+
+    CONSTRAINT FK_Rooms_Places
+        FOREIGN KEY (PlaceID)
+        REFERENCES dbo.Places (PlaceID)
+        ON DELETE CASCADE
+);
+GO
+
+-- ==============================================================================
+-- [10] جدول الوحدات الفعلية للغرف
+-- ==============================================================================
+
+CREATE TABLE dbo.RoomUnits
+(
+    RoomUnitID INT IDENTITY(1,1) NOT NULL,
+    PlaceID INT NOT NULL,
+    RoomID INT NOT NULL,
+    RoomNumber NVARCHAR(50) NOT NULL,
+    FloorNumber INT NOT NULL,
+    FloorLabel NVARCHAR(50) NULL,
+
+    IsAvailable BIT NOT NULL
+        CONSTRAINT DF_RoomUnits_IsAvailable DEFAULT (1),
+
+    Notes NVARCHAR(250) NULL,
+
+    CreatedAt DATETIME2 NOT NULL
+        CONSTRAINT DF_RoomUnits_CreatedAt DEFAULT SYSDATETIME(),
+
+    CONSTRAINT PK_RoomUnits
+        PRIMARY KEY CLUSTERED (RoomUnitID),
+
+    CONSTRAINT UQ_RoomUnits_Place_RoomNumber
+        UNIQUE (PlaceID, RoomNumber),
+
+    CONSTRAINT FK_RoomUnits_Rooms
+        FOREIGN KEY (RoomID, PlaceID)
+        REFERENCES dbo.Rooms (RoomID, PlaceID)
+        ON DELETE CASCADE,
+
+    CONSTRAINT FK_RoomUnits_Places
+        FOREIGN KEY (PlaceID)
+        REFERENCES dbo.Places (PlaceID)
+);
+GO
+
+-- ==============================================================================
+-- [11] صور المنشآت
+-- ==============================================================================
+
+CREATE TABLE dbo.PlaceImages
+(
+    ImageID INT IDENTITY(1,1) NOT NULL,
+    PlaceID INT NOT NULL,
+    ImagePath NVARCHAR(255) NOT NULL,
+
+    CONSTRAINT PK_PlaceImages
+        PRIMARY KEY CLUSTERED (ImageID),
+
+    CONSTRAINT FK_PlaceImages_Places
+        FOREIGN KEY (PlaceID)
+        REFERENCES dbo.Places (PlaceID)
+        ON DELETE CASCADE
+);
+GO
+
+-- ==============================================================================
+-- [12] الخدمات الإضافية
+-- ==============================================================================
+
+CREATE TABLE dbo.PlaceAdditionalServices
+(
+    ServiceID INT IDENTITY(1,1) NOT NULL,
+    PlaceID INT NOT NULL,
+    ServiceName NVARCHAR(100) NOT NULL,
+    Price DECIMAL(18,2) NOT NULL
+        CONSTRAINT DF_PlaceAdditionalServices_Price DEFAULT 0,
+    IsActive BIT NOT NULL
+        CONSTRAINT DF_PlaceAdditionalServices_IsActive DEFAULT 1,
+    CreatedAt DATETIME NULL
+        CONSTRAINT DF_PlaceAdditionalServices_CreatedAt DEFAULT GETDATE(),
+    Description NVARCHAR(MAX) NULL,
+    ImageUrl NVARCHAR(MAX) NULL,
+
+    CONSTRAINT PK_PlaceAdditionalServices
+        PRIMARY KEY CLUSTERED (ServiceID),
+
+    CONSTRAINT UQ_PlaceAdditionalServices_ServiceID_PlaceID
+        UNIQUE (ServiceID, PlaceID),
+
+    CONSTRAINT FK_PlaceAdditionalServices_Places
+        FOREIGN KEY (PlaceID)
+        REFERENCES dbo.Places (PlaceID)
+        ON DELETE CASCADE
+);
+GO
+
+-- ==============================================================================
+-- [13] وسائل الراحة
+-- ==============================================================================
+
+CREATE TABLE dbo.PlaceAmenities
+(
+    AmenityID INT IDENTITY(1,1) NOT NULL,
+    PlaceID INT NOT NULL,
+    AmenityName NVARCHAR(100) NOT NULL,
+    IconClass NVARCHAR(50) NULL,
+    IsActive BIT NOT NULL
+        CONSTRAINT DF_PlaceAmenities_IsActive DEFAULT 1,
+    CreatedAt DATETIME NULL
+        CONSTRAINT DF_PlaceAmenities_CreatedAt DEFAULT GETDATE(),
+
+    CONSTRAINT PK_PlaceAmenities
+        PRIMARY KEY CLUSTERED (AmenityID),
+
+    CONSTRAINT FK_PlaceAmenities_Places
+        FOREIGN KEY (PlaceID)
+        REFERENCES dbo.Places (PlaceID)
+        ON DELETE CASCADE
+);
+GO
+
+-- ==============================================================================
+-- [14] مساحات المنشأة
+-- ==============================================================================
+
+CREATE TABLE dbo.PlaceSpaces
+(
+    SpaceID INT IDENTITY(1,1) NOT NULL,
+    PlaceID INT NOT NULL,
+    SpaceName NVARCHAR(100) NOT NULL,
+    IconClass NVARCHAR(50) NULL,
+    IsActive BIT NOT NULL
+        CONSTRAINT DF_PlaceSpaces_IsActive DEFAULT 1,
+    CreatedAt DATETIME NULL
+        CONSTRAINT DF_PlaceSpaces_CreatedAt DEFAULT GETDATE(),
+
+    CONSTRAINT PK_PlaceSpaces
+        PRIMARY KEY CLUSTERED (SpaceID),
+
+    CONSTRAINT FK_PlaceSpaces_Places
+        FOREIGN KEY (PlaceID)
+        REFERENCES dbo.Places (PlaceID)
+        ON DELETE CASCADE
+);
+GO
+
+-- ==============================================================================
+-- [15] الباقات
+-- ==============================================================================
+
+CREATE TABLE dbo.PlacePackages
+(
+    PackageID INT IDENTITY(1,1) NOT NULL,
+    PlaceID INT NOT NULL,
+    PackageName NVARCHAR(100) NOT NULL,
+    Price DECIMAL(18,2) NOT NULL,
+    Capacity INT NOT NULL
+        CONSTRAINT DF_PlacePackages_Capacity DEFAULT 30,
+    TimeFrame NVARCHAR(100) NULL,
+    StartTime TIME NULL,
+    EndTime TIME NULL,
+    IsActive BIT NOT NULL
+        CONSTRAINT DF_PlacePackages_IsActive DEFAULT 1,
+    CreatedAt DATETIME NULL
+        CONSTRAINT DF_PlacePackages_CreatedAt DEFAULT GETDATE(),
+
+    CONSTRAINT PK_PlacePackages
+        PRIMARY KEY CLUSTERED (PackageID),
+
+    CONSTRAINT UQ_PlacePackages_PackageID_PlaceID
+        UNIQUE (PackageID, PlaceID),
+
+    CONSTRAINT FK_PlacePackages_Places
+        FOREIGN KEY (PlaceID)
+        REFERENCES dbo.Places (PlaceID)
+        ON DELETE CASCADE
+);
+GO
+
+-- ==============================================================================
+-- [16] سياسات المنشأة
+-- ==============================================================================
+
+CREATE TABLE dbo.PlacePolicies
+(
+    PlaceId INT NOT NULL,
+
+    BookingApprovalMode NVARCHAR(20) NOT NULL
+        CONSTRAINT DF_PlacePolicies_BookingApprovalMode DEFAULT N'Instant',
+
+    DepositPoliciesJson NVARCHAR(MAX) NULL
+        CONSTRAINT DF_PlacePolicies_DepositPoliciesJson DEFAULT N'[]',
+
+    SecurityPoliciesJson NVARCHAR(MAX) NULL
+        CONSTRAINT DF_PlacePolicies_SecurityPoliciesJson DEFAULT N'[]',
+
+    PaymentTimeout INT NOT NULL
+        CONSTRAINT DF_PlacePolicies_PaymentTimeout DEFAULT 12,
+
+    IsSarSupported BIT NOT NULL
+        CONSTRAINT DF_PlacePolicies_IsSarSupported DEFAULT 1,
+
+    IsUsdSupported BIT NOT NULL
+        CONSTRAINT DF_PlacePolicies_IsUsdSupported DEFAULT 1,
+
+    CleaningFee DECIMAL(18,2) NOT NULL
+        CONSTRAINT DF_PlacePolicies_CleaningFee DEFAULT 0,
+
+    TaxPercentage DECIMAL(18,2) NOT NULL
+        CONSTRAINT DF_PlacePolicies_TaxPercentage DEFAULT 0,
+
+    IsNonRefundableEnabled BIT NOT NULL
+        CONSTRAINT DF_PlacePolicies_IsNonRefundableEnabled DEFAULT 0,
+
+    NonRefundableDiscount INT NOT NULL
+        CONSTRAINT DF_PlacePolicies_NonRefundableDiscount DEFAULT 10,
+
+    FreeCancellationHours INT NOT NULL
+        CONSTRAINT DF_PlacePolicies_FreeCancellationHours DEFAULT 48,
+
+    ImmediateGracePeriod BIT NOT NULL
+        CONSTRAINT DF_PlacePolicies_ImmediateGracePeriod DEFAULT 1,
+
+    NoShowGraceMinutes INT NOT NULL
+        CONSTRAINT DF_PlacePolicies_NoShowGraceMinutes DEFAULT 60,
+
+    PenaltyType NVARCHAR(30) NOT NULL
+        CONSTRAINT DF_PlacePolicies_PenaltyType DEFAULT N'LoseDeposit',
+
+    PenaltyValue DECIMAL(18,2) NOT NULL
+        CONSTRAINT DF_PlacePolicies_PenaltyValue DEFAULT 0,
+
+    ConfiscateOnNoShow BIT NOT NULL
+        CONSTRAINT DF_PlacePolicies_ConfiscateOnNoShow DEFAULT 1,
+
+    RefundTransferFee NVARCHAR(20) NOT NULL
+        CONSTRAINT DF_PlacePolicies_RefundTransferFee DEFAULT N'CustomerPays',
+
+    RefundProcessingDays INT NOT NULL
+        CONSTRAINT DF_PlacePolicies_RefundProcessingDays DEFAULT 3,
+
+    ExceptionPoliciesJson NVARCHAR(MAX) NULL
+        CONSTRAINT DF_PlacePolicies_ExceptionPoliciesJson DEFAULT N'[]',
+
+    OperationSystemMode NVARCHAR(20) NOT NULL
+        CONSTRAINT DF_PlacePolicies_OperationSystemMode DEFAULT N'FullDay',
+
+    CheckInTime NVARCHAR(50) NULL
+        CONSTRAINT DF_PlacePolicies_CheckInTime DEFAULT N'14:00',
+
+    CheckOutTime NVARCHAR(50) NULL
+        CONSTRAINT DF_PlacePolicies_CheckOutTime DEFAULT N'12:00',
+
+    ShiftsJson NVARCHAR(MAX) NULL
+        CONSTRAINT DF_PlacePolicies_ShiftsJson DEFAULT N'[]',
+
+    BufferTimeHours INT NOT NULL
+        CONSTRAINT DF_PlacePolicies_BufferTimeHours DEFAULT 2,
+
+    MinimumNoticeHours INT NOT NULL
+        CONSTRAINT DF_PlacePolicies_MinimumNoticeHours DEFAULT 24,
+
+    MaximumHorizonMonths INT NOT NULL
+        CONSTRAINT DF_PlacePolicies_MaximumHorizonMonths DEFAULT 6,
+
+    ClosedDaysCsv NVARCHAR(MAX) NULL
+        CONSTRAINT DF_PlacePolicies_ClosedDaysCsv DEFAULT N'',
+
+    IsChatEnabled BIT NOT NULL
+        CONSTRAINT DF_PlacePolicies_IsChatEnabled DEFAULT 1,
+
+    WelcomeMessage NVARCHAR(MAX) NULL
+        CONSTRAINT DF_PlacePolicies_WelcomeMessage DEFAULT N'',
+
+    OfflineReplyToggle BIT NOT NULL
+        CONSTRAINT DF_PlacePolicies_OfflineReplyToggle DEFAULT 0,
+
+    OfflineMessage NVARCHAR(MAX) NULL
+        CONSTRAINT DF_PlacePolicies_OfflineMessage DEFAULT N'',
+
+    QuickRepliesJson NVARCHAR(MAX) NULL
+        CONSTRAINT DF_PlacePolicies_QuickRepliesJson DEFAULT N'[]',
+
+    EmergencyContact NVARCHAR(100) NULL
+        CONSTRAINT DF_PlacePolicies_EmergencyContact DEFAULT N'',
+
+    ContactEmail NVARCHAR(255) NULL
+        CONSTRAINT DF_PlacePolicies_ContactEmail DEFAULT N'',
+
+    IsSoundAlertEnabled BIT NOT NULL
+        CONSTRAINT DF_PlacePolicies_IsSoundAlertEnabled DEFAULT 1,
+
+    IsPushNoticeEnabled BIT NOT NULL
+        CONSTRAINT DF_PlacePolicies_IsPushNoticeEnabled DEFAULT 1,
+
+    ForFamiliesOnly BIT NOT NULL
+        CONSTRAINT DF_PlacePolicies_ForFamiliesOnly DEFAULT 0,
+
+    AllowSmoking BIT NOT NULL
+        CONSTRAINT DF_PlacePolicies_AllowSmoking DEFAULT 0,
+
+    AllowParties BIT NOT NULL
+        CONSTRAINT DF_PlacePolicies_AllowParties DEFAULT 0,
+
+    AllowQatInside BIT NOT NULL
+        CONSTRAINT DF_PlacePolicies_AllowQatInside DEFAULT 0,
+
+    CreatedAt DATETIME2 NOT NULL
+        CONSTRAINT DF_PlacePolicies_CreatedAt DEFAULT GETDATE(),
+
+    CONSTRAINT PK_PlacePolicies
+        PRIMARY KEY CLUSTERED (PlaceId),
+
+    CONSTRAINT FK_PlacePolicies_Places
+        FOREIGN KEY (PlaceId)
+        REFERENCES dbo.Places (PlaceID)
+        ON DELETE CASCADE
+);
+GO
+
+-- ==============================================================================
+-- [17] المفضلة
+-- ==============================================================================
+
+CREATE TABLE dbo.Favorites
+(
+    FavoriteID INT IDENTITY(1,1) NOT NULL,
+    UserID INT NOT NULL,
+    PlaceID INT NOT NULL,
+    CreatedAt DATETIME NULL
+        CONSTRAINT DF_Favorites_CreatedAt DEFAULT GETDATE(),
+
+    CONSTRAINT PK_Favorites
+        PRIMARY KEY CLUSTERED (FavoriteID),
+
+    CONSTRAINT FK_Favorites_Users
+        FOREIGN KEY (UserID)
+        REFERENCES dbo.Users (UserID),
+
+    CONSTRAINT FK_Favorites_Places
+        FOREIGN KEY (PlaceID)
+        REFERENCES dbo.Places (PlaceID)
+        ON DELETE CASCADE
+);
+GO
+
+-- ==============================================================================
+-- [18] شبكات الدفع والمحافظ المدعومة
+-- ==============================================================================
+
+CREATE TABLE dbo.SupportedWallets
+(
+    WalletID INT IDENTITY(1,1) NOT NULL,
+    WalletName NVARCHAR(100) NOT NULL,
+    LogoPath NVARCHAR(255) NULL,
+    IsActive BIT NOT NULL
+        CONSTRAINT DF_SupportedWallets_IsActive DEFAULT 1,
+    CreatedAt DATETIME NULL
+        CONSTRAINT DF_SupportedWallets_CreatedAt DEFAULT GETDATE(),
+
+    CONSTRAINT PK_SupportedWallets
+        PRIMARY KEY CLUSTERED (WalletID)
+);
+GO
+
+CREATE UNIQUE INDEX UQ_SupportedWallets_WalletName
+ON dbo.SupportedWallets (WalletName);
+GO
+
+-- ==============================================================================
+-- [19] محافظ المالك
+-- ==============================================================================
+
+CREATE TABLE dbo.OwnerWallets
+(
+    OwnerWalletID INT IDENTITY(1,1) NOT NULL,
+    OwnerID INT NOT NULL,
+    WalletID INT NOT NULL,
+    AccountNumber NVARCHAR(100) NOT NULL,
+    BeneficiaryName NVARCHAR(150) NOT NULL,
+    IsActive BIT NOT NULL
+        CONSTRAINT DF_OwnerWallets_IsActive DEFAULT 1,
+    UpdatedAt DATETIME NULL
+        CONSTRAINT DF_OwnerWallets_UpdatedAt DEFAULT GETDATE(),
+
+    CONSTRAINT PK_OwnerWallets
+        PRIMARY KEY CLUSTERED (OwnerWalletID),
+
+    CONSTRAINT FK_OwnerWallets_Users
+        FOREIGN KEY (OwnerID)
+        REFERENCES dbo.Users (UserID)
+        ON DELETE CASCADE,
+
+    CONSTRAINT FK_OwnerWallets_SupportedWallets
+        FOREIGN KEY (WalletID)
+        REFERENCES dbo.SupportedWallets (WalletID)
+        ON DELETE CASCADE
+);
+GO
+
+CREATE UNIQUE INDEX UQ_OwnerWallets_Account
+ON dbo.OwnerWallets
+(
+    OwnerID,
+    WalletID,
+    AccountNumber
+);
+GO
+
+-- ==============================================================================
+-- [20] محافظ المنصة
+-- ==============================================================================
+
+CREATE TABLE dbo.PlatformWallets
+(
+    PlatformWalletID INT IDENTITY(1,1) NOT NULL,
+    WalletID INT NOT NULL,
+    AccountNumber NVARCHAR(100) NOT NULL,
+    BeneficiaryName NVARCHAR(150) NOT NULL,
+
+    IsActive BIT NOT NULL
+        CONSTRAINT DF_PlatformWallets_IsActive DEFAULT 1,
+
+    IsPrimary BIT NOT NULL
+        CONSTRAINT DF_PlatformWallets_IsPrimary DEFAULT 0,
+
+    Instructions NVARCHAR(MAX) NULL,
+
+    CreatedAt DATETIME NULL
+        CONSTRAINT DF_PlatformWallets_CreatedAt DEFAULT GETDATE(),
+
+    UpdatedAt DATETIME NULL
+        CONSTRAINT DF_PlatformWallets_UpdatedAt DEFAULT GETDATE(),
+
+    CONSTRAINT PK_PlatformWallets
+        PRIMARY KEY CLUSTERED (PlatformWalletID),
+
+    CONSTRAINT UQ_PlatformWallets_WalletID
+        UNIQUE (WalletID),
+
+    CONSTRAINT FK_PlatformWallets_SupportedWallets
+        FOREIGN KEY (WalletID)
+        REFERENCES dbo.SupportedWallets (WalletID)
+);
+GO
+
+CREATE UNIQUE INDEX UQ_PlatformWallets_Primary
+ON dbo.PlatformWallets (IsPrimary)
+WHERE IsPrimary = 1;
+GO
+
+-- ==============================================================================
+-- [21] حساب ضمان عمولات المنشأة
+-- ==============================================================================
+
+CREATE TABLE dbo.PlaceCommissionAccounts
+(
+    PlaceCommissionAccountID INT IDENTITY(1,1) NOT NULL,
+    PlaceID INT NOT NULL,
+
+    AvailableBalance DECIMAL(18,2) NOT NULL
+        CONSTRAINT DF_PlaceCommissionAccounts_AvailableBalance DEFAULT 0.00,
+
+    HeldBalance DECIMAL(18,2) NOT NULL
+        CONSTRAINT DF_PlaceCommissionAccounts_HeldBalance DEFAULT 0.00,
+
+    DebtAmount DECIMAL(18,2) NOT NULL
+        CONSTRAINT DF_PlaceCommissionAccounts_DebtAmount DEFAULT 0.00,
+
+    AllowNegativeBalance BIT NULL,
+    DebtLimit DECIMAL(18,2) NULL,
+    LowBalanceThreshold DECIMAL(18,2) NULL,
+
+    AccountStatus NVARCHAR(30) NOT NULL
+        CONSTRAINT DF_PlaceCommissionAccounts_AccountStatus DEFAULT N'NeedsTopUp',
+
+    LastTopUpAt DATETIME NULL,
+    DebtStartedAt DATETIME2 NULL,
+    DebtDueAt DATETIME2 NULL,
+
+    CreatedAt DATETIME NULL
+        CONSTRAINT DF_PlaceCommissionAccounts_CreatedAt DEFAULT GETDATE(),
+
+    UpdatedAt DATETIME NULL
+        CONSTRAINT DF_PlaceCommissionAccounts_UpdatedAt DEFAULT GETDATE(),
+
+    RowVersion ROWVERSION NOT NULL,
+
+    CONSTRAINT PK_PlaceCommissionAccounts
+        PRIMARY KEY CLUSTERED (PlaceCommissionAccountID),
+
+    CONSTRAINT UQ_PlaceCommissionAccounts_PlaceID
+        UNIQUE (PlaceID),
+
+    CONSTRAINT FK_PlaceCommissionAccounts_Places
+        FOREIGN KEY (PlaceID)
+        REFERENCES dbo.Places (PlaceID),
+
+    CONSTRAINT CK_PlaceCommissionAccounts_AvailableBalance
+        CHECK (AvailableBalance >= 0),
+
+    CONSTRAINT CK_PlaceCommissionAccounts_HeldBalance
+        CHECK (HeldBalance >= 0),
+
+    CONSTRAINT CK_PlaceCommissionAccounts_DebtAmount
+        CHECK (DebtAmount >= 0),
+
+    CONSTRAINT CK_PlaceCommissionAccounts_DebtLimit
+        CHECK
+        (
+            DebtLimit IS NULL
+            OR DebtLimit >= 0
+        ),
+
+    CONSTRAINT CK_PlaceCommissionAccounts_LowBalanceThreshold
+        CHECK
+        (
+            LowBalanceThreshold IS NULL
+            OR LowBalanceThreshold >= 0
+        ),
+
+    CONSTRAINT CK_PlaceCommissionAccounts_DebtDates
+        CHECK
+        (
+            DebtStartedAt IS NULL
+            OR DebtDueAt IS NULL
+            OR DebtDueAt >= DebtStartedAt
+        ),
+
+    CONSTRAINT CK_PlaceCommissionAccounts_AccountStatus
+        CHECK
+        (
+            AccountStatus IN
+            (
+                N'NeedsTopUp',
+                N'Active',
+                N'LowBalance',
+                N'InDebt',
+                N'Suspended'
+            )
+        )
+);
+GO
+
+-- [22] العروض والخصومات
+-- ==============================================================================
+
+CREATE TABLE dbo.Promotions
+(
+    PromotionID INT IDENTITY(1,1) NOT NULL,
+    OwnerID INT NOT NULL,
+    PlaceID INT NOT NULL,
+    PromotionTitle NVARCHAR(150) NOT NULL,
+
+    DiscountType NVARCHAR(20) NULL,
+    DiscountValue DECIMAL(18,2) NOT NULL,
+
+    OfferMode NVARCHAR(20) NOT NULL
+        CONSTRAINT DF_Promotions_OfferMode DEFAULT N'Discount',
+
+    RewardType NVARCHAR(30) NULL,
+    RequiredQuantity INT NULL,
+    RewardQuantity INT NULL,
+    RewardServiceID INT NULL,
+    SpecialPrice DECIMAL(18,2) NULL,
+
+    IsRewardRepeatable BIT NOT NULL
+        CONSTRAINT DF_Promotions_IsRewardRepeatable DEFAULT 0,
+
+    StartDate DATE NOT NULL,
+    EndDate DATE NOT NULL,
+
+    IsActive BIT NOT NULL
+        CONSTRAINT DF_Promotions_IsActive DEFAULT 0,
+
+    CreatedAt DATETIME NULL
+        CONSTRAINT DF_Promotions_CreatedAt DEFAULT GETDATE(),
+
+    ShortDescription NVARCHAR(250) NULL,
+    Description NVARCHAR(MAX) NULL,
+    ImagePath NVARCHAR(255) NULL,
+    PromoCode NVARCHAR(50) NULL,
+    MaximumDiscountAmount DECIMAL(18,2) NULL,
+    MinimumBookingAmount DECIMAL(18,2) NULL,
+    MinimumNights INT NULL,
+    MinimumPeople INT NULL,
+    TotalUsageLimit INT NULL,
+    PerCustomerUsageLimit INT NULL,
+
+    IsAutomatic BIT NOT NULL
+        CONSTRAINT DF_Promotions_IsAutomatic DEFAULT 1,
+
+    IsStackable BIT NOT NULL
+        CONSTRAINT DF_Promotions_IsStackable DEFAULT 0,
+
+    RoomID INT NULL,
+    PackageID INT NULL,
+    ServiceID INT NULL,
+    StayStartDate DATE NULL,
+    StayEndDate DATE NULL,
+    ApplicableDaysCsv NVARCHAR(100) NULL,
+
+    Status NVARCHAR(20) NOT NULL
+        CONSTRAINT DF_Promotions_Status DEFAULT N'Draft',
+
+    SubmittedAt DATETIME NULL,
+    ReviewedAt DATETIME NULL,
+    ReviewedByUserID INT NULL,
+    RejectionReason NVARCHAR(500) NULL,
+    PausedAt DATETIME NULL,
+
+    UpdatedAt DATETIME NULL
+        CONSTRAINT DF_Promotions_UpdatedAt DEFAULT GETDATE(),
+
+    CONSTRAINT PK_Promotions
+        PRIMARY KEY CLUSTERED (PromotionID),
+
+    CONSTRAINT FK_Promotions_Owner
+        FOREIGN KEY (OwnerID)
+        REFERENCES dbo.Users (UserID),
+
+    CONSTRAINT FK_Promotions_Places
+        FOREIGN KEY (PlaceID)
+        REFERENCES dbo.Places (PlaceID)
+        ON DELETE CASCADE,
+
+    CONSTRAINT FK_Promotions_Rooms
+        FOREIGN KEY (RoomID, PlaceID)
+        REFERENCES dbo.Rooms (RoomID, PlaceID),
+
+    CONSTRAINT FK_Promotions_PlacePackages
+        FOREIGN KEY (PackageID, PlaceID)
+        REFERENCES dbo.PlacePackages (PackageID, PlaceID),
+
+    CONSTRAINT FK_Promotions_PlaceAdditionalServices
+        FOREIGN KEY (ServiceID, PlaceID)
+        REFERENCES dbo.PlaceAdditionalServices (ServiceID, PlaceID),
+
+    CONSTRAINT FK_Promotions_RewardService
+        FOREIGN KEY (RewardServiceID, PlaceID)
+        REFERENCES dbo.PlaceAdditionalServices (ServiceID, PlaceID),
+
+    CONSTRAINT FK_Promotions_ReviewedBy
+        FOREIGN KEY (ReviewedByUserID)
+        REFERENCES dbo.Users (UserID),
+
+    CONSTRAINT CK_Promotions_OfferMode
+        CHECK
+        (
+            OfferMode IN
+            (
+                N'Discount',
+                N'ConditionalReward'
+            )
+        ),
+
+    CONSTRAINT CK_Promotions_RewardType
+        CHECK
+        (
+            RewardType IS NULL
+            OR RewardType IN
+            (
+                N'PercentageDiscount',
+                N'FixedDiscount',
+                N'FreeQuantity',
+                N'FreeService',
+                N'SpecialPrice',
+                N'ServiceSpecialPrice'
+            )
+        ),
+
+    CONSTRAINT CK_Promotions_RequiredQuantity
+        CHECK
+        (
+            RequiredQuantity IS NULL
+            OR RequiredQuantity > 0
+        ),
+
+    CONSTRAINT CK_Promotions_RewardQuantity
+        CHECK
+        (
+            RewardQuantity IS NULL
+            OR RewardQuantity > 0
+        ),
+
+    CONSTRAINT CK_Promotions_SpecialPrice
+        CHECK
+        (
+            SpecialPrice IS NULL
+            OR SpecialPrice > 0
+        ),
+
+    CONSTRAINT CK_Promotions_DiscountType
+        CHECK
+        (
+            DiscountType IS NULL
+            OR DiscountType IN
+            (
+                N'Percentage',
+                N'FixedAmount'
+            )
+        ),
+
+    CONSTRAINT CK_Promotions_DiscountValue
+        CHECK
+        (
+            DiscountValue >= 0
+        ),
+
+    CONSTRAINT CK_Promotions_DiscountRules
+        CHECK
+        (
+            (
+                OfferMode = N'Discount'
+                AND DiscountType IS NOT NULL
+                AND
+                (
+                    (
+                        DiscountType = N'Percentage'
+                        AND DiscountValue > 0
+                        AND DiscountValue <= 100
+                    )
+                    OR
+                    (
+                        DiscountType = N'FixedAmount'
+                        AND DiscountValue > 0
+                    )
+                )
+            )
+            OR
+            (
+                OfferMode = N'ConditionalReward'
+                AND DiscountValue >= 0
+            )
+        ),
+
+    CONSTRAINT CK_Promotions_ApplicationMode
+        CHECK
+        (
+            (
+                IsAutomatic = 1
+                AND
+                (
+                    PromoCode IS NULL
+                    OR LTRIM(RTRIM(PromoCode)) = N''
+                )
+            )
+            OR
+            (
+                IsAutomatic = 0
+                AND PromoCode IS NOT NULL
+                AND LTRIM(RTRIM(PromoCode)) <> N''
+            )
+        ),
+
+    CONSTRAINT CK_Promotions_MaximumDiscountAmount
+        CHECK
+        (
+            MaximumDiscountAmount IS NULL
+            OR MaximumDiscountAmount >= 0
+        ),
+
+    CONSTRAINT CK_Promotions_MinimumBookingAmount
+        CHECK
+        (
+            MinimumBookingAmount IS NULL
+            OR MinimumBookingAmount >= 0
+        ),
+
+    CONSTRAINT CK_Promotions_MinimumNights
+        CHECK
+        (
+            MinimumNights IS NULL
+            OR MinimumNights > 0
+        ),
+
+    CONSTRAINT CK_Promotions_MinimumPeople
+        CHECK
+        (
+            MinimumPeople IS NULL
+            OR MinimumPeople > 0
+        ),
+
+    CONSTRAINT CK_Promotions_TotalUsageLimit
+        CHECK
+        (
+            TotalUsageLimit IS NULL
+            OR TotalUsageLimit > 0
+        ),
+
+    CONSTRAINT CK_Promotions_PerCustomerUsageLimit
+        CHECK
+        (
+            PerCustomerUsageLimit IS NULL
+            OR PerCustomerUsageLimit > 0
+        ),
+
+    CONSTRAINT CK_Promotions_DateRange
+        CHECK
+        (
+            EndDate >= StartDate
+        ),
+
+    CONSTRAINT CK_Promotions_StayDateRange
+        CHECK
+        (
+            StayStartDate IS NULL
+            OR StayEndDate IS NULL
+            OR StayEndDate >= StayStartDate
+        ),
+
+    CONSTRAINT CK_Promotions_Status
+        CHECK
+        (
+            Status IN
+            (
+                N'Draft',
+                N'Pending',
+                N'Scheduled',
+                N'Active',
+                N'Paused',
+                N'Expired',
+                N'Rejected',
+                N'Cancelled'
+            )
+        ),
+
+    CONSTRAINT CK_Promotions_Target
+        CHECK
+        (
+            (CASE WHEN RoomID IS NOT NULL THEN 1 ELSE 0 END)
+            +
+            (CASE WHEN PackageID IS NOT NULL THEN 1 ELSE 0 END)
+            +
+            (CASE WHEN ServiceID IS NOT NULL THEN 1 ELSE 0 END)
+            <= 1
+        )
+);
+GO
+
+CREATE UNIQUE INDEX UQ_Promotions_PromoCode
+ON dbo.Promotions (PromoCode)
+WHERE PromoCode IS NOT NULL
+AND PromoCode <> N'';
+GO
+
+CREATE INDEX IX_Promotions_OwnerID_Status
+ON dbo.Promotions
+(
+    OwnerID,
+    Status
+);
+GO
+
+CREATE INDEX IX_Promotions_PlaceID_Status
+ON dbo.Promotions
+(
+    PlaceID,
+    Status
+);
+GO
+
+CREATE INDEX IX_Promotions_StartDate_EndDate
+ON dbo.Promotions
+(
+    StartDate,
+    EndDate
+);
+GO
+
+-- ==============================================================================
+-- [23] باقات الإعلانات
+-- ============================================================================== 
+
+CREATE TABLE dbo.AdvertisementPlans
+(
+    AdvertisementPlanID INT IDENTITY(1,1) NOT NULL,
+    PlanName NVARCHAR(100) NOT NULL,
+    PlacementType NVARCHAR(30) NOT NULL,
+    DurationType NVARCHAR(20) NOT NULL,
+    DurationDays INT NOT NULL,
+    Price DECIMAL(18,2) NOT NULL,
+
+    Currency NVARCHAR(50) NOT NULL
+        CONSTRAINT DF_AdvertisementPlans_Currency DEFAULT N'ريال يمني',
+
+    MaxActiveAdvertisements INT NOT NULL
+        CONSTRAINT DF_AdvertisementPlans_MaxActive DEFAULT 1,
+
+    DisplayPriority INT NOT NULL
+        CONSTRAINT DF_AdvertisementPlans_DisplayPriority DEFAULT 0,
+
+    Description NVARCHAR(500) NULL,
+
+    IsActive BIT NOT NULL
+        CONSTRAINT DF_AdvertisementPlans_IsActive DEFAULT 1,
+
+    BillingModel NVARCHAR(20) NOT NULL
+        CONSTRAINT DF_AdvertisementPlans_BillingModel DEFAULT N'Flat',
+
+    CostPerClick DECIMAL(18,2) NULL,
+    CostPerThousandImpressions DECIMAL(18,2) NULL,
+    MinimumTotalBudget DECIMAL(18,2) NULL,
+    DefaultDailyBudget DECIMAL(18,2) NULL,
+
+    MaxMediaItems INT NOT NULL
+        CONSTRAINT DF_AdvertisementPlans_MaxMediaItems DEFAULT 5,
+
+    AllowVideo BIT NOT NULL
+        CONSTRAINT DF_AdvertisementPlans_AllowVideo DEFAULT 0,
+
+    CreatedAt DATETIME NOT NULL
+        CONSTRAINT DF_AdvertisementPlans_CreatedAt DEFAULT GETDATE(),
+
+    UpdatedAt DATETIME NOT NULL
+        CONSTRAINT DF_AdvertisementPlans_UpdatedAt DEFAULT GETDATE(),
+
+    CONSTRAINT PK_AdvertisementPlans
+        PRIMARY KEY CLUSTERED (AdvertisementPlanID),
+
+    CONSTRAINT CK_AdvertisementPlans_PlacementType
+        CHECK
+        (
+            PlacementType IN
+            (
+                N'HomeSlider',
+                N'FeaturedPlaces',
+                N'SearchTop',
+                N'CategoryTop',
+                N'CityPage',
+                N'HomeBanner',
+                N'MapPin',
+                N'PlaceDetails'
+            )
+        ),
+
+    CONSTRAINT CK_AdvertisementPlans_Duration
+        CHECK
+        (
+            (DurationType = N'Daily' AND DurationDays = 1)
+            OR
+            (DurationType = N'Weekly' AND DurationDays = 7)
+            OR
+            (DurationType = N'Monthly' AND DurationDays = 30)
+        ),
+
+    CONSTRAINT CK_AdvertisementPlans_Price
+        CHECK (Price >= 0),
+
+    CONSTRAINT CK_AdvertisementPlans_MaxActive
+        CHECK (MaxActiveAdvertisements > 0),
+
+    CONSTRAINT CK_AdvertisementPlans_BillingModel
+        CHECK
+        (
+            BillingModel IN
+            (
+                N'Flat',
+                N'CPC',
+                N'CPM'
+            )
+        ),
+
+    CONSTRAINT CK_AdvertisementPlans_AdvancedPricing
+        CHECK
+        (
+            (BillingModel = N'Flat')
+            OR
+            (
+                BillingModel = N'CPC'
+                AND CostPerClick IS NOT NULL
+                AND CostPerClick > 0
+            )
+            OR
+            (
+                BillingModel = N'CPM'
+                AND CostPerThousandImpressions IS NOT NULL
+                AND CostPerThousandImpressions > 0
+            )
+        ),
+
+    CONSTRAINT CK_AdvertisementPlans_BudgetAndMedia
+        CHECK
+        (
+            (MinimumTotalBudget IS NULL OR MinimumTotalBudget >= 0)
+            AND (DefaultDailyBudget IS NULL OR DefaultDailyBudget >= 0)
+            AND MaxMediaItems BETWEEN 1 AND 20
+        )
+);
+GO
+
+CREATE UNIQUE INDEX UQ_AdvertisementPlans_Name_Placement
+ON dbo.AdvertisementPlans
+(
+    PlanName,
+    PlacementType
+);
+GO
+
+CREATE INDEX IX_AdvertisementPlans_Placement_IsActive
+ON dbo.AdvertisementPlans
+(
+    PlacementType,
+    IsActive
+);
+GO
+
+-- ==============================================================================
+-- [24] الإعلانات
+-- ============================================================================== 
+
+CREATE TABLE dbo.Advertisements
+(
+    AdvertisementID INT IDENTITY(1,1) NOT NULL,
+    OwnerID INT NOT NULL,
+    PlaceID INT NOT NULL,
+    AdvertisementPlanID INT NOT NULL,
+    PromotionID INT NULL,
+    AdvertisementTitle NVARCHAR(150) NOT NULL,
+    ShortDescription NVARCHAR(300) NULL,
+    ImagePath NVARCHAR(255) NULL,
+
+    ButtonText NVARCHAR(50) NOT NULL
+        CONSTRAINT DF_Advertisements_ButtonText DEFAULT N'عرض المنشأة',
+
+    PlacementTypeSnapshot NVARCHAR(30) NOT NULL,
+    DurationTypeSnapshot NVARCHAR(20) NOT NULL,
+    DurationDaysSnapshot INT NOT NULL,
+    PriceSnapshot DECIMAL(18,2) NOT NULL,
+    Currency NVARCHAR(50) NOT NULL,
+
+    BillingModelSnapshot NVARCHAR(20) NOT NULL
+        CONSTRAINT DF_Advertisements_BillingModelSnapshot DEFAULT N'Flat',
+
+    CostPerClickSnapshot DECIMAL(18,2) NULL,
+    CostPerThousandSnapshot DECIMAL(18,2) NULL,
+    TotalBudget DECIMAL(18,2) NULL,
+    DailyBudget DECIMAL(18,2) NULL,
+
+    SpentAmount DECIMAL(18,2) NOT NULL
+        CONSTRAINT DF_Advertisements_SpentAmount DEFAULT 0,
+
+    MaxImpressions BIGINT NULL,
+    MaxClicks BIGINT NULL,
+
+    FrequencyCapPerUserPerDay INT NOT NULL
+        CONSTRAINT DF_Advertisements_FrequencyCap DEFAULT 3,
+
+    TargetingMode NVARCHAR(20) NOT NULL
+        CONSTRAINT DF_Advertisements_TargetingMode DEFAULT N'All',
+
+    DeviceTarget NVARCHAR(20) NOT NULL
+        CONSTRAINT DF_Advertisements_DeviceTarget DEFAULT N'All',
+
+    DestinationType NVARCHAR(20) NOT NULL
+        CONSTRAINT DF_Advertisements_DestinationType DEFAULT N'Place',
+
+    DestinationPath NVARCHAR(500) NULL,
+
+    RotationWeight INT NOT NULL
+        CONSTRAINT DF_Advertisements_RotationWeight DEFAULT 100,
+
+    PrioritySnapshot INT NOT NULL
+        CONSTRAINT DF_Advertisements_PrioritySnapshot DEFAULT 0,
+
+    UniqueImpressionsCount BIGINT NOT NULL
+        CONSTRAINT DF_Advertisements_UniqueImpressions DEFAULT 0,
+
+    ConversionsCount BIGINT NOT NULL
+        CONSTRAINT DF_Advertisements_Conversions DEFAULT 0,
+
+    LastImpressionAt DATETIME2 NULL,
+    LastClickAt DATETIME2 NULL,
+    LastServedAt DATETIME2 NULL,
+
+    TargetLatitude DECIMAL(9,6) NULL,
+    TargetLongitude DECIMAL(9,6) NULL,
+    TargetRadiusKm DECIMAL(8,2) NULL,
+
+    AutoRenew BIT NOT NULL
+        CONSTRAINT DF_Advertisements_AutoRenew DEFAULT 0,
+
+    RenewalCount INT NOT NULL
+        CONSTRAINT DF_Advertisements_RenewalCount DEFAULT 0,
+
+    PauseReason NVARCHAR(500) NULL,
+    CancellationReason NVARCHAR(500) NULL,
+
+    ArchivedDailyStatisticsJson NVARCHAR(MAX) NULL,
+
+    BookingStartsCount BIGINT NOT NULL
+        CONSTRAINT DF_Advertisements_BookingStartsCount DEFAULT 0,
+
+    StartImmediately BIT NOT NULL
+        CONSTRAINT DF_Advertisements_StartImmediately DEFAULT 1,
+
+    RequestedStartAt DATETIME NULL,
+    StartAt DATETIME NULL,
+    EndAt DATETIME NULL,
+    PlatformWalletID INT NULL,
+    TransferredAmount DECIMAL(18,2) NULL,
+    ReferenceNumber NVARCHAR(100) NULL,
+    TransferDate DATETIME NULL,
+    ReceiptImage NVARCHAR(255) NULL,
+
+    PaymentStatus NVARCHAR(20) NOT NULL
+        CONSTRAINT DF_Advertisements_PaymentStatus DEFAULT N'Unpaid',
+
+    Status NVARCHAR(20) NOT NULL
+        CONSTRAINT DF_Advertisements_Status DEFAULT N'Draft',
+
+    SubmittedAt DATETIME NULL,
+    ReviewedAt DATETIME NULL,
+    ReviewedByUserID INT NULL,
+    RejectionReason NVARCHAR(500) NULL,
+    PausedAt DATETIME NULL,
+
+    ImpressionsCount BIGINT NOT NULL
+        CONSTRAINT DF_Advertisements_ImpressionsCount DEFAULT 0,
+
+    ClicksCount BIGINT NOT NULL
+        CONSTRAINT DF_Advertisements_ClicksCount DEFAULT 0,
+
+    CreatedAt DATETIME NOT NULL
+        CONSTRAINT DF_Advertisements_CreatedAt DEFAULT GETDATE(),
+
+    UpdatedAt DATETIME NOT NULL
+        CONSTRAINT DF_Advertisements_UpdatedAt DEFAULT GETDATE(),
+
+    RowVersion ROWVERSION NOT NULL,
+
+    CONSTRAINT PK_Advertisements
+        PRIMARY KEY CLUSTERED (AdvertisementID),
+
+    CONSTRAINT FK_Advertisements_Owners
+        FOREIGN KEY (OwnerID)
+        REFERENCES dbo.Users (UserID),
+
+    CONSTRAINT FK_Advertisements_Places
+        FOREIGN KEY (PlaceID)
+        REFERENCES dbo.Places (PlaceID),
+
+    CONSTRAINT FK_Advertisements_Plans
+        FOREIGN KEY (AdvertisementPlanID)
+        REFERENCES dbo.AdvertisementPlans (AdvertisementPlanID),
+
+    CONSTRAINT FK_Advertisements_Promotions
+        FOREIGN KEY (PromotionID)
+        REFERENCES dbo.Promotions (PromotionID),
+
+    CONSTRAINT FK_Advertisements_PlatformWallets
+        FOREIGN KEY (PlatformWalletID)
+        REFERENCES dbo.PlatformWallets (PlatformWalletID),
+
+    CONSTRAINT FK_Advertisements_ReviewedBy
+        FOREIGN KEY (ReviewedByUserID)
+        REFERENCES dbo.Users (UserID),
+
+    CONSTRAINT CK_Advertisements_PlacementType
+        CHECK
+        (
+            PlacementTypeSnapshot IN
+            (
+                N'HomeSlider',
+                N'FeaturedPlaces',
+                N'SearchTop',
+                N'CategoryTop',
+                N'CityPage',
+                N'HomeBanner',
+                N'MapPin',
+                N'PlaceDetails'
+            )
+        ),
+
+    CONSTRAINT CK_Advertisements_Duration
+        CHECK
+        (
+            (
+                DurationTypeSnapshot = N'Daily'
+                AND DurationDaysSnapshot BETWEEN 1 AND 365
+            )
+            OR
+            (
+                DurationTypeSnapshot = N'Weekly'
+                AND DurationDaysSnapshot = 7
+            )
+            OR
+            (
+                DurationTypeSnapshot = N'Monthly'
+                AND DurationDaysSnapshot = 30
+            )
+        ),
+
+    CONSTRAINT CK_Advertisements_Price
+        CHECK (PriceSnapshot >= 0),
+
+    CONSTRAINT CK_Advertisements_TransferredAmount
+        CHECK
+        (
+            TransferredAmount IS NULL
+            OR TransferredAmount >= 0
+        ),
+
+    CONSTRAINT CK_Advertisements_DateRange
+        CHECK
+        (
+            StartAt IS NULL
+            OR EndAt IS NULL
+            OR EndAt > StartAt
+        ),
+
+    CONSTRAINT CK_Advertisements_PaymentStatus
+        CHECK
+        (
+            PaymentStatus IN
+            (
+                N'Unpaid',
+                N'PendingReview',
+                N'Paid',
+                N'Rejected',
+                N'Refunded'
+            )
+        ),
+
+    CONSTRAINT CK_Advertisements_Status
+        CHECK
+        (
+            Status IN
+            (
+                N'Draft',
+                N'AwaitingPayment',
+                N'Pending',
+                N'Scheduled',
+                N'Active',
+                N'Paused',
+                N'Expired',
+                N'Rejected',
+                N'Cancelled'
+            )
+        ),
+
+    CONSTRAINT CK_Advertisements_Statistics
+        CHECK
+        (
+            ImpressionsCount >= 0
+            AND ClicksCount >= 0
+            AND ClicksCount <= ImpressionsCount
+        ),
+
+    CONSTRAINT CK_Advertisements_BillingModelSnapshot
+        CHECK
+        (
+            BillingModelSnapshot IN
+            (
+                N'Flat',
+                N'CPC',
+                N'CPM'
+            )
+        ),
+
+    CONSTRAINT CK_Advertisements_GeoTargetingAndRenewal
+        CHECK
+        (
+            (TargetLatitude IS NULL OR TargetLatitude BETWEEN -90 AND 90)
+            AND (TargetLongitude IS NULL OR TargetLongitude BETWEEN -180 AND 180)
+            AND (TargetRadiusKm IS NULL OR TargetRadiusKm > 0)
+            AND
+            (
+                TargetRadiusKm IS NULL
+                OR
+                (
+                    TargetLatitude IS NOT NULL
+                    AND TargetLongitude IS NOT NULL
+                )
+            )
+            AND RenewalCount >= 0
+        ),
+
+    CONSTRAINT CK_Advertisements_TargetingAndDestination
+        CHECK
+        (
+            TargetingMode IN (N'All', N'Custom')
+            AND DeviceTarget IN (N'All', N'Desktop', N'Mobile')
+            AND DestinationType IN (N'Place', N'Promotion', N'Booking')
+        ),
+
+    CONSTRAINT CK_Advertisements_CompleteBudget
+        CHECK
+        (
+            (TotalBudget IS NULL OR TotalBudget >= 0)
+            AND (DailyBudget IS NULL OR DailyBudget >= 0)
+            AND SpentAmount >= 0
+            AND (TotalBudget IS NULL OR SpentAmount <= TotalBudget)
+            AND (MaxImpressions IS NULL OR MaxImpressions > 0)
+            AND (MaxClicks IS NULL OR MaxClicks > 0)
+            AND FrequencyCapPerUserPerDay BETWEEN 1 AND 100
+            AND RotationWeight BETWEEN 1 AND 1000
+        ),
+
+    CONSTRAINT CK_Advertisements_CompleteStatistics
+        CHECK
+        (
+            UniqueImpressionsCount >= 0
+            AND UniqueImpressionsCount <= ImpressionsCount
+            AND ConversionsCount >= 0
+            AND ConversionsCount <= ClicksCount
+        )
+);
+GO
+
+CREATE INDEX IX_Advertisements_OwnerID_Status
+ON dbo.Advertisements
+(
+    OwnerID,
+    Status
+);
+GO
+
+CREATE INDEX IX_Advertisements_PlaceID_Status
+ON dbo.Advertisements
+(
+    PlaceID,
+    Status
+);
+GO
+
+CREATE INDEX IX_Advertisements_Placement_Dates
+ON dbo.Advertisements
+(
+    PlacementTypeSnapshot,
+    StartAt,
+    EndAt
+);
+GO
+
+CREATE INDEX IX_Advertisements_PaymentStatus
+ON dbo.Advertisements
+(
+    PaymentStatus,
+    SubmittedAt
+);
+GO
+
+CREATE UNIQUE INDEX UQ_Advertisements_PaymentReference
+ON dbo.Advertisements
+(
+    PlatformWalletID,
+    ReferenceNumber
+)
+WHERE PlatformWalletID IS NOT NULL
+AND ReferenceNumber IS NOT NULL
+AND ReferenceNumber <> N'';
+GO
+
+CREATE INDEX IX_Advertisements_ActiveServing
+ON dbo.Advertisements
+(
+    Status,
+    PaymentStatus,
+    PlacementTypeSnapshot,
+    StartAt,
+    EndAt,
+    PrioritySnapshot DESC,
+    LastServedAt
+)
+INCLUDE
+(
+    PlaceID,
+    AdvertisementPlanID,
+    TotalBudget,
+    SpentAmount,
+    ImpressionsCount,
+    ClicksCount,
+    RotationWeight,
+    TargetingMode,
+    DeviceTarget
+);
+GO
+
+CREATE INDEX IX_Advertisements_BudgetStatus
+ON dbo.Advertisements
+(
+    BillingModelSnapshot,
+    Status,
+    SpentAmount,
+    TotalBudget
+);
+GO
+
+-- ==============================================================================
+-- [25] وسائط الإعلانات
+-- ============================================================================== 
+
+CREATE TABLE dbo.AdvertisementMedia
+(
+    AdvertisementMediaID INT IDENTITY(1,1) NOT NULL,
+    AdvertisementID INT NOT NULL,
+    MediaType NVARCHAR(20) NOT NULL,
+    FilePath NVARCHAR(500) NOT NULL,
+    ThumbnailPath NVARCHAR(500) NULL,
+    AltText NVARCHAR(200) NULL,
+
+    DisplayOrder INT NOT NULL
+        CONSTRAINT DF_AdvertisementMedia_DisplayOrder DEFAULT 0,
+
+    IsPrimary BIT NOT NULL
+        CONSTRAINT DF_AdvertisementMedia_IsPrimary DEFAULT 0,
+
+    IsActive BIT NOT NULL
+        CONSTRAINT DF_AdvertisementMedia_IsActive DEFAULT 1,
+
+    CreatedAt DATETIME2 NOT NULL
+        CONSTRAINT DF_AdvertisementMedia_CreatedAt DEFAULT SYSDATETIME(),
+
+    CONSTRAINT PK_AdvertisementMedia
+        PRIMARY KEY CLUSTERED (AdvertisementMediaID),
+
+    CONSTRAINT FK_AdvertisementMedia_Advertisements
+        FOREIGN KEY (AdvertisementID)
+        REFERENCES dbo.Advertisements (AdvertisementID)
+        ON DELETE CASCADE,
+
+    CONSTRAINT CK_AdvertisementMedia_MediaType
+        CHECK (MediaType IN (N'Image', N'Video')),
+
+    CONSTRAINT CK_AdvertisementMedia_DisplayOrder
+        CHECK (DisplayOrder >= 0)
+);
+GO
+
+CREATE INDEX IX_AdvertisementMedia_Advertisement_Order
+ON dbo.AdvertisementMedia
+(
+    AdvertisementID,
+    IsActive,
+    DisplayOrder
+);
+GO
+
+CREATE UNIQUE INDEX UQ_AdvertisementMedia_OnePrimary
+ON dbo.AdvertisementMedia (AdvertisementID)
+WHERE IsPrimary = 1;
+GO
+
+-- ==============================================================================
+-- [26] الاستهداف الموحد للإعلانات (مدن + فئات)
+-- ============================================================================== 
+
+CREATE TABLE dbo.AdvertisementTargets
+(
+    AdvertisementTargetID INT IDENTITY(1,1) NOT NULL,
+    AdvertisementID INT NOT NULL,
+    CityID INT NULL,
+    CategoryID INT NULL,
+
+    CreatedAt DATETIME2 NOT NULL
+        CONSTRAINT DF_AdvertisementTargets_CreatedAt DEFAULT SYSDATETIME(),
+
+    CONSTRAINT PK_AdvertisementTargets
+        PRIMARY KEY CLUSTERED (AdvertisementTargetID),
+
+    CONSTRAINT FK_AdvertisementTargets_Advertisements
+        FOREIGN KEY (AdvertisementID)
+        REFERENCES dbo.Advertisements (AdvertisementID)
+        ON DELETE CASCADE,
+
+    CONSTRAINT FK_AdvertisementTargets_Cities
+        FOREIGN KEY (CityID)
+        REFERENCES dbo.Cities (CityID),
+
+    CONSTRAINT FK_AdvertisementTargets_Categories
+        FOREIGN KEY (CategoryID)
+        REFERENCES dbo.Categories (CategoryID),
+
+    CONSTRAINT CK_AdvertisementTargets_ExactlyOneTarget
+        CHECK
+        (
+            (CityID IS NOT NULL AND CategoryID IS NULL)
+            OR
+            (CityID IS NULL AND CategoryID IS NOT NULL)
+        )
+);
+GO
+
+CREATE UNIQUE INDEX UQ_AdvertisementTargets_City
+ON dbo.AdvertisementTargets
+(
+    AdvertisementID,
+    CityID
+)
+WHERE CityID IS NOT NULL;
+GO
+
+CREATE UNIQUE INDEX UQ_AdvertisementTargets_Category
+ON dbo.AdvertisementTargets
+(
+    AdvertisementID,
+    CategoryID
+)
+WHERE CategoryID IS NOT NULL;
+GO
+
+CREATE INDEX IX_AdvertisementTargets_City_Advertisement
+ON dbo.AdvertisementTargets
+(
+    CityID,
+    AdvertisementID
+)
+WHERE CityID IS NOT NULL;
+GO
+
+CREATE INDEX IX_AdvertisementTargets_Category_Advertisement
+ON dbo.AdvertisementTargets
+(
+    CategoryID,
+    AdvertisementID
+)
+WHERE CategoryID IS NOT NULL;
+GO
+
+-- ==============================================================================
+-- [27] الحجوزات
+-- ==============================================================================
+
+CREATE TABLE dbo.Bookings
+(
+    BookingID INT IDENTITY(1,1) NOT NULL,
+    CustomerID INT NULL,
+
+    BookingSource NVARCHAR(20) NOT NULL
+        CONSTRAINT DF_Bookings_BookingSource DEFAULT N'Online',
+
+    ManualBookingChannel NVARCHAR(20) NULL,
+    CreatedByUserID INT NULL,
+
+    GuestName NVARCHAR(150) NULL,
+    GuestPhone NVARCHAR(50) NULL,
+    GuestEmail NVARCHAR(150) NULL,
+
+    OwnerInternalNotes NVARCHAR(1000) NULL,
+
+    PlaceID INT NOT NULL,
+    RoomID INT NULL,
+    PackageID INT NULL,
+    StartDate DATETIME NOT NULL,
+    EndDate DATETIME NULL,
+    TotalPrice DECIMAL(18,2) NOT NULL,
+
+    BookingState NVARCHAR(20) NULL
+        CONSTRAINT DF_Bookings_BookingState DEFAULT N'Pending',
+
+    RejectionReason NVARCHAR(MAX) NULL,
+
+    CreatedAt DATETIME NULL
+        CONSTRAINT DF_Bookings_CreatedAt DEFAULT GETDATE(),
+
+    PaymentStatus NVARCHAR(20) NOT NULL
+        CONSTRAINT DF_Bookings_PaymentStatus DEFAULT N'Unpaid',
+
+    PaymentMethod NVARCHAR(30) NULL,
+    PaymentNotificationImage NVARCHAR(255) NULL,
+    TimerExpiredAt DATETIME NULL,
+
+    RefundStatus NVARCHAR(30) NOT NULL
+        CONSTRAINT DF_Bookings_RefundStatus DEFAULT N'NotApplicable',
+
+    Quantity INT NOT NULL
+        CONSTRAINT DF_Bookings_Quantity DEFAULT 1,
+
+    AdultsCount INT NOT NULL
+        CONSTRAINT DF_Bookings_AdultsCount DEFAULT 1,
+
+    ChildrenCount INT NOT NULL
+        CONSTRAINT DF_Bookings_ChildrenCount DEFAULT 0,
+
+    BookingType NVARCHAR(50) NULL,
+    SeatingSetup NVARCHAR(100) NULL,
+
+    LastStatusChangedAt DATETIME2 NULL,
+    AcceptedAt DATETIME2 NULL,
+    PaymentApprovedAt DATETIME2 NULL,
+    CompletedAt DATETIME2 NULL,
+    NoShowAt DATETIME2 NULL,
+    ClosedAt DATETIME2 NULL,
+
+    ClosedByUserID INT NULL,
+    ClosedByType NVARCHAR(20) NULL,
+
+    CancellationReason NVARCHAR(500) NULL,
+    OwnerCancellationReason NVARCHAR(500) NULL,
+
+    PaymentProofRejectionReason NVARCHAR(500) NULL,
+    PaymentProofRejectedAt DATETIME2 NULL,
+
+    PaymentProofReviewCount INT NOT NULL
+        CONSTRAINT DF_Bookings_PaymentProofReviewCount DEFAULT 0,
+
+    PromotionID INT NULL,
+
+    OriginalTotalPrice DECIMAL(18,2) NOT NULL,
+
+    DiscountAmount DECIMAL(18,2) NOT NULL
+        CONSTRAINT DF_Bookings_DiscountAmount DEFAULT 0.00,
+
+    PromotionTitleSnapshot NVARCHAR(150) NULL,
+    PromotionCodeSnapshot NVARCHAR(50) NULL,
+    DiscountTypeSnapshot NVARCHAR(20) NULL,
+    DiscountValueSnapshot DECIMAL(18,2) NULL,
+
+    AdvertisementID INT NULL,
+
+    RowVersion ROWVERSION NOT NULL,
+
+    CONSTRAINT PK_Bookings
+        PRIMARY KEY CLUSTERED (BookingID),
+
+    CONSTRAINT FK_Bookings_Customers
+        FOREIGN KEY (CustomerID)
+        REFERENCES dbo.Users (UserID),
+
+    CONSTRAINT FK_Bookings_CreatedByUser
+        FOREIGN KEY (CreatedByUserID)
+        REFERENCES dbo.Users (UserID),
+
+    CONSTRAINT FK_Bookings_Places
+        FOREIGN KEY (PlaceID)
+        REFERENCES dbo.Places (PlaceID),
+
+    CONSTRAINT FK_Bookings_Rooms
+        FOREIGN KEY (RoomID)
+        REFERENCES dbo.Rooms (RoomID),
+
+    CONSTRAINT FK_Bookings_PlacePackages
+        FOREIGN KEY (PackageID)
+        REFERENCES dbo.PlacePackages (PackageID),
+
+    CONSTRAINT FK_Bookings_Promotions
+        FOREIGN KEY (PromotionID)
+        REFERENCES dbo.Promotions (PromotionID),
+
+    CONSTRAINT FK_Bookings_Advertisements
+        FOREIGN KEY (AdvertisementID)
+        REFERENCES dbo.Advertisements (AdvertisementID),
+
+    CONSTRAINT CK_Bookings_OriginalTotalPrice
+        CHECK
+        (
+            OriginalTotalPrice >= 0
+        ),
+
+    CONSTRAINT CK_Bookings_DiscountAmount
+        CHECK
+        (
+            DiscountAmount >= 0
+            AND DiscountAmount <= OriginalTotalPrice
+        ),
+
+    CONSTRAINT CK_Bookings_DiscountValueSnapshot
+        CHECK
+        (
+            DiscountValueSnapshot IS NULL
+            OR DiscountValueSnapshot >= 0
+        ),
+
+    CONSTRAINT CK_Bookings_BookingSource
+        CHECK
+        (
+            BookingSource IN
+            (
+                N'Online',
+                N'OwnerManual'
+            )
+        ),
+
+    CONSTRAINT CK_Bookings_ManualBookingChannel
+        CHECK
+        (
+            ManualBookingChannel IS NULL
+            OR ManualBookingChannel IN
+            (
+                N'Phone',
+                N'WalkIn',
+                N'WhatsApp',
+                N'Other'
+            )
+        ),
+
+    CONSTRAINT CK_Bookings_CustomerOrGuest
+        CHECK
+        (
+            CustomerID IS NOT NULL
+            OR
+            (
+                BookingSource = N'OwnerManual'
+                AND GuestName IS NOT NULL
+                AND LEN(LTRIM(RTRIM(GuestName))) > 0
+                AND GuestPhone IS NOT NULL
+                AND LEN(LTRIM(RTRIM(GuestPhone))) > 0
+            )
+        )
+);
+GO
+
+CREATE INDEX IX_Bookings_PromotionID
+ON dbo.Bookings (PromotionID)
+WHERE PromotionID IS NOT NULL;
+GO
+
+CREATE INDEX IX_Bookings_AdvertisementID
+ON dbo.Bookings (AdvertisementID)
+WHERE AdvertisementID IS NOT NULL;
+GO
+
+CREATE INDEX IX_Bookings_Place_BookingSource_StartDate
+ON dbo.Bookings
+(
+    PlaceID,
+    BookingSource,
+    StartDate
+);
+GO
+
+CREATE INDEX IX_Bookings_GuestPhone
+ON dbo.Bookings (GuestPhone)
+WHERE GuestPhone IS NOT NULL;
+GO
+
+-- ==============================================================================
+-- [28] سجل أحداث الإعلانات
+-- ============================================================================== 
+
+CREATE TABLE dbo.AdvertisementEvents
+(
+    AdvertisementEventID BIGINT IDENTITY(1,1) NOT NULL,
+    AdvertisementID INT NOT NULL,
+    UserID INT NULL,
+    BookingID INT NULL,
+    EventType NVARCHAR(30) NOT NULL,
+    PlacementType NVARCHAR(30) NOT NULL,
+    SessionKey NVARCHAR(100) NULL,
+    VisitorHash NVARCHAR(128) NULL,
+    RequestKey NVARCHAR(128) NULL,
+    DeviceType NVARCHAR(20) NULL,
+    IpHash NVARCHAR(128) NULL,
+    UserAgentHash NVARCHAR(128) NULL,
+
+    CostAmount DECIMAL(18,4) NOT NULL
+        CONSTRAINT DF_AdvertisementEvents_CostAmount DEFAULT 0,
+
+    EventAt DATETIME2 NOT NULL
+        CONSTRAINT DF_AdvertisementEvents_EventAt DEFAULT SYSDATETIME(),
+
+    CONSTRAINT PK_AdvertisementEvents
+        PRIMARY KEY CLUSTERED (AdvertisementEventID),
+
+    CONSTRAINT FK_AdvertisementEvents_Advertisements
+        FOREIGN KEY (AdvertisementID)
+        REFERENCES dbo.Advertisements (AdvertisementID),
+
+    CONSTRAINT FK_AdvertisementEvents_Users
+        FOREIGN KEY (UserID)
+        REFERENCES dbo.Users (UserID),
+
+    CONSTRAINT FK_AdvertisementEvents_Bookings
+        FOREIGN KEY (BookingID)
+        REFERENCES dbo.Bookings (BookingID),
+
+    CONSTRAINT CK_AdvertisementEvents_EventType
+        CHECK
+        (
+            EventType IN
+            (
+                N'Impression',
+                N'Click',
+                N'Hide',
+                N'Report',
+                N'BookingStarted',
+                N'BookingCompleted'
+            )
+        ),
+
+    CONSTRAINT CK_AdvertisementEvents_PlacementType
+        CHECK
+        (
+            PlacementType IN
+            (
+                N'HomeSlider',
+                N'FeaturedPlaces',
+                N'SearchTop',
+                N'CategoryTop',
+                N'CityPage',
+                N'HomeBanner',
+                N'MapPin',
+                N'PlaceDetails'
+            )
+        ),
+
+    CONSTRAINT CK_AdvertisementEvents_DeviceType
+        CHECK
+        (
+            DeviceType IS NULL
+            OR DeviceType IN
+            (
+                N'Desktop',
+                N'Mobile',
+                N'Tablet',
+                N'Unknown'
+            )
+        ),
+
+    CONSTRAINT CK_AdvertisementEvents_CostAmount
+        CHECK (CostAmount >= 0)
+);
+GO
+
+CREATE INDEX IX_AdvertisementEvents_Advertisement_EventAt
+ON dbo.AdvertisementEvents
+(
+    AdvertisementID,
+    EventType,
+    EventAt DESC
+);
+GO
+
+CREATE INDEX IX_AdvertisementEvents_User_EventAt
+ON dbo.AdvertisementEvents (UserID, EventAt DESC)
+WHERE UserID IS NOT NULL;
+GO
+
+CREATE UNIQUE INDEX UQ_AdvertisementEvents_RequestKey
+ON dbo.AdvertisementEvents
+(
+    AdvertisementID,
+    EventType,
+    RequestKey
+)
+WHERE RequestKey IS NOT NULL;
+GO
+
+-- ==============================================================================
+-- [29] ربط الحجوزات بوحدات الغرف الفعلية
+-- ==============================================================================
+
+CREATE TABLE dbo.BookingRoomUnits
+(
+    BookingRoomUnitID INT IDENTITY(1,1) NOT NULL,
+    BookingID INT NOT NULL,
+    RoomUnitID INT NOT NULL,
+
+    AssignmentStatus NVARCHAR(20) NOT NULL
+        CONSTRAINT DF_BookingRoomUnits_AssignmentStatus DEFAULT N'Held',
+
+    AssignedAt DATETIME2 NOT NULL
+        CONSTRAINT DF_BookingRoomUnits_AssignedAt DEFAULT SYSDATETIME(),
+
+    ReleasedAt DATETIME2 NULL,
+
+    CONSTRAINT PK_BookingRoomUnits
+        PRIMARY KEY CLUSTERED (BookingRoomUnitID),
+
+    CONSTRAINT UQ_BookingRoomUnits_Booking_RoomUnit
+        UNIQUE (BookingID, RoomUnitID),
+
+    CONSTRAINT FK_BookingRoomUnits_Bookings
+        FOREIGN KEY (BookingID)
+        REFERENCES dbo.Bookings (BookingID)
+        ON DELETE CASCADE,
+
+    CONSTRAINT FK_BookingRoomUnits_RoomUnits
+        FOREIGN KEY (RoomUnitID)
+        REFERENCES dbo.RoomUnits (RoomUnitID),
+
+    CONSTRAINT CK_BookingRoomUnits_AssignmentStatus
+        CHECK
+        (
+            AssignmentStatus IN
+            (
+                N'Held',
+                N'Confirmed',
+                N'Released',
+                N'Completed'
+            )
+        ),
+
+    CONSTRAINT CK_BookingRoomUnits_ReleasedAt
+        CHECK
+        (
+            ReleasedAt IS NULL
+            OR ReleasedAt >= AssignedAt
+        )
+);
+GO
+
+CREATE INDEX IX_BookingRoomUnits_RoomUnit_Status
+ON dbo.BookingRoomUnits
+(
+    RoomUnitID,
+    AssignmentStatus
+)
+INCLUDE
+(
+    BookingID,
+    AssignedAt,
+    ReleasedAt
+);
+GO
+
+-- ==============================================================================
+-- [30] الخدمات الإضافية الخاصة بالحجوزات
+-- ==============================================================================
+
+CREATE TABLE dbo.BookingAdditionalServices
+(
+    BookingAdditionalServiceID INT IDENTITY(1,1) NOT NULL,
+    BookingID INT NOT NULL,
+    ServiceID INT NOT NULL,
+
+    Quantity INT NOT NULL
+        CONSTRAINT DF_BookingAdditionalServices_Quantity DEFAULT 1,
+
+    UnitPrice DECIMAL(18,2) NOT NULL,
+
+    CONSTRAINT PK_BookingAdditionalServices
+        PRIMARY KEY CLUSTERED (BookingAdditionalServiceID),
+
+    CONSTRAINT FK_BookingAdditionalServices_Bookings
+        FOREIGN KEY (BookingID)
+        REFERENCES dbo.Bookings (BookingID)
+        ON DELETE CASCADE,
+
+    CONSTRAINT FK_BookingAdditionalServices_Services
+        FOREIGN KEY (ServiceID)
+        REFERENCES dbo.PlaceAdditionalServices (ServiceID),
+
+    CONSTRAINT UQ_BookingAdditionalServices
+        UNIQUE
+        (
+            BookingID,
+            ServiceID
+        )
+);
+GO
+
+-- ==============================================================================
+-- [31] السجلات المالية
+-- ==============================================================================
+
+CREATE TABLE dbo.FinancialRecords
+(
+    RecordID INT IDENTITY(1,1) NOT NULL,
+    BookingID INT NOT NULL,
+    DepositAmount DECIMAL(18,2) NOT NULL,
+    PlatformCommission DECIMAL(18,2) NOT NULL,
+
+    TransferReferenceNumber NVARCHAR(100) NULL,
+    OnlinePaymentType NVARCHAR(20) NULL,
+
+    AmountPaidOnline DECIMAL(18,2) NOT NULL
+        CONSTRAINT DF_FinancialRecords_AmountPaidOnline DEFAULT 0.00,
+
+    AmountToPayAtProperty DECIMAL(18,2) NOT NULL
+        CONSTRAINT DF_FinancialRecords_AmountToPayAtProperty DEFAULT 0.00,
+
+    CommissionRateSnapshot DECIMAL(5,2) NOT NULL
+        CONSTRAINT DF_FinancialRecords_CommissionRateSnapshot DEFAULT 0.00,
+
+    CommissionBaseAmount DECIMAL(18,2) NOT NULL
+        CONSTRAINT DF_FinancialRecords_CommissionBaseAmount DEFAULT 0.00,
+
+    CommissionStatus NVARCHAR(30) NOT NULL
+        CONSTRAINT DF_FinancialRecords_CommissionStatus DEFAULT N'Calculated',
+
+    CommissionHeldAt DATETIME NULL,
+    CommissionChargedAt DATETIME NULL,
+    CommissionReleasedAt DATETIME NULL,
+
+    AmountCollectedAtProperty DECIMAL(18,2) NOT NULL
+        CONSTRAINT DF_FinancialRecords_AmountCollectedAtProperty DEFAULT 0.00,
+
+    CollectedAt DATETIME NULL,
+
+    UpdatedAt DATETIME NOT NULL
+        CONSTRAINT DF_FinancialRecords_UpdatedAt DEFAULT GETDATE(),
+
+    RowVersion ROWVERSION NOT NULL,
+
+    CONSTRAINT PK_FinancialRecords
+        PRIMARY KEY CLUSTERED (RecordID),
+
+    CONSTRAINT FK_FinancialRecords_Bookings
+        FOREIGN KEY (BookingID)
+        REFERENCES dbo.Bookings (BookingID)
+        ON DELETE CASCADE,
+
+    CONSTRAINT CK_FinancialRecords_DepositAmount
+        CHECK (DepositAmount >= 0),
+
+    CONSTRAINT CK_FinancialRecords_PlatformCommission
+        CHECK (PlatformCommission >= 0),
+
+    CONSTRAINT CK_FinancialRecords_AmountPaidOnline
+        CHECK (AmountPaidOnline >= 0),
+
+    CONSTRAINT CK_FinancialRecords_AmountToPayAtProperty
+        CHECK (AmountToPayAtProperty >= 0),
+
+    CONSTRAINT CK_FinancialRecords_CommissionRateSnapshot
+        CHECK
+        (
+            CommissionRateSnapshot >= 0
+            AND CommissionRateSnapshot <= 100
+        ),
+
+    CONSTRAINT CK_FinancialRecords_CommissionBaseAmount
+        CHECK
+        (
+            CommissionBaseAmount >= 0
+        ),
+
+    CONSTRAINT CK_FinancialRecords_AmountCollectedAtProperty
+        CHECK
+        (
+            AmountCollectedAtProperty >= 0
+        ),
+
+    CONSTRAINT CK_FinancialRecords_CommissionStatus
+        CHECK
+        (
+            CommissionStatus IN
+            (
+                N'Calculated',
+                N'Held',
+                N'Charged',
+                N'Released',
+                N'Debt',
+                N'NotApplicable'
+            )
+        )
+);
+GO
+
+CREATE UNIQUE INDEX UQ_FinancialRecords_BookingID
+ON dbo.FinancialRecords (BookingID);
+GO
+
+-- [32] حركات رصيد ضمان العمولات
+-- ==============================================================================
+
+CREATE TABLE dbo.CommissionTransactions
+(
+    CommissionTransactionID INT IDENTITY(1,1) NOT NULL,
+    PlaceID INT NOT NULL,
+    BookingID INT NULL,
+    PlatformWalletID INT NULL,
+    TransactionType NVARCHAR(30) NOT NULL,
+    Amount DECIMAL(18,2) NOT NULL,
+
+    AvailableBalanceBefore DECIMAL(18,2) NOT NULL
+        CONSTRAINT DF_CommissionTransactions_AvailableBalanceBefore DEFAULT 0.00,
+
+    AvailableBalanceAfter DECIMAL(18,2) NOT NULL
+        CONSTRAINT DF_CommissionTransactions_AvailableBalanceAfter DEFAULT 0.00,
+
+    HeldBalanceBefore DECIMAL(18,2) NOT NULL
+        CONSTRAINT DF_CommissionTransactions_HeldBalanceBefore DEFAULT 0.00,
+
+    HeldBalanceAfter DECIMAL(18,2) NOT NULL
+        CONSTRAINT DF_CommissionTransactions_HeldBalanceAfter DEFAULT 0.00,
+
+    DebtBefore DECIMAL(18,2) NOT NULL
+        CONSTRAINT DF_CommissionTransactions_DebtBefore DEFAULT 0.00,
+
+    DebtAfter DECIMAL(18,2) NOT NULL
+        CONSTRAINT DF_CommissionTransactions_DebtAfter DEFAULT 0.00,
+
+    Status NVARCHAR(20) NOT NULL
+        CONSTRAINT DF_CommissionTransactions_Status DEFAULT N'Completed',
+
+    ReferenceNumber NVARCHAR(100) NULL,
+    TransferDate DATETIME NULL,
+    ReceiptImage NVARCHAR(255) NULL,
+    ReviewedAt DATETIME NULL,
+    ReviewedByUserID INT NULL,
+    RejectionReason NVARCHAR(500) NULL,
+
+    CreatedAt DATETIME NULL
+        CONSTRAINT DF_CommissionTransactions_CreatedAt DEFAULT GETDATE(),
+
+    CreatedByUserID INT NULL,
+    Notes NVARCHAR(MAX) NULL,
+
+    CONSTRAINT PK_CommissionTransactions
+        PRIMARY KEY CLUSTERED (CommissionTransactionID),
+
+    CONSTRAINT FK_CommissionTransactions_Places
+        FOREIGN KEY (PlaceID)
+        REFERENCES dbo.Places (PlaceID),
+
+    CONSTRAINT FK_CommissionTransactions_Bookings
+        FOREIGN KEY (BookingID)
+        REFERENCES dbo.Bookings (BookingID),
+
+    CONSTRAINT FK_CommissionTransactions_PlatformWallets
+        FOREIGN KEY (PlatformWalletID)
+        REFERENCES dbo.PlatformWallets (PlatformWalletID),
+
+    CONSTRAINT FK_CommissionTransactions_ReviewedBy
+        FOREIGN KEY (ReviewedByUserID)
+        REFERENCES dbo.Users (UserID),
+
+    CONSTRAINT FK_CommissionTransactions_CreatedBy
+        FOREIGN KEY (CreatedByUserID)
+        REFERENCES dbo.Users (UserID),
+
+    CONSTRAINT CK_CommissionTransactions_Amount
+        CHECK (Amount > 0),
+
+    CONSTRAINT CK_CommissionTransactions_AvailableBalance
+        CHECK
+        (
+            AvailableBalanceBefore >= 0
+            AND AvailableBalanceAfter >= 0
+        ),
+
+    CONSTRAINT CK_CommissionTransactions_HeldBalance
+        CHECK
+        (
+            HeldBalanceBefore >= 0
+            AND HeldBalanceAfter >= 0
+        ),
+
+    CONSTRAINT CK_CommissionTransactions_Debt
+        CHECK
+        (
+            DebtBefore >= 0
+            AND DebtAfter >= 0
+        ),
+
+    CONSTRAINT CK_CommissionTransactions_TransactionType
+        CHECK
+        (
+            TransactionType IN
+            (
+                N'TopUp',
+                N'CommissionHold',
+                N'CommissionCharge',
+                N'CommissionRelease',
+                N'Debt',
+                N'DebtPayment',
+                N'Adjustment'
+            )
+        ),
+
+    CONSTRAINT CK_CommissionTransactions_Status
+        CHECK
+        (
+            Status IN
+            (
+                N'Pending',
+                N'Completed',
+                N'Rejected',
+                N'Reversed',
+                N'Failed',
+                N'Cancelled'
+            )
+        )
+);
+GO
+
+CREATE INDEX IX_CommissionTransactions_Place_CreatedAt
+ON dbo.CommissionTransactions
+(
+    PlaceID,
+    CreatedAt DESC
+);
+GO
+
+CREATE INDEX IX_CommissionTransactions_BookingID
+ON dbo.CommissionTransactions (BookingID)
+WHERE BookingID IS NOT NULL;
+GO
+
+CREATE UNIQUE INDEX UQ_CommissionTransactions_TopUpReference
+ON dbo.CommissionTransactions
+(
+    PlatformWalletID,
+    ReferenceNumber
+)
+WHERE TransactionType = N'TopUp'
+  AND PlatformWalletID IS NOT NULL
+  AND ReferenceNumber IS NOT NULL;
+GO
+
+-- ==============================================================================
+-- [33] طلبات الاسترداد
+-- ==============================================================================
+
+CREATE TABLE dbo.RefundRequests
+(
+    RefundRequestID INT IDENTITY(1,1) NOT NULL,
+    BookingID INT NOT NULL,
+    CustomerID INT NULL,
+    PlaceID INT NOT NULL,
+
+    DepositPaid DECIMAL(18,2) NOT NULL
+        CONSTRAINT DF_RefundRequests_DepositPaid DEFAULT 0.00,
+
+    CancellationFee DECIMAL(18,2) NOT NULL
+        CONSTRAINT DF_RefundRequests_CancellationFee DEFAULT 0.00,
+
+    RefundAmount DECIMAL(18,2) NOT NULL
+        CONSTRAINT DF_RefundRequests_RefundAmount DEFAULT 0.00,
+
+    OwnerShare DECIMAL(18,2) NOT NULL
+        CONSTRAINT DF_RefundRequests_OwnerShare DEFAULT 0.00,
+
+    PlatformCommission DECIMAL(18,2) NOT NULL
+        CONSTRAINT DF_RefundRequests_PlatformCommission DEFAULT 0.00,
+
+    CommissionReleased DECIMAL(18,2) NOT NULL
+        CONSTRAINT DF_RefundRequests_CommissionReleased DEFAULT 0.00,
+
+    Status NVARCHAR(20) NOT NULL
+        CONSTRAINT DF_RefundRequests_Status DEFAULT N'Pending',
+
+    Reason NVARCHAR(MAX) NULL,
+    ReferenceNumber NVARCHAR(100) NULL,
+    ProofImage NVARCHAR(255) NULL,
+
+    RefundWalletID INT NULL,
+    RefundAccountNumber NVARCHAR(100) NULL,
+    RefundBeneficiaryName NVARCHAR(150) NULL,
+    TransferredAt DATETIME2 NULL,
+    CustomerConfirmedAt DATETIME2 NULL,
+
+    RequestedAt DATETIME NULL
+        CONSTRAINT DF_RefundRequests_RequestedAt DEFAULT GETDATE(),
+
+    ProcessedAt DATETIME NULL,
+    ProcessedByUserID INT NULL,
+    Notes NVARCHAR(MAX) NULL,
+
+    CONSTRAINT PK_RefundRequests
+        PRIMARY KEY CLUSTERED (RefundRequestID),
+
+    CONSTRAINT FK_RefundRequests_Bookings
+        FOREIGN KEY (BookingID)
+        REFERENCES dbo.Bookings (BookingID),
+
+    CONSTRAINT FK_RefundRequests_Customers
+        FOREIGN KEY (CustomerID)
+        REFERENCES dbo.Users (UserID),
+
+    CONSTRAINT FK_RefundRequests_Places
+        FOREIGN KEY (PlaceID)
+        REFERENCES dbo.Places (PlaceID),
+
+    CONSTRAINT FK_RefundRequests_ProcessedBy
+        FOREIGN KEY (ProcessedByUserID)
+        REFERENCES dbo.Users (UserID),
+
+    CONSTRAINT FK_RefundRequests_RefundWallet
+        FOREIGN KEY (RefundWalletID)
+        REFERENCES dbo.SupportedWallets (WalletID),
+
+    CONSTRAINT CK_RefundRequests_DepositPaid
+        CHECK (DepositPaid >= 0),
+
+    CONSTRAINT CK_RefundRequests_CancellationFee
+        CHECK (CancellationFee >= 0),
+
+    CONSTRAINT CK_RefundRequests_RefundAmount
+        CHECK
+        (
+            RefundAmount >= 0
+            AND RefundAmount <= DepositPaid
+        ),
+
+    CONSTRAINT CK_RefundRequests_OwnerShare
+        CHECK (OwnerShare >= 0),
+
+    CONSTRAINT CK_RefundRequests_PlatformCommission
+        CHECK (PlatformCommission >= 0),
+
+    CONSTRAINT CK_RefundRequests_CommissionReleased
+        CHECK (CommissionReleased >= 0),
+
+    CONSTRAINT CK_RefundRequests_Status
+        CHECK
+        (
+            Status IN
+            (
+                N'Pending',
+                N'Processing',
+                N'Completed',
+                N'Rejected',
+                N'Failed',
+                N'Cancelled'
+            )
+        )
+);
+GO
+
+CREATE INDEX IX_RefundRequests_Place_Status
+ON dbo.RefundRequests
+(
+    PlaceID,
+    Status,
+    RequestedAt DESC
+);
+GO
+
+CREATE INDEX IX_RefundRequests_RefundWalletID
+ON dbo.RefundRequests (RefundWalletID)
+WHERE RefundWalletID IS NOT NULL;
+GO
+
+-- [34] التقييمات
+-- ==============================================================================
+
+CREATE TABLE dbo.Reviews
+(
+    ReviewID INT IDENTITY(1,1) NOT NULL,
+    UserID INT NOT NULL,
+    PlaceID INT NOT NULL,
+
+    Stars INT NULL,
+
+    ReviewText NVARCHAR(MAX) NULL,
+
+    CreatedAt DATETIME NULL
+        CONSTRAINT DF_Reviews_CreatedAt DEFAULT GETDATE(),
+
+    OwnerReply NVARCHAR(MAX) NULL,
+    ReplyCreatedAt DATETIME NULL,
+
+    IsEdited BIT NOT NULL
+        CONSTRAINT DF_Reviews_IsEdited DEFAULT 0,
+
+    ParentReviewId INT NULL,
+
+    CONSTRAINT PK_Reviews
+        PRIMARY KEY CLUSTERED (ReviewID),
+
+    CONSTRAINT CK_Reviews_Stars
+        CHECK
+        (
+            Stars >= 1
+            AND Stars <= 5
+        ),
+
+    CONSTRAINT FK_Reviews_Users
+        FOREIGN KEY (UserID)
+        REFERENCES dbo.Users (UserID),
+
+    CONSTRAINT FK_Reviews_Places
+        FOREIGN KEY (PlaceID)
+        REFERENCES dbo.Places (PlaceID)
+        ON DELETE CASCADE,
+
+    CONSTRAINT FK_Reviews_Parent
+        FOREIGN KEY (ParentReviewId)
+        REFERENCES dbo.Reviews (ReviewID)
+);
+GO
+
+-- ==============================================================================
+-- [35] إعجابات التقييمات
+-- ==============================================================================
+
+CREATE TABLE dbo.ReviewLikes
+(
+    LikeId INT IDENTITY(1,1) NOT NULL,
+    UserId INT NOT NULL,
+    ReviewId INT NOT NULL,
+
+    CreatedAt DATETIME NULL
+        CONSTRAINT DF_ReviewLikes_CreatedAt DEFAULT GETDATE(),
+
+    CONSTRAINT PK_ReviewLikes
+        PRIMARY KEY CLUSTERED (LikeId),
+
+    CONSTRAINT FK_ReviewLikes_Users
+        FOREIGN KEY (UserId)
+        REFERENCES dbo.Users (UserID)
+        ON DELETE CASCADE,
+
+    CONSTRAINT FK_ReviewLikes_Reviews
+        FOREIGN KEY (ReviewId)
+        REFERENCES dbo.Reviews (ReviewID)
+        ON DELETE CASCADE,
+
+    CONSTRAINT UQ_ReviewLikes_User_Review
+        UNIQUE
+        (
+            UserId,
+            ReviewId
+        )
+);
+GO
+
+-- ==============================================================================
+-- [36] الشكاوى والبلاغات
+-- ==============================================================================
+
+CREATE TABLE dbo.Reports
+(
+    ReportID INT IDENTITY(1,1) NOT NULL,
+    ReporterID INT NOT NULL,
+    AgainstUserID INT NULL,
+    ReportReason NVARCHAR(MAX) NOT NULL,
+    PlaceId INT NULL,
+    EvidenceImage NVARCHAR(255) NULL,
+
+    ReportStatus NVARCHAR(20) NOT NULL
+        CONSTRAINT DF_Reports_ReportStatus DEFAULT N'Pending',
+
+    AdminComment NVARCHAR(500) NULL,
+
+    CreatedAt DATETIME NULL
+        CONSTRAINT DF_Reports_CreatedAt DEFAULT GETDATE(),
+
+    ReportType NVARCHAR(30) NOT NULL
+        CONSTRAINT DF_Reports_ReportType DEFAULT N'ClientInfraction',
+
+    ReviewID INT NULL,
+
+    WithdrawnAt DATETIME NULL,
+    WithdrawnReason NVARCHAR(500) NULL,
+
+    OwnerReply NVARCHAR(MAX) NULL,
+    OwnerReplyDate DATETIME NULL,
+
+    ReporterReply NVARCHAR(MAX) NULL,
+    ReporterReplyDate DATETIME NULL,
+
+    EscalatedAt DATETIME NULL,
+    WarningIssuedAt DATETIME NULL,
+
+    ReportNumber NVARCHAR(30) NOT NULL,
+
+    RequestKind NVARCHAR(20) NOT NULL
+        CONSTRAINT DF_Reports_RequestKind DEFAULT N'Report',
+
+    Title NVARCHAR(200) NULL,
+    Category NVARCHAR(50) NULL,
+    OtherReportTypeDescription NVARCHAR(200) NULL,
+    OtherCategoryDescription NVARCHAR(200) NULL,
+    RequiredAction NVARCHAR(30) NULL,
+
+    Priority NVARCHAR(20) NOT NULL
+        CONSTRAINT DF_Reports_Priority DEFAULT N'Normal',
+
+    BookingID INT NULL,
+    PromotionID INT NULL,
+    AdvertisementID INT NULL,
+    AssignedAdminUserID INT NULL,
+
+    ReporterReplyDeadline DATETIME NULL,
+    ReportedPartyReplyDeadline DATETIME NULL,
+
+    Resolution NVARCHAR(MAX) NULL,
+    ResolutionAction NVARCHAR(100) NULL,
+    ResolvedAt DATETIME NULL,
+    ResolvedByUserID INT NULL,
+    ClosedAt DATETIME NULL,
+
+    UpdatedAt DATETIME NOT NULL
+        CONSTRAINT DF_Reports_UpdatedAt DEFAULT GETDATE(),
+
+    RowVersion ROWVERSION NOT NULL,
+
+    CONSTRAINT PK_Reports
+        PRIMARY KEY CLUSTERED (ReportID),
+
+    CONSTRAINT FK_Reports_Reporter
+        FOREIGN KEY (ReporterID)
+        REFERENCES dbo.Users (UserID),
+
+    CONSTRAINT FK_Reports_AgainstUser
+        FOREIGN KEY (AgainstUserID)
+        REFERENCES dbo.Users (UserID)
+        ON DELETE NO ACTION,
+
+    CONSTRAINT FK_Reports_Places
+        FOREIGN KEY (PlaceId)
+        REFERENCES dbo.Places (PlaceID)
+        ON DELETE SET NULL,
+
+    CONSTRAINT FK_Reports_Reviews
+        FOREIGN KEY (ReviewID)
+        REFERENCES dbo.Reviews (ReviewID)
+        ON DELETE NO ACTION,
+
+    CONSTRAINT FK_Reports_Bookings
+        FOREIGN KEY (BookingID)
+        REFERENCES dbo.Bookings (BookingID),
+
+    CONSTRAINT FK_Reports_Promotions
+        FOREIGN KEY (PromotionID)
+        REFERENCES dbo.Promotions (PromotionID),
+
+    CONSTRAINT FK_Reports_Advertisements
+        FOREIGN KEY (AdvertisementID)
+        REFERENCES dbo.Advertisements (AdvertisementID),
+
+    CONSTRAINT FK_Reports_AssignedAdmin
+        FOREIGN KEY (AssignedAdminUserID)
+        REFERENCES dbo.Users (UserID),
+
+    CONSTRAINT FK_Reports_ResolvedBy
+        FOREIGN KEY (ResolvedByUserID)
+        REFERENCES dbo.Users (UserID),
+
+    CONSTRAINT CK_Reports_RequestKind
+        CHECK
+        (
+            RequestKind IN
+            (
+                N'Report',
+                N'Complaint'
+            )
+        ),
+
+    CONSTRAINT CK_Reports_Priority
+        CHECK
+        (
+            Priority IN
+            (
+                N'Low',
+                N'Normal',
+                N'High',
+                N'Urgent'
+            )
+        ),
+
+    CONSTRAINT CK_Reports_RequiredAction
+        CHECK
+        (
+            RequiredAction IS NULL
+            OR RequiredAction IN
+            (
+                N'Clarification',
+                N'ResolutionConfirmation',
+                N'ReportedPartyResponse'
+            )
+        ),
+
+    CONSTRAINT CK_Reports_Status
+        CHECK
+        (
+            ReportStatus IN
+            (
+                N'Pending',
+                N'InReview',
+                N'WaitingForReporter',
+                N'WaitingForReportedParty',
+                N'Escalated',
+                N'Resolved',
+                N'Rejected',
+                N'Closed',
+                N'Withdrawn'
+            )
+        ),
+
+    CONSTRAINT CK_Reports_ResolvedData
+        CHECK
+        (
+            ReportStatus <> N'Resolved'
+            OR
+            (
+                ResolvedAt IS NOT NULL
+                AND ResolvedByUserID IS NOT NULL
+                AND Resolution IS NOT NULL
+            )
+        ),
+
+    CONSTRAINT CK_Reports_ClosedAt
+        CHECK
+        (
+            ReportStatus <> N'Closed'
+            OR ClosedAt IS NOT NULL
+        )
+);
+GO
+
+CREATE UNIQUE INDEX UQ_Reports_ReportNumber
+ON dbo.Reports (ReportNumber);
+GO
+
+CREATE INDEX IX_Reports_Status_Priority
+ON dbo.Reports
+(
+    ReportStatus,
+    Priority,
+    CreatedAt
+);
+GO
+
+CREATE INDEX IX_Reports_ReporterID
+ON dbo.Reports
+(
+    ReporterID,
+    CreatedAt
+);
+GO
+
+CREATE INDEX IX_Reports_AgainstUserID
+ON dbo.Reports
+(
+    AgainstUserID,
+    CreatedAt
+)
+WHERE AgainstUserID IS NOT NULL;
+GO
+
+CREATE INDEX IX_Reports_AssignedAdmin
+ON dbo.Reports
+(
+    AssignedAdminUserID,
+    ReportStatus
+)
+WHERE AssignedAdminUserID IS NOT NULL;
+GO
+
+CREATE INDEX IX_Reports_BookingID
+ON dbo.Reports (BookingID)
+WHERE BookingID IS NOT NULL;
+GO
+
+-- ==============================================================================
+-- [37] الدردشة
+-- ==============================================================================
+
+CREATE TABLE dbo.Chats
+(
+    MessageID INT IDENTITY(1,1) NOT NULL,
+    SenderID INT NOT NULL,
+    ReceiverID INT NOT NULL,
+    MessageText NVARCHAR(MAX) NULL,
+
+    SendTime DATETIME NULL
+        CONSTRAINT DF_Chats_SendTime DEFAULT GETDATE(),
+
+    IsRead BIT NOT NULL
+        CONSTRAINT DF_Chats_IsRead DEFAULT 0,
+
+    AttachmentUrl NVARCHAR(255) NULL,
+    PlaceID INT NULL,
+
+    IsDeletedForSender BIT NOT NULL
+        CONSTRAINT DF_Chats_IsDeletedForSender DEFAULT 0,
+
+    IsDeletedForReceiver BIT NOT NULL
+        CONSTRAINT DF_Chats_IsDeletedForReceiver DEFAULT 0,
+
+    IsEdited BIT NOT NULL
+        CONSTRAINT DF_Chats_IsEdited DEFAULT 0,
+
+    ReportID INT NULL,
+
+    IsReportMessage BIT NOT NULL
+        CONSTRAINT DF_Chats_IsReportMessage DEFAULT 0,
+
+    CONSTRAINT PK_Chats
+        PRIMARY KEY CLUSTERED (MessageID),
+
+    CONSTRAINT FK_Chats_Sender
+        FOREIGN KEY (SenderID)
+        REFERENCES dbo.Users (UserID),
+
+    CONSTRAINT FK_Chats_Receiver
+        FOREIGN KEY (ReceiverID)
+        REFERENCES dbo.Users (UserID),
+
+    CONSTRAINT FK_Chats_Places
+        FOREIGN KEY (PlaceID)
+        REFERENCES dbo.Places (PlaceID)
+        ON DELETE SET NULL,
+
+    CONSTRAINT FK_Chats_Reports
+        FOREIGN KEY (ReportID)
+        REFERENCES dbo.Reports (ReportID),
+
+    CONSTRAINT CK_Chats_ReportMessage
+        CHECK
+        (
+            (
+                ReportID IS NULL
+                AND IsReportMessage = 0
+            )
+            OR
+            (
+                ReportID IS NOT NULL
+                AND IsReportMessage = 1
+                AND IsEdited = 0
+                AND IsDeletedForSender = 0
+                AND IsDeletedForReceiver = 0
+            )
+        )
+);
+GO
+
+CREATE INDEX IX_Chats_ReportID_SendTime
+ON dbo.Chats
+(
+    ReportID,
+    SendTime
+)
+WHERE ReportID IS NOT NULL;
+GO
+
+-- ==============================================================================
+-- [38] الإشعارات
+-- ==============================================================================
+
+CREATE TABLE dbo.Notifications
+(
+    NotificationID INT IDENTITY(1,1) NOT NULL,
+    UserID INT NOT NULL,
+
+    NotificationTitle NVARCHAR(150) NULL,
+    NotificationText NVARCHAR(MAX) NOT NULL,
+
+    NotificationType NVARCHAR(50) NULL
+        CONSTRAINT DF_Notifications_NotificationType DEFAULT N'General',
+
+    TargetUrl NVARCHAR(500) NULL,
+    ReferenceType NVARCHAR(50) NULL,
+    ReferenceID INT NULL,
+
+    NotificationState NVARCHAR(20) NULL
+        CONSTRAINT DF_Notifications_NotificationState DEFAULT N'Unread',
+
+    ReadAt DATETIME NULL,
+
+    CreatedAt DATETIME NULL
+        CONSTRAINT DF_Notifications_CreatedAt DEFAULT GETDATE(),
+
+    CONSTRAINT PK_Notifications
+        PRIMARY KEY CLUSTERED (NotificationID),
+
+    CONSTRAINT FK_Notifications_Users
+        FOREIGN KEY (UserID)
+        REFERENCES dbo.Users (UserID)
+        ON DELETE CASCADE
+);
+GO
+
+CREATE INDEX IX_Notifications_User_State_CreatedAt
+ON dbo.Notifications
+(
+    UserID,
+    NotificationState,
+    CreatedAt DESC
+);
+GO
+
+CREATE INDEX IX_Notifications_Reference
+ON dbo.Notifications
+(
+    ReferenceType,
+    ReferenceID
+)
+WHERE ReferenceID IS NOT NULL;
+GO
+
+-- ==============================================================================
+-- [39] إعدادات النظام
+-- ==============================================================================
+
+CREATE TABLE dbo.SystemSettings
+(
+    Id INT IDENTITY(1,1) NOT NULL,
+
+    SiteName NVARCHAR(100) NOT NULL
+        CONSTRAINT DF_SystemSettings_SiteName DEFAULT N'دليلك اليمني',
+
+    SiteDescription NVARCHAR(500) NULL,
+    LogoPath NVARCHAR(255) NULL,
+    FaviconPath NVARCHAR(255) NULL,
+
+    MaxImageSize INT NOT NULL
+        CONSTRAINT DF_SystemSettings_MaxImageSize DEFAULT 5,
+
+    MaxImageCount INT NOT NULL
+        CONSTRAINT DF_SystemSettings_MaxImageCount DEFAULT 10,
+
+    DefaultWalletLogoPath NVARCHAR(255) NOT NULL
+        CONSTRAINT DF_SystemSettings_DefaultWalletLogoPath DEFAULT N'/images/wallets/default-wallet.png',
+
+    AutoApprovePlaces BIT NOT NULL
+        CONSTRAINT DF_SystemSettings_AutoApprovePlaces DEFAULT 0,
+
+    AllowNewRegistrations BIT NOT NULL
+        CONSTRAINT DF_SystemSettings_AllowNewRegistrations DEFAULT 1,
+
+    ContactEmail NVARCHAR(100) NULL,
+    SupportPhone NVARCHAR(50) NULL,
+    FacebookLink NVARCHAR(255) NULL,
+    TwitterLink NVARCHAR(255) NULL,
+    InstagramLink NVARCHAR(255) NULL,
+    WhatsAppNumber NVARCHAR(50) NULL,
+
+    MaintenanceMode BIT NOT NULL
+        CONSTRAINT DF_SystemSettings_MaintenanceMode DEFAULT 0,
+
+    MaintenanceMessage NVARCHAR(500) NULL,
+
+    MaintenanceTitle NVARCHAR(150) NOT NULL
+        CONSTRAINT DF_SystemSettings_MaintenanceTitle DEFAULT N'نعود إليكم قريبًا',
+
+    MaintenanceType NVARCHAR(20) NOT NULL
+        CONSTRAINT DF_SystemSettings_MaintenanceType DEFAULT N'Full',
+
+    MaintenanceAffectOwners BIT NOT NULL
+        CONSTRAINT DF_SystemSettings_MaintenanceAffectOwners DEFAULT 1,
+
+    MaintenanceStartAt DATETIME2 NULL,
+    MaintenanceEndAt DATETIME2 NULL,
+
+    MaintenanceShowContact BIT NOT NULL
+        CONSTRAINT DF_SystemSettings_MaintenanceShowContact DEFAULT 1,
+
+    MaintenanceBlockBookings BIT NOT NULL
+        CONSTRAINT DF_SystemSettings_MaintenanceBlockBookings DEFAULT 0,
+
+    MaintenanceBlockPayments BIT NOT NULL
+        CONSTRAINT DF_SystemSettings_MaintenanceBlockPayments DEFAULT 0,
+
+    MaintenanceBlockOwnerChanges BIT NOT NULL
+        CONSTRAINT DF_SystemSettings_MaintenanceBlockOwnerChanges DEFAULT 0,
+
+    MaintenanceBlockMessages BIT NOT NULL
+        CONSTRAINT DF_SystemSettings_MaintenanceBlockMessages DEFAULT 0,
+
+    MaintenanceBlockReviews BIT NOT NULL
+        CONSTRAINT DF_SystemSettings_MaintenanceBlockReviews DEFAULT 0,
+
+    MaintenanceBlockRegistrations BIT NOT NULL
+        CONSTRAINT DF_SystemSettings_MaintenanceBlockRegistrations DEFAULT 0,
+
+    CommissionPercentage DECIMAL(5,2) NULL
+        CONSTRAINT DF_SystemSettings_CommissionPercentage DEFAULT 10.00,
+
+    DefaultCurrency NVARCHAR(50) NULL
+        CONSTRAINT DF_SystemSettings_DefaultCurrency DEFAULT N'ريال يمني',
+
+    AutoUpdateExchangeRates BIT NOT NULL
+        CONSTRAINT DF_SystemSettings_AutoUpdateExchangeRates DEFAULT 1,
+
+    ExchangeRateLastAttemptAt DATETIME2 NULL,
+    ExchangeRateLastUpdatedAt DATETIME2 NULL,
+    ExchangeRateLastSource NVARCHAR(100) NULL,
+
+    ExchangeRateLastStatus NVARCHAR(20) NOT NULL
+        CONSTRAINT DF_SystemSettings_ExchangeRateLastStatus DEFAULT N'Never',
+
+    ExchangeRateLastError NVARCHAR(500) NULL,
+
+    HeroTitleMain NVARCHAR(150) NULL
+        CONSTRAINT DF_SystemSettings_HeroTitleMain DEFAULT N'دليلك اليمني بين يديك..',
+
+    HeroTitleSub NVARCHAR(150) NULL
+        CONSTRAINT DF_SystemSettings_HeroTitleSub DEFAULT N'اكتشف',
+
+    SeasonTheme NVARCHAR(50) NULL
+        CONSTRAINT DF_SystemSettings_SeasonTheme DEFAULT N'Normal',
+
+    IsBannerActive BIT NOT NULL
+        CONSTRAINT DF_SystemSettings_IsBannerActive DEFAULT 1,
+
+    BannerText NVARCHAR(MAX) NULL
+        CONSTRAINT DF_SystemSettings_BannerText
+        DEFAULT N'إدارة منصة دليلك اليمني تهنئكم بحلول المناسبة السعيدة، كل عام وأنتم بخير! ✨',
+
+    SanaaUsdRate DECIMAL(18,2) NOT NULL
+        CONSTRAINT DF_SystemSettings_SanaaUsd DEFAULT 537.00,
+
+    AdenUsdRate DECIMAL(18,2) NOT NULL
+        CONSTRAINT DF_SystemSettings_AdenUsd DEFAULT 1900.00,
+
+    SanaaSarRate DECIMAL(18,2) NOT NULL
+        CONSTRAINT DF_SystemSettings_SanaaSar DEFAULT 140.00,
+
+    AdenSarRate DECIMAL(18,2) NOT NULL
+        CONSTRAINT DF_SystemSettings_AdenSar DEFAULT 500.00,
+
+    MinimumCommissionTopUp DECIMAL(18,2) NOT NULL
+        CONSTRAINT DF_SystemSettings_MinimumCommissionTopUp DEFAULT 20000.00,
+
+    DefaultLowBalanceThreshold DECIMAL(18,2) NOT NULL
+        CONSTRAINT DF_SystemSettings_DefaultLowBalanceThreshold DEFAULT 2000.00,
+
+    AllowNegativeCommissionBalance BIT NOT NULL
+        CONSTRAINT DF_SystemSettings_AllowNegativeCommissionBalance DEFAULT 0,
+
+    DefaultCommissionDebtLimit DECIMAL(18,2) NOT NULL
+        CONSTRAINT DF_SystemSettings_DefaultCommissionDebtLimit DEFAULT 0.00,
+
+    CommissionDebtGraceDays INT NOT NULL
+        CONSTRAINT DF_SystemSettings_CommissionDebtGraceDays DEFAULT 3,
+
+    SuspendBookingWhenBalanceInsufficient BIT NOT NULL
+        CONSTRAINT DF_SystemSettings_SuspendBookingWhenBalanceInsufficient DEFAULT 1,
+
+    HidePlaceWhenCommissionSuspended BIT NOT NULL
+        CONSTRAINT DF_SystemSettings_HidePlaceWhenCommissionSuspended DEFAULT 0,
+
+    OwnerFreeTrialEnabled BIT NOT NULL
+        CONSTRAINT DF_SystemSettings_OwnerFreeTrialEnabled DEFAULT 0,
+
+    OwnerFreeTrialDays INT NOT NULL
+        CONSTRAINT DF_SystemSettings_OwnerFreeTrialDays DEFAULT 14,
+
+    RequiredCommissionGuaranteeBalance DECIMAL(18,2) NOT NULL
+        CONSTRAINT DF_SystemSettings_RequiredCommissionGuaranteeBalance DEFAULT 0.00,
+
+    -- حساب التشغيل الرسمي لمنشآت الإدارة
+    PlatformOwnerUserID INT NULL,
+
+    CONSTRAINT PK_SystemSettings
+        PRIMARY KEY CLUSTERED (Id),
+
+    CONSTRAINT FK_SystemSettings_PlatformOwnerUser
+        FOREIGN KEY (PlatformOwnerUserID)
+        REFERENCES dbo.Users (UserID)
+        ON DELETE SET NULL,
+
+    CONSTRAINT CK_SystemSettings_MinimumCommissionTopUp
+        CHECK
+        (
+            MinimumCommissionTopUp >= 0
+        ),
+
+    CONSTRAINT CK_SystemSettings_DefaultLowBalanceThreshold
+        CHECK
+        (
+            DefaultLowBalanceThreshold >= 0
+        ),
+
+    CONSTRAINT CK_SystemSettings_DefaultCommissionDebtLimit
+        CHECK
+        (
+            DefaultCommissionDebtLimit >= 0
+        ),
+
+    CONSTRAINT CK_SystemSettings_CommissionDebtGraceDays
+        CHECK
+        (
+            CommissionDebtGraceDays >= 0
+        ),
+
+    CONSTRAINT CK_SystemSettings_ExchangeRateLastStatus
+        CHECK
+        (
+            ExchangeRateLastStatus IN
+            (
+                N'Never',
+                N'Success',
+                N'Failed'
+            )
+        ),
+
+    CONSTRAINT CK_SystemSettings_MaintenanceType
+        CHECK
+        (
+            MaintenanceType IN
+            (
+                N'Full',
+                N'ReadOnly',
+                N'Partial'
+            )
+        ),
+
+    CONSTRAINT CK_SystemSettings_MaxImageSize
+        CHECK
+        (
+            MaxImageSize BETWEEN 1 AND 100
+        ),
+
+    CONSTRAINT CK_SystemSettings_MaxImageCount
+        CHECK
+        (
+            MaxImageCount BETWEEN 1 AND 100
+        ),
+
+    CONSTRAINT CK_SystemSettings_MaintenanceDates
+        CHECK
+        (
+            MaintenanceStartAt IS NULL
+            OR MaintenanceEndAt IS NULL
+            OR MaintenanceEndAt > MaintenanceStartAt
+        )
+);
+GO
+
+-- ==============================================================================
+-- [40] استثناءات تقويم المنشأة
+-- ==============================================================================
+
+CREATE TABLE dbo.PlaceCalendarExceptions
+(
+    ExceptionID INT IDENTITY(1,1) NOT NULL,
+    PlaceID INT NOT NULL,
+    ExceptionDate DATE NOT NULL,
+    ExceptionType NVARCHAR(20) NOT NULL,
+    Reason NVARCHAR(255) NULL,
+    CustomPrice DECIMAL(18,2) NULL,
+
+    CreatedAt DATETIME NULL
+        CONSTRAINT DF_PlaceCalendarExceptions_CreatedAt DEFAULT GETDATE(),
+
+    CONSTRAINT PK_PlaceCalendarExceptions
+        PRIMARY KEY CLUSTERED (ExceptionID),
+
+    CONSTRAINT FK_PlaceCalendarExceptions_Places
+        FOREIGN KEY (PlaceID)
+        REFERENCES dbo.Places (PlaceID)
+        ON DELETE CASCADE,
+
+    CONSTRAINT UQ_PlaceCalendarExceptions_Place_Date
+        UNIQUE
+        (
+            PlaceID,
+            ExceptionDate
+        )
+);
+GO
+
+-- ==============================================================================
+-- [41] شرائح السلايدر
+-- ==============================================================================
+
+CREATE TABLE dbo.HeroSlides
+(
+    HeroSlideID INT IDENTITY(1,1) NOT NULL,
+    ImagePath NVARCHAR(255) NOT NULL,
+    TypingText NVARCHAR(150) NOT NULL,
+
+    DisplayOrder INT NOT NULL
+        CONSTRAINT DF_HeroSlides_DisplayOrder DEFAULT 0,
+
+    IsActive BIT NOT NULL
+        CONSTRAINT DF_HeroSlides_IsActive DEFAULT 1,
+
+    CreatedAt DATETIME NULL
+        CONSTRAINT DF_HeroSlides_CreatedAt DEFAULT GETDATE(),
+
+    MainTextColor NVARCHAR(20) NOT NULL
+        CONSTRAINT DF_HeroSlides_MainTextColor DEFAULT N'#ffffff',
+
+    AccentColor NVARCHAR(20) NOT NULL
+        CONSTRAINT DF_HeroSlides_AccentColor DEFAULT N'#ff5a5f',
+
+    CONSTRAINT PK_HeroSlides
+        PRIMARY KEY CLUSTERED (HeroSlideID)
+);
+GO
+
+-- ==============================================================================
+-- نهاية السكربت
+-- ==============================================================================
+
+PRINT N'تم إنشاء قاعدة بيانات DalilakAlYamaniDB وجميع الجداول 41 والعلاقات والقيود والفهارس بنجاح.';
+GO

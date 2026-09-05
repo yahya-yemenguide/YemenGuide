@@ -1,0 +1,239 @@
+@model YemenGuide.Core.DTOs.Admin.AdminEmployeesTabDto
+@using System
+@using System.Globalization
+@using YemenGuide.Core.DTOs.Admin
+@{
+    bool isArabic = string.Equals(CultureInfo.CurrentUICulture.TwoLetterISOLanguageName, "ar", StringComparison.OrdinalIgnoreCase);
+    string L(string ar, string en) => isArabic ? ar : en;
+    string StatusLabel(string? status) => status switch { "Active" => L("نشط","Active"), "Suspended" => L("موقوف","Suspended"), "OnLeave" => L("في إجازة","On leave"), "Terminated" => L("منتهي الخدمة","Terminated"), _ => L("غير محدد","Unknown") };
+}
+
+<div class="employees-tab-panel" data-panel="employees">
+    <div class="employees-panel-heading">
+        <div>
+            <span class="employees-section-kicker">@L("فريق العمل", "Team")</span>
+            <h2>@L("الموظفون", "Employees")</h2>
+            <p>@L("الحسابات الإدارية المرتبطة بالأدوار الوظيفية داخل المنصة.", "Administrative accounts linked to platform roles.")</p>
+        </div>
+
+        @if (Model.CanCreate)
+        {
+            <button type="button"
+                    class="employees-btn employees-btn--primary"
+                    data-open-employee-form>
+                <i class="bi bi-person-plus-fill"></i>
+                @L("إضافة موظف", "Add employee")
+            </button>
+        }
+    </div>
+
+    <div class="employees-mini-stats">
+        <article>
+            <span><i class="bi bi-people"></i></span>
+            <div><strong>@Model.TotalCount</strong><small>@L("إجمالي النتائج", "Total results")</small></div>
+        </article>
+        <article>
+            <span><i class="bi bi-check-circle"></i></span>
+            <div><strong>@Model.ActiveCount</strong><small>@L("حساب نشط", "Active accounts")</small></div>
+        </article>
+        <article>
+            <span><i class="bi bi-pause-circle"></i></span>
+            <div><strong>@Model.SuspendedCount</strong><small>@L("حساب موقوف", "Suspended accounts")</small></div>
+        </article>
+    </div>
+
+    <form class="employees-filter-bar"
+          data-employees-filter
+          autocomplete="off">
+        <label class="employees-search-field">
+            <i class="bi bi-search"></i>
+            <input type="search"
+                   name="Search"
+                   value="@Model.Filter.Search"
+                   placeholder="@L("ابحث بالاسم، المستخدم، البريد أو الرقم الوظيفي...", "Search by name, username, email, or employee number...")" />
+            <button type="button" data-clear-search aria-label="@L("مسح البحث", "Clear search")">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </label>
+
+        <select name="AdminRoleId" aria-label="@L("فلترة حسب الدور", "Filter by role")">
+            <option value="">@L("كل الأدوار", "All roles")</option>
+            @foreach (var role in Model.Roles)
+            {
+                <option value="@role.AdminRoleId"
+                        selected="@(Model.Filter.AdminRoleId == role.AdminRoleId)">@role.RoleName</option>
+            }
+        </select>
+
+        <select name="EmploymentStatus" aria-label="@L("فلترة حسب الحالة", "Filter by status")">
+            <option value="">@L("كل الحالات", "All statuses")</option>
+            <option value="Active" selected="@(Model.Filter.EmploymentStatus == "Active")">@L("نشط", "Active")</option>
+            <option value="Suspended" selected="@(Model.Filter.EmploymentStatus == "Suspended")">@L("موقوف", "Suspended")</option>
+        </select>
+
+        <button type="submit" class="employees-btn employees-btn--filter">
+            <i class="bi bi-sliders"></i>
+            @L("تطبيق", "Apply")
+        </button>
+    </form>
+
+    @if (Model.Employees.Count == 0)
+    {
+        <div class="employees-empty-state">
+            <span><i class="bi bi-person-x"></i></span>
+            <h3>@L("لا توجد نتائج", "No results")</h3>
+            <p>@L("غيّر البحث أو الفلاتر، أو أضف أول موظف إداري.", "Change the search or filters, or add the first admin employee.")</p>
+        </div>
+    }
+    else
+    {
+        <div class="employees-list" role="list">
+            <div class="employees-list__head" aria-hidden="true">
+                <span>@L("الموظف", "Employee")</span>
+                <span>@L("الدور الوظيفي", "Role")</span>
+                <span>@L("الحالة", "Status")</span>
+                <span>@L("آخر دخول", "Last sign-in")</span>
+                <span>@L("الإجراءات", "Actions")</span>
+            </div>
+
+            @foreach (var employee in Model.Employees)
+            {
+                var initial = string.IsNullOrWhiteSpace(employee.FullName)
+                    ? "م"
+                    : employee.FullName.Substring(0, 1);
+                var statusClass = employee.EmploymentStatus switch
+                {
+                    "Active" => "is-active",
+                    "Suspended" => "is-suspended",
+                    "OnLeave" => "is-leave",
+                    "Terminated" => "is-terminated",
+                    _ => "is-neutral"
+                };
+
+                <article class="employee-row @(employee.IsSystemAdmin ? "is-system-admin" : "")"
+                         role="listitem"
+                         data-employee-id="@employee.UserId">
+                    <div class="employee-row__person">
+                        <span class="employee-avatar">@initial</span>
+                        <div>
+                            <div class="employee-name-line">
+                                <strong>@employee.FullName</strong>
+                                @if (employee.IsSystemAdmin)
+                                {
+                                    <span class="employee-system-tag"><i class="bi bi-shield-fill-check"></i> @L("مدير النظام", "System Admin")</span>
+                                }
+                                @if (employee.MustChangePassword && !employee.IsSystemAdmin)
+                                {
+                                    <span class="employee-password-tag" title="@L("يجب تغيير كلمة المرور عند أول دخول", "Password must be changed on first sign-in")">
+                                        <i class="bi bi-key-fill"></i>
+                                    </span>
+                                }
+                            </div>
+                            <small dir="ltr">@("@" + employee.Username)</small>
+                            @if (!string.IsNullOrWhiteSpace(employee.EmployeeNumber))
+                            {
+                                <em>@L("رقم وظيفي:", "Employee no.:") @employee.EmployeeNumber</em>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="employee-row__role" data-mobile-label="@L("الدور", "Role")">
+                        @if (string.IsNullOrWhiteSpace(employee.AdminRoleName))
+                        {
+                            <span class="employee-role-pill is-missing">@L("بدون دور", "No role")</span>
+                        }
+                        else
+                        {
+                            <span class="employee-role-pill @(employee.IsRoleActive ? "" : "is-disabled")">
+                                <i class="bi bi-person-badge"></i>
+                                @employee.AdminRoleName
+                            </span>
+                        }
+                    </div>
+
+                    <div data-mobile-label="@L("الحالة", "Status")">
+                        <span class="employee-status @statusClass">
+                            <i></i>
+                            @StatusLabel(employee.EmploymentStatus)
+                        </span>
+                    </div>
+
+                    <div class="employee-row__login" data-mobile-label="@L("آخر دخول", "Last sign-in")">
+                        @if (employee.LastLoginAt.HasValue)
+                        {
+                            <strong>@employee.LastLoginAt.Value.ToString("yyyy/MM/dd", CultureInfo.CurrentCulture)</strong>
+                            <small>@employee.LastLoginAt.Value.ToString("hh:mm tt", CultureInfo.CurrentCulture)</small>
+                        }
+                        else
+                        {
+                            <strong>@L("لم يسجل بعد", "Not signed in yet")</strong>
+                            <small>@L("حساب جديد", "New account")</small>
+                        }
+                    </div>
+
+                    <div class="employee-row__actions">
+                        @if (!employee.IsSystemAdmin && Model.CanEdit)
+                        {
+                            <button type="button"
+                                    class="employee-icon-btn"
+                                    data-edit-employee="@employee.UserId"
+                                    title="@L("تعديل الموظف", "Edit employee")">
+                                <i class="bi bi-pencil-square"></i>
+                            </button>
+                        }
+
+                        @if (!employee.IsSystemAdmin && Model.CanChangeState)
+                        {
+                            if (employee.EmploymentStatus == AdminEmployeeStatuses.Active)
+                            {
+                                <button type="button"
+                                        class="employee-icon-btn is-warning"
+                                        data-change-employee-status="@employee.UserId"
+                                        data-next-status="Suspended"
+                                        data-employee-name="@employee.FullName"
+                                        title="@L("إيقاف الموظف", "Suspend employee")">
+                                    <i class="bi bi-pause-circle"></i>
+                                </button>
+                            }
+                            else
+                            {
+                                <button type="button"
+                                        class="employee-icon-btn is-success"
+                                        data-change-employee-status="@employee.UserId"
+                                        data-next-status="Active"
+                                        data-employee-name="@employee.FullName"
+                                        title="@L("تفعيل الموظف", "Activate employee")">
+                                    <i class="bi bi-play-circle"></i>
+                                </button>
+                            }
+                        }
+
+                        @if (employee.IsSystemAdmin)
+                        {
+                            <span class="employee-protected-copy">@L("محمي", "Protected")</span>
+                        }
+                    </div>
+                </article>
+            }
+        </div>
+    }
+
+    @if (Model.TotalPages > 1)
+    {
+        <nav class="employees-pagination" aria-label="@L("صفحات الموظفين", "Employee pages")">
+            <button type="button"
+                    data-employees-page="@(Model.PageNumber - 1)"
+                    disabled="@(Model.PageNumber <= 1)">
+                <i class="bi @(isArabic ? "bi-chevron-right" : "bi-chevron-left")"></i>
+            </button>
+
+            <span>@L("صفحة", "Page") <strong>@Model.PageNumber</strong> @L("من", "of") <strong>@Model.TotalPages</strong></span>
+
+            <button type="button"
+                    data-employees-page="@(Model.PageNumber + 1)"
+                    disabled="@(Model.PageNumber >= Model.TotalPages)">
+                <i class="bi @(isArabic ? "bi-chevron-left" : "bi-chevron-right")"></i>
+            </button>
+        </nav>
+    }
+</div>
