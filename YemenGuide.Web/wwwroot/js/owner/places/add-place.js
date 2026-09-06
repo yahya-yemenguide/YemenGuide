@@ -313,73 +313,109 @@
             contactPhoneDisplay.addEventListener('blur', function () {
                 window.formatPhoneNumber(window.contactPhoneIti, contactPhoneDisplay);
             });
+
+            if (contactPhoneDisplay.value) {
+                window.validatePhoneInput(window.contactPhoneIti, contactPhoneDisplay, 'contactPhoneMsg');
+                setTimeout(() => window.formatPhoneNumber(window.contactPhoneIti, contactPhoneDisplay), 200);
+            }
+        }
+
+        const revalidatePhonePair = () => {
+            if (ownerPhoneDisplay?.value.trim() && contactPhoneDisplay?.value.trim()) {
+                validateOwnerStepPhones(false);
+            }
+        };
+
+        [ownerPhoneDisplay, contactPhoneDisplay].filter(Boolean).forEach(input => {
+            input.addEventListener('input', revalidatePhonePair);
+            input.addEventListener('countrychange', revalidatePhonePair);
+            input.addEventListener('blur', revalidatePhonePair);
+        });
+
+        window.setTimeout(revalidatePhonePair, 240);
+    }
+
+    function normalizePhoneForComparison(itiInstance, inputElement) {
+        if (!inputElement) return '';
+
+        let value = inputElement.value || '';
+        if (itiInstance) {
+            const internationalNumber = itiInstance.getNumber();
+            if (internationalNumber) value = internationalNumber;
+        }
+
+        let digits = value.replace(/\D/g, '');
+        if (digits.startsWith('00')) digits = digits.substring(2);
+
+        if (digits.length === 9 && /^(77|78|70|73|71)/.test(digits)) {
+            digits = `967${digits}`;
+        }
+
+        return digits;
+    }
+
+    function showPhoneFieldError(inputElement, msgId, message) {
+        const wrapper = inputElement?.closest('.premium-input-group-phone');
+        const msgElement = document.getElementById(msgId);
+
+        if (wrapper) {
+            wrapper.classList.remove('glow-success');
+            wrapper.classList.add('glow-error', 'is-invalid');
+        }
+
+        if (msgElement) {
+            msgElement.innerHTML = `<i class="bi bi-x-circle-fill"></i> ${message}`;
+            msgElement.className = 'small mt-1 text-end d-block fw-bold text-danger';
         }
     }
 
-    function restoreAndRememberFacilityBookingPhone(rawConfig) {
-        const config = normalizeWizardConfig(rawConfig);
-        const input = document.getElementById('contactPhoneDisplay');
-        if (!input) return;
+    function validateOwnerStepPhones(showEmptyMessages) {
+        const ownerInput = document.getElementById('ownerPhoneDisplay');
+        const bookingInput = document.getElementById('contactPhoneDisplay');
 
-        const ownerKey = String(config.ownerId || 'current-owner');
-        const storageKey = `yg.owner.bookingPhone.${ownerKey}`;
+        const ownerValid = window.isStrictlyValidPhone(window.ownerPhoneIti, ownerInput);
+        const bookingValid = window.isStrictlyValidPhone(window.contactPhoneIti, bookingInput);
 
-        let storedValue = '';
-        try {
-            storedValue = localStorage.getItem(storageKey) || '';
-        } catch (_) { }
+        window.validatePhoneInput(window.ownerPhoneIti, ownerInput, 'ownerPhoneMsg');
+        window.validatePhoneInput(window.contactPhoneIti, bookingInput, 'contactPhoneMsg');
 
-        // الاسترجاع يتم بعد أن تنتهي مكتبة الهاتف الأصلية من التهيئة.
-        if (!input.value.trim() && storedValue) {
-            if (window.contactPhoneIti) {
-                window.contactPhoneIti.setNumber(storedValue);
-                window.setTimeout(() => {
-                    window.formatPhoneNumber(
-                        window.contactPhoneIti,
-                        input
-                    );
-                    window.validatePhoneInput(
-                        window.contactPhoneIti,
-                        input,
-                        'contactPhoneMsg'
-                    );
-                }, 120);
-            } else {
-                input.value = storedValue;
+        if (!ownerValid) {
+            if (showEmptyMessages && !ownerInput?.value.trim()) {
+                showPhoneFieldError(ownerInput, 'ownerPhoneMsg', 'يرجى إدخال رقم هاتف المالك.');
             }
+            return {
+                isValid: false,
+                message: 'رقم هاتف المالك غير صحيح. يرجى مراجعته قبل المتابعة.'
+            };
         }
 
-        const persist = () => {
-            let value = input.value.trim();
-
-            // نفس المكتبة والسياسة القديمة؛ لا نغير التحقق ولا التنسيق.
-            if (window.contactPhoneIti) {
-                const internationalNumber =
-                    window.contactPhoneIti.getNumber();
-
-                if (internationalNumber) {
-                    value = internationalNumber;
-                }
+        if (!bookingValid) {
+            if (showEmptyMessages && !bookingInput?.value.trim()) {
+                showPhoneFieldError(bookingInput, 'contactPhoneMsg', 'يرجى إدخال رقم هاتف الحجوزات.');
             }
+            return {
+                isValid: false,
+                message: 'رقم هاتف الحجوزات غير صحيح. يرجى مراجعته قبل المتابعة.'
+            };
+        }
 
-            if (!value) return;
+        const ownerNumber = normalizePhoneForComparison(window.ownerPhoneIti, ownerInput);
+        const bookingNumber = normalizePhoneForComparison(window.contactPhoneIti, bookingInput);
 
-            try {
-                localStorage.setItem(storageKey, value);
-            } catch (_) { }
-        };
+        if (ownerNumber && bookingNumber && ownerNumber === bookingNumber) {
+            showPhoneFieldError(
+                bookingInput,
+                'contactPhoneMsg',
+                'رقم الحجوزات يجب أن يكون مختلفًا عن رقم المالك الشخصي.'
+            );
 
-        let saveTimer = 0;
+            return {
+                isValid: false,
+                message: 'رقم هاتف الحجوزات يجب أن يكون مختلفًا عن رقم هاتف المالك الشخصي.'
+            };
+        }
 
-        input.addEventListener('input', () => {
-            window.clearTimeout(saveTimer);
-            saveTimer = window.setTimeout(persist, 280);
-        });
-
-        input.addEventListener('countrychange', persist);
-        input.addEventListener('blur', persist);
-
-        window.persistOwnerBookingPhone = persist;
+        return { isValid: true, message: '' };
     }
 
 
@@ -665,7 +701,6 @@
 
                 setupWizardLogic(config);
                 initPhoneFieldsForWizard();
-                restoreAndRememberFacilityBookingPhone(config);
                 window.initAddPlaceMap();
                 prefillWizardContext(config);
 
@@ -1748,6 +1783,12 @@
                         errorMsg = 'كلمة المرور يجب أن لا تقل عن 6 أحرف أو أرقام.';
                     }
                 }
+
+                const phoneValidation = validateOwnerStepPhones(true);
+                if (!phoneValidation.isValid) {
+                    isValid = false;
+                    errorMsg = phoneValidation.message;
+                }
             }
 
 
@@ -1920,13 +1961,14 @@
                 }
             });
 
-            const ownerDisplay = document.getElementById('ownerPhoneDisplay');
-            const contactDisplay = document.getElementById('contactPhoneDisplay');
-            if (window.ownerPhoneIti && !window.isStrictlyValidPhone(window.ownerPhoneIti, ownerDisplay)) isValid = false;
-            if (window.contactPhoneIti && !window.isStrictlyValidPhone(window.contactPhoneIti, contactDisplay)) isValid = false;
-
             if (!isValid) {
-                moveToStepAndShowError('يرجى تعبئة الحقول الإجبارية بشكل صحيح والتأكد من أرقام الهواتف والخريطة.');
+                moveToStepAndShowError('يرجى تعبئة الحقول الإجبارية في هذه الخطوة بشكل صحيح.');
+                return;
+            }
+
+            const phoneValidation = validateOwnerStepPhones(true);
+            if (!phoneValidation.isValid) {
+                moveToStepAndShowError(phoneValidation.message, 'step_owner');
                 return;
             }
 
@@ -1944,8 +1986,6 @@
 
             // إعادة فهرسة الباقات المخصصة المفعلة قبل إنشاء FormData مباشرة.
             form.customPackagesEditor?.reindex();
-
-            window.persistOwnerBookingPhone?.();
 
             const formData = new FormData(form);
             applyWizardSubmissionContext(formData, config);
@@ -3406,7 +3446,6 @@
             const config = normalizeWizardConfig(rawConfig);
             setupWizardLogic(config);
             initPhoneFieldsForWizard();
-            restoreAndRememberFacilityBookingPhone(config);
             window.initAddPlaceMap();
             prefillWizardContext(config);
             initializeArabicFileUploads(document.getElementById('fullPlaceSurveyForm'));

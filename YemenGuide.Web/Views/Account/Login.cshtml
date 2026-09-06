@@ -2,7 +2,11 @@
     Layout = null;
     ViewData["Title"] = "تسجيل الدخول / إنشاء حساب";
     string roleParam = Context.Request.Query["role"].ToString();
-    bool isOwner = (roleParam == "owner");
+    string modeParam = Context.Request.Query["mode"].ToString();
+    bool isOwner = string.Equals(roleParam, "owner", StringComparison.OrdinalIgnoreCase);
+    bool showRegister = isOwner || string.Equals(modeParam, "register", StringComparison.OrdinalIgnoreCase);
+    string loginError = TempData["LoginError"] as string ?? string.Empty;
+    string registerError = TempData["RegisterError"] as string ?? string.Empty;
 }
 
 <!DOCTYPE html>
@@ -51,7 +55,7 @@
         <span class="auth-ambient-orb auth-ambient-orb--pearl"></span>
     </div>
 
-    <div class="container auth-premium-shell @(isOwner ? "active" : "")">
+    <div class="container auth-premium-shell @(showRegister ? "active" : "")">
 
         <div class="form-box login">
             <form id="ajaxLoginForm">
@@ -59,8 +63,8 @@
 
                 <h1 style="--d: 0.1s;">تسجيل الدخول</h1>
 
-                <div id="loginErrorMessage" class="alert-danger" style="display: none; background-color: #f8d7da; color: #721c24; border-radius: 8px; padding: 10px; margin-bottom: 12px; font-size: 0.85rem; font-weight: bold; --d: 0.15s;">
-                    <i class="bi bi-exclamation-triangle-fill me-1"></i> <span id="errorText"></span>
+                <div id="loginErrorMessage" class="alert-danger" style="display: @(string.IsNullOrWhiteSpace(loginError) ? "none" : "block"); background-color: #f8d7da; color: #721c24; border-radius: 8px; padding: 10px; margin-bottom: 12px; font-size: 0.85rem; font-weight: bold; --d: 0.15s;">
+                    <i class="bi bi-exclamation-triangle-fill me-1"></i> <span id="errorText">@loginError</span>
                 </div>
 
                 <div class="input-box" style="--d: 0.2s;">
@@ -88,7 +92,7 @@
 
                 <div class="social-login" style="--d: 0.55s;">
                     <p>أو الدخول بواسطة</p>
-                    <a href="/Account/GoogleLogin" class="google-btn">
+                    <a href="/Account/GoogleLogin?intent=login" class="google-btn">
                         <i class='bi bi-google'></i> جوجل
                     </a>
                 </div>
@@ -109,6 +113,11 @@
                 @Html.AntiForgeryToken()
 
                 <h1 style="--d: 0.1s;">إنشاء حساب</h1>
+
+                <div id="registerGoogleErrorMessage" class="alert-danger" style="display: @(string.IsNullOrWhiteSpace(registerError) ? "none" : "block"); background-color: #f8d7da; color: #721c24; border-radius: 8px; padding: 10px; margin-bottom: 12px; font-size: 0.85rem; font-weight: bold; --d: 0.15s;">
+                    <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                    <span>@registerError</span>
+                </div>
 
                 <div class="name-grid" style="--d: 0.2s;">
                     <div class="input-box">
@@ -158,7 +167,7 @@
 
                 <div class="social-login" style="--d: 0.8s;">
                     <p>أو سجل بواسطة</p>
-                    <a href="/Account/GoogleLogin" class="google-btn">
+                    <a href="/Account/GoogleLogin?intent=register&amp;role=Customer" class="google-btn">
                         <i class='bi bi-google'></i> جوجل
                     </a>
                 </div>
@@ -216,3 +225,4 @@
 
 </body>
 </html>
+

@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const selectedRole = registerForm?.querySelector('input[name="role"]:checked')?.value;
         const safeRole = selectedRole === 'Owner' ? 'Owner' : 'Customer';
-        registerGoogleButton.href = `/Account/GoogleLogin?role=${encodeURIComponent(safeRole)}`;
+        registerGoogleButton.href = `/Account/GoogleLogin?intent=register&role=${encodeURIComponent(safeRole)}`;
     };
 
     roleInputs.forEach(input => input.addEventListener('change', refreshRegisterGoogleUrl));
@@ -427,3 +427,4 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+

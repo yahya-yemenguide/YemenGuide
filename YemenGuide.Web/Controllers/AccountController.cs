@@ -760,7 +760,8 @@ namespace YemenGuide.Web.Controllers
         [HttpGet]
         public IActionResult GoogleLogin(
             string? role = null,
-            string? returnUrl = null)
+            string? returnUrl = null,
+            string? intent = null)
         {
             RememberReturnUrl(
                 returnUrl);
@@ -769,12 +770,25 @@ namespace YemenGuide.Web.Controllers
                 ? SystemRoles.Owner
                 : SystemRoles.Customer;
 
-            var properties = new AuthenticationProperties
+            string safeIntent = string.Equals(intent, "register", StringComparison.OrdinalIgnoreCase)
+                ? "register"
+                : "login";
+
+            var properties = new GoogleChallengeProperties
             {
                 RedirectUri = Url.Action(nameof(GoogleResponse), "Account")
             };
 
+            // عند إنشاء حساب جديد نُجبر Google على عرض قائمة الحسابات،
+            // حتى يستطيع المستخدم اختيار "استخدام حساب آخر" بدلاً من
+            // إعادة استعمال الحساب المفتوح في المتصفح تلقائياً.
+            if (safeIntent == "register")
+            {
+                properties.Prompt = "select_account";
+            }
+
             properties.Items["registration_role"] = safeRole;
+            properties.Items["auth_intent"] = safeIntent;
 
             var pendingReturnUrl =
                 PeekReturnUrl();
@@ -818,11 +832,45 @@ namespace YemenGuide.Web.Controllers
             string email = NormalizeEmail(result.Principal.FindFirstValue(ClaimTypes.Email));
             string googleName = (result.Principal.FindFirstValue(ClaimTypes.Name) ?? string.Empty).Trim();
 
+            string authIntent =
+                result.Properties?.Items.TryGetValue("auth_intent", out var storedIntent) == true &&
+                string.Equals(storedIntent, "register", StringComparison.OrdinalIgnoreCase)
+                    ? "register"
+                    : "login";
+
             if (!IsValidEmail(email))
                 return RedirectToAction(nameof(Login));
 
             var user = await _context.Users
                 .FirstOrDefaultAsync(u => u.ContactInfo.ToLower() == email);
+
+            // تسجيل الدخول لا ينشئ حساباً جديداً بصمت.
+            if (authIntent == "login" && user == null)
+            {
+                await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                TempData["LoginError"] =
+                    "لا يوجد حساب مرتبط بهذا البريد. انتقل إلى إنشاء حساب واستخدم Google لإنشاء حساب جديد.";
+
+                return RedirectToAction(nameof(Login));
+            }
+
+            // إنشاء الحساب لا يتحول إلى تسجيل دخول إذا كان البريد مستخدماً مسبقاً.
+            if (authIntent == "register" && user != null)
+            {
+                await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                TempData["RegisterError"] =
+                    "هذا البريد مسجل مسبقاً. استخدم «تسجيل الدخول بواسطة Google» للدخول إلى حسابك.";
+
+                return RedirectToAction(
+                    nameof(Login),
+                    new
+                    {
+                        mode = "register",
+                        role = string.Equals(user.Role, SystemRoles.Owner, StringComparison.OrdinalIgnoreCase)
+                            ? "owner"
+                            : "customer"
+                    });
+            }
 
             bool isNewGoogleAccount = false;
 

@@ -103,6 +103,18 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 {
                     ViewBag.CurrentOwnerName = currentUser.FullName;
                     ViewBag.CurrentOwnerPhone = currentUser.PhoneNumber ?? "";
+
+                    // رقم الحجوزات يُؤخذ من آخر منشأة تخص المالك الحالي فقط.
+                    // لا نستخدم localStorage حتى لا ينتقل الرقم بين الحسابات على نفس المتصفح.
+                    if (currentUser.Role == SystemRoles.Owner)
+                    {
+                        ViewBag.CurrentBookingPhone = await _context.Places
+                            .AsNoTracking()
+                            .Where(p => p.OwnerId == userId && !string.IsNullOrWhiteSpace(p.PhoneNumber))
+                            .OrderByDescending(p => p.PlaceId)
+                            .Select(p => p.PhoneNumber)
+                            .FirstOrDefaultAsync() ?? "";
+                    }
                 }
             }
 
@@ -178,6 +190,79 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 await using var transaction = await _context.Database.BeginTransactionAsync();
                 try
                 {
+                    string submittedOwnerPhone = Request.Form.ContainsKey("OwnerPhone")
+                        ? Request.Form["OwnerPhone"].ToString().Trim()
+                        : string.Empty;
+                    string submittedBookingPhone = model.PhoneNumber?.Trim() ?? string.Empty;
+
+                    static string NormalizePhoneForComparison(string phone)
+                    {
+                        string digits = new string((phone ?? string.Empty).Where(char.IsDigit).ToArray());
+
+                        if (digits.StartsWith("00", StringComparison.Ordinal))
+                            digits = digits.Substring(2);
+
+                        // الرقم اليمني المحلي يُوحّد مع صيغته الدولية للمقارنة الصحيحة.
+                        if (digits.Length == 9 &&
+                            (digits.StartsWith("77") || digits.StartsWith("78") ||
+                             digits.StartsWith("70") || digits.StartsWith("73") ||
+                             digits.StartsWith("71")))
+                        {
+                            digits = "967" + digits;
+                        }
+
+                        return digits;
+                    }
+
+                    static bool IsAcceptablePhone(string phone)
+                    {
+                        string digits = NormalizePhoneForComparison(phone);
+                        if (string.IsNullOrWhiteSpace(digits)) return false;
+
+                        if (digits.StartsWith("967", StringComparison.Ordinal))
+                        {
+                            string localNumber = digits.Substring(3);
+                            return localNumber.Length == 9 &&
+                                   (localNumber.StartsWith("77") || localNumber.StartsWith("78") ||
+                                    localNumber.StartsWith("70") || localNumber.StartsWith("73") ||
+                                    localNumber.StartsWith("71"));
+                        }
+
+                        // دعم الأرقام الدولية بصيغة E.164 بعد إزالة علامة + والفواصل.
+                        return digits.Length >= 8 && digits.Length <= 15 && digits[0] != '0';
+                    }
+
+                    if (!IsAcceptablePhone(submittedOwnerPhone))
+                    {
+                        return Json(new
+                        {
+                            success = false,
+                            step = "step_owner",
+                            message = "رقم هاتف المالك غير صحيح. يرجى مراجعته قبل المتابعة."
+                        });
+                    }
+
+                    if (!IsAcceptablePhone(submittedBookingPhone))
+                    {
+                        return Json(new
+                        {
+                            success = false,
+                            step = "step_owner",
+                            message = "رقم هاتف الحجوزات غير صحيح. يرجى مراجعته قبل المتابعة."
+                        });
+                    }
+
+                    if (NormalizePhoneForComparison(submittedOwnerPhone) ==
+                        NormalizePhoneForComparison(submittedBookingPhone))
+                    {
+                        return Json(new
+                        {
+                            success = false,
+                            step = "step_owner",
+                            message = "رقم هاتف الحجوزات يجب أن يكون مختلفًا عن رقم هاتف المالك الشخصي."
+                        });
+                    }
+
                     int ownerId = 0;
                     string ownerMode = Request.Form.ContainsKey("OwnerMode") ? Request.Form["OwnerMode"].ToString() : "";
 
