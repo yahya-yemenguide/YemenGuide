@@ -40,7 +40,7 @@
                 });
 }
 
-@section Styles {
+@section PageStyles {
     <link rel="stylesheet" href="~/lib/sweetalert2/sweetalert2.min.css" />
     <link rel="stylesheet"
       href="~/css/owner/dashboard-owner.css"
@@ -143,19 +143,6 @@
                     <small data-live-date>@DateTime.Now.ToString("dddd، dd MMMM")</small>
                 </div>
             </div>
-
-            <div class="od-command-actions">
-                <a class="od-button od-button--primary"
-               href="/Owner/Reservation/ManageReservations?reservationTab=calendar-manager-tab">
-                    <i class="bi bi-calendar2-plus"></i>
-                    تقويم الحجوزات
-                </a>
-                <a class="od-button od-button--soft"
-               href="/Owner/Reservation/ManageReservations">
-                    <i class="bi bi-calendar-check"></i>
-                    إدارة الحجوزات
-                </a>
-            </div>
         </section>
 
         <section class="od-day-command" data-day-command aria-label="نبض تشغيل المنشأة اليوم">
@@ -249,10 +236,6 @@
             </div>
         </section>
 
-        @* =============================================================
-    شريط حالة الفترة التجريبية داخل الداشبورد.
-    يبقى مستقلًا عن منبثقة الترحيب القديمة.
-    ============================================================= *@
         @if (Model.TrialStatus.HasTrialHistory &&
        Model.TrialStatus.StartedAt.HasValue &&
        Model.TrialStatus.EndsAt.HasValue &&
@@ -331,15 +314,11 @@
                                 <strong>@dashboardTrial.EndsAt.Value.ToString("dd MMMM yyyy")</strong>.
                                 @if (dashboardTrial.IsEndingSoon && dashboardTrial.NeedsTopUp)
                                 {
-                                    <text>
-                                        جهّز رصيد ضمان العمولات قبل النهاية حتى لا تتوقف الحجوزات الجديدة.
-                                    </text>
+                                    <text>جهّز رصيد ضمان العمولات قبل النهاية حتى لا تتوقف الحجوزات الجديدة.</text>
                                 }
                                 else
                                 {
-                                    <text>
-                                        استمتع بالفترة الحالية، وسنذكّرك تلقائيًا عندما يقترب موعد الانتهاء.
-                                    </text>
+                                    <text>استمتع بالفترة الحالية، وسنذكّرك تلقائيًا عندما يقترب موعد الانتهاء.</text>
                                 }
                             </p>
                         }
@@ -446,55 +425,29 @@
             </div>
         </section>
 
+        @* الإحصائيات المختصرة: أبقينا فقط غير المكرر منها. *@
         <section class="od-kpi-grid" aria-label="المؤشرات الرئيسية">
             <article data-od-tilt class="od-kpi od-kpi--primary">
-                <div class="od-kpi__head"><span><i class="bi bi-lightning-charge-fill"></i></span><small>جديدة اليوم</small></div>
+                <div class="od-kpi__head">
+                    <span><i class="bi bi-lightning-charge-fill"></i></span>
+                    <small>جديدة اليوم</small>
+                </div>
                 <strong data-counter-value="@Model.Kpis.NewBookingsToday">@Model.Kpis.NewBookingsToday.ToString("N0")</strong>
                 <p>حجوزات أُنشئت اليوم</p>
                 <div class="od-sparkline" data-sparkline="bookings"></div>
             </article>
 
-            <article data-od-tilt class="od-kpi od-kpi--warning">
-                <div class="od-kpi__head"><span><i class="bi bi-calendar2-day-fill"></i></span><small>تشغيل اليوم</small></div>
-                <strong data-counter-value="@Model.Kpis.TodayBookings">@Model.Kpis.TodayBookings.ToString("N0")</strong>
-                <p>حجوزات تبدأ اليوم</p>
-                <div class="od-kpi__micro"><b>@Model.TodayOperation.ActiveNow</b> نشطة الآن</div>
-            </article>
-
             <article data-od-tilt class="od-kpi od-kpi--success">
-                <div class="od-kpi__head"><span><i class="bi bi-cash-stack"></i></span><small>إيراد الشهر</small></div>
+                <div class="od-kpi__head">
+                    <span><i class="bi bi-cash-stack"></i></span>
+                    <small>إيراد الشهر</small>
+                </div>
                 <strong data-counter-value="@Model.Kpis.MonthlyRevenue.ToString(System.Globalization.CultureInfo.InvariantCulture)">@Money(Model.Kpis.MonthlyRevenue)</strong>
                 <p>@Model.Currency</p>
                 <div class="od-kpi__change @RevenueTone(Model.Kpis.RevenueChangePercent)">
                     <i class="bi @(Model.Kpis.RevenueChangePercent >= 0 ? "bi-arrow-up-right" : "bi-arrow-down-right")"></i>
                     @Math.Abs(Model.Kpis.RevenueChangePercent).ToString("0.#")% عن الشهر السابق
                 </div>
-            </article>
-
-            <article data-od-tilt class="od-kpi od-kpi--cyan">
-                <div class="od-kpi__head"><span><i class="bi bi-bar-chart-fill"></i></span><small>@(Model.Kpis.HasRoomUnits ? "الإشغال الآن" : "حجوزات الشهر")</small></div>
-                <strong data-counter-value="@(Model.Kpis.HasRoomUnits ? Model.Kpis.OccupancyPercent.ToString(System.Globalization.CultureInfo.InvariantCulture) : Model.BookingSummary.TotalThisMonth.ToString())" data-counter-suffix="@(Model.Kpis.HasRoomUnits ? "%" : "")" data-counter-decimals="@(Model.Kpis.HasRoomUnits ? "1" : "0")">@(Model.Kpis.HasRoomUnits ? $"{Model.Kpis.OccupancyPercent:0.#}%" : Model.BookingSummary.TotalThisMonth.ToString("N0"))</strong>
-                <p>@(Model.Kpis.HasRoomUnits ? $"{Model.TodayOperation.OccupiedRoomUnits} من {Model.TodayOperation.TotalRoomUnits} وحدة" : "إجمالي الطلبات هذا الشهر")</p>
-                <div class="od-sparkline" data-sparkline="occupancy"></div>
-            </article>
-
-            <article data-od-tilt class="od-kpi od-kpi--rating">
-                <div class="od-kpi__head"><span><i class="bi bi-star-fill"></i></span><small>رضا العملاء</small></div>
-                <strong data-counter-value="@Model.Kpis.AverageRating.ToString(System.Globalization.CultureInfo.InvariantCulture)" data-counter-decimals="1">@Model.Kpis.AverageRating.ToString("0.0")</strong>
-                <p>من 5 · @Model.Kpis.ReviewsCount.ToString("N0") تقييم</p>
-                <div class="od-stars" aria-label="التقييم">
-                    @for (var i = 1; i <= 5; i++)
-                    {
-                        <i class="bi @(i <= Math.Round(Model.Kpis.AverageRating) ? "bi-star-fill" : "bi-star")"></i>
-                    }
-                </div>
-            </article>
-
-            <article data-od-tilt class="od-kpi od-kpi--balance">
-                <div class="od-kpi__head"><span><i class="bi bi-shield-check"></i></span><small>رصيد الضمان</small></div>
-                <strong data-counter-value="@Model.Kpis.AvailableGuaranteeBalance.ToString(System.Globalization.CultureInfo.InvariantCulture)">@Money(Model.Kpis.AvailableGuaranteeBalance)</strong>
-                <p>@Model.Currency</p>
-                <div class="od-kpi__status @GuaranteeTone(Model.Kpis.GuaranteeStatus)">@Model.Guarantee.AccountStatusLabel</div>
             </article>
         </section>
 
@@ -533,7 +486,11 @@
         <section class="od-grid od-grid--hero">
             <article data-od-tilt class="od-panel od-panel--chart">
                 <header class="od-panel__head">
-                    <div><span class="od-section-kicker">الحجوزات</span><h2>أداء الطلبات</h2><p>حركة الحجوزات خلال آخر 30 يومًا.</p></div>
+                    <div>
+                        <span class="od-section-kicker">الحجوزات</span>
+                        <h2>أداء الطلبات</h2>
+                        <p>حركة الحجوزات خلال آخر 30 يومًا.</p>
+                    </div>
                     <div class="od-range-switch" role="group" aria-label="نطاق الرسم">
                         <button type="button" data-booking-range="7">7 أيام</button>
                         <button type="button" data-booking-range="14">14 يوم</button>
@@ -591,7 +548,7 @@
                 <div class="od-finance-layout">
                     <div class="od-chart od-chart--finance" id="ownerFinanceChart"></div>
                     <div class="od-finance-ledger">
-                        <span><small>قيمة الحجوزات</small><b>@Money(Model.Finance.GrossBookingValue)</b></span>
+                        <span><small>قيمة الحجوزات بعد الخصومات</small><b>@Money(Model.Finance.GrossBookingValue)</b></span>
                         <span><small>مدفوع إلكترونيًا</small><b>@Money(Model.Finance.PaidOnline)</b></span>
                         <span><small>محصل في المنشأة</small><b>@Money(Model.Finance.CollectedAtProperty)</b></span>
                         <span class="is-danger"><small>مستردات</small><b>-@Money(Model.Finance.RefundedAmount)</b></span>
@@ -615,7 +572,9 @@
                         <span><small>المطلوب</small><strong>@Money(Model.Guarantee.RequiredBalance)</strong></span>
                     </div>
                 </div>
-                <a class="od-button od-button--wide od-button--soft" href="/Owner/Financials?financeTab=balance&placeId=@Model.PlaceId"><i class="bi bi-wallet2"></i>فتح مركز الرصيد والعمولات</a>
+                <a class="od-button od-button--wide od-button--soft" href="/Owner/Financials?financeTab=balance&placeId=@Model.PlaceId">
+                    <i class="bi bi-wallet2"></i>فتح مركز الرصيد والعمولات
+                </a>
             </article>
         </section>
 
@@ -697,7 +656,9 @@
             </article>
 
             <article data-od-tilt class="od-panel od-panel--activity">
-                <header class="od-panel__head od-panel__head--compact"><div><span class="od-section-kicker">مباشر</span><h2>آخر النشاطات</h2></div></header>
+                <header class="od-panel__head od-panel__head--compact">
+                    <div><span class="od-section-kicker">مباشر</span><h2>آخر النشاطات</h2></div>
+                </header>
                 <div class="od-timeline">
                     @if (Model.RecentActivities.Count == 0)
                     {
@@ -741,15 +702,10 @@
 
 <script id="ownerDashboardData" type="application/json">@Html.Raw(dashboardJson)</script>
 
-@* =============================================================
-       منبثقة الترحيب بالفترة التجريبية
-       تظهر فقط عندما يقرر الكنترولر أن التجربة فعالة، ثم يتحكم JS
-       في عرضها مرة واحدة لكل مالك/بداية تجربة على نفس المتصفح.
-       ============================================================= *@
 @if (Model?.TrialWelcome?.ShouldShow == true &&
-  Model.TrialWelcome.IsActive &&
-  Model.TrialWelcome.StartedAt.HasValue &&
-  Model.TrialWelcome.EndsAt.HasValue)
+   Model.TrialWelcome.IsActive &&
+   Model.TrialWelcome.StartedAt.HasValue &&
+   Model.TrialWelcome.EndsAt.HasValue)
 {
     var trial = Model.TrialWelcome;
     var elapsedDays = Math.Max(
@@ -782,8 +738,7 @@
      data-show-trial-welcome="true"
      data-storage-key="@trial.StorageKey">
 
-        <div class="owner-trial-welcome__backdrop"
-         aria-hidden="true"></div>
+        <div class="owner-trial-welcome__backdrop" aria-hidden="true"></div>
 
         <section class="owner-trial-welcome__dialog"
              role="dialog"
@@ -800,8 +755,7 @@
             </button>
 
             <div class="owner-trial-welcome__hero">
-                <div class="owner-trial-welcome__gift"
-                 aria-hidden="true">
+                <div class="owner-trial-welcome__gift" aria-hidden="true">
                     <span class="owner-trial-welcome__gift-glow"></span>
                     <i class="bi bi-gift-fill"></i>
                     <span class="owner-trial-welcome__spark is-one"></span>
@@ -815,9 +769,7 @@
                         انطلاقة مجانية لمنشأتك
                     </span>
 
-                    <h2 id="ownerTrialWelcomeTitle">
-                        مرحبًا بك في فترتك التجريبية المجانية
-                    </h2>
+                    <h2 id="ownerTrialWelcomeTitle">مرحبًا بك في فترتك التجريبية المجانية</h2>
 
                     <p id="ownerTrialWelcomeDescription">
                         تم تفعيل منشأة
@@ -829,31 +781,20 @@
                 </div>
             </div>
 
-            <div class="owner-trial-welcome__metrics"
-             aria-label="ملخص الفترة التجريبية">
-
+            <div class="owner-trial-welcome__metrics" aria-label="ملخص الفترة التجريبية">
                 <article class="owner-trial-welcome__metric is-days">
                     <span><i class="bi bi-calendar2-week"></i></span>
-                    <div>
-                        <small>مدة التجربة</small>
-                        <strong>@trial.TotalTrialDays يومًا</strong>
-                    </div>
+                    <div><small>مدة التجربة</small><strong>@trial.TotalTrialDays يومًا</strong></div>
                 </article>
 
                 <article class="owner-trial-welcome__metric is-commission">
                     <span><i class="bi bi-percent"></i></span>
-                    <div>
-                        <small>عمولة المنصة أثناء التجربة</small>
-                        <strong>0%</strong>
-                    </div>
+                    <div><small>عمولة المنصة أثناء التجربة</small><strong>0%</strong></div>
                 </article>
 
                 <article class="owner-trial-welcome__metric is-booking">
                     <span><i class="bi bi-calendar2-check"></i></span>
-                    <div>
-                        <small>استقبال الحجوزات</small>
-                        <strong>@(trial.CanAcceptNewBookings ? "متاح الآن" : "قيد التحقق")</strong>
-                    </div>
+                    <div><small>استقبال الحجوزات</small><strong>@(trial.CanAcceptNewBookings ? "متاح الآن" : "قيد التحقق")</strong></div>
                 </article>
             </div>
 
@@ -883,20 +824,13 @@
                 </div>
 
                 <div class="owner-trial-welcome__date-row">
-                    <span>
-                        <i class="bi bi-play-circle"></i>
-                        بدأت @trial.StartedAt.Value.ToString("dd MMM yyyy")
-                    </span>
-                    <span>
-                        <i class="bi bi-flag"></i>
-                        النهاية @trial.EndsAt.Value.ToString("dd MMM yyyy")
-                    </span>
+                    <span><i class="bi bi-play-circle"></i> بدأت @trial.StartedAt.Value.ToString("dd MMM yyyy")</span>
+                    <span><i class="bi bi-flag"></i> النهاية @trial.EndsAt.Value.ToString("dd MMM yyyy")</span>
                 </div>
             </div>
 
             <div class="owner-trial-welcome__after-trial">
-                <div class="owner-trial-welcome__shield"
-                 aria-hidden="true">
+                <div class="owner-trial-welcome__shield" aria-hidden="true">
                     <i class="bi bi-shield-check"></i>
                 </div>
 
@@ -908,10 +842,7 @@
                         <p>
                             لاستمرار استقبال الحجوزات الجديدة يجب أن يتوفر
                             رصيد ضمان العمولة المطلوب للمنشأة، وقيمته حاليًا
-                            <strong>
-                                @trial.RequiredGuaranteeBalance.ToString("N0")
-                                @trial.Currency
-                            </strong>.
+                            <strong>@trial.RequiredGuaranteeBalance.ToString("N0") @trial.Currency</strong>.
                             يمكنك تجهيز الرصيد من الآن، ولن يتم استخدامه كعمولة
                             على حجوزات الفترة التجريبية.
                         </p>
@@ -961,15 +892,10 @@
                 <i class="bi bi-check2-circle"></i>
                 حجوزات التجربة تبقى بدون عمولة حتى بعد انتهاء الفترة.
             </p>
-
         </section>
     </div>
 }
 
-
-<!-- =============================================================
-     JavaScript الخاص بالصفحة
-============================================================= -->
 @section Scripts {
     <script src="~/lib/sweetalert2/sweetalert2.js"></script>
     <script src="~/lib/apexcharts/apexcharts.min.js"></script>

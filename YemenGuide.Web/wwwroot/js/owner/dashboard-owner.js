@@ -43,7 +43,7 @@
         const cancelled = last(toNumbers(trend.cancelled), days);
 
         const options = {
-            chart: { type: 'area', height: 265, toolbar: { show: false }, zoom: { enabled: false }, fontFamily: 'inherit', animations: { enabled: true, easing: 'easeinout', speed: 950, animateGradually: { enabled: true, delay: 90 }, dynamicAnimation: { enabled: true, speed: 450 } } },
+            chart: { type: 'area', height: 265, toolbar: { show: false }, zoom: { enabled: false }, fontFamily: 'Tajawal, sans-serif', animations: { enabled: true, easing: 'easeinout', speed: 950, animateGradually: { enabled: true, delay: 90 }, dynamicAnimation: { enabled: true, speed: 450 } } },
             series: [
                 { name: 'الحجوزات', data: bookings },
                 { name: 'المكتملة', data: completed },
@@ -54,10 +54,10 @@
             fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: .20, opacityTo: .015, stops: [0, 92, 100] } },
             dataLabels: { enabled: false },
             markers: { size: 0, hover: { sizeOffset: 4 } },
-            xaxis: { categories: labels, labels: { style: { colors: ink(), fontSize: '10px' } }, axisBorder: { show: false }, axisTicks: { show: false }, tooltip: { enabled: false } },
-            yaxis: { min: 0, forceNiceScale: true, labels: { style: { colors: ink(), fontSize: '10px' }, formatter: value => Math.round(value) } },
+            xaxis: { categories: labels, labels: { style: { colors: ink(), fontSize: '13px' } }, axisBorder: { show: false }, axisTicks: { show: false }, tooltip: { enabled: false } },
+            yaxis: { min: 0, forceNiceScale: true, labels: { style: { colors: ink(), fontSize: '13px' }, formatter: value => Math.round(value) } },
             grid: { borderColor: grid(), strokeDashArray: 4, padding: { left: 4, right: 4 } },
-            legend: { position: 'top', horizontalAlign: 'right', fontSize: '11px', labels: { colors: ink() }, markers: { width: 8, height: 8, radius: 8 } },
+            legend: { position: 'top', horizontalAlign: 'right', fontSize: '14px', labels: { colors: ink() }, markers: { width: 8, height: 8, radius: 8 } },
             tooltip: { theme: isDark() ? 'dark' : 'light' }
         };
 
@@ -75,7 +75,7 @@
         if (!node || typeof window.ApexCharts === 'undefined') return;
         const finance = data.finance || {};
         new ApexCharts(node, {
-            chart: { type: 'bar', height: 280, toolbar: { show: false }, fontFamily: 'inherit', animations: { enabled: true, easing: 'easeinout', speed: 1100, animateGradually: { enabled: true, delay: 120 } } },
+            chart: { type: 'bar', height: 280, toolbar: { show: false }, fontFamily: 'Tajawal, sans-serif', animations: { enabled: true, easing: 'easeinout', speed: 1100, animateGradually: { enabled: true, delay: 120 } } },
             series: [
                 { name: 'المحصل', data: toNumbers(finance.monthlyCollected) },
                 { name: 'عمولة المنصة', data: toNumbers(finance.monthlyCommission) }
@@ -83,10 +83,10 @@
             colors: [primary, warning],
             plotOptions: { bar: { borderRadius: 8, columnWidth: '46%', distributed: false } },
             dataLabels: { enabled: false },
-            xaxis: { categories: finance.monthlyLabels || [], labels: { style: { colors: ink(), fontSize: '10px' } }, axisBorder: { show: false }, axisTicks: { show: false } },
-            yaxis: { labels: { style: { colors: ink(), fontSize: '10px' }, formatter: compactNumber } },
+            xaxis: { categories: finance.monthlyLabels || [], labels: { style: { colors: ink(), fontSize: '13px' } }, axisBorder: { show: false }, axisTicks: { show: false } },
+            yaxis: { labels: { style: { colors: ink(), fontSize: '13px' }, formatter: compactNumber } },
             grid: { borderColor: grid(), strokeDashArray: 4 },
-            legend: { position: 'top', horizontalAlign: 'right', fontSize: '11px', labels: { colors: ink() } },
+            legend: { position: 'top', horizontalAlign: 'right', fontSize: '14px', labels: { colors: ink() } },
             tooltip: { theme: isDark() ? 'dark' : 'light', y: { formatter: value => `${formatNumber(value)} ${data.currency || ''}` } }
         }).render();
     }
@@ -98,10 +98,10 @@
         const status = String(guarantee.accountStatus || 'NeedsTopUp');
         const chartColor = status === 'Active' ? success : (status === 'InDebt' || status === 'Suspended' ? danger : warning);
         new ApexCharts(node, {
-            chart: { type: 'radialBar', height: 190, sparkline: { enabled: true }, fontFamily: 'inherit', animations: { enabled: true, easing: 'easeinout', speed: 1400 } },
+            chart: { type: 'radialBar', height: 190, sparkline: { enabled: true }, fontFamily: 'Tajawal, sans-serif', animations: { enabled: true, easing: 'easeinout', speed: 1400 } },
             series: [Math.max(0, Math.min(100, Number(guarantee.fundingPercent || 0)))],
             colors: [chartColor],
-            plotOptions: { radialBar: { startAngle: -130, endAngle: 130, hollow: { size: '62%' }, track: { background: isDark() ? 'rgba(255,255,255,.08)' : '#EAF1F4', strokeWidth: '100%' }, dataLabels: { name: { show: true, offsetY: 19, color: ink(), fontSize: '10px' }, value: { offsetY: -7, color: ink(), fontSize: '22px', fontWeight: 900, formatter: value => `${Math.round(value)}%` } } } },
+            plotOptions: { radialBar: { startAngle: -130, endAngle: 130, hollow: { size: '62%' }, track: { background: isDark() ? 'rgba(255,255,255,.08)' : '#EAF1F4', strokeWidth: '100%' }, dataLabels: { name: { show: true, offsetY: 19, color: ink(), fontSize: '13px' }, value: { offsetY: -7, color: ink(), fontSize: '24px', fontWeight: 900, formatter: value => `${Math.round(value)}%` } } } },
             labels: ['تغطية الرصيد']
         }).render();
     }
@@ -113,7 +113,7 @@
         const raw = toNumbers(reviews.starCounts);
         const counts = raw.length === 5 ? raw.slice().reverse() : [0, 0, 0, 0, 0];
         new ApexCharts(node, {
-            chart: { type: 'donut', height: 185, fontFamily: 'inherit', animations: { enabled: true, easing: 'easeinout', speed: 1200, animateGradually: { enabled: true, delay: 130 } } },
+            chart: { type: 'donut', height: 185, fontFamily: 'Tajawal, sans-serif', animations: { enabled: true, easing: 'easeinout', speed: 1200, animateGradually: { enabled: true, delay: 130 } } },
             series: counts,
             labels: ['5 نجوم', '4 نجوم', '3 نجوم', 'نجمتان', 'نجمة'],
             colors: ['#E5A000', '#F3B837', '#7EC7DD', '#99AAB3', '#C8D3D8'],

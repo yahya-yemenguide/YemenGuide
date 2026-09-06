@@ -53,10 +53,23 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             public int? PromotionId { get; set; }
             public string PromotionTitle { get; set; } = string.Empty;
             public string PromotionCode { get; set; } = string.Empty;
+            public string OfferMode { get; set; } = "Discount";
+            public string RewardType { get; set; } = string.Empty;
+            public int? RequiredQuantity { get; set; }
+            public int? RewardQuantity { get; set; }
+            public bool IsRewardRepeatable { get; set; }
+            public int AppliedFreeQuantity { get; set; }
+            public int RepeatCount { get; set; }
+            public int? RewardServiceId { get; set; }
+            public string RewardServiceName { get; set; } = string.Empty;
+            public decimal? SpecialPrice { get; set; }
+            public string OfferSummary { get; set; } = string.Empty;
             public string DiscountType { get; set; } = string.Empty;
             public decimal DiscountValue { get; set; }
             public decimal? MaximumDiscountAmount { get; set; }
             public decimal DiscountAmount { get; set; }
+            public decimal BenefitAmount { get; set; }
+            public bool AddsComplimentaryService { get; set; }
             public bool IsApplied { get; set; }
             public string Message { get; set; } = string.Empty;
         }
@@ -70,6 +83,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             public User? Customer { get; set; }
             public List<PlaceAdditionalService> Services { get; set; } = new();
             public Dictionary<int, int> ServiceQuantities { get; set; } = new();
+            public HashSet<int> ComplimentaryServiceIds { get; set; } = new();
             public List<RoomUnit> CandidateRoomUnits { get; set; } = new();
             public ManualPromotionResolution Promotion { get; set; } = new();
             public DateTime StartDate { get; set; }
@@ -248,7 +262,6 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 return Json(new { success = true, events = Array.Empty<object>() });
             }
 
-            // التقويم نفسه يحدّث الحجوزات التي انتهت مهلة عربونها قبل إرجاع الأحداث.
             await ExpireOverdueAwaitingPaymentsAsync(ownerId, placeId.Value);
 
             start = start.Date;
@@ -333,8 +346,6 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 });
             }
 
-            // ملخص إشغال الغرف داخل كل يوم في العرض الحالي.
-            // نحسبه من RoomUnits الفعلية + الحجوزات القديمة التي لم يكن لها Assignment.
             var activeUnitIds = await _context.RoomUnits
                 .AsNoTracking()
                 .Where(item => item.PlaceId == placeId.Value && item.IsAvailable == true)
@@ -626,10 +637,6 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             });
         }
 
-        // =====================================================================
-        // العميل للحجز اليدوي
-        // =====================================================================
-
         [HttpGet]
         public async Task<IActionResult> SearchManualBookingCustomer(string phone)
         {
@@ -648,8 +655,6 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 });
             }
 
-            // نبحث في قاعدة البيانات نفسها بدل تحميل أول N عميل إلى الذاكرة.
-            // المقارنة بالجزء الأخير تتحمل وجود +967 أو المسافات والشرطات في الرقم المخزن.
             var phoneSuffix = normalized.Length > 9
                 ? normalized.Substring(normalized.Length - 9)
                 : normalized;
@@ -695,10 +700,6 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
             return Json(new { success = true, data = result });
         }
-
-        // =====================================================================
-        // خيارات وتوفر الحجز اليدوي
-        // =====================================================================
 
         [HttpGet]
         public async Task<IActionResult> GetManualBookingOptions(
@@ -895,10 +896,6 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             });
         }
 
-        // =====================================================================
-        // إنشاء الحجز اليدوي — نفس Bookings / RoomUnits / Finance
-        // =====================================================================
-
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> CreateManualBooking(
@@ -926,12 +923,16 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 }
 
                 var now = DateTime.Now;
+                var isFreeBooking = quote.PublicQuote.TotalPrice <= 0m;
                 var isCollectedMode = IsState(request.PaymentMode, "Collected");
-                var paidAmount = isCollectedMode
-                    ? Math.Round(Math.Max(0m, request.PaidAmount), 2)
-                    : 0m;
+                var paidAmount = isFreeBooking
+                    ? 0m
+                    : isCollectedMode
+                        ? Math.Round(Math.Max(0m, request.PaidAmount), 2)
+                        : 0m;
 
-                var isCollected = isCollectedMode && paidAmount > 0m;
+                var isCollected = !isFreeBooking && isCollectedMode && paidAmount > 0m;
+
                 if (paidAmount > quote.PublicQuote.TotalPrice)
                 {
                     await transaction.RollbackAsync();
@@ -954,7 +955,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     });
                 }
 
-                var requiresDeposit = quote.PublicQuote.DepositAmount > 0m;
+                var requiresDeposit = !isFreeBooking && quote.PublicQuote.DepositAmount > 0m;
                 var bookingState = requiresDeposit && !isCollected
                     ? "AwaitingPayment"
                     : "Confirmed";
@@ -964,11 +965,13 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     ? now.AddHours(paymentTimeout)
                     : (DateTime?)null;
 
-                var paymentStatus = paidAmount <= 0m
-                    ? "Unpaid"
-                    : paidAmount >= quote.PublicQuote.TotalPrice
-                        ? "Paid"
-                        : "PartiallyPaid";
+                var paymentStatus = isFreeBooking
+                    ? "Paid"
+                    : paidAmount <= 0m
+                        ? "Unpaid"
+                        : paidAmount >= quote.PublicQuote.TotalPrice
+                            ? "Paid"
+                            : "PartiallyPaid";
 
                 var customerId = quote.Customer?.UserId;
                 var guestName = customerId.HasValue ? null : request.GuestName?.Trim();
@@ -1013,14 +1016,16 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                         : null,
                     BookingState = bookingState,
                     PaymentStatus = paymentStatus,
-                    PaymentMethod = isCollected
-                        ? request.PaymentMethod?.Trim()
-                        : null,
+                    PaymentMethod = isFreeBooking
+                        ? "Promotion"
+                        : isCollected
+                            ? request.PaymentMethod?.Trim()
+                            : null,
                     RefundStatus = "NotApplicable",
                     TimerExpiredAt = timerExpiredAt,
                     LastStatusChangedAt = now,
                     AcceptedAt = now,
-                    PaymentApprovedAt = isCollected ? now : null,
+                    PaymentApprovedAt = isFreeBooking || isCollected ? now : null,
                     CreatedAt = now,
                     BookingSource = "OwnerManual",
                     ManualBookingChannel = NormalizeManualChannel(request.ManualBookingChannel),
@@ -1053,8 +1058,8 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
                 foreach (var service in quote.Services)
                 {
-                    if (!quote.ServiceQuantities.TryGetValue(service.ServiceId, out var quantity) ||
-                        quantity <= 0)
+                    if (!quote.ServiceQuantities.TryGetValue(service.ServiceId, out var serviceQuantity) ||
+                        serviceQuantity <= 0)
                     {
                         continue;
                     }
@@ -1063,8 +1068,10 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     {
                         BookingId = booking.BookingId,
                         ServiceId = service.ServiceId,
-                        Quantity = quantity,
-                        UnitPrice = service.Price
+                        Quantity = serviceQuantity,
+                        UnitPrice = quote.ComplimentaryServiceIds.Contains(service.ServiceId)
+                            ? 0m
+                            : service.Price
                     });
                 }
 
@@ -1079,7 +1086,9 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     PlatformCommission = quote.PublicQuote.PlatformCommission,
                     CommissionRateSnapshot = quote.PublicQuote.CommissionPercentage,
                     CommissionBaseAmount = quote.PublicQuote.TotalPrice,
-                    CommissionStatus = "Calculated",
+                    CommissionStatus = quote.PublicQuote.PlatformCommission > 0m
+                        ? "Calculated"
+                        : "NotApplicable",
                     TransferReferenceNumber = isCollected &&
                                               !string.IsNullOrWhiteSpace(request.PaymentReferenceNumber)
                         ? request.PaymentReferenceNumber.Trim()
@@ -1106,7 +1115,9 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     AddStructuredNotification(
                         customerId,
                         "تم تأكيد الحجز",
-                        $"تم إنشاء وتأكيد الحجز المباشر رقم {booking.BookingId} بواسطة المنشأة.",
+                        isFreeBooking
+                            ? $"تم إنشاء وتأكيد الحجز المباشر المجاني رقم {booking.BookingId} بواسطة المنشأة."
+                            : $"تم إنشاء وتأكيد الحجز المباشر رقم {booking.BookingId} بواسطة المنشأة.",
                         NotificationTypes.BookingConfirmed,
                         $"/Places/BookingDetails/{booking.BookingId}",
                         NotificationReferenceTypes.Booking,
@@ -1115,7 +1126,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
                 await _context.SaveChangesAsync();
 
-                if (bookingState == "Confirmed")
+                if (bookingState == "Confirmed" && quote.PublicQuote.PlatformCommission > 0m)
                 {
                     var commissionResult = await _commissionFinanceService
                         .HoldBookingCommissionAsync(
@@ -1158,9 +1169,11 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     depositAmount = quote.PublicQuote.DepositAmount,
                     paidAmount,
                     remainingAmount = remaining,
-                    message = bookingState == "Confirmed"
-                        ? "تم إنشاء الحجز المباشر وتثبيت التوفر بنجاح."
-                        : "تم إنشاء الحجز المباشر وحجز التوفر مؤقتًا بانتظار العربون."
+                    message = isFreeBooking
+                        ? "تم إنشاء الحجز المجاني وتثبيت التوفر بنجاح."
+                        : bookingState == "Confirmed"
+                            ? "تم إنشاء الحجز المباشر وتثبيت التوفر بنجاح."
+                            : "تم إنشاء الحجز المباشر وحجز التوفر مؤقتًا بانتظار العربون."
                 });
             }
             catch (DbUpdateConcurrencyException)
@@ -1300,7 +1313,6 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     });
                 }
 
-
                 booking.BookingState = "Confirmed";
                 booking.PaymentStatus = paidAmount >= booking.TotalPrice
                     ? "Paid"
@@ -1339,20 +1351,23 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
                 await _context.SaveChangesAsync();
 
-                var commissionResult = await _commissionFinanceService
-                    .HoldBookingCommissionAsync(
-                        booking.BookingId,
-                        ownerId,
-                        HttpContext.RequestAborted);
-
-                if (!commissionResult.Success)
+                if (financial.PlatformCommission > 0m)
                 {
-                    await transaction.RollbackAsync();
-                    return BadRequest(new
+                    var commissionResult = await _commissionFinanceService
+                        .HoldBookingCommissionAsync(
+                            booking.BookingId,
+                            ownerId,
+                            HttpContext.RequestAborted);
+
+                    if (!commissionResult.Success)
                     {
-                        success = false,
-                        message = commissionResult.Message
-                    });
+                        await transaction.RollbackAsync();
+                        return BadRequest(new
+                        {
+                            success = false,
+                            message = commissionResult.Message
+                        });
+                    }
                 }
 
                 await transaction.CommitAsync();
@@ -1377,10 +1392,6 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 });
             }
         }
-
-        // =====================================================================
-        // إغلاق / إعادة فتح نطاق من التقويم
-        // =====================================================================
 
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -1436,8 +1447,6 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 });
             }
 
-            // لا نسمح بتحويل يوم أو فترة عليها حجز نشط إلى "مغلقة".
-            // أولاً ننظف الحجوزات التي انتهت مهلة عربونها حتى لا تمنع الإغلاق بلا داعٍ.
             await ExpireOverdueAwaitingPaymentsAsync(ownerId, placeId.Value);
 
             var referenceTime = DateTime.Now;
@@ -1583,10 +1592,6 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             });
         }
 
-        // =====================================================================
-        // بناء السعر + التوفر + السياسات
-        // =====================================================================
-
         private async Task<ManualBookingQuoteInternal> BuildManualBookingQuoteAsync(
             OwnerManualBookingRequestDto request,
             int ownerId,
@@ -1683,14 +1688,15 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
             if (IsState(request.PaymentMode, "Collected"))
             {
-                if (request.PaidAmount <= 0m)
+                if (request.PaidAmount < 0m)
                 {
-                    failed.PublicQuote.Message = "أدخل المبلغ المستلم فعليًا.";
+                    failed.PublicQuote.Message = "المبلغ المستلم غير صحيح.";
                     return failed;
                 }
 
-                if (string.IsNullOrWhiteSpace(request.PaymentMethod) ||
-                    request.PaymentMethod.Trim().Length > 30)
+                if (request.PaidAmount > 0m &&
+                    (string.IsNullOrWhiteSpace(request.PaymentMethod) ||
+                     request.PaymentMethod.Trim().Length > 30))
                 {
                     failed.PublicQuote.Message = "حدد طريقة دفع صحيحة.";
                     return failed;
@@ -2043,10 +2049,12 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 startDate,
                 endDate,
                 nights,
+                quantity,
                 Math.Max(0, request.AdultsCount) + Math.Max(0, request.ChildrenCount),
                 baseAmount,
                 servicesTotal,
                 serviceTotals,
+                serviceQuantities,
                 request.PromotionId,
                 request.PromotionCode);
 
@@ -2059,8 +2067,39 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 return failed;
             }
 
+            var complimentaryServiceIds = new HashSet<int>();
+            if (promotion.IsApplied &&
+                promotion.AddsComplimentaryService &&
+                promotion.RewardServiceId.HasValue &&
+                promotion.RewardServiceId.Value > 0)
+            {
+                var rewardService = await _context.PlaceAdditionalServices
+                    .FirstOrDefaultAsync(item =>
+                        item.ServiceId == promotion.RewardServiceId.Value &&
+                        item.PlaceId == place.PlaceId &&
+                        item.IsActive == true);
+
+                if (rewardService == null)
+                {
+                    failed.PublicQuote.Message = "الخدمة المجانية لم تعد متاحة في هذه المنشأة.";
+                    return failed;
+                }
+
+                if (!serviceQuantities.ContainsKey(rewardService.ServiceId))
+                {
+                    serviceQuantities[rewardService.ServiceId] =
+                        Math.Max(1, promotion.RewardQuantity ?? 1);
+                    services.Add(rewardService);
+                    complimentaryServiceIds.Add(rewardService.ServiceId);
+                }
+            }
+
             var discount = promotion.IsApplied
-                ? Math.Round(Math.Min(promotion.DiscountAmount, baseAmount + servicesTotal), 2)
+                ? Math.Round(
+                    Math.Min(
+                        Math.Max(0m, promotion.DiscountAmount),
+                        Math.Max(0m, baseAmount + servicesTotal)),
+                    2)
                 : 0m;
 
             var discountedBeforeTax = Math.Round(
@@ -2068,17 +2107,22 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 2);
 
             var taxAmount = Math.Round(discountedBeforeTax * taxPercentage / 100m, 2);
-            var totalPrice = Math.Round(discountedBeforeTax + taxAmount, 2);
-
-            if (totalPrice <= 0m)
-            {
-                failed.PublicQuote.Message = "تعذر حساب السعر النهائي.";
-                return failed;
-            }
+            var totalPrice = Math.Round(Math.Max(0m, discountedBeforeTax + taxAmount), 2);
 
             var depositAmount = ManualCalculateDepositAmount(place, totalPrice);
 
-            var collected = IsState(request.PaymentMode, "Collected") && request.PaidAmount > 0m;
+            if (IsState(request.PaymentMode, "Collected") &&
+                totalPrice > 0m &&
+                request.PaidAmount <= 0m)
+            {
+                failed.PublicQuote.Message = "أدخل المبلغ المستلم فعليًا.";
+                return failed;
+            }
+
+            var collected = totalPrice > 0m &&
+                            IsState(request.PaymentMode, "Collected") &&
+                            request.PaidAmount > 0m;
+
             var normalizedPaidAmount = collected
                 ? Math.Round(Math.Max(0m, request.PaidAmount), 2)
                 : 0m;
@@ -2106,9 +2150,9 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 0m,
                 100m);
 
-            var platformCommission = Math.Round(
-                totalPrice * commissionPercentage / 100m,
-                2);
+            var platformCommission = totalPrice <= 0m
+                ? 0m
+                : Math.Round(totalPrice * commissionPercentage / 100m, 2);
 
             var proposedState = depositAmount > 0m && !collected
                 ? "AwaitingPayment"
@@ -2119,7 +2163,9 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             var publicQuote = new OwnerManualBookingQuoteDto
             {
                 Success = true,
-                Message = "تم التحقق من السعر والتوفر والسياسات.",
+                Message = totalPrice <= 0m
+                    ? "تم التحقق من الحجز والعرض المجاني والتوفر والسياسات."
+                    : "تم التحقق من السعر والتوفر والسياسات.",
                 CustomerId = customer?.UserId,
                 CustomerDisplayName = customer == null
                     ? request.GuestName?.Trim() ?? "ضيف"
@@ -2136,9 +2182,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 TotalPrice = totalPrice,
                 DepositAmount = depositAmount,
                 RemainingAmount = Math.Round(
-                    Math.Max(
-                        0m,
-                        totalPrice - normalizedPaidAmount),
+                    Math.Max(0m, totalPrice - normalizedPaidAmount),
                     2),
                 CommissionPercentage = commissionPercentage,
                 PlatformCommission = platformCommission,
@@ -2171,6 +2215,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 Customer = customer,
                 Services = services,
                 ServiceQuantities = serviceQuantities,
+                ComplimentaryServiceIds = complimentaryServiceIds,
                 CandidateRoomUnits = candidateUnits,
                 Promotion = promotion,
                 StartDate = startDate,
@@ -2478,26 +2523,18 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             DateTime startDate,
             DateTime? endDate,
             int bookingDays,
+            int bookingQuantity,
             int totalGuests,
             decimal baseAmount,
             decimal servicesTotal,
             IReadOnlyDictionary<int, decimal> serviceTotals,
+            IReadOnlyDictionary<int, int> serviceQuantities,
             int? requestedPromotionId,
             string? requestedPromotionCode)
         {
             var result = new ManualPromotionResolution();
             var explicitPromotion = requestedPromotionId.HasValue ||
                                     !string.IsNullOrWhiteSpace(requestedPromotionCode);
-
-            if (!customerId.HasValue || customerId.Value <= 0)
-            {
-                if (explicitPromotion)
-                {
-                    result.Message = "لضمان حدود استخدام العرض، اربط الحجز بحساب عميل قبل تطبيق الخصم.";
-                }
-
-                return result;
-            }
 
             var normalizedCode = requestedPromotionCode?.Trim() ?? string.Empty;
             var today = DateTime.Today;
@@ -2563,18 +2600,20 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 .Select(group => new { Id = group.Key, Count = group.Count() })
                 .ToDictionaryAsync(item => item.Id, item => item.Count);
 
-            var customerUsage = await _context.Bookings
-                .AsNoTracking()
-                .Where(item =>
-                    item.CustomerId == customerId.Value &&
-                    item.PromotionId.HasValue &&
-                    ids.Contains(item.PromotionId.Value) &&
-                    item.BookingState != "Cancelled" &&
-                    item.BookingState != "Rejected" &&
-                    item.BookingState != "Expired")
-                .GroupBy(item => item.PromotionId!.Value)
-                .Select(group => new { Id = group.Key, Count = group.Count() })
-                .ToDictionaryAsync(item => item.Id, item => item.Count);
+            var customerUsage = customerId.HasValue && customerId.Value > 0
+                ? await _context.Bookings
+                    .AsNoTracking()
+                    .Where(item =>
+                        item.CustomerId == customerId.Value &&
+                        item.PromotionId.HasValue &&
+                        ids.Contains(item.PromotionId.Value) &&
+                        item.BookingState != "Cancelled" &&
+                        item.BookingState != "Rejected" &&
+                        item.BookingState != "Expired")
+                    .GroupBy(item => item.PromotionId!.Value)
+                    .Select(group => new { Id = group.Key, Count = group.Count() })
+                    .ToDictionaryAsync(item => item.Id, item => item.Count)
+                : new Dictionary<int, int>();
 
             var candidates = new List<ManualPromotionResolution>();
             var minimumAmount = Math.Round(Math.Max(0m, baseAmount + servicesTotal), 2);
@@ -2582,7 +2621,25 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
             foreach (var promotion in promotions)
             {
+                var evaluation = new ManualPromotionResolution
+                {
+                    PromotionTitle = promotion.PromotionTitle?.Trim() ?? "عرض خاص",
+                    OfferMode = string.IsNullOrWhiteSpace(promotion.OfferMode)
+                        ? "Discount"
+                        : promotion.OfferMode.Trim(),
+                    RewardType = promotion.RewardType?.Trim() ?? string.Empty,
+                    RequiredQuantity = promotion.RequiredQuantity,
+                    RewardQuantity = promotion.RewardQuantity,
+                    IsRewardRepeatable = promotion.IsRewardRepeatable,
+                    RewardServiceId = promotion.RewardServiceId,
+                    SpecialPrice = promotion.SpecialPrice,
+                    DiscountType = promotion.DiscountType?.Trim() ?? string.Empty,
+                    DiscountValue = promotion.DiscountValue,
+                    MaximumDiscountAmount = promotion.MaximumDiscountAmount
+                };
+
                 decimal eligible;
+                string targetType;
 
                 if (promotion.RoomId.HasValue)
                 {
@@ -2591,6 +2648,8 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                         firstFailure = FirstNonEmpty(firstFailure, "العرض مخصص لغرفة أخرى.");
                         continue;
                     }
+
+                    targetType = "Room";
                     eligible = baseAmount;
                 }
                 else if (promotion.PackageId.HasValue)
@@ -2600,19 +2659,32 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                         firstFailure = FirstNonEmpty(firstFailure, "العرض مخصص لباقة أخرى.");
                         continue;
                     }
+
+                    targetType = "Package";
                     eligible = baseAmount;
                 }
                 else if (promotion.ServiceId.HasValue)
                 {
-                    if (!serviceTotals.TryGetValue(promotion.ServiceId.Value, out eligible) || eligible <= 0m)
+                    if (!serviceTotals.TryGetValue(promotion.ServiceId.Value, out eligible) ||
+                        eligible <= 0m)
                     {
                         firstFailure = FirstNonEmpty(firstFailure, "العرض مخصص لخدمة غير مختارة.");
                         continue;
                     }
+
+                    targetType = "Service";
                 }
                 else
                 {
+                    targetType = "Place";
                     eligible = baseAmount + servicesTotal;
+                }
+
+                eligible = Math.Round(Math.Max(0m, eligible), 2);
+                if (eligible <= 0m)
+                {
+                    firstFailure = FirstNonEmpty(firstFailure, "لا توجد قيمة مؤهلة لتطبيق هذا العرض.");
+                    continue;
                 }
 
                 if (promotion.MinimumBookingAmount.HasValue &&
@@ -2639,7 +2711,8 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     continue;
                 }
 
-                var lastStayDate = roomId.HasValue && endDate.HasValue && endDate.Value.Date > startDate.Date
+                var lastStayDate = roomId.HasValue && endDate.HasValue &&
+                                   endDate.Value.Date > startDate.Date
                     ? endDate.Value.Date.AddDays(-1)
                     : startDate.Date;
 
@@ -2693,58 +2766,445 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     continue;
                 }
 
-                customerUsage.TryGetValue(promotion.PromotionId, out var usedByCustomer);
                 if (promotion.PerCustomerUsageLimit.HasValue &&
-                    promotion.PerCustomerUsageLimit.Value > 0 &&
-                    usedByCustomer >= promotion.PerCustomerUsageLimit.Value)
+                    promotion.PerCustomerUsageLimit.Value > 0)
                 {
-                    firstFailure = FirstNonEmpty(firstFailure, "العميل وصل إلى حد استخدام هذا العرض.");
-                    continue;
+                    if (!customerId.HasValue || customerId.Value <= 0)
+                    {
+                        firstFailure = FirstNonEmpty(
+                            firstFailure,
+                            "هذا العرض له حد استخدام لكل عميل؛ اربط الحجز بحساب العميل لتطبيقه.");
+                        continue;
+                    }
+
+                    customerUsage.TryGetValue(promotion.PromotionId, out var usedByCustomer);
+                    if (usedByCustomer >= promotion.PerCustomerUsageLimit.Value)
+                    {
+                        firstFailure = FirstNonEmpty(firstFailure, "العميل وصل إلى حد استخدام هذا العرض.");
+                        continue;
+                    }
                 }
 
                 var requiresCode = promotion.IsAutomatic == false;
                 var storedCode = promotion.PromoCode?.Trim() ?? string.Empty;
-                if (requiresCode && !string.Equals(storedCode, normalizedCode, StringComparison.OrdinalIgnoreCase))
+                if (requiresCode)
                 {
-                    firstFailure = FirstNonEmpty(firstFailure, "أدخل كود العرض الصحيح.");
-                    continue;
+                    if (string.IsNullOrWhiteSpace(storedCode))
+                    {
+                        firstFailure = FirstNonEmpty(firstFailure, "العرض يحتاج كودًا لكن لم يتم إعداد كود صالح له.");
+                        continue;
+                    }
+
+                    if (!string.Equals(storedCode, normalizedCode, StringComparison.OrdinalIgnoreCase))
+                    {
+                        firstFailure = FirstNonEmpty(firstFailure, "أدخل كود العرض الصحيح.");
+                        continue;
+                    }
+
+                    evaluation.PromotionCode = storedCode;
                 }
 
-                var rawDiscount = string.Equals(
-                        promotion.DiscountType,
-                        "Percentage",
+                var normalizedOfferMode = string.Equals(
+                        evaluation.OfferMode,
+                        "ConditionalReward",
                         StringComparison.OrdinalIgnoreCase)
-                    ? eligible * promotion.DiscountValue / 100m
-                    : promotion.DiscountValue;
+                    ? "ConditionalReward"
+                    : "Discount";
 
-                if (promotion.MaximumDiscountAmount.HasValue &&
-                    promotion.MaximumDiscountAmount.Value > 0m)
+                var normalizedRewardType = evaluation.RewardType;
+                decimal rawDiscount = 0m;
+                decimal benefitAmount = 0m;
+                var canApply = true;
+
+                if (normalizedOfferMode == "Discount")
                 {
-                    rawDiscount = Math.Min(rawDiscount, promotion.MaximumDiscountAmount.Value);
+                    var discountType = string.Equals(
+                            promotion.DiscountType,
+                            "FixedAmount",
+                            StringComparison.OrdinalIgnoreCase)
+                        ? "FixedAmount"
+                        : "Percentage";
+
+                    evaluation.DiscountType = discountType;
+                    evaluation.OfferSummary = discountType == "Percentage"
+                        ? $"خصم {promotion.DiscountValue:0.##}%"
+                        : $"خصم بمبلغ {promotion.DiscountValue:N0}";
+
+                    rawDiscount = discountType == "Percentage"
+                        ? eligible * promotion.DiscountValue / 100m
+                        : promotion.DiscountValue;
+
+                    if (promotion.MaximumDiscountAmount.HasValue &&
+                        promotion.MaximumDiscountAmount.Value > 0m)
+                    {
+                        rawDiscount = Math.Min(rawDiscount, promotion.MaximumDiscountAmount.Value);
+                    }
+
+                    benefitAmount = rawDiscount;
+                }
+                else if (string.Equals(
+                             normalizedRewardType,
+                             "PercentageDiscount",
+                             StringComparison.OrdinalIgnoreCase))
+                {
+                    evaluation.DiscountType = "Percentage";
+                    evaluation.OfferSummary =
+                        $"خصم {promotion.DiscountValue:0.##}% بعد تحقق شروط العرض";
+                    rawDiscount = eligible * promotion.DiscountValue / 100m;
+
+                    if (promotion.MaximumDiscountAmount.HasValue &&
+                        promotion.MaximumDiscountAmount.Value > 0m)
+                    {
+                        rawDiscount = Math.Min(rawDiscount, promotion.MaximumDiscountAmount.Value);
+                    }
+
+                    benefitAmount = rawDiscount;
+                }
+                else if (string.Equals(
+                             normalizedRewardType,
+                             "FixedDiscount",
+                             StringComparison.OrdinalIgnoreCase))
+                {
+                    evaluation.DiscountType = "FixedAmount";
+                    evaluation.OfferSummary =
+                        $"خصم بمبلغ {promotion.DiscountValue:N0} بعد تحقق شروط العرض";
+                    rawDiscount = promotion.DiscountValue;
+
+                    if (promotion.MaximumDiscountAmount.HasValue &&
+                        promotion.MaximumDiscountAmount.Value > 0m)
+                    {
+                        rawDiscount = Math.Min(rawDiscount, promotion.MaximumDiscountAmount.Value);
+                    }
+
+                    benefitAmount = rawDiscount;
+                }
+                else if (string.Equals(
+                             normalizedRewardType,
+                             "SpecialPrice",
+                             StringComparison.OrdinalIgnoreCase))
+                {
+                    evaluation.DiscountType = "SpecialPrice";
+
+                    if (!promotion.SpecialPrice.HasValue ||
+                        promotion.SpecialPrice.Value < 0m)
+                    {
+                        evaluation.Message = "السعر الخاص في هذا العرض غير صالح.";
+                        canApply = false;
+                    }
+                    else
+                    {
+                        decimal specialTotal;
+
+                        if (roomId.HasValue &&
+                            (promotion.RoomId.HasValue || targetType == "Place"))
+                        {
+                            specialTotal = promotion.SpecialPrice.Value *
+                                           Math.Max(1, bookingDays) *
+                                           Math.Max(1, bookingQuantity);
+                        }
+                        else if (packageId.HasValue &&
+                                 (promotion.PackageId.HasValue || targetType == "Place"))
+                        {
+                            specialTotal = promotion.SpecialPrice.Value *
+                                           Math.Max(1, bookingQuantity);
+                        }
+                        else if (targetType == "Service" && promotion.ServiceId.HasValue)
+                        {
+                            var selectedQuantity = serviceQuantities.TryGetValue(
+                                promotion.ServiceId.Value,
+                                out var serviceQuantity)
+                                ? Math.Max(1, serviceQuantity)
+                                : 1;
+
+                            specialTotal = promotion.SpecialPrice.Value * selectedQuantity;
+                        }
+                        else
+                        {
+                            specialTotal = promotion.SpecialPrice.Value;
+                        }
+
+                        rawDiscount = Math.Max(0m, eligible - specialTotal);
+                        benefitAmount = rawDiscount;
+                        evaluation.OfferSummary = $"سعر خاص {promotion.SpecialPrice.Value:N0}";
+                    }
+                }
+                else if (string.Equals(
+                             normalizedRewardType,
+                             "FreeQuantity",
+                             StringComparison.OrdinalIgnoreCase))
+                {
+                    evaluation.DiscountType = "FreeQuantity";
+
+                    int totalUnits;
+                    decimal amountPerUnit;
+                    string unitLabel;
+                    var isNightBasedReward = roomId.HasValue;
+
+                    var requiredQuantity = isNightBasedReward &&
+                                           promotion.MinimumNights.HasValue &&
+                                           promotion.MinimumNights.Value > 0
+                        ? promotion.MinimumNights.Value
+                        : promotion.RequiredQuantity ?? promotion.MinimumNights ?? 1;
+
+                    requiredQuantity = Math.Max(1, requiredQuantity);
+                    var rewardQuantity = Math.Max(1, promotion.RewardQuantity ?? 1);
+
+                    if (isNightBasedReward)
+                    {
+                        totalUnits = Math.Max(1, bookingDays);
+                        amountPerUnit = baseAmount / Math.Max(1, bookingDays);
+                        unitLabel = "ليلة";
+                    }
+                    else if (targetType == "Service" && promotion.ServiceId.HasValue)
+                    {
+                        var serviceId = promotion.ServiceId.Value;
+                        totalUnits = serviceQuantities.TryGetValue(serviceId, out var serviceQuantity)
+                            ? Math.Max(0, serviceQuantity)
+                            : 0;
+                        amountPerUnit = totalUnits > 0 &&
+                                        serviceTotals.TryGetValue(serviceId, out var serviceTotal)
+                            ? serviceTotal / totalUnits
+                            : 0m;
+                        unitLabel = "وحدة";
+                    }
+                    else
+                    {
+                        totalUnits = Math.Max(1, bookingQuantity);
+                        amountPerUnit = baseAmount / Math.Max(1, bookingQuantity);
+                        unitLabel = "وحدة";
+                    }
+
+                    var completedRequirements = requiredQuantity > 0
+                        ? totalUnits / requiredQuantity
+                        : 0;
+
+                    var repeatCount = promotion.IsRewardRepeatable
+                        ? completedRequirements
+                        : completedRequirements > 0 ? 1 : 0;
+
+                    var calculatedFreeUnits = repeatCount * rewardQuantity;
+                    var freeUnits = Math.Min(
+                        Math.Max(0, totalUnits),
+                        Math.Max(0, calculatedFreeUnits));
+
+                    if (freeUnits <= 0 || amountPerUnit <= 0m)
+                    {
+                        evaluation.Message =
+                            $"للاستفادة من العرض اختر {requiredQuantity} {unitLabel} على الأقل؛ عند تحقق الشرط تحصل على {rewardQuantity} مجانًا.";
+                        canApply = false;
+                    }
+                    else
+                    {
+                        rawDiscount = Math.Min(eligible, amountPerUnit * freeUnits);
+                        benefitAmount = rawDiscount;
+                        evaluation.RequiredQuantity = requiredQuantity;
+                        evaluation.RewardQuantity = rewardQuantity;
+                        evaluation.IsRewardRepeatable = promotion.IsRewardRepeatable;
+                        evaluation.AppliedFreeQuantity = freeUnits;
+                        evaluation.RepeatCount = repeatCount;
+                        evaluation.OfferSummary = unitLabel == "ليلة"
+                            ? promotion.IsRewardRepeatable
+                                ? $"كل {requiredQuantity} ليلة تمنح {rewardQuantity} ليلة مجانًا — تم تطبيقها {repeatCount} مرة"
+                                : $"احجز {requiredQuantity} ليلة واحصل على {rewardQuantity} ليلة مجانًا — مرة واحدة للحجز"
+                            : promotion.IsRewardRepeatable
+                                ? $"كل {requiredQuantity} وحدة تمنح {rewardQuantity} مجانًا — تم تطبيقها {repeatCount} مرة"
+                                : $"احجز {requiredQuantity} واحصل على {rewardQuantity} مجانًا — مرة واحدة للحجز";
+                    }
+                }
+                else if (string.Equals(
+                             normalizedRewardType,
+                             "FreeService",
+                             StringComparison.OrdinalIgnoreCase))
+                {
+                    evaluation.DiscountType = "FreeService";
+                    var rewardServiceId = promotion.RewardServiceId;
+
+                    if (!rewardServiceId.HasValue || rewardServiceId.Value <= 0)
+                    {
+                        evaluation.Message = "الخدمة المجانية في هذا العرض غير محددة.";
+                        canApply = false;
+                    }
+                    else
+                    {
+                        var rewardService = await _context.PlaceAdditionalServices
+                            .AsNoTracking()
+                            .FirstOrDefaultAsync(service =>
+                                service.ServiceId == rewardServiceId.Value &&
+                                service.PlaceId == placeId &&
+                                service.IsActive == true);
+
+                        if (rewardService == null)
+                        {
+                            evaluation.Message = "الخدمة المجانية لم تعد متاحة في هذه المنشأة.";
+                            canApply = false;
+                        }
+                        else
+                        {
+                            var rewardQuantity = Math.Max(1, promotion.RewardQuantity ?? 1);
+                            evaluation.RewardServiceId = rewardService.ServiceId;
+                            evaluation.RewardServiceName =
+                                rewardService.ServiceName?.Trim() ?? "خدمة إضافية";
+                            evaluation.RewardQuantity = rewardQuantity;
+                            evaluation.AddsComplimentaryService =
+                                !serviceTotals.ContainsKey(rewardService.ServiceId);
+
+                            var rewardValue = Math.Max(0m, rewardService.Price) * rewardQuantity;
+
+                            if (serviceTotals.TryGetValue(
+                                    rewardService.ServiceId,
+                                    out var selectedServiceTotal) &&
+                                selectedServiceTotal > 0m)
+                            {
+                                rawDiscount = Math.Min(selectedServiceTotal, rewardValue);
+                            }
+
+                            benefitAmount = rewardValue;
+                            evaluation.OfferSummary = rewardQuantity > 1
+                                ? $"{rewardQuantity} × {evaluation.RewardServiceName} مجانًا"
+                                : $"{evaluation.RewardServiceName} مجانًا";
+                        }
+                    }
+                }
+                else if (string.Equals(
+                             normalizedRewardType,
+                             "ServiceSpecialPrice",
+                             StringComparison.OrdinalIgnoreCase))
+                {
+                    evaluation.DiscountType = "ServiceSpecialPrice";
+                    var rewardServiceId = promotion.RewardServiceId ?? promotion.ServiceId;
+
+                    if (!rewardServiceId.HasValue ||
+                        !promotion.SpecialPrice.HasValue ||
+                        promotion.SpecialPrice.Value < 0m)
+                    {
+                        evaluation.Message = "بيانات سعر الخدمة الخاص غير مكتملة.";
+                        canApply = false;
+                    }
+                    else if (!serviceTotals.TryGetValue(
+                                 rewardServiceId.Value,
+                                 out var selectedServiceTotal) ||
+                             selectedServiceTotal <= 0m)
+                    {
+                        evaluation.Message = "أضف الخدمة المشمولة بالعرض أولًا للاستفادة من سعرها الخاص.";
+                        canApply = false;
+                    }
+                    else
+                    {
+                        var rewardService = await _context.PlaceAdditionalServices
+                            .AsNoTracking()
+                            .FirstOrDefaultAsync(service =>
+                                service.ServiceId == rewardServiceId.Value &&
+                                service.PlaceId == placeId &&
+                                service.IsActive == true);
+
+                        if (rewardService == null)
+                        {
+                            evaluation.Message = "الخدمة ذات السعر الخاص لم تعد متاحة.";
+                            canApply = false;
+                        }
+                        else
+                        {
+                            var selectedQuantity = serviceQuantities.TryGetValue(
+                                rewardServiceId.Value,
+                                out var serviceQuantity)
+                                ? Math.Max(1, serviceQuantity)
+                                : 1;
+
+                            var specialTotal = promotion.SpecialPrice.Value * selectedQuantity;
+                            rawDiscount = Math.Max(0m, selectedServiceTotal - specialTotal);
+                            benefitAmount = rawDiscount;
+                            evaluation.RewardServiceId = rewardService.ServiceId;
+                            evaluation.RewardServiceName =
+                                rewardService.ServiceName?.Trim() ?? "خدمة إضافية";
+                            evaluation.OfferSummary =
+                                $"{evaluation.RewardServiceName} بسعر خاص {promotion.SpecialPrice.Value:N0}";
+                        }
+                    }
+                }
+                else
+                {
+                    evaluation.Message = "نوع المكافأة في هذا العرض غير مدعوم.";
+                    canApply = false;
                 }
 
-                rawDiscount = Math.Round(Math.Min(eligible, Math.Max(0m, rawDiscount)), 2);
-                if (rawDiscount <= 0m)
+                if (!canApply)
                 {
+                    firstFailure = FirstNonEmpty(firstFailure, evaluation.Message);
                     continue;
                 }
 
-                candidates.Add(new ManualPromotionResolution
+                decimal discountCap = eligible;
+
+                if (string.Equals(
+                        normalizedRewardType,
+                        "FreeService",
+                        StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(
+                        normalizedRewardType,
+                        "ServiceSpecialPrice",
+                        StringComparison.OrdinalIgnoreCase))
                 {
-                    PromotionId = promotion.PromotionId,
-                    PromotionTitle = promotion.PromotionTitle?.Trim() ?? "عرض خاص",
-                    PromotionCode = requiresCode ? storedCode : string.Empty,
-                    DiscountType = promotion.DiscountType?.Trim() ?? "Percentage",
-                    DiscountValue = promotion.DiscountValue,
-                    MaximumDiscountAmount = promotion.MaximumDiscountAmount,
-                    DiscountAmount = rawDiscount,
-                    IsApplied = true,
-                    Message = "تم تطبيق أفضل عرض واحد صالح بدون تكديس."
-                });
+                    var rewardServiceIdForCap = evaluation.RewardServiceId ??
+                                                promotion.RewardServiceId ??
+                                                promotion.ServiceId;
+
+                    if (rewardServiceIdForCap.HasValue &&
+                        serviceTotals.TryGetValue(
+                            rewardServiceIdForCap.Value,
+                            out var rewardServiceSelectedTotal) &&
+                        rewardServiceSelectedTotal > 0m)
+                    {
+                        discountCap = rewardServiceSelectedTotal;
+                    }
+                    else if (string.Equals(
+                                 normalizedRewardType,
+                                 "FreeService",
+                                 StringComparison.OrdinalIgnoreCase) &&
+                             evaluation.AddsComplimentaryService)
+                    {
+                        discountCap = 0m;
+                    }
+                }
+
+                rawDiscount = Math.Min(
+                    Math.Max(0m, discountCap),
+                    Math.Max(0m, rawDiscount));
+
+                evaluation.DiscountAmount = Math.Round(rawDiscount, 2);
+                evaluation.BenefitAmount = Math.Round(
+                    Math.Max(benefitAmount, evaluation.DiscountAmount),
+                    2);
+
+                var isNonMonetaryReward = string.Equals(
+                        normalizedRewardType,
+                        "FreeService",
+                        StringComparison.OrdinalIgnoreCase) &&
+                    evaluation.AddsComplimentaryService;
+
+                if (evaluation.DiscountAmount <= 0m && !isNonMonetaryReward)
+                {
+                    evaluation.Message =
+                        string.Equals(normalizedRewardType, "SpecialPrice", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(normalizedRewardType, "ServiceSpecialPrice", StringComparison.OrdinalIgnoreCase)
+                            ? "السعر الخاص لا يقل عن السعر الحالي، لذلك لا يوجد توفير قابل للتطبيق."
+                            : "قيمة التوفير المحسوبة لهذا العرض تساوي صفرًا.";
+
+                    firstFailure = FirstNonEmpty(firstFailure, evaluation.Message);
+                    continue;
+                }
+
+                evaluation.PromotionId = promotion.PromotionId;
+                evaluation.IsApplied = true;
+                evaluation.Message = string.IsNullOrWhiteSpace(evaluation.OfferSummary)
+                    ? "تم تطبيق أفضل عرض واحد صالح بدون تكديس."
+                    : $"تم تطبيق العرض: {evaluation.OfferSummary}.";
+
+                candidates.Add(evaluation);
             }
 
             var selected = candidates
-                .OrderByDescending(item => item.DiscountAmount)
+                .OrderByDescending(item => item.BenefitAmount)
+                .ThenByDescending(item => item.DiscountAmount)
                 .ThenByDescending(item => item.DiscountValue)
                 .FirstOrDefault();
 
@@ -3141,8 +3601,6 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             bool supportsPackages,
             int totalActiveUnits)
         {
-            // المصدر الأول لنوع القالب هو نفس BookingSystemId المستخدم في معالج إنشاء المنشأة.
-            // 1 = فندق/غرف، 2 = شاليه/مزرعة، 3 أو 4 = قاعات/صالات.
             var bookingSystemId = place.Category?.BookingSystemId ?? 0;
 
             if (bookingSystemId == 1)
@@ -3163,7 +3621,6 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 return ("Venue", "قاعة / صالة وباقات");
             }
 
-            // fallback للبيانات القديمة أو التصنيفات التي لا تملك BookingSystemId واضحًا.
             var category = place.Category?.CategoryName?.Trim() ?? string.Empty;
             var normalized = category.ToLowerInvariant();
 

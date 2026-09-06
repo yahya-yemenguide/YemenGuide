@@ -5,9 +5,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using YemenGuide.Core.Constants;
 using YemenGuide.Core.DTOs.Admin;
+using YemenGuide.Data;
 using YemenGuide.Web.Filters;
 using YemenGuide.Web.Services.Employees;
 using YemenGuide.Web.Services.Finance;
@@ -23,15 +25,20 @@ namespace YemenGuide.Web.Areas.Admin.Controllers.Financials
         private const string PartialViewPath =
             "~/Areas/Admin/Views/AdminFinancials/_AdminCommissionGuarantee.cshtml";
 
+        private readonly AppDbContext _context;
         private readonly IAdminFinancialService _adminFinancialService;
         private readonly IAdminPermissionService _adminPermissionService;
         private readonly ILogger<AdminCommissionGuaranteeController> _logger;
 
         public AdminCommissionGuaranteeController(
+            AppDbContext context,
             IAdminFinancialService adminFinancialService,
             IAdminPermissionService adminPermissionService,
             ILogger<AdminCommissionGuaranteeController> logger)
         {
+            _context = context ??
+                throw new ArgumentNullException(nameof(context));
+
             _adminFinancialService = adminFinancialService ??
                 throw new ArgumentNullException(nameof(adminFinancialService));
 
@@ -182,6 +189,152 @@ namespace YemenGuide.Web.Areas.Admin.Controllers.Financials
                         success = false,
                         message = "لم يتم العثور على السجل المالي لهذا الحجز."
                     });
+                }
+
+                /*
+                 * المرحلة الثانية - ربط العروض والخصومات بمالية الأدمن:
+                 *
+                 * لا نعيد حساب العرض هنا ولا نثق بعرض حيّ قد يكون المالك
+                 * عدّله لاحقًا. نقرأ Snapshot الحجز نفسه فقط؛ لأنه يمثل
+                 * السعر والعرض اللذين تم تثبيتهما وقت إنشاء الحجز.
+                 *
+                 * خدمة المالية قامت مسبقًا بتحويل القيم المالية داخل details
+                 * إلى عملة العرض المفضلة للأدمن. لذلك نحسب معامل عرض من
+                 * TotalPrice المحفوظ ونستخدمه فقط لعرض السعر الأصلي والتوفير.
+                 * لا يتم تغيير أي قيمة محاسبية أو عمولة من هذا الكنترولر.
+                 */
+                var bookingPricing =
+                    await _context.Bookings
+                        .AsNoTracking()
+                        .Where(booking =>
+                            booking.BookingId == bookingId)
+                        .Select(booking => new
+                        {
+                            booking.CreatedAt,
+                            booking.TotalPrice,
+                            booking.OriginalTotalPrice,
+                            booking.DiscountAmount,
+                            booking.PromotionId,
+                            booking.PromotionTitleSnapshot,
+                            booking.PromotionCodeSnapshot
+                        })
+                        .FirstOrDefaultAsync(cancellationToken);
+
+                if (bookingPricing != null)
+                {
+                    var rawFinalTotal =
+                        Math.Max(
+                            0m,
+                            bookingPricing.TotalPrice);
+
+                    var rawOriginalTotal =
+                        bookingPricing.OriginalTotalPrice > 0m
+                            ? bookingPricing.OriginalTotalPrice
+                            : rawFinalTotal +
+                              Math.Max(
+                                  0m,
+                                  bookingPricing.DiscountAmount);
+
+                    var rawFinalSavings =
+                        Math.Max(
+                            0m,
+                            rawOriginalTotal -
+                            rawFinalTotal);
+
+                    var displayScale =
+                        rawFinalTotal > 0m
+                            ? details.BookingTotalPrice /
+                              rawFinalTotal
+                            : 1m;
+
+                    var displayOriginalTotal =
+                        Math.Round(
+                            rawOriginalTotal *
+                            displayScale,
+                            2);
+
+                    var displayFinalSavings =
+                        Math.Round(
+                            rawFinalSavings *
+                            displayScale,
+                            2);
+
+                    var hasPromotion =
+                        (bookingPricing.PromotionId.HasValue &&
+                         bookingPricing.PromotionId.Value > 0) ||
+                        !string.IsNullOrWhiteSpace(
+                            bookingPricing.PromotionTitleSnapshot) ||
+                        !string.IsNullOrWhiteSpace(
+                            bookingPricing.PromotionCodeSnapshot) ||
+                        rawFinalSavings > 0m;
+
+                    if (hasPromotion)
+                    {
+                        var promotionTitle =
+                            !string.IsNullOrWhiteSpace(
+                                bookingPricing.PromotionTitleSnapshot)
+                                ? bookingPricing
+                                    .PromotionTitleSnapshot!
+                                    .Trim()
+                                : "عرض خاص";
+
+                        var promotionCodeText =
+                            !string.IsNullOrWhiteSpace(
+                                bookingPricing.PromotionCodeSnapshot)
+                                ? $" | كود العرض: {bookingPricing.PromotionCodeSnapshot!.Trim()}"
+                                : string.Empty;
+
+                        var savingsText =
+                            displayFinalSavings > 0m
+                                ? $" | التوفير الفعلي: {displayFinalSavings:N2}"
+                                : string.Empty;
+
+                        details.Timeline.Insert(
+                            0,
+                            new AdminBookingCommissionTimelineItemDto
+                            {
+                                Status = "Promotion",
+                                Label =
+                                    $"العرض المطبق: {promotionTitle}",
+                                OccurredAt =
+                                    bookingPricing.CreatedAt,
+                                Amount =
+                                    displayFinalSavings,
+                                Description =
+                                    $"السعر قبل العرض: {displayOriginalTotal:N2} ← " +
+                                    $"السعر النهائي: {details.BookingTotalPrice:N2}" +
+                                    savingsText +
+                                    promotionCodeText,
+                                IsCompleted = true,
+                                IsCurrent = false
+                            });
+
+                        /*
+                         * توضيح مصدر أساس العمولة فقط.
+                         * لا نعدل CommissionBaseAmount ولا PlatformCommission؛
+                         * فهما محفوظان أصلًا من الحساب المالي المركزي.
+                         */
+                        var calculatedStep =
+                            details.Timeline.FirstOrDefault(item =>
+                                string.Equals(
+                                    item.Status,
+                                    AdminBookingCommissionStatuses.Calculated,
+                                    StringComparison.OrdinalIgnoreCase));
+
+                        if (calculatedStep != null)
+                        {
+                            var existingDescription =
+                                string.IsNullOrWhiteSpace(
+                                    calculatedStep.Description)
+                                    ? string.Empty
+                                    : calculatedStep.Description.Trim() + " ";
+
+                            calculatedStep.Description =
+                                existingDescription +
+                                $"أساس احتساب العمولة بعد العرض: " +
+                                $"{details.CommissionBaseAmount:N2}.";
+                        }
+                    }
                 }
 
                 return Json(new

@@ -599,8 +599,34 @@
 
                                 <dl>
                                     <div><dt>السعر الأصلي</dt><dd>@Money(item.BookingOriginalTotalPrice)</dd></div>
-                                    <div><dt>الخصم</dt><dd>@Money(item.BookingDiscountAmount)</dd></div>
-                                    <div><dt>السعر النهائي</dt><dd>@Money(item.BookingTotalPrice)</dd></div>
+                                    <div><dt>الخصم / التوفير</dt><dd>@Money(item.BookingDiscountAmount)</dd></div>
+                                    <div><dt>السعر النهائي بعد الخصم</dt><dd>@Money(item.BookingTotalPrice)</dd></div>
+
+                                    @if (item.BookingDiscountAmount > 0m &&
+                                         (
+                                             (item.PromotionId.HasValue && item.PromotionId.Value > 0) ||
+                                             !string.IsNullOrWhiteSpace(item.PromotionTitleSnapshot) ||
+                                             !string.IsNullOrWhiteSpace(item.PromotionCodeSnapshot)
+                                         ))
+                                    {
+                                        <div>
+                                            <dt>العرض المطبق</dt>
+                                            <dd>
+                                                @(string.IsNullOrWhiteSpace(item.PromotionTitleSnapshot)
+                                                    ? "عرض خاص"
+                                                    : item.PromotionTitleSnapshot.Trim())
+                                            </dd>
+                                        </div>
+
+                                        @if (!string.IsNullOrWhiteSpace(item.PromotionCodeSnapshot))
+                                        {
+                                            <div>
+                                                <dt>كود العرض</dt>
+                                                <dd dir="ltr">@item.PromotionCodeSnapshot.Trim()</dd>
+                                            </div>
+                                        }
+                                    }
+
                                     <div><dt>العربون المطلوب</dt><dd>@Money(item.RequiredDepositAmount)</dd></div>
                                     <div><dt>المدفوع إلكترونيًا</dt><dd>@Money(item.AmountPaidOnline)</dd></div>
                                 </dl>

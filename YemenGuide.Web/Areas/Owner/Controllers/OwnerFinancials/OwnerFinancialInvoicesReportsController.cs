@@ -1,10 +1,8 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.IO;
 using System.Linq;
 using System.Security.Claims;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -298,108 +296,6 @@ namespace YemenGuide.Web.Areas.Owner.Controllers.OwnerFinancials
                         .Status500InternalServerError,
                     "تعذر تجهيز التقرير للطباعة حاليًا.");
             }
-        }
-
-        [HttpGet("Export/Excel")]
-        public async Task<IActionResult> ExportExcel(
-            [FromQuery] FinancialReportFilterDto? filter,
-            CancellationToken cancellationToken = default)
-        {
-            filter ??=
-                new FinancialReportFilterDto();
-
-            NormalizeFilter(
-                filter);
-
-            filter.ExportFormat =
-                OwnerFinancialExportFormats.Excel;
-
-            if (!TryGetCurrentOwnerId(
-                    out var ownerId))
-            {
-                return Unauthorized();
-            }
-
-            try
-            {
-                filter.PlaceId =
-                    await ResolveActivePlaceIdAsync(
-                        ownerId,
-                        cancellationToken);
-
-                var excel =
-                    await _commissionFinanceService
-                        .BuildFinancialExcelAsync(
-                            ownerId,
-                            filter,
-                            cancellationToken);
-
-                if (
-                    excel.Content == null ||
-                    excel.Content.Length == 0
-                )
-                {
-                    return StatusCode(
-                        StatusCodes
-                            .Status500InternalServerError,
-                        "تعذر إنشاء ملف Excel لأن محتواه فارغ.");
-                }
-
-                var fileName =
-                    BuildSafeFileName(
-                        excel.FileName,
-                        ".xlsx");
-
-                Response.Headers[
-                    "X-Content-Type-Options"] =
-                    "nosniff";
-
-                Response.Headers[
-                    "Cache-Control"] =
-                    "no-store, no-cache, must-revalidate";
-
-                return File(
-                    excel.Content,
-                    string.IsNullOrWhiteSpace(
-                        excel.ContentType)
-                        ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                        : excel.ContentType,
-                    fileName);
-            }
-            catch (OperationCanceledException)
-                when (
-                    cancellationToken
-                        .IsCancellationRequested)
-            {
-                return new EmptyResult();
-            }
-            catch (Exception exception)
-            {
-                _logger.LogError(
-                    exception,
-                    "تعذر تصدير تقرير Excel " +
-                    "للمالك {OwnerId} ونوع التقرير {ReportType}.",
-                    ownerId,
-                    filter.ReportType);
-
-                return StatusCode(
-                    StatusCodes
-                        .Status500InternalServerError,
-                    "تعذر إنشاء ملف Excel حاليًا.");
-            }
-        }
-
-        // توافق مع أي رابط CSV قديم؛ النظام النهائي يخرج Excel حقيقي.
-        [HttpGet("Export/Csv")]
-        public Task<IActionResult>
-            ExportCsvCompatibility(
-                [FromQuery]
-                FinancialReportFilterDto? filter,
-                CancellationToken cancellationToken = default)
-        {
-            return ExportExcel(
-                filter,
-                cancellationToken);
         }
 
         private void NormalizeFilter(
@@ -715,96 +611,6 @@ namespace YemenGuide.Web.Areas.Owner.Controllers.OwnerFinancials
                 new(
                     key,
                     value.Trim()));
-        }
-
-        private static string BuildSafeFileName(
-            string? suggestedName,
-            string requiredExtension)
-        {
-            var extension =
-                requiredExtension.StartsWith(
-                    ".",
-                    StringComparison.Ordinal)
-                    ? requiredExtension
-                    : "." + requiredExtension;
-
-            var name =
-                Path.GetFileName(
-                    string.IsNullOrWhiteSpace(
-                        suggestedName)
-                        ? "Dalilak-Financial-Report"
-                        : suggestedName.Trim());
-
-            if (
-                name.EndsWith(
-                    extension,
-                    StringComparison.OrdinalIgnoreCase)
-            )
-            {
-                name =
-                    name.Substring(
-                        0,
-                        name.Length -
-                        extension.Length);
-            }
-
-            var invalidCharacters =
-                Path.GetInvalidFileNameChars();
-
-            var builder =
-                new StringBuilder(
-                    capacity:
-                        Math.Min(
-                            180,
-                            Math.Max(
-                                32,
-                                name.Length)));
-
-            foreach (
-                var character in
-                name)
-            {
-                if (
-                    invalidCharacters.Contains(
-                        character) ||
-                    char.IsControl(
-                        character)
-                )
-                {
-                    builder.Append(
-                        '-');
-                }
-                else
-                {
-                    builder.Append(
-                        character);
-                }
-
-                if (builder.Length >= 150)
-                {
-                    break;
-                }
-            }
-
-            var safeName =
-                builder
-                    .ToString()
-                    .Trim()
-                    .Trim(
-                        '.',
-                        '-',
-                        '_');
-
-            if (string.IsNullOrWhiteSpace(
-                    safeName))
-            {
-                safeName =
-                    "Dalilak-Financial-Report";
-            }
-
-            return
-                safeName +
-                extension;
         }
 
         private Task<int?>
