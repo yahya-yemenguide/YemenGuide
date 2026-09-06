@@ -6,13 +6,14 @@ using YemenGuide.Web.Services.ExchangeRates;
 namespace YemenGuide.Web.Services
 {
     /// <summary>
-    /// خدمة التحويل الأساسية من الريال اليمني إلى العملة المطلوبة.
+    /// خدمة التحويل الأساسية بين الريال اليمني وعملة العرض المطلوبة.
     ///
     /// North = سوق صنعاء.
     /// South = سوق عدن.
     ///
     /// هذه الخدمة لا تقرر عملة المستخدم؛ هي فقط تنفذ التحويل.
     /// تحديد عملة المستخدم يتم في CurrencyDisplayService.
+    /// القيم المالية داخل قاعدة البيانات تبقى YER.
     /// </summary>
     public class CurrencyService
     {
@@ -95,6 +96,7 @@ namespace YemenGuide.Web.Services
 
         /// <summary>
         /// يرجع القيمة الرقمية بعد التحويل بحسب السوق.
+        /// YER -> العملة المطلوبة.
         /// </summary>
         public decimal ConvertAmount(
             decimal priceInYer,
@@ -105,7 +107,6 @@ namespace YemenGuide.Web.Services
                 CurrencyDisplayService.NormalizeCurrency(
                     targetCurrency);
 
-            // أي قيمة قديمة أو غير معروفة تعامل كريال يمني حفاظًا على التوافق.
             if (string.IsNullOrWhiteSpace(currency) ||
                 currency == CurrencyDisplayService.YemeniRial)
             {
@@ -135,6 +136,81 @@ namespace YemenGuide.Web.Services
 
             return Math.Round(
                 priceInYer,
+                0,
+                MidpointRounding.AwayFromZero);
+        }
+
+        /// <summary>
+        /// تحويل عكسي من عملة الإدخال إلى YER باستخدام سوق صنعاء كمرجع احتياطي.
+        /// </summary>
+        public decimal ConvertToYer(
+            decimal amountInSourceCurrency,
+            string sourceCurrency)
+        {
+            return ConvertToYer(
+                amountInSourceCurrency,
+                sourceCurrency,
+                ExchangeRateRegionResolver.SanaaMarket);
+        }
+
+        /// <summary>
+        /// تحويل عكسي من عملة الإدخال إلى YER بحسب رقم المدينة.
+        /// </summary>
+        public decimal ConvertToYer(
+            decimal amountInSourceCurrency,
+            string sourceCurrency,
+            int cityId)
+        {
+            string? region = GetRegionByCityId(cityId);
+
+            return ConvertToYer(
+                amountInSourceCurrency,
+                sourceCurrency,
+                region);
+        }
+
+        /// <summary>
+        /// تحويل عكسي من عملة الإدخال إلى YER بحسب سوق الصرف.
+        /// يستخدم قبل الحفظ عندما أدخل المستخدم القيمة بالدولار أو السعودي.
+        /// </summary>
+        public decimal ConvertToYer(
+            decimal amountInSourceCurrency,
+            string sourceCurrency,
+            string? exchangeRateRegion)
+        {
+            string currency =
+                CurrencyDisplayService.NormalizeCurrency(
+                    sourceCurrency);
+
+            if (string.IsNullOrWhiteSpace(currency) ||
+                currency == CurrencyDisplayService.YemeniRial)
+            {
+                return Math.Round(
+                    amountInSourceCurrency,
+                    0,
+                    MidpointRounding.AwayFromZero);
+            }
+
+            var rates = GetRates(exchangeRateRegion);
+
+            if (currency == CurrencyDisplayService.UsDollar)
+            {
+                return Math.Round(
+                    amountInSourceCurrency * rates.UsdRate,
+                    2,
+                    MidpointRounding.AwayFromZero);
+            }
+
+            if (currency == CurrencyDisplayService.SaudiRiyal)
+            {
+                return Math.Round(
+                    amountInSourceCurrency * rates.SarRate,
+                    2,
+                    MidpointRounding.AwayFromZero);
+            }
+
+            return Math.Round(
+                amountInSourceCurrency,
                 0,
                 MidpointRounding.AwayFromZero);
         }
