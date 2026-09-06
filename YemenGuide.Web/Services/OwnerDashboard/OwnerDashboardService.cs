@@ -7,20 +7,32 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using YemenGuide.Core.DTOs.Owner;
 using YemenGuide.Data;
+using YemenGuide.Web.Services;
+using YemenGuide.Web.Services.ExchangeRates;
 
 namespace YemenGuide.Web.Services.OwnerDashboard
 {
     /// <summary>
     /// يبني مركز قيادة المالك من الجداول الموجودة فعليًا في قاعدة البيانات.
-    /// لا ينشئ أي بيانات تجريبية ولا يكتب في قاعدة البيانات.
+    /// جميع القيم المالية تحفظ وتقرأ من قاعدة البيانات بالريال اليمني،
+    /// ثم تحول هنا فقط لعملة العرض المختارة من بروفايل المالك.
     /// </summary>
     public sealed class OwnerDashboardService : IOwnerDashboardService
     {
         private readonly AppDbContext _context;
+        private readonly CurrencyDisplayService _currencyDisplayService;
+        private readonly CurrencyService _currencyService;
 
-        public OwnerDashboardService(AppDbContext context)
+        public OwnerDashboardService(
+            AppDbContext context,
+            CurrencyDisplayService currencyDisplayService,
+            CurrencyService currencyService)
         {
             _context = context ?? throw new ArgumentNullException(nameof(context));
+            _currencyDisplayService = currencyDisplayService ??
+                throw new ArgumentNullException(nameof(currencyDisplayService));
+            _currencyService = currencyService ??
+                throw new ArgumentNullException(nameof(currencyService));
         }
 
         public async Task<OwnerDashboardDto> GetDashboardAsync(
@@ -48,12 +60,16 @@ namespace YemenGuide.Web.Services.OwnerDashboard
                 throw new InvalidOperationException("تعذر العثور على حساب المالك الحالي.");
             }
 
+            var displayCurrency = await _currencyDisplayService
+                .GetPreferredCurrencyAsync(cancellationToken);
+
             var model = new OwnerDashboardDto
             {
                 OwnerId = ownerId,
                 OwnerName = string.IsNullOrWhiteSpace(owner.FullName)
                     ? "المالك"
                     : owner.FullName.Trim(),
+                Currency = displayCurrency,
                 GeneratedAt = DateTime.Now
             };
 
@@ -61,15 +77,10 @@ namespace YemenGuide.Web.Services.OwnerDashboard
                 .AsNoTracking()
                 .Select(item => new
                 {
-                    item.DefaultCurrency,
                     item.RequiredCommissionGuaranteeBalance,
                     item.DefaultLowBalanceThreshold
                 })
                 .FirstOrDefaultAsync(cancellationToken);
-
-            model.Currency = string.IsNullOrWhiteSpace(settings?.DefaultCurrency)
-                ? "ريال يمني"
-                : settings!.DefaultCurrency!.Trim();
 
             var places = await _context.Places
                 .AsNoTracking()
@@ -81,7 +92,10 @@ namespace YemenGuide.Web.Services.OwnerDashboard
                     Status = place.Status,
                     IsAvailable = place.IsAvailable == true,
                     CategoryName = place.Category.CategoryName,
-                    BookingSystemId = place.Category.BookingSystemId
+                    BookingSystemId = place.Category.BookingSystemId,
+                    ExchangeRateRegion = place.City != null
+                        ? place.City.ExchangeRateRegion
+                        : null
                 })
                 .OrderByDescending(place =>
                     (place.Status == "Approved" || place.Status == "Active") &&
@@ -111,6 +125,20 @@ namespace YemenGuide.Web.Services.OwnerDashboard
             model.PlaceStatus = selectedPlace.Status?.Trim() ?? string.Empty;
             model.PlaceStatusLabel = PlaceStatusLabel(selectedPlace.Status, selectedPlace.IsAvailable);
             model.IsPlaceAvailable = selectedPlace.IsAvailable;
+
+            var exchangeRateRegion = string.IsNullOrWhiteSpace(selectedPlace.ExchangeRateRegion)
+                ? ExchangeRateRegionResolver.SanaaMarket
+                : selectedPlace.ExchangeRateRegion!.Trim();
+
+            decimal DisplayAmount(decimal amountInYer) =>
+                _currencyService.ConvertAmount(
+                    amountInYer,
+                    displayCurrency,
+                    exchangeRateRegion);
+
+            string DisplayMoney(decimal amountInYer) =>
+                $"{CurrencyDisplayService.FormatNumber(DisplayAmount(amountInYer), displayCurrency)} " +
+                CurrencyDisplayService.GetCurrencySymbol(displayCurrency);
 
             var placeId = selectedPlace.PlaceId;
             var now = DateTime.Now;
@@ -225,23 +253,24 @@ namespace YemenGuide.Web.Services.OwnerDashboard
             var paidOnline = currentFinance.Sum(item => item.AmountPaidOnline);
             var collectedAtProperty = currentFinance.Sum(item => item.AmountCollectedAtProperty);
             var platformCommission = currentFinance.Sum(item => item.PlatformCommission);
+            var netCollectedRevenue = Math.Max(
+                0m,
+                paidOnline + collectedAtProperty - refundedAmount - platformCommission);
 
             model.Finance = new OwnerDashboardFinanceDto
             {
-                GrossBookingValue = grossBookingValue,
-                PaidOnline = paidOnline,
-                CollectedAtProperty = collectedAtProperty,
-                RefundedAmount = refundedAmount,
-                PlatformCommission = platformCommission,
-                NetCollectedRevenue = Math.Max(
-                    0m,
-                    paidOnline + collectedAtProperty - refundedAmount - platformCommission)
+                GrossBookingValue = DisplayAmount(grossBookingValue),
+                PaidOnline = DisplayAmount(paidOnline),
+                CollectedAtProperty = DisplayAmount(collectedAtProperty),
+                RefundedAmount = DisplayAmount(refundedAmount),
+                PlatformCommission = DisplayAmount(platformCommission),
+                NetCollectedRevenue = DisplayAmount(netCollectedRevenue)
             };
 
             model.Kpis.NewBookingsToday = newBookingsToday;
             model.Kpis.TodayBookings = todayBookings;
-            model.Kpis.MonthlyRevenue = monthlyRevenue;
-            model.Kpis.PreviousMonthRevenue = previousFinance;
+            model.Kpis.MonthlyRevenue = DisplayAmount(monthlyRevenue);
+            model.Kpis.PreviousMonthRevenue = DisplayAmount(previousFinance);
             model.Kpis.RevenueChangePercent = PercentageChange(monthlyRevenue, previousFinance);
 
             var commissionAccount = await _context.PlaceCommissionAccounts
@@ -257,34 +286,37 @@ namespace YemenGuide.Web.Services.OwnerDashboard
                 })
                 .FirstOrDefaultAsync(cancellationToken);
 
-            var requiredGuarantee = Math.Max(
+            var requiredGuaranteeYer = Math.Max(
                 0m,
                 settings?.RequiredCommissionGuaranteeBalance ?? 0m);
 
-            var availableBalance = commissionAccount?.AvailableBalance ?? 0m;
-            var lowBalanceThreshold = commissionAccount?.LowBalanceThreshold
+            var availableBalanceYer = commissionAccount?.AvailableBalance ?? 0m;
+            var lowBalanceThresholdYer = commissionAccount?.LowBalanceThreshold
                                       ?? settings?.DefaultLowBalanceThreshold
                                       ?? 0m;
             var accountStatus = string.IsNullOrWhiteSpace(commissionAccount?.AccountStatus)
-                ? (availableBalance >= requiredGuarantee && requiredGuarantee > 0m
+                ? (availableBalanceYer >= requiredGuaranteeYer && requiredGuaranteeYer > 0m
                     ? "Active"
                     : "NeedsTopUp")
                 : commissionAccount!.AccountStatus!.Trim();
 
-            var fundingPercent = requiredGuarantee <= 0m
+            var fundingPercent = requiredGuaranteeYer <= 0m
                 ? 100m
                 : Math.Clamp(
-                    Math.Round(availableBalance * 100m / requiredGuarantee, 1),
+                    Math.Round(availableBalanceYer * 100m / requiredGuaranteeYer, 1),
                     0m,
                     100m);
+
+            var availableBalance = DisplayAmount(availableBalanceYer);
+            var requiredGuarantee = DisplayAmount(requiredGuaranteeYer);
 
             model.Guarantee = new OwnerDashboardGuaranteeDto
             {
                 AvailableBalance = availableBalance,
-                HeldBalance = commissionAccount?.HeldBalance ?? 0m,
-                DebtAmount = commissionAccount?.DebtAmount ?? 0m,
+                HeldBalance = DisplayAmount(commissionAccount?.HeldBalance ?? 0m),
+                DebtAmount = DisplayAmount(commissionAccount?.DebtAmount ?? 0m),
                 RequiredBalance = requiredGuarantee,
-                LowBalanceThreshold = Math.Max(0m, lowBalanceThreshold),
+                LowBalanceThreshold = DisplayAmount(Math.Max(0m, lowBalanceThresholdYer)),
                 FundingPercent = fundingPercent,
                 AccountStatus = accountStatus,
                 AccountStatusLabel = GuaranteeStatusLabel(accountStatus)
@@ -456,7 +488,7 @@ namespace YemenGuide.Web.Services.OwnerDashboard
                     BookingState = item.BookingState?.Trim() ?? string.Empty,
                     BookingStateLabel = BookingStateLabel(item.BookingState),
                     BookingSource = item.BookingSource?.Trim() ?? string.Empty,
-                    TotalPrice = item.TotalPrice,
+                    TotalPrice = DisplayAmount(item.TotalPrice),
                     Url = BookingUrl(item.BookingId, item.BookingState)
                 }).ToList()
             };
@@ -497,7 +529,8 @@ namespace YemenGuide.Web.Services.OwnerDashboard
                 pendingRefunds,
                 accountStatus,
                 availableBalance,
-                requiredGuarantee);
+                requiredGuarantee,
+                displayCurrency);
 
             var trendRows = await bookingQuery
                 .Where(booking => booking.CreatedAt.HasValue &&
@@ -564,8 +597,8 @@ namespace YemenGuide.Web.Services.OwnerDashboard
                     item.Year == month.Year && item.Month == month.Month);
 
                 model.Finance.MonthlyLabels.Add(MonthLabel(month));
-                model.Finance.MonthlyCollected.Add(row?.Collected ?? 0m);
-                model.Finance.MonthlyCommission.Add(row?.Commission ?? 0m);
+                model.Finance.MonthlyCollected.Add(DisplayAmount(row?.Collected ?? 0m));
+                model.Finance.MonthlyCommission.Add(DisplayAmount(row?.Commission ?? 0m));
             }
 
             var activePromotions = await _context.Promotions
@@ -617,7 +650,7 @@ namespace YemenGuide.Web.Services.OwnerDashboard
                 Clicks = clicks,
                 BookingStarts = bookingStarts,
                 Conversions = conversions,
-                SpentAmount = marketingSpent,
+                SpentAmount = DisplayAmount(marketingSpent),
                 ConversionRate = impressions <= 0
                     ? 0m
                     : Math.Round(conversions * 100m / impressions, 2),
@@ -660,6 +693,7 @@ namespace YemenGuide.Web.Services.OwnerDashboard
             model.RecentActivities = await BuildRecentActivitiesAsync(
                 ownerId,
                 placeId,
+                DisplayMoney,
                 cancellationToken);
 
             return model;
@@ -668,6 +702,7 @@ namespace YemenGuide.Web.Services.OwnerDashboard
         private async Task<List<OwnerDashboardActivityDto>> BuildRecentActivitiesAsync(
             int ownerId,
             int placeId,
+            Func<decimal, string> displayMoney,
             CancellationToken cancellationToken)
         {
             var activities = new List<OwnerDashboardActivityDto>();
@@ -696,7 +731,7 @@ namespace YemenGuide.Web.Services.OwnerDashboard
                 {
                     Type = "Booking",
                     Title = $"حجز #{item.BookingId} · {BookingStateLabel(item.BookingState)}",
-                    Description = $"{FirstNonEmpty("عميل", item.CustomerName, item.GuestName)} · {item.TotalPrice:N0}",
+                    Description = $"{FirstNonEmpty("عميل", item.CustomerName, item.GuestName)} · {displayMoney(item.TotalPrice)}",
                     Icon = "bi-calendar2-check-fill",
                     Tone = IsClosedWithoutRevenue(item.BookingState) ? "danger" : "primary",
                     OccurredAt = item.CreatedAt ?? item.StartDate,
@@ -788,7 +823,7 @@ namespace YemenGuide.Web.Services.OwnerDashboard
                 {
                     Type = "Finance",
                     Title = CommissionTransactionLabel(item.TransactionType),
-                    Description = $"{item.Amount:N0} · {TransactionStatusLabel(item.Status)}",
+                    Description = $"{displayMoney(item.Amount)} · {TransactionStatusLabel(item.Status)}",
                     Icon = "bi-wallet2",
                     Tone = IsState(item.Status, "Rejected") || IsState(item.Status, "Failed")
                         ? "danger"
@@ -815,7 +850,8 @@ namespace YemenGuide.Web.Services.OwnerDashboard
             int pendingRefunds,
             string accountStatus,
             decimal availableBalance,
-            decimal requiredGuarantee)
+            decimal requiredGuarantee,
+            string displayCurrency)
         {
             if (pendingBookings > 0)
             {
@@ -899,12 +935,16 @@ namespace YemenGuide.Web.Services.OwnerDashboard
 
             if (financialRisk)
             {
+                var symbol = CurrencyDisplayService.GetCurrencySymbol(displayCurrency);
+                var availableText = CurrencyDisplayService.FormatNumber(availableBalance, displayCurrency);
+                var requiredText = CurrencyDisplayService.FormatNumber(requiredGuarantee, displayCurrency);
+
                 model.AttentionItems.Add(new OwnerDashboardAttentionItemDto
                 {
                     Key = "commission-balance",
                     Title = GuaranteeStatusLabel(accountStatus),
                     Description = requiredGuarantee > 0m
-                        ? $"المتاح {availableBalance:N0} من رصيد مطلوب {requiredGuarantee:N0}."
+                        ? $"المتاح {availableText} {symbol} من رصيد مطلوب {requiredText} {symbol}."
                         : "راجع مركز رصيد ضمان العمولات لمعرفة حالة الحساب.",
                     Icon = "bi-shield-exclamation",
                     Tone = IsState(accountStatus, "Suspended") || IsState(accountStatus, "InDebt")
@@ -1054,6 +1094,7 @@ namespace YemenGuide.Web.Services.OwnerDashboard
             public bool IsAvailable { get; set; }
             public string? CategoryName { get; set; }
             public int BookingSystemId { get; set; }
+            public string? ExchangeRateRegion { get; set; }
         }
     }
 }

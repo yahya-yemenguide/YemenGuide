@@ -18,34 +18,25 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
     {
         private static readonly string[] CalendarBlockingAssignmentStates =
         {
-            "Held",
-            "Confirmed"
+            "Held", "Confirmed"
         };
 
         private static readonly HashSet<string> ManualBookingChannels =
             new(StringComparer.OrdinalIgnoreCase)
             {
-                "Phone",
-                "WalkIn",
-                "WhatsApp",
-                "Other"
+                "Phone", "WalkIn", "WhatsApp", "Other"
             };
 
         private static readonly HashSet<string> ManualPaymentModes =
             new(StringComparer.OrdinalIgnoreCase)
             {
-                "Unpaid",
-                "Collected"
+                "Unpaid", "Collected"
             };
 
         private static readonly HashSet<string> CalendarHistoricalBookingStates =
             new(StringComparer.OrdinalIgnoreCase)
             {
-                "Completed",
-                "Cancelled",
-                "Rejected",
-                "NoShow",
-                "Expired"
+                "Completed", "Cancelled", "Rejected", "NoShow", "Expired"
             };
 
         private sealed class ManualPromotionResolution
@@ -91,63 +82,74 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             public int Quantity { get; set; }
         }
 
+        private void ApplyManualQuoteDisplayCurrency(
+            OwnerManualBookingQuoteDto quote,
+            OwnerReservationCurrencyContext currency)
+        {
+            quote.BaseAmount = ToDisplayCurrency(quote.BaseAmount, currency);
+            quote.ServicesTotal = ToDisplayCurrency(quote.ServicesTotal, currency);
+            quote.CleaningFee = ToDisplayCurrency(quote.CleaningFee, currency);
+            quote.TaxAmount = ToDisplayCurrency(quote.TaxAmount, currency);
+            quote.OriginalTotalPrice = ToDisplayCurrency(quote.OriginalTotalPrice, currency);
+            quote.DiscountAmount = ToDisplayCurrency(quote.DiscountAmount, currency);
+            quote.TotalPrice = ToDisplayCurrency(quote.TotalPrice, currency);
+            quote.DepositAmount = ToDisplayCurrency(quote.DepositAmount, currency);
+            quote.RemainingAmount = ToDisplayCurrency(quote.RemainingAmount, currency);
+            quote.PlatformCommission = ToDisplayCurrency(quote.PlatformCommission, currency);
+
+            if (quote.DiscountValue.HasValue && IsMonetaryDiscountType(quote.DiscountType))
+            {
+                quote.DiscountValue = ToDisplayCurrency(quote.DiscountValue.Value, currency);
+                quote.PromotionMessage = string.IsNullOrWhiteSpace(quote.PromotionTitle)
+                    ? "تم تطبيق العرض المالي على الحجز."
+                    : $"تم تطبيق العرض: {quote.PromotionTitle}.";
+            }
+        }
+
+        private void ApplyCalendarDayDisplayCurrency(
+            OwnerCalendarDayDetailsDto dto,
+            OwnerReservationCurrencyContext currency)
+        {
+            foreach (var booking in dto.Bookings)
+            {
+                booking.TotalPrice = ToDisplayCurrency(booking.TotalPrice, currency);
+                booking.DepositAmount = ToDisplayCurrency(booking.DepositAmount, currency);
+                booking.PaidAmount = ToDisplayCurrency(booking.PaidAmount, currency);
+                booking.RemainingAmount = ToDisplayCurrency(booking.RemainingAmount, currency);
+            }
+        }
+
         // =====================================================================
         // سياق التقويم — المنشأة تأتي من هيدر المالك فقط
         // =====================================================================
 
         [HttpGet]
-        public async Task<IActionResult> GetCalendarContext(
-            DateTime? start = null,
-            DateTime? end = null)
+        public async Task<IActionResult> GetCalendarContext(DateTime? start = null, DateTime? end = null)
         {
-            if (!TryGetCurrentOwnerId(out var ownerId))
-            {
-                return UnauthorizedOwnerJson();
-            }
+            if (!TryGetCurrentOwnerId(out var ownerId)) return UnauthorizedOwnerJson();
 
             var placeId = await GetActiveOwnerPlaceIdAsync(ownerId);
             if (!placeId.HasValue)
-            {
-                return Json(new
-                {
-                    success = false,
-                    message = "لا توجد منشأة نشطة مرتبطة بحسابك."
-                });
-            }
+                return Json(new { success = false, message = "لا توجد منشأة نشطة مرتبطة بحسابك." });
 
+            var currency = await GetOwnerCurrencyContextAsync(placeId.Value);
             await ExpireOverdueAwaitingPaymentsAsync(ownerId, placeId.Value);
 
             var place = await _context.Places
                 .AsNoTracking()
                 .Include(item => item.Category)
                 .Include(item => item.PlacePolicy)
-                .FirstOrDefaultAsync(item =>
-                    item.PlaceId == placeId.Value &&
-                    item.OwnerId == ownerId);
+                .FirstOrDefaultAsync(item => item.PlaceId == placeId.Value && item.OwnerId == ownerId);
 
             if (place == null)
-            {
-                return Json(new
-                {
-                    success = false,
-                    message = "تعذر تحميل المنشأة المختارة من الهيدر."
-                });
-            }
+                return Json(new { success = false, message = "تعذر تحميل المنشأة المختارة من الهيدر." });
 
             var rangeStart = (start ?? DateTime.Today).Date;
             var rangeEnd = (end ?? rangeStart.AddMonths(1)).Date;
-            if (rangeEnd <= rangeStart)
-            {
-                rangeEnd = rangeStart.AddDays(1);
-            }
+            if (rangeEnd <= rangeStart) rangeEnd = rangeStart.AddDays(1);
+            if ((rangeEnd - rangeStart).TotalDays > 370) rangeEnd = rangeStart.AddDays(370);
 
-            if ((rangeEnd - rangeStart).TotalDays > 370)
-            {
-                rangeEnd = rangeStart.AddDays(370);
-            }
-
-            var rangeBookings = await _context.Bookings
-                .AsNoTracking()
+            var rangeBookings = await _context.Bookings.AsNoTracking()
                 .Where(item =>
                     item.PlaceId == place.PlaceId &&
                     item.StartDate < rangeEnd &&
@@ -157,53 +159,25 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     item.BookingState != "Cancelled" &&
                     item.BookingState != "Rejected" &&
                     item.BookingState != "Expired")
-                .Select(item => new
-                {
-                    item.BookingState,
-                    item.BookingSource
-                })
+                .Select(item => new { item.BookingState, item.BookingSource })
                 .ToListAsync();
 
-            var totalUnits = await _context.RoomUnits
-                .AsNoTracking()
-                .CountAsync(item =>
-                    item.PlaceId == place.PlaceId &&
-                    item.IsAvailable == true);
-
-            var occupiedToday = await GetOccupiedRoomUnitCountForDateAsync(
-                place.PlaceId,
-                DateTime.Today);
-
-            var closedDays = await _context.PlaceCalendarExceptions
-                .AsNoTracking()
-                .CountAsync(item =>
-                    item.PlaceId == place.PlaceId &&
-                    item.ExceptionType == "Closed" &&
-                    item.ExceptionDate >= rangeStart &&
-                    item.ExceptionDate < rangeEnd);
+            var totalUnits = await _context.RoomUnits.AsNoTracking().CountAsync(item =>
+                item.PlaceId == place.PlaceId && item.IsAvailable == true);
+            var occupiedToday = await GetOccupiedRoomUnitCountForDateAsync(place.PlaceId, DateTime.Today);
+            var closedDays = await _context.PlaceCalendarExceptions.AsNoTracking().CountAsync(item =>
+                item.PlaceId == place.PlaceId &&
+                item.ExceptionType == "Closed" &&
+                item.ExceptionDate >= rangeStart &&
+                item.ExceptionDate < rangeEnd);
 
             var availableToday = Math.Max(0, totalUnits - occupiedToday);
-            var occupancy = totalUnits <= 0
-                ? 0m
-                : Math.Round(occupiedToday * 100m / totalUnits, 1);
-
-            var supportsRooms = await _context.Rooms
-                .AsNoTracking()
-                .AnyAsync(item =>
-                    item.PlaceId == place.PlaceId &&
-                    item.IsAvailable == true);
-
-            var supportsPackages = await _context.PlacePackages
-                .AsNoTracking()
-                .AnyAsync(item =>
-                    item.PlaceId == place.PlaceId &&
-                    item.IsActive == true);
-
-            var manualTemplate = ResolveManualBookingTemplate(
-                place,
-                supportsRooms,
-                supportsPackages,
-                totalUnits);
+            var occupancy = totalUnits <= 0 ? 0m : Math.Round(occupiedToday * 100m / totalUnits, 1);
+            var supportsRooms = await _context.Rooms.AsNoTracking().AnyAsync(item =>
+                item.PlaceId == place.PlaceId && item.IsAvailable == true);
+            var supportsPackages = await _context.PlacePackages.AsNoTracking().AnyAsync(item =>
+                item.PlaceId == place.PlaceId && item.IsActive == true);
+            var manualTemplate = ResolveManualBookingTemplate(place, supportsRooms, supportsPackages, totalUnits);
 
             var context = new OwnerCalendarContextDto
             {
@@ -220,15 +194,11 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 AvailableRoomUnitsToday = availableToday,
                 OccupancyPercentToday = occupancy,
                 TotalBookingsInRange = rangeBookings.Count,
-                ConfirmedBookingsInRange = rangeBookings.Count(item =>
-                    IsState(item.BookingState, "Confirmed")),
+                ConfirmedBookingsInRange = rangeBookings.Count(item => IsState(item.BookingState, "Confirmed")),
                 AwaitingPaymentBookingsInRange = rangeBookings.Count(item =>
-                    IsState(item.BookingState, "AwaitingPayment") ||
-                    IsState(item.BookingState, "PaymentReview")),
-                ManualBookingsInRange = rangeBookings.Count(item =>
-                    IsState(item.BookingSource, "OwnerManual")),
-                OnlineBookingsInRange = rangeBookings.Count(item =>
-                    !IsState(item.BookingSource, "OwnerManual")),
+                    IsState(item.BookingState, "AwaitingPayment") || IsState(item.BookingState, "PaymentReview")),
+                ManualBookingsInRange = rangeBookings.Count(item => IsState(item.BookingSource, "OwnerManual")),
+                OnlineBookingsInRange = rangeBookings.Count(item => !IsState(item.BookingSource, "OwnerManual")),
                 ClosedDaysInRange = closedDays,
                 BookingApprovalMode = place.PlacePolicy?.BookingApprovalMode ?? "Manual",
                 MinimumNoticeHours = Math.Max(0, place.PlacePolicy?.MinimumNoticeHours ?? 0),
@@ -242,39 +212,26 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             return Json(new
             {
                 success = true,
-                data = context
+                data = context,
+                currency = currency.Currency,
+                currencyCode = currency.CurrencyCode,
+                currencySymbol = currency.CurrencySymbol
             });
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetCalendarEventsV2(
-            DateTime start,
-            DateTime end)
+        public async Task<IActionResult> GetCalendarEventsV2(DateTime start, DateTime end)
         {
-            if (!TryGetCurrentOwnerId(out var ownerId))
-            {
-                return UnauthorizedOwnerJson();
-            }
-
+            if (!TryGetCurrentOwnerId(out var ownerId)) return UnauthorizedOwnerJson();
             var placeId = await GetActiveOwnerPlaceIdAsync(ownerId);
-            if (!placeId.HasValue)
-            {
-                return Json(new { success = true, events = Array.Empty<object>() });
-            }
+            if (!placeId.HasValue) return Json(new { success = true, events = Array.Empty<object>() });
 
+            var currency = await GetOwnerCurrencyContextAsync(placeId.Value);
             await ExpireOverdueAwaitingPaymentsAsync(ownerId, placeId.Value);
-
             start = start.Date;
             end = end.Date;
-            if (end <= start)
-            {
-                end = start.AddMonths(1);
-            }
-
-            if ((end - start).TotalDays > 370)
-            {
-                end = start.AddDays(370);
-            }
+            if (end <= start) end = start.AddMonths(1);
+            if ((end - start).TotalDays > 370) end = start.AddDays(370);
 
             var bookings = await _context.Bookings
                 .AsNoTracking()
@@ -292,33 +249,21 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 .ThenBy(item => item.BookingId)
                 .ToListAsync();
 
-            var exceptions = await _context.PlaceCalendarExceptions
-                .AsNoTracking()
-                .Where(item =>
-                    item.PlaceId == placeId.Value &&
-                    item.ExceptionType == "Closed" &&
-                    item.ExceptionDate >= start &&
-                    item.ExceptionDate < end)
+            var exceptions = await _context.PlaceCalendarExceptions.AsNoTracking()
+                .Where(item => item.PlaceId == placeId.Value &&
+                               item.ExceptionType == "Closed" &&
+                               item.ExceptionDate >= start && item.ExceptionDate < end)
                 .ToListAsync();
 
             var events = new List<OwnerCalendarEventDto>();
-
             foreach (var booking in bookings)
             {
                 var state = booking.BookingState?.Trim() ?? "Pending";
                 var isManual = IsState(booking.BookingSource, "OwnerManual");
-                var customerName = FirstNonEmpty(
-                    "ضيف",
-                    booking.Customer?.FullName,
-                    booking.Customer?.Username,
-                    booking.GuestName);
-
+                var customerName = FirstNonEmpty("ضيف", booking.Customer?.FullName, booking.Customer?.Username, booking.GuestName);
                 var resourceName = booking.Room != null
                     ? BuildRoomName(booking.Room)
-                    : booking.Package != null
-                        ? BuildPackageName(booking.Package)
-                        : "حجز";
-
+                    : booking.Package != null ? BuildPackageName(booking.Package) : "حجز";
                 var css = GetCalendarStateCss(state, isManual);
                 var titlePrefix = isManual ? "مباشر" : "أونلاين";
 
@@ -340,14 +285,11 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     Reason = BuildCalendarBookingStateReason(booking),
                     TimerExpiredAt = booking.TimerExpiredAt,
                     IsHistorical = IsCalendarHistoricalState(state),
-                    ClassNames = isManual
-                        ? new List<string> { css, "yg-event-manual" }
-                        : new List<string> { css }
+                    ClassNames = isManual ? new List<string> { css, "yg-event-manual" } : new List<string> { css }
                 });
             }
 
-            var activeUnitIds = await _context.RoomUnits
-                .AsNoTracking()
+            var activeUnitIds = await _context.RoomUnits.AsNoTracking()
                 .Where(item => item.PlaceId == placeId.Value && item.IsAvailable == true)
                 .Select(item => item.RoomUnitId)
                 .ToListAsync();
@@ -356,38 +298,22 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             {
                 var activeUnitSet = activeUnitIds.ToHashSet();
                 var referenceTime = DateTime.Now;
-
                 for (var day = start; day < end; day = day.AddDays(1))
                 {
                     var nextDay = day.AddDays(1);
                     var blockingForDay = bookings.Where(item =>
                         item.RoomId.HasValue &&
                         BlockingBookingStates.Contains(item.BookingState ?? string.Empty) &&
-                        (item.BookingState != "AwaitingPayment" ||
-                         !item.TimerExpiredAt.HasValue ||
-                         item.TimerExpiredAt.Value > referenceTime) &&
+                        (item.BookingState != "AwaitingPayment" || !item.TimerExpiredAt.HasValue || item.TimerExpiredAt.Value > referenceTime) &&
                         item.StartDate < nextDay &&
-                        (item.EndDate ?? item.StartDate.AddDays(1)) > day)
-                        .ToList();
+                        (item.EndDate ?? item.StartDate.AddDays(1)) > day).ToList();
 
-                    var assigned = blockingForDay
-                        .SelectMany(item => item.BookingRoomUnits)
-                        .Where(item =>
-                            activeUnitSet.Contains(item.RoomUnitId) &&
-                            CalendarBlockingAssignmentStates.Contains(item.AssignmentStatus))
-                        .Select(item => item.RoomUnitId)
-                        .Distinct()
-                        .Count();
-
-                    var legacy = blockingForDay
-                        .Where(item => item.BookingRoomUnits.Count == 0)
-                        .Sum(item => Math.Max(1, item.Quantity));
-
+                    var assigned = blockingForDay.SelectMany(item => item.BookingRoomUnits)
+                        .Where(item => activeUnitSet.Contains(item.RoomUnitId) && CalendarBlockingAssignmentStates.Contains(item.AssignmentStatus))
+                        .Select(item => item.RoomUnitId).Distinct().Count();
+                    var legacy = blockingForDay.Where(item => item.BookingRoomUnits.Count == 0).Sum(item => Math.Max(1, item.Quantity));
                     var occupied = Math.Min(activeUnitIds.Count, assigned + Math.Max(0, legacy));
-                    if (occupied <= 0)
-                    {
-                        continue;
-                    }
+                    if (occupied <= 0) continue;
 
                     events.Add(new OwnerCalendarEventDto
                     {
@@ -402,9 +328,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                         TotalUnits = activeUnitIds.Count,
                         ClassNames = new List<string>
                         {
-                            occupied >= activeUnitIds.Count
-                                ? "yg-event-occupancy-full"
-                                : "yg-event-occupancy"
+                            occupied >= activeUnitIds.Count ? "yg-event-occupancy-full" : "yg-event-occupancy"
                         }
                     });
                 }
@@ -415,9 +339,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 events.Add(new OwnerCalendarEventDto
                 {
                     Id = $"E_{exception.ExceptionId}",
-                    Title = string.IsNullOrWhiteSpace(exception.Reason)
-                        ? "مغلق من المنشأة"
-                        : $"مغلق · {exception.Reason.Trim()}",
+                    Title = string.IsNullOrWhiteSpace(exception.Reason) ? "مغلق من المنشأة" : $"مغلق · {exception.Reason.Trim()}",
                     Start = exception.ExceptionDate.Date,
                     End = exception.ExceptionDate.Date.AddDays(1),
                     AllDay = true,
@@ -429,13 +351,8 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 });
             }
 
-            var place = await _context.Places
-                .AsNoTracking()
-                .Include(item => item.PlacePolicy)
-                .FirstOrDefaultAsync(item =>
-                    item.PlaceId == placeId.Value &&
-                    item.OwnerId == ownerId);
-
+            var place = await _context.Places.AsNoTracking().Include(item => item.PlacePolicy)
+                .FirstOrDefaultAsync(item => item.PlaceId == placeId.Value && item.OwnerId == ownerId);
             if (place != null)
             {
                 var weeklyClosed = ReadWeeklyClosedDays(place);
@@ -443,11 +360,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 {
                     for (var day = start; day < end; day = day.AddDays(1))
                     {
-                        if (!weeklyClosed.Contains(day.DayOfWeek.ToString()))
-                        {
-                            continue;
-                        }
-
+                        if (!weeklyClosed.Contains(day.DayOfWeek.ToString())) continue;
                         events.Add(new OwnerCalendarEventDto
                         {
                             Id = $"P_{day:yyyyMMdd}",
@@ -466,46 +379,30 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             return Json(new
             {
                 success = true,
-                events
+                events,
+                currency = currency.Currency,
+                currencyCode = currency.CurrencyCode,
+                currencySymbol = currency.CurrencySymbol
             });
         }
 
         [HttpGet]
         public async Task<IActionResult> GetCalendarDayDetails(DateTime date)
         {
-            if (!TryGetCurrentOwnerId(out var ownerId))
-            {
-                return UnauthorizedOwnerJson();
-            }
-
+            if (!TryGetCurrentOwnerId(out var ownerId)) return UnauthorizedOwnerJson();
             var placeId = await GetActiveOwnerPlaceIdAsync(ownerId);
-            if (!placeId.HasValue)
-            {
-                return Json(new { success = false, message = "لا توجد منشأة حالية." });
-            }
+            if (!placeId.HasValue) return Json(new { success = false, message = "لا توجد منشأة حالية." });
 
+            var currency = await GetOwnerCurrencyContextAsync(placeId.Value);
             await ExpireOverdueAwaitingPaymentsAsync(ownerId, placeId.Value);
-
             date = date.Date;
 
-            var place = await _context.Places
-                .AsNoTracking()
-                .Include(item => item.PlacePolicy)
-                .FirstOrDefaultAsync(item =>
-                    item.PlaceId == placeId.Value &&
-                    item.OwnerId == ownerId);
+            var place = await _context.Places.AsNoTracking().Include(item => item.PlacePolicy)
+                .FirstOrDefaultAsync(item => item.PlaceId == placeId.Value && item.OwnerId == ownerId);
+            if (place == null) return Json(new { success = false, message = "المنشأة غير موجودة." });
 
-            if (place == null)
-            {
-                return Json(new { success = false, message = "المنشأة غير موجودة." });
-            }
-
-            var exception = await _context.PlaceCalendarExceptions
-                .AsNoTracking()
-                .FirstOrDefaultAsync(item =>
-                    item.PlaceId == place.PlaceId &&
-                    item.ExceptionDate == date &&
-                    item.ExceptionType == "Closed");
+            var exception = await _context.PlaceCalendarExceptions.AsNoTracking().FirstOrDefaultAsync(item =>
+                item.PlaceId == place.PlaceId && item.ExceptionDate == date && item.ExceptionType == "Closed");
 
             var bookings = await _context.Bookings
                 .AsNoTracking()
@@ -513,8 +410,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 .Include(item => item.Room)
                 .Include(item => item.Package)
                 .Include(item => item.FinancialRecord)
-                .Include(item => item.BookingRoomUnits)
-                    .ThenInclude(item => item.RoomUnit)
+                .Include(item => item.BookingRoomUnits).ThenInclude(item => item.RoomUnit)
                 .Where(item =>
                     item.PlaceId == place.PlaceId &&
                     item.StartDate.Date <= date &&
@@ -525,26 +421,21 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 .ThenBy(item => item.BookingId)
                 .ToListAsync();
 
-            var totalUnits = await _context.RoomUnits
-                .AsNoTracking()
-                .CountAsync(item => item.PlaceId == place.PlaceId && item.IsAvailable == true);
-
+            var totalUnits = await _context.RoomUnits.AsNoTracking().CountAsync(item =>
+                item.PlaceId == place.PlaceId && item.IsAvailable == true);
             var occupiedUnits = await GetOccupiedRoomUnitCountForDateAsync(place.PlaceId, date);
             var availableUnits = Math.Max(0, totalUnits - occupiedUnits);
 
             var dto = new OwnerCalendarDayDetailsDto
             {
                 Date = date,
-                IsWeeklyClosed = ReadWeeklyClosedDays(place)
-                    .Contains(date.DayOfWeek.ToString()),
+                IsWeeklyClosed = ReadWeeklyClosedDays(place).Contains(date.DayOfWeek.ToString()),
                 IsExceptionClosed = exception != null,
                 ClosedReason = exception?.Reason?.Trim() ?? string.Empty,
                 TotalActiveRoomUnits = totalUnits,
                 OccupiedRoomUnits = occupiedUnits,
                 AvailableRoomUnits = availableUnits,
-                OccupancyPercent = totalUnits <= 0
-                    ? 0m
-                    : Math.Round(occupiedUnits * 100m / totalUnits, 1),
+                OccupancyPercent = totalUnits <= 0 ? 0m : Math.Round(occupiedUnits * 100m / totalUnits, 1),
                 BookingCount = bookings.Count,
                 ConfirmedCount = bookings.Count(item => IsState(item.BookingState, "Confirmed")),
                 AwaitingPaymentCount = bookings.Count(item => IsState(item.BookingState, "AwaitingPayment")),
@@ -562,26 +453,13 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 {
                     var paid = (item.FinancialRecord?.AmountPaidOnline ?? 0m) +
                                (item.FinancialRecord?.AmountCollectedAtProperty ?? 0m);
-
-                    var remaining = Math.Max(
-                        0m,
-                        item.FinancialRecord?.AmountToPayAtProperty ??
-                        (item.TotalPrice - paid));
-
+                    var remaining = Math.Max(0m, item.FinancialRecord?.AmountToPayAtProperty ?? (item.TotalPrice - paid));
                     return new OwnerCalendarBookingItemDto
                     {
                         BookingId = item.BookingId,
                         CustomerId = item.CustomerId,
-                        CustomerName = FirstNonEmpty(
-                            "ضيف",
-                            item.Customer?.FullName,
-                            item.Customer?.Username,
-                            item.GuestName),
-                        CustomerPhone = FirstNonEmpty(
-                            "بدون هاتف",
-                            item.Customer?.PhoneNumber,
-                            item.Customer?.ContactInfo,
-                            item.GuestPhone),
+                        CustomerName = FirstNonEmpty("ضيف", item.Customer?.FullName, item.Customer?.Username, item.GuestName),
+                        CustomerPhone = FirstNonEmpty("بدون هاتف", item.Customer?.PhoneNumber, item.Customer?.ContactInfo, item.GuestPhone),
                         BookingSource = item.BookingSource?.Trim() ?? "Online",
                         ManualBookingChannel = item.ManualBookingChannel?.Trim() ?? string.Empty,
                         BookingState = item.BookingState?.Trim() ?? string.Empty,
@@ -609,19 +487,16 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                                          item.TimerExpiredAt.HasValue &&
                                          item.TimerExpiredAt.Value <= DateTime.Now,
                         IsHistorical = IsCalendarHistoricalState(item.BookingState),
-                        AssignedUnitsText = string.Join(
-                            "، ",
-                            item.BookingRoomUnits
-                                .Where(assignment =>
-                                    IsState(assignment.AssignmentStatus, "Held") ||
-                                    IsState(assignment.AssignmentStatus, "Confirmed") ||
-                                    IsState(assignment.AssignmentStatus, "Completed"))
-                                .OrderBy(assignment => assignment.RoomUnit.FloorNumber)
-                                .ThenBy(assignment => assignment.RoomUnit.RoomNumber)
-                                .Select(assignment =>
-                                    string.IsNullOrWhiteSpace(assignment.RoomUnit.FloorLabel)
-                                        ? assignment.RoomUnit.RoomNumber
-                                        : $"{assignment.RoomUnit.RoomNumber} · {assignment.RoomUnit.FloorLabel}")),
+                        AssignedUnitsText = string.Join("، ", item.BookingRoomUnits
+                            .Where(assignment =>
+                                IsState(assignment.AssignmentStatus, "Held") ||
+                                IsState(assignment.AssignmentStatus, "Confirmed") ||
+                                IsState(assignment.AssignmentStatus, "Completed"))
+                            .OrderBy(assignment => assignment.RoomUnit.FloorNumber)
+                            .ThenBy(assignment => assignment.RoomUnit.RoomNumber)
+                            .Select(assignment => string.IsNullOrWhiteSpace(assignment.RoomUnit.FloorLabel)
+                                ? assignment.RoomUnit.RoomNumber
+                                : $"{assignment.RoomUnit.RoomNumber} · {assignment.RoomUnit.FloorLabel}")),
                         CanRecordManualPayment =
                             IsState(item.BookingSource, "OwnerManual") &&
                             IsState(item.BookingState, "AwaitingPayment") &&
@@ -630,61 +505,40 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 }).ToList()
             };
 
+            ApplyCalendarDayDisplayCurrency(dto, currency);
             return Json(new
             {
                 success = true,
-                data = dto
+                data = dto,
+                currency = currency.Currency,
+                currencyCode = currency.CurrencyCode,
+                currencySymbol = currency.CurrencySymbol
             });
         }
 
         [HttpGet]
         public async Task<IActionResult> SearchManualBookingCustomer(string phone)
         {
-            if (!TryGetCurrentOwnerId(out _))
-            {
-                return UnauthorizedOwnerJson();
-            }
-
+            if (!TryGetCurrentOwnerId(out _)) return UnauthorizedOwnerJson();
             var normalized = NormalizePhoneForSearch(phone);
             if (normalized.Length < 7)
-            {
-                return Json(new
-                {
-                    success = true,
-                    data = new OwnerManualBookingCustomerResultDto { Found = false }
-                });
-            }
+                return Json(new { success = true, data = new OwnerManualBookingCustomerResultDto { Found = false } });
 
-            var phoneSuffix = normalized.Length > 9
-                ? normalized.Substring(normalized.Length - 9)
-                : normalized;
-
-            var customer = await _context.Users
-                .AsNoTracking()
+            var phoneSuffix = normalized.Length > 9 ? normalized.Substring(normalized.Length - 9) : normalized;
+            var customer = await _context.Users.AsNoTracking()
                 .Where(item =>
-                    item.Role == "Customer" &&
-                    item.AccountState == "Active" &&
+                    item.Role == "Customer" && item.AccountState == "Active" &&
                     item.PhoneNumber != null &&
-                    item.PhoneNumber
-                        .Replace(" ", string.Empty)
-                        .Replace("-", string.Empty)
-                        .Replace("(", string.Empty)
-                        .Replace(")", string.Empty)
-                        .Replace(".", string.Empty)
-                        .Replace("+", string.Empty)
-                        .EndsWith(phoneSuffix))
+                    item.PhoneNumber.Replace(" ", string.Empty).Replace("-", string.Empty)
+                        .Replace("(", string.Empty).Replace(")", string.Empty)
+                        .Replace(".", string.Empty).Replace("+", string.Empty).EndsWith(phoneSuffix))
                 .OrderByDescending(item => item.LastLoginAt)
                 .ThenByDescending(item => item.UserId)
                 .Select(item => new
                 {
-                    item.UserId,
-                    item.FullName,
-                    item.Username,
-                    item.PhoneNumber,
-                    item.ContactInfo,
-                    item.ProfileImage
-                })
-                .FirstOrDefaultAsync();
+                    item.UserId, item.FullName, item.Username, item.PhoneNumber,
+                    item.ContactInfo, item.ProfileImage
+                }).FirstOrDefaultAsync();
 
             var result = customer == null
                 ? new OwnerManualBookingCustomerResultDto { Found = false }
@@ -697,79 +551,43 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     ContactInfo = customer.ContactInfo?.Trim() ?? string.Empty,
                     ProfileImage = customer.ProfileImage?.Trim() ?? string.Empty
                 };
-
             return Json(new { success = true, data = result });
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetManualBookingOptions(
-            DateTime startDate,
-            DateTime? endDate = null)
+        public async Task<IActionResult> GetManualBookingOptions(DateTime startDate, DateTime? endDate = null)
         {
-            if (!TryGetCurrentOwnerId(out var ownerId))
-            {
-                return UnauthorizedOwnerJson();
-            }
-
+            if (!TryGetCurrentOwnerId(out var ownerId)) return UnauthorizedOwnerJson();
             var placeId = await GetActiveOwnerPlaceIdAsync(ownerId);
-            if (!placeId.HasValue)
-            {
-                return Json(new { success = false, message = "لا توجد منشأة حالية." });
-            }
+            if (!placeId.HasValue) return Json(new { success = false, message = "لا توجد منشأة حالية." });
 
+            var currency = await GetOwnerCurrencyContextAsync(placeId.Value);
             var place = await LoadManualBookingPlaceAsync(placeId.Value, ownerId);
-            if (place == null)
-            {
-                return Json(new { success = false, message = "المنشأة غير موجودة." });
-            }
+            if (place == null) return Json(new { success = false, message = "المنشأة غير موجودة." });
 
             startDate = startDate.Date;
-            var roomEnd = (endDate?.Date ?? startDate.AddDays(1));
-            if (roomEnd <= startDate)
-            {
-                roomEnd = startDate.AddDays(1);
-            }
+            var roomEnd = endDate?.Date ?? startDate.AddDays(1);
+            if (roomEnd <= startDate) roomEnd = startDate.AddDays(1);
 
-            var weeklyClosed = ManualContainsWeeklyClosedDate(
-                place,
-                startDate,
-                roomEnd,
-                true);
+            var weeklyClosed = ManualContainsWeeklyClosedDate(place, startDate, roomEnd, true);
+            var exceptionClosed = await _context.PlaceCalendarExceptions.AsNoTracking().AnyAsync(item =>
+                item.PlaceId == place.PlaceId && item.ExceptionType == "Closed" &&
+                item.ExceptionDate >= startDate && item.ExceptionDate < roomEnd);
 
-            var exceptionClosed = await _context.PlaceCalendarExceptions
-                .AsNoTracking()
-                .AnyAsync(item =>
-                    item.PlaceId == place.PlaceId &&
-                    item.ExceptionType == "Closed" &&
-                    item.ExceptionDate >= startDate &&
-                    item.ExceptionDate < roomEnd);
-
-            var rooms = await _context.Rooms
-                .AsNoTracking()
-                .Where(item =>
-                    item.PlaceId == place.PlaceId &&
-                    item.IsAvailable == true)
-                .OrderBy(item => item.RoomType)
-                .ThenBy(item => item.RoomId)
-                .ToListAsync();
+            var rooms = await _context.Rooms.AsNoTracking()
+                .Where(item => item.PlaceId == place.PlaceId && item.IsAvailable == true)
+                .OrderBy(item => item.RoomType).ThenBy(item => item.RoomId).ToListAsync();
 
             var roomOptions = new List<OwnerManualRoomOptionDto>();
             foreach (var room in rooms)
             {
-                var availability = await GetRoomAvailabilityAsync(
-                    place,
-                    room,
-                    startDate,
-                    roomEnd,
-                    DateTime.Now,
-                    includeCandidates: true);
-
+                var availability = await GetRoomAvailabilityAsync(place, room, startDate, roomEnd, DateTime.Now, true);
                 roomOptions.Add(new OwnerManualRoomOptionDto
                 {
                     RoomId = room.RoomId,
                     Name = BuildRoomName(room),
                     Description = room.Description?.Trim() ?? string.Empty,
-                    Price = room.Price,
+                    Price = ToDisplayCurrency(room.Price, currency),
                     ActiveUnits = availability.ActiveUnits,
                     AvailableUnits = availability.AvailableUnits,
                     MaxAdults = Math.Max(0, room.MaxAdults),
@@ -777,40 +595,24 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     BedsCount = room.BedsCount,
                     BedType = room.BedType?.Trim() ?? string.Empty,
                     AreaSquareMeters = room.AreaSquareMeters,
-                    AvailableRoomUnits = availability.UnitOptions
-                        .Where(unit => unit.IsSelectable)
-                        .ToList(),
+                    AvailableRoomUnits = availability.UnitOptions.Where(unit => unit.IsSelectable).ToList(),
                     RoomUnits = availability.UnitOptions.ToList()
                 });
             }
 
-            var packages = await _context.PlacePackages
-                .AsNoTracking()
-                .Where(item =>
-                    item.PlaceId == place.PlaceId &&
-                    item.IsActive == true)
-                .OrderBy(item => item.StartTime)
-                .ThenBy(item => item.PackageName)
-                .ToListAsync();
+            var packages = await _context.PlacePackages.AsNoTracking()
+                .Where(item => item.PlaceId == place.PlaceId && item.IsActive == true)
+                .OrderBy(item => item.StartTime).ThenBy(item => item.PackageName).ToListAsync();
 
             var packageOptions = new List<OwnerManualPackageOptionDto>();
             foreach (var package in packages)
             {
-                var packageClosed =
-                    ManualContainsWeeklyClosedDate(place, startDate, startDate, false) ||
+                var packageClosed = ManualContainsWeeklyClosedDate(place, startDate, startDate, false) ||
                     await _context.PlaceCalendarExceptions.AsNoTracking().AnyAsync(item =>
-                        item.PlaceId == place.PlaceId &&
-                        item.ExceptionType == "Closed" &&
-                        item.ExceptionDate == startDate);
-
+                        item.PlaceId == place.PlaceId && item.ExceptionType == "Closed" && item.ExceptionDate == startDate);
                 var shiftValid = ManualPackageFitsConfiguredShift(place, package);
                 var conflict = !packageClosed && shiftValid &&
-                               await ManualHasPackageBookingConflictAsync(
-                                   place,
-                                   package,
-                                   startDate,
-                                   DateTime.Now);
-
+                    await ManualHasPackageBookingConflictAsync(place, package, startDate, DateTime.Now);
                 var available = !packageClosed && shiftValid && !conflict;
 
                 packageOptions.Add(new OwnerManualPackageOptionDto
@@ -820,24 +622,17 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     TimeFrame = package.TimeFrame?.Trim() ?? string.Empty,
                     StartTime = package.StartTime,
                     EndTime = package.EndTime,
-                    Price = package.Price,
+                    Price = ToDisplayCurrency(package.Price, currency),
                     Capacity = package.Capacity,
                     IsAvailable = available,
-                    AvailabilityMessage = packageClosed
-                        ? "اليوم مغلق"
-                        : !shiftValid
-                            ? "خارج الفترات التشغيلية"
-                            : conflict
-                                ? "الفترة محجوزة أو ضمن وقت التجهيز"
-                                : "متاحة"
+                    AvailabilityMessage = packageClosed ? "اليوم مغلق"
+                        : !shiftValid ? "خارج الفترات التشغيلية"
+                        : conflict ? "الفترة محجوزة أو ضمن وقت التجهيز" : "متاحة"
                 });
             }
 
-            var services = await _context.PlaceAdditionalServices
-                .AsNoTracking()
-                .Where(item =>
-                    item.PlaceId == place.PlaceId &&
-                    item.IsActive == true)
+            var rawServices = await _context.PlaceAdditionalServices.AsNoTracking()
+                .Where(item => item.PlaceId == place.PlaceId && item.IsActive == true)
                 .OrderBy(item => item.ServiceName)
                 .Select(item => new OwnerManualServiceOptionDto
                 {
@@ -845,8 +640,10 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     ServiceName = item.ServiceName ?? "خدمة إضافية",
                     Description = item.Description ?? string.Empty,
                     Price = item.Price
-                })
-                .ToListAsync();
+                }).ToListAsync();
+
+            foreach (var service in rawServices)
+                service.Price = ToDisplayCurrency(service.Price, currency);
 
             return Json(new
             {
@@ -859,119 +656,93 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     IsClosedByException = exceptionClosed,
                     ClosureMessage = weeklyClosed
                         ? "الفترة تتضمن يوم إغلاق أسبوعي حسب سياسة المنشأة."
-                        : exceptionClosed
-                            ? "الفترة تتضمن يومًا مغلقًا من التقويم."
-                            : string.Empty,
+                        : exceptionClosed ? "الفترة تتضمن يومًا مغلقًا من التقويم." : string.Empty,
                     Rooms = roomOptions,
                     Packages = packageOptions,
-                    Services = services
-                }
+                    Services = rawServices
+                },
+                currency = currency.Currency,
+                currencyCode = currency.CurrencyCode,
+                currencySymbol = currency.CurrencySymbol
             });
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> PreviewManualBooking(
-            [FromBody] OwnerManualBookingRequestDto request)
+        public async Task<IActionResult> PreviewManualBooking([FromBody] OwnerManualBookingRequestDto request)
         {
-            if (!TryGetCurrentOwnerId(out var ownerId))
-            {
-                return UnauthorizedOwnerJson();
-            }
+            if (!TryGetCurrentOwnerId(out var ownerId)) return UnauthorizedOwnerJson();
+            var placeId = await GetActiveOwnerPlaceIdAsync(ownerId);
+            var currency = await GetOwnerCurrencyContextAsync(placeId ?? 0);
+
+            if (request != null && request.PaidAmount > 0m)
+                request.PaidAmount = ToYer(request.PaidAmount, currency);
 
             var result = await BuildManualBookingQuoteAsync(request, ownerId, false);
             if (!result.PublicQuote.Success)
-            {
-                return BadRequest(new
-                {
-                    success = false,
-                    message = result.PublicQuote.Message
-                });
-            }
+                return BadRequest(new { success = false, message = result.PublicQuote.Message });
 
+            ApplyManualQuoteDisplayCurrency(result.PublicQuote, currency);
             return Json(new
             {
                 success = true,
-                data = result.PublicQuote
+                data = result.PublicQuote,
+                currency = currency.Currency,
+                currencyCode = currency.CurrencyCode,
+                currencySymbol = currency.CurrencySymbol
             });
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> CreateManualBooking(
-            [FromBody] OwnerManualBookingRequestDto request)
+        public async Task<IActionResult> CreateManualBooking([FromBody] OwnerManualBookingRequestDto request)
         {
-            if (!TryGetCurrentOwnerId(out var ownerId))
-            {
-                return UnauthorizedOwnerJson();
-            }
+            if (!TryGetCurrentOwnerId(out var ownerId)) return UnauthorizedOwnerJson();
+            var activePlaceId = await GetActiveOwnerPlaceIdAsync(ownerId);
+            var currency = await GetOwnerCurrencyContextAsync(activePlaceId ?? 0);
 
-            await using var transaction = await _context.Database
-                .BeginTransactionAsync(IsolationLevel.Serializable);
+            if (request != null && request.PaidAmount > 0m)
+                request.PaidAmount = ToYer(request.PaidAmount, currency);
 
+            await using var transaction = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
             try
             {
                 var quote = await BuildManualBookingQuoteAsync(request, ownerId, true);
                 if (!quote.PublicQuote.Success)
                 {
                     await transaction.RollbackAsync();
-                    return BadRequest(new
-                    {
-                        success = false,
-                        message = quote.PublicQuote.Message
-                    });
+                    return BadRequest(new { success = false, message = quote.PublicQuote.Message });
                 }
 
                 var now = DateTime.Now;
                 var isFreeBooking = quote.PublicQuote.TotalPrice <= 0m;
                 var isCollectedMode = IsState(request.PaymentMode, "Collected");
-                var paidAmount = isFreeBooking
-                    ? 0m
-                    : isCollectedMode
-                        ? Math.Round(Math.Max(0m, request.PaidAmount), 2)
-                        : 0m;
-
+                var paidAmount = isFreeBooking ? 0m
+                    : isCollectedMode ? Math.Round(Math.Max(0m, request.PaidAmount), 2) : 0m;
                 var isCollected = !isFreeBooking && isCollectedMode && paidAmount > 0m;
 
                 if (paidAmount > quote.PublicQuote.TotalPrice)
                 {
                     await transaction.RollbackAsync();
-                    return BadRequest(new
-                    {
-                        success = false,
-                        message = "المبلغ المستلم لا يمكن أن يتجاوز إجمالي الحجز."
-                    });
+                    return BadRequest(new { success = false, message = "المبلغ المستلم لا يمكن أن يتجاوز إجمالي الحجز." });
                 }
-
-                if (isCollected &&
-                    quote.PublicQuote.DepositAmount > 0m &&
-                    paidAmount < quote.PublicQuote.DepositAmount)
+                if (isCollected && quote.PublicQuote.DepositAmount > 0m && paidAmount < quote.PublicQuote.DepositAmount)
                 {
                     await transaction.RollbackAsync();
                     return BadRequest(new
                     {
                         success = false,
-                        message = $"المبلغ المستلم أقل من العربون المطلوب ({quote.PublicQuote.DepositAmount:N0} ريال)."
+                        message = $"المبلغ المستلم أقل من العربون المطلوب ({DisplayMoney(quote.PublicQuote.DepositAmount, currency)})."
                     });
                 }
 
                 var requiresDeposit = !isFreeBooking && quote.PublicQuote.DepositAmount > 0m;
-                var bookingState = requiresDeposit && !isCollected
-                    ? "AwaitingPayment"
-                    : "Confirmed";
-
+                var bookingState = requiresDeposit && !isCollected ? "AwaitingPayment" : "Confirmed";
                 var paymentTimeout = Math.Max(1, quote.Place.PlacePolicy?.PaymentTimeout ?? 12);
-                var timerExpiredAt = bookingState == "AwaitingPayment"
-                    ? now.AddHours(paymentTimeout)
-                    : (DateTime?)null;
-
-                var paymentStatus = isFreeBooking
-                    ? "Paid"
-                    : paidAmount <= 0m
-                        ? "Unpaid"
-                        : paidAmount >= quote.PublicQuote.TotalPrice
-                            ? "Paid"
-                            : "PartiallyPaid";
+                var timerExpiredAt = bookingState == "AwaitingPayment" ? now.AddHours(paymentTimeout) : (DateTime?)null;
+                var paymentStatus = isFreeBooking ? "Paid"
+                    : paidAmount <= 0m ? "Unpaid"
+                    : paidAmount >= quote.PublicQuote.TotalPrice ? "Paid" : "PartiallyPaid";
 
                 var customerId = quote.Customer?.UserId;
                 var guestName = customerId.HasValue ? null : request.GuestName?.Trim();
@@ -989,38 +760,20 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     Quantity = quote.Quantity,
                     AdultsCount = Math.Max(0, request.AdultsCount),
                     ChildrenCount = Math.Max(0, request.ChildrenCount),
-                    BookingType = string.IsNullOrWhiteSpace(request.BookingType)
-                        ? null
-                        : request.BookingType.Trim(),
-                    SeatingSetup = string.IsNullOrWhiteSpace(request.SeatingSetup)
-                        ? null
-                        : request.SeatingSetup.Trim(),
+                    BookingType = string.IsNullOrWhiteSpace(request.BookingType) ? null : request.BookingType.Trim(),
+                    SeatingSetup = string.IsNullOrWhiteSpace(request.SeatingSetup) ? null : request.SeatingSetup.Trim(),
                     TotalPrice = quote.PublicQuote.TotalPrice,
                     OriginalTotalPrice = quote.PublicQuote.OriginalTotalPrice,
                     DiscountAmount = quote.PublicQuote.DiscountAmount,
-                    PromotionId = quote.Promotion.IsApplied
-                        ? quote.Promotion.PromotionId
-                        : null,
-                    PromotionTitleSnapshot = quote.Promotion.IsApplied
-                        ? quote.Promotion.PromotionTitle
-                        : null,
-                    PromotionCodeSnapshot = quote.Promotion.IsApplied &&
-                                            !string.IsNullOrWhiteSpace(quote.Promotion.PromotionCode)
-                        ? quote.Promotion.PromotionCode
-                        : null,
-                    DiscountTypeSnapshot = quote.Promotion.IsApplied
-                        ? quote.Promotion.DiscountType
-                        : null,
-                    DiscountValueSnapshot = quote.Promotion.IsApplied
-                        ? quote.Promotion.DiscountValue
-                        : null,
+                    PromotionId = quote.Promotion.IsApplied ? quote.Promotion.PromotionId : null,
+                    PromotionTitleSnapshot = quote.Promotion.IsApplied ? quote.Promotion.PromotionTitle : null,
+                    PromotionCodeSnapshot = quote.Promotion.IsApplied && !string.IsNullOrWhiteSpace(quote.Promotion.PromotionCode)
+                        ? quote.Promotion.PromotionCode : null,
+                    DiscountTypeSnapshot = quote.Promotion.IsApplied ? quote.Promotion.DiscountType : null,
+                    DiscountValueSnapshot = quote.Promotion.IsApplied ? quote.Promotion.DiscountValue : null,
                     BookingState = bookingState,
                     PaymentStatus = paymentStatus,
-                    PaymentMethod = isFreeBooking
-                        ? "Promotion"
-                        : isCollected
-                            ? request.PaymentMethod?.Trim()
-                            : null,
+                    PaymentMethod = isFreeBooking ? "Promotion" : isCollected ? request.PaymentMethod?.Trim() : null,
                     RefundStatus = "NotApplicable",
                     TimerExpiredAt = timerExpiredAt,
                     LastStatusChangedAt = now,
@@ -1047,9 +800,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                         {
                             BookingId = booking.BookingId,
                             RoomUnitId = roomUnit.RoomUnitId,
-                            AssignmentStatus = bookingState == "Confirmed"
-                                ? "Confirmed"
-                                : "Held",
+                            AssignmentStatus = bookingState == "Confirmed" ? "Confirmed" : "Held",
                             AssignedAt = now,
                             ReleasedAt = null
                         });
@@ -1058,27 +809,19 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
                 foreach (var service in quote.Services)
                 {
-                    if (!quote.ServiceQuantities.TryGetValue(service.ServiceId, out var serviceQuantity) ||
-                        serviceQuantity <= 0)
-                    {
+                    if (!quote.ServiceQuantities.TryGetValue(service.ServiceId, out var serviceQuantity) || serviceQuantity <= 0)
                         continue;
-                    }
 
                     _context.BookingAdditionalServices.Add(new BookingAdditionalService
                     {
                         BookingId = booking.BookingId,
                         ServiceId = service.ServiceId,
                         Quantity = serviceQuantity,
-                        UnitPrice = quote.ComplimentaryServiceIds.Contains(service.ServiceId)
-                            ? 0m
-                            : service.Price
+                        UnitPrice = quote.ComplimentaryServiceIds.Contains(service.ServiceId) ? 0m : service.Price
                     });
                 }
 
-                var remaining = Math.Round(
-                    Math.Max(0m, quote.PublicQuote.TotalPrice - paidAmount),
-                    2);
-
+                var remaining = Math.Round(Math.Max(0m, quote.PublicQuote.TotalPrice - paidAmount), 2);
                 _context.FinancialRecords.Add(new FinancialRecord
                 {
                     BookingId = booking.BookingId,
@@ -1086,13 +829,9 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     PlatformCommission = quote.PublicQuote.PlatformCommission,
                     CommissionRateSnapshot = quote.PublicQuote.CommissionPercentage,
                     CommissionBaseAmount = quote.PublicQuote.TotalPrice,
-                    CommissionStatus = quote.PublicQuote.PlatformCommission > 0m
-                        ? "Calculated"
-                        : "NotApplicable",
-                    TransferReferenceNumber = isCollected &&
-                                              !string.IsNullOrWhiteSpace(request.PaymentReferenceNumber)
-                        ? request.PaymentReferenceNumber.Trim()
-                        : null,
+                    CommissionStatus = quote.PublicQuote.PlatformCommission > 0m ? "Calculated" : "NotApplicable",
+                    TransferReferenceNumber = isCollected && !string.IsNullOrWhiteSpace(request.PaymentReferenceNumber)
+                        ? request.PaymentReferenceNumber.Trim() : null,
                     AmountPaidOnline = 0m,
                     AmountToPayAtProperty = remaining,
                     AmountCollectedAtProperty = paidAmount,
@@ -1125,28 +864,18 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 }
 
                 await _context.SaveChangesAsync();
-
                 if (bookingState == "Confirmed" && quote.PublicQuote.PlatformCommission > 0m)
                 {
-                    var commissionResult = await _commissionFinanceService
-                        .HoldBookingCommissionAsync(
-                            booking.BookingId,
-                            ownerId,
-                            HttpContext.RequestAborted);
-
+                    var commissionResult = await _commissionFinanceService.HoldBookingCommissionAsync(
+                        booking.BookingId, ownerId, HttpContext.RequestAborted);
                     if (!commissionResult.Success)
                     {
                         await transaction.RollbackAsync();
-                        return BadRequest(new
-                        {
-                            success = false,
-                            message = commissionResult.Message
-                        });
+                        return BadRequest(new { success = false, message = commissionResult.Message });
                     }
                 }
 
                 await transaction.CommitAsync();
-
                 return Json(new
                 {
                     success = true,
@@ -1155,20 +884,17 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     paymentStatus,
                     assignedRoomUnits = quote.Room == null
                         ? Array.Empty<object>()
-                        : quote.CandidateRoomUnits
-                            .Take(quote.Quantity)
-                            .Select(item => new
-                            {
-                                item.RoomUnitId,
-                                item.RoomNumber,
-                                item.FloorNumber,
-                                item.FloorLabel
-                            })
-                            .ToArray(),
-                    totalPrice = quote.PublicQuote.TotalPrice,
-                    depositAmount = quote.PublicQuote.DepositAmount,
-                    paidAmount,
-                    remainingAmount = remaining,
+                        : quote.CandidateRoomUnits.Take(quote.Quantity).Select(item => new
+                        {
+                            item.RoomUnitId, item.RoomNumber, item.FloorNumber, item.FloorLabel
+                        }).ToArray(),
+                    totalPrice = ToDisplayCurrency(quote.PublicQuote.TotalPrice, currency),
+                    depositAmount = ToDisplayCurrency(quote.PublicQuote.DepositAmount, currency),
+                    paidAmount = ToDisplayCurrency(paidAmount, currency),
+                    remainingAmount = ToDisplayCurrency(remaining, currency),
+                    currency = currency.Currency,
+                    currencyCode = currency.CurrencyCode,
+                    currencySymbol = currency.CurrencySymbol,
                     message = isFreeBooking
                         ? "تم إنشاء الحجز المجاني وتثبيت التوفر بنجاح."
                         : bookingState == "Confirmed"
@@ -1184,41 +910,23 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             catch (Exception)
             {
                 await transaction.RollbackAsync();
-                return StatusCode(500, new
-                {
-                    success = false,
-                    message = "تعذر إنشاء الحجز اليدوي. لم يتم حفظ أي بيانات."
-                });
+                return StatusCode(500, new { success = false, message = "تعذر إنشاء الحجز اليدوي. لم يتم حفظ أي بيانات." });
             }
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> RecordManualBookingPayment(
-            [FromBody] OwnerManualPaymentInputDto input)
+        public async Task<IActionResult> RecordManualBookingPayment([FromBody] OwnerManualPaymentInputDto input)
         {
-            if (!TryGetCurrentOwnerId(out var ownerId))
+            if (!TryGetCurrentOwnerId(out var ownerId)) return UnauthorizedOwnerJson();
+            if (input.BookingId <= 0 || input.PaidAmount <= 0m ||
+                string.IsNullOrWhiteSpace(input.PaymentMethod) || input.PaymentMethod.Trim().Length > 30 ||
+                (!string.IsNullOrWhiteSpace(input.PaymentReferenceNumber) && input.PaymentReferenceNumber.Trim().Length > 100))
             {
-                return UnauthorizedOwnerJson();
+                return BadRequest(new { success = false, message = "بيانات الدفعة غير صحيحة." });
             }
 
-            if (input.BookingId <= 0 ||
-                input.PaidAmount <= 0m ||
-                string.IsNullOrWhiteSpace(input.PaymentMethod) ||
-                input.PaymentMethod.Trim().Length > 30 ||
-                (!string.IsNullOrWhiteSpace(input.PaymentReferenceNumber) &&
-                 input.PaymentReferenceNumber.Trim().Length > 100))
-            {
-                return BadRequest(new
-                {
-                    success = false,
-                    message = "بيانات الدفعة غير صحيحة."
-                });
-            }
-
-            await using var transaction = await _context.Database
-                .BeginTransactionAsync(IsolationLevel.Serializable);
-
+            await using var transaction = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
             try
             {
                 var booking = await _context.Bookings
@@ -1233,21 +941,16 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 if (booking == null)
                 {
                     await transaction.RollbackAsync();
-                    return NotFound(new
-                    {
-                        success = false,
-                        message = "الحجز اليدوي غير موجود أو لا يتبع منشأتك."
-                    });
+                    return NotFound(new { success = false, message = "الحجز اليدوي غير موجود أو لا يتبع منشأتك." });
                 }
+
+                var currency = await GetOwnerCurrencyContextAsync(booking.PlaceId);
+                var inputPaidAmountYer = Math.Round(Math.Max(0m, ToYer(input.PaidAmount, currency)), 2);
 
                 if (!IsState(booking.BookingState, "AwaitingPayment"))
                 {
                     await transaction.RollbackAsync();
-                    return BadRequest(new
-                    {
-                        success = false,
-                        message = "الحجز لا ينتظر دفعة حاليًا."
-                    });
+                    return BadRequest(new { success = false, message = "الحجز لا ينتظر دفعة حاليًا." });
                 }
 
                 var now = DateTime.Now;
@@ -1259,7 +962,6 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     booking.RejectionReason = null;
                     ReleaseRoomAssignments(booking, now);
                     CloseBooking(booking, now, null, "System");
-
                     AddStructuredNotification(
                         booking.CustomerId,
                         "انتهت مهلة دفع الحجز",
@@ -1268,10 +970,8 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                         $"/Places/BookingDetails/{booking.BookingId}",
                         NotificationReferenceTypes.Booking,
                         booking.BookingId);
-
                     await _context.SaveChangesAsync();
                     await transaction.CommitAsync();
-
                     return BadRequest(new
                     {
                         success = false,
@@ -1285,45 +985,33 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 if (financial == null)
                 {
                     await transaction.RollbackAsync();
-                    return BadRequest(new
-                    {
-                        success = false,
-                        message = "السجل المالي للحجز غير موجود."
-                    });
+                    return BadRequest(new { success = false, message = "السجل المالي للحجز غير موجود." });
                 }
 
-                var paidAmount = Math.Round(Math.Max(0m, input.PaidAmount), 2);
+                var paidAmount = inputPaidAmountYer;
                 if (paidAmount < financial.DepositAmount)
                 {
                     await transaction.RollbackAsync();
                     return BadRequest(new
                     {
                         success = false,
-                        message = $"المبلغ أقل من العربون المطلوب ({financial.DepositAmount:N0} ريال)."
+                        message = $"المبلغ أقل من العربون المطلوب ({DisplayMoney(financial.DepositAmount, currency)})."
                     });
                 }
-
                 if (paidAmount > booking.TotalPrice)
                 {
                     await transaction.RollbackAsync();
-                    return BadRequest(new
-                    {
-                        success = false,
-                        message = "المبلغ لا يمكن أن يتجاوز إجمالي الحجز."
-                    });
+                    return BadRequest(new { success = false, message = "المبلغ لا يمكن أن يتجاوز إجمالي الحجز." });
                 }
 
                 booking.BookingState = "Confirmed";
-                booking.PaymentStatus = paidAmount >= booking.TotalPrice
-                    ? "Paid"
-                    : "PartiallyPaid";
+                booking.PaymentStatus = paidAmount >= booking.TotalPrice ? "Paid" : "PartiallyPaid";
                 booking.PaymentMethod = input.PaymentMethod.Trim();
                 booking.PaymentApprovedAt = now;
                 booking.TimerExpiredAt = null;
                 booking.LastStatusChangedAt = now;
 
-                foreach (var assignment in booking.BookingRoomUnits
-                             .Where(item => IsState(item.AssignmentStatus, "Held")))
+                foreach (var assignment in booking.BookingRoomUnits.Where(item => IsState(item.AssignmentStatus, "Held")))
                 {
                     assignment.AssignmentStatus = "Confirmed";
                     assignment.ReleasedAt = null;
@@ -1331,13 +1019,9 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
                 financial.AmountCollectedAtProperty = paidAmount;
                 financial.AmountPaidOnline = 0m;
-                financial.AmountToPayAtProperty = Math.Round(
-                    Math.Max(0m, booking.TotalPrice - paidAmount),
-                    2);
-                financial.TransferReferenceNumber =
-                    string.IsNullOrWhiteSpace(input.PaymentReferenceNumber)
-                        ? null
-                        : input.PaymentReferenceNumber.Trim();
+                financial.AmountToPayAtProperty = Math.Round(Math.Max(0m, booking.TotalPrice - paidAmount), 2);
+                financial.TransferReferenceNumber = string.IsNullOrWhiteSpace(input.PaymentReferenceNumber)
+                    ? null : input.PaymentReferenceNumber.Trim();
                 financial.UpdatedAt = now;
 
                 AddStructuredNotification(
@@ -1350,137 +1034,73 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     booking.BookingId);
 
                 await _context.SaveChangesAsync();
-
                 if (financial.PlatformCommission > 0m)
                 {
-                    var commissionResult = await _commissionFinanceService
-                        .HoldBookingCommissionAsync(
-                            booking.BookingId,
-                            ownerId,
-                            HttpContext.RequestAborted);
-
+                    var commissionResult = await _commissionFinanceService.HoldBookingCommissionAsync(
+                        booking.BookingId, ownerId, HttpContext.RequestAborted);
                     if (!commissionResult.Success)
                     {
                         await transaction.RollbackAsync();
-                        return BadRequest(new
-                        {
-                            success = false,
-                            message = commissionResult.Message
-                        });
+                        return BadRequest(new { success = false, message = commissionResult.Message });
                     }
                 }
 
                 await transaction.CommitAsync();
-
                 return Json(new
                 {
                     success = true,
                     bookingId = booking.BookingId,
                     bookingState = booking.BookingState,
                     paymentStatus = booking.PaymentStatus,
-                    remainingAmount = financial.AmountToPayAtProperty,
+                    remainingAmount = ToDisplayCurrency(financial.AmountToPayAtProperty, currency),
+                    currency = currency.Currency,
+                    currencyCode = currency.CurrencyCode,
+                    currencySymbol = currency.CurrencySymbol,
                     message = "تم تسجيل الدفعة وتأكيد الحجز بنجاح."
                 });
             }
             catch (Exception)
             {
                 await transaction.RollbackAsync();
-                return StatusCode(500, new
-                {
-                    success = false,
-                    message = "تعذر تسجيل الدفعة."
-                });
+                return StatusCode(500, new { success = false, message = "تعذر تسجيل الدفعة." });
             }
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> CloseCalendarRange(
-            [FromBody] OwnerCalendarRangeActionDto input)
+        public async Task<IActionResult> CloseCalendarRange([FromBody] OwnerCalendarRangeActionDto input)
         {
-            if (!TryGetCurrentOwnerId(out var ownerId))
-            {
-                return UnauthorizedOwnerJson();
-            }
-
+            if (!TryGetCurrentOwnerId(out var ownerId)) return UnauthorizedOwnerJson();
             var placeId = await GetActiveOwnerPlaceIdAsync(ownerId);
-            if (!placeId.HasValue)
-            {
-                return BadRequest(new { success = false, message = "لا توجد منشأة حالية." });
-            }
+            if (!placeId.HasValue) return BadRequest(new { success = false, message = "لا توجد منشأة حالية." });
 
             var start = input.StartDate.Date;
             var end = input.EndDate.Date;
-            if (end < start)
-            {
-                (start, end) = (end, start);
-            }
+            if (end < start) (start, end) = (end, start);
+            if (start < DateTime.Today) return BadRequest(new { success = false, message = "لا يمكن إغلاق أيام سابقة." });
+            if ((end - start).Days > 366) return BadRequest(new { success = false, message = "الحد الأقصى للإغلاق دفعة واحدة سنة كاملة." });
 
-            if (start < DateTime.Today)
-            {
-                return BadRequest(new
-                {
-                    success = false,
-                    message = "لا يمكن إغلاق أيام سابقة."
-                });
-            }
-
-            if ((end - start).Days > 366)
-            {
-                return BadRequest(new
-                {
-                    success = false,
-                    message = "الحد الأقصى للإغلاق دفعة واحدة سنة كاملة."
-                });
-            }
-
-            var reason = string.IsNullOrWhiteSpace(input.Reason)
-                ? "إغلاق من قبل المالك"
-                : input.Reason.Trim();
-
-            if (reason.Length > 255)
-            {
-                return BadRequest(new
-                {
-                    success = false,
-                    message = "سبب الإغلاق أطول من الحد المسموح."
-                });
-            }
+            var reason = string.IsNullOrWhiteSpace(input.Reason) ? "إغلاق من قبل المالك" : input.Reason.Trim();
+            if (reason.Length > 255) return BadRequest(new { success = false, message = "سبب الإغلاق أطول من الحد المسموح." });
 
             await ExpireOverdueAwaitingPaymentsAsync(ownerId, placeId.Value);
-
             var referenceTime = DateTime.Now;
-            var blockingBookings = await _context.Bookings
-                .AsNoTracking()
+            var blockingBookings = await _context.Bookings.AsNoTracking()
                 .Where(item =>
                     item.PlaceId == placeId.Value &&
                     BlockingBookingStates.Contains(item.BookingState ?? string.Empty) &&
-                    (item.BookingState != "AwaitingPayment" ||
-                     !item.TimerExpiredAt.HasValue ||
-                     item.TimerExpiredAt > referenceTime) &&
+                    (item.BookingState != "AwaitingPayment" || !item.TimerExpiredAt.HasValue || item.TimerExpiredAt > referenceTime) &&
                     item.StartDate.Date <= end &&
-                    (item.EndDate.HasValue
-                        ? item.EndDate.Value.Date > start
-                        : item.StartDate.Date >= start))
+                    (item.EndDate.HasValue ? item.EndDate.Value.Date > start : item.StartDate.Date >= start))
                 .OrderBy(item => item.StartDate)
-                .Select(item => new
-                {
-                    item.BookingId,
-                    item.BookingState,
-                    item.StartDate,
-                    item.EndDate
-                })
-                .Take(8)
-                .ToListAsync();
+                .Select(item => new { item.BookingId, item.BookingState, item.StartDate, item.EndDate })
+                .Take(8).ToListAsync();
 
             if (blockingBookings.Count > 0)
             {
                 var first = blockingBookings[0];
                 var firstDate = first.StartDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-                var extra = blockingBookings.Count > 1
-                    ? $" ويوجد {blockingBookings.Count - 1} حجز نشط آخر ضمن الفترة."
-                    : string.Empty;
-
+                var extra = blockingBookings.Count > 1 ? $" ويوجد {blockingBookings.Count - 1} حجز نشط آخر ضمن الفترة." : string.Empty;
                 return BadRequest(new
                 {
                     success = false,
@@ -1493,17 +1113,12 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             }
 
             var existingExceptions = await _context.PlaceCalendarExceptions
-                .Where(item =>
-                    item.PlaceId == placeId.Value &&
-                    item.ExceptionDate >= start &&
-                    item.ExceptionDate <= end)
+                .Where(item => item.PlaceId == placeId.Value && item.ExceptionDate >= start && item.ExceptionDate <= end)
                 .ToListAsync();
-
-            var existingByDate = existingExceptions
-                .GroupBy(item => item.ExceptionDate.Date)
+            var existingByDate = existingExceptions.GroupBy(item => item.ExceptionDate.Date)
                 .ToDictionary(group => group.Key, group => group.First());
-
             var createdAt = DateTime.Now;
+
             for (var day = start; day <= end; day = day.AddDays(1))
             {
                 if (!existingByDate.TryGetValue(day, out var existing))
@@ -1519,14 +1134,12 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     });
                     continue;
                 }
-
                 existing.ExceptionType = "Closed";
                 existing.Reason = reason;
                 existing.CustomPrice = null;
             }
 
             await _context.SaveChangesAsync();
-
             return Json(new
             {
                 success = true,
@@ -1538,44 +1151,22 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> ReopenCalendarRange(
-            [FromBody] OwnerCalendarRangeActionDto input)
+        public async Task<IActionResult> ReopenCalendarRange([FromBody] OwnerCalendarRangeActionDto input)
         {
-            if (!TryGetCurrentOwnerId(out var ownerId))
-            {
-                return UnauthorizedOwnerJson();
-            }
-
+            if (!TryGetCurrentOwnerId(out var ownerId)) return UnauthorizedOwnerJson();
             var placeId = await GetActiveOwnerPlaceIdAsync(ownerId);
-            if (!placeId.HasValue)
-            {
-                return BadRequest(new { success = false, message = "لا توجد منشأة حالية." });
-            }
+            if (!placeId.HasValue) return BadRequest(new { success = false, message = "لا توجد منشأة حالية." });
 
             var start = input.StartDate.Date;
             var end = input.EndDate.Date;
-            if (end < start)
-            {
-                (start, end) = (end, start);
-            }
-
-            if ((end - start).Days > 366)
-            {
-                return BadRequest(new
-                {
-                    success = false,
-                    message = "الحد الأقصى لإعادة الفتح دفعة واحدة سنة كاملة."
-                });
-            }
+            if (end < start) (start, end) = (end, start);
+            if ((end - start).Days > 366) return BadRequest(new { success = false, message = "الحد الأقصى لإعادة الفتح دفعة واحدة سنة كاملة." });
 
             var exceptions = await _context.PlaceCalendarExceptions
-                .Where(item =>
-                    item.PlaceId == placeId.Value &&
-                    item.ExceptionType == "Closed" &&
-                    item.ExceptionDate >= start &&
-                    item.ExceptionDate <= end)
+                .Where(item => item.PlaceId == placeId.Value &&
+                               item.ExceptionType == "Closed" &&
+                               item.ExceptionDate >= start && item.ExceptionDate <= end)
                 .ToListAsync();
-
             if (exceptions.Count > 0)
             {
                 _context.PlaceCalendarExceptions.RemoveRange(exceptions);
@@ -1598,221 +1189,94 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             bool forCommit)
         {
             var failed = new ManualBookingQuoteInternal();
-
-            if (request == null)
-            {
-                failed.PublicQuote.Message = "بيانات الحجز غير موجودة.";
-                return failed;
-            }
-
-            if (request.StartDate == default)
-            {
-                failed.PublicQuote.Message = "حدد تاريخ بداية الحجز.";
-                return failed;
-            }
-
-            if (request.RoomId.HasValue == request.PackageId.HasValue)
-            {
-                failed.PublicQuote.Message = "اختر غرفة أو باقة واحدة فقط.";
-                return failed;
-            }
-
-            if (request.Quantity < 1 || request.Quantity > 100 ||
-                request.AdultsCount < 0 || request.AdultsCount > 1000 ||
-                request.ChildrenCount < 0 || request.ChildrenCount > 1000)
-            {
-                failed.PublicQuote.Message = "الكمية أو أعداد الأشخاص خارج الحدود المسموحة.";
-                return failed;
-            }
-
+            if (request == null) { failed.PublicQuote.Message = "بيانات الحجز غير موجودة."; return failed; }
+            if (request.StartDate == default) { failed.PublicQuote.Message = "حدد تاريخ بداية الحجز."; return failed; }
+            if (request.RoomId.HasValue == request.PackageId.HasValue) { failed.PublicQuote.Message = "اختر غرفة أو باقة واحدة فقط."; return failed; }
+            if (request.Quantity < 1 || request.Quantity > 100 || request.AdultsCount < 0 || request.AdultsCount > 1000 || request.ChildrenCount < 0 || request.ChildrenCount > 1000)
+            { failed.PublicQuote.Message = "الكمية أو أعداد الأشخاص خارج الحدود المسموحة."; return failed; }
             if ((request.SelectedRoomUnitIds?.Count ?? 0) > 100 ||
                 (request.SelectedRoomUnitIds?.Any(id => id <= 0) == true) ||
-                (request.SelectedRoomUnitIds?.Distinct().Count() ?? 0) !=
-                (request.SelectedRoomUnitIds?.Count ?? 0))
-            {
-                failed.PublicQuote.Message = "اختيار أرقام الغرف الفعلية غير صحيح.";
-                return failed;
-            }
-
+                (request.SelectedRoomUnitIds?.Distinct().Count() ?? 0) != (request.SelectedRoomUnitIds?.Count ?? 0))
+            { failed.PublicQuote.Message = "اختيار أرقام الغرف الفعلية غير صحيح."; return failed; }
             if ((request.AdditionalServices?.Count ?? 0) > 100 ||
-                (request.AdditionalServices?.Any(item =>
-                    item.ServiceId <= 0 ||
-                    item.Quantity < 1 ||
-                    item.Quantity > 100) == true))
-            {
-                failed.PublicQuote.Message = "بيانات الخدمات الإضافية غير صحيحة.";
-                return failed;
-            }
-
-            if (!string.IsNullOrWhiteSpace(request.BookingType) &&
-                request.BookingType.Trim().Length > 50)
-            {
-                failed.PublicQuote.Message = "نوع الحجز أطول من الحد المسموح.";
-                return failed;
-            }
-
-            if (!string.IsNullOrWhiteSpace(request.SeatingSetup) &&
-                request.SeatingSetup.Trim().Length > 100)
-            {
-                failed.PublicQuote.Message = "وصف إعداد الجلسة أطول من الحد المسموح.";
-                return failed;
-            }
-
+                (request.AdditionalServices?.Any(item => item.ServiceId <= 0 || item.Quantity < 1 || item.Quantity > 100) == true))
+            { failed.PublicQuote.Message = "بيانات الخدمات الإضافية غير صحيحة."; return failed; }
+            if (!string.IsNullOrWhiteSpace(request.BookingType) && request.BookingType.Trim().Length > 50)
+            { failed.PublicQuote.Message = "نوع الحجز أطول من الحد المسموح."; return failed; }
+            if (!string.IsNullOrWhiteSpace(request.SeatingSetup) && request.SeatingSetup.Trim().Length > 100)
+            { failed.PublicQuote.Message = "وصف إعداد الجلسة أطول من الحد المسموح."; return failed; }
             if (!ManualBookingChannels.Contains(request.ManualBookingChannel ?? string.Empty))
-            {
-                failed.PublicQuote.Message = "قناة الحجز اليدوي غير صحيحة.";
-                return failed;
-            }
+            { failed.PublicQuote.Message = "قناة الحجز اليدوي غير صحيحة."; return failed; }
 
             if (IsState(request.ManualBookingChannel, "Other"))
             {
                 var otherChannel = request.ManualBookingChannelOther?.Trim() ?? string.Empty;
-                if (otherChannel.Length < 2)
-                {
-                    failed.PublicQuote.Message = "اكتب قناة الحجز الأخرى.";
-                    return failed;
-                }
-
-                if (otherChannel.Length > 100)
-                {
-                    failed.PublicQuote.Message = "وصف قناة الحجز الأخرى أطول من الحد المسموح.";
-                    return failed;
-                }
+                if (otherChannel.Length < 2) { failed.PublicQuote.Message = "اكتب قناة الحجز الأخرى."; return failed; }
+                if (otherChannel.Length > 100) { failed.PublicQuote.Message = "وصف قناة الحجز الأخرى أطول من الحد المسموح."; return failed; }
             }
 
             if (!ManualPaymentModes.Contains(request.PaymentMode ?? string.Empty))
-            {
-                failed.PublicQuote.Message = "حالة الدفع المختارة غير صحيحة.";
-                return failed;
-            }
+            { failed.PublicQuote.Message = "حالة الدفع المختارة غير صحيحة."; return failed; }
 
             if (IsState(request.PaymentMode, "Collected"))
             {
-                if (request.PaidAmount < 0m)
-                {
-                    failed.PublicQuote.Message = "المبلغ المستلم غير صحيح.";
-                    return failed;
-                }
-
-                if (request.PaidAmount > 0m &&
-                    (string.IsNullOrWhiteSpace(request.PaymentMethod) ||
-                     request.PaymentMethod.Trim().Length > 30))
-                {
-                    failed.PublicQuote.Message = "حدد طريقة دفع صحيحة.";
-                    return failed;
-                }
-
-                if (!string.IsNullOrWhiteSpace(request.PaymentReferenceNumber) &&
-                    request.PaymentReferenceNumber.Trim().Length > 100)
-                {
-                    failed.PublicQuote.Message = "الرقم المرجعي أطول من الحد المسموح.";
-                    return failed;
-                }
+                if (request.PaidAmount < 0m) { failed.PublicQuote.Message = "المبلغ المستلم غير صحيح."; return failed; }
+                if (request.PaidAmount > 0m && (string.IsNullOrWhiteSpace(request.PaymentMethod) || request.PaymentMethod.Trim().Length > 30))
+                { failed.PublicQuote.Message = "حدد طريقة دفع صحيحة."; return failed; }
+                if (!string.IsNullOrWhiteSpace(request.PaymentReferenceNumber) && request.PaymentReferenceNumber.Trim().Length > 100)
+                { failed.PublicQuote.Message = "الرقم المرجعي أطول من الحد المسموح."; return failed; }
             }
 
             var placeId = await GetActiveOwnerPlaceIdAsync(ownerId);
-            if (!placeId.HasValue)
-            {
-                failed.PublicQuote.Message = "لا توجد منشأة مختارة من الهيدر.";
-                return failed;
-            }
-
+            if (!placeId.HasValue) { failed.PublicQuote.Message = "لا توجد منشأة مختارة من الهيدر."; return failed; }
             var place = await LoadManualBookingPlaceAsync(placeId.Value, ownerId);
-            if (place == null)
-            {
-                failed.PublicQuote.Message = "المنشأة المختارة غير متاحة.";
-                return failed;
-            }
+            if (place == null) { failed.PublicQuote.Message = "المنشأة المختارة غير متاحة."; return failed; }
+            var displayCurrency = await GetOwnerCurrencyContextAsync(place.PlaceId);
 
             var startDate = request.StartDate.Date;
             var endDate = request.EndDate?.Date;
             var now = DateTime.Now;
-
-            if (startDate < DateTime.Today)
-            {
-                failed.PublicQuote.Message = "لا يمكن إنشاء حجز في تاريخ سابق.";
-                return failed;
-            }
+            if (startDate < DateTime.Today) { failed.PublicQuote.Message = "لا يمكن إنشاء حجز في تاريخ سابق."; return failed; }
 
             var horizonMonths = Math.Max(0, place.PlacePolicy?.MaximumHorizonMonths ?? 0);
             if (horizonMonths > 0)
             {
                 var lastDate = endDate ?? startDate;
                 if (lastDate > DateTime.Today.AddMonths(horizonMonths))
-                {
-                    failed.PublicQuote.Message =
-                        $"سياسة المنشأة تسمح بالحجز حتى {horizonMonths} أشهر مقدمًا فقط.";
-                    return failed;
-                }
+                { failed.PublicQuote.Message = $"سياسة المنشأة تسمح بالحجز حتى {horizonMonths} أشهر مقدمًا فقط."; return failed; }
             }
 
             User? customer = null;
             if (request.CustomerId.HasValue && request.CustomerId.Value > 0)
             {
-                customer = await _context.Users
-                    .FirstOrDefaultAsync(item =>
-                        item.UserId == request.CustomerId.Value &&
-                        item.Role == "Customer" &&
-                        item.AccountState == "Active");
-
-                if (customer == null)
-                {
-                    failed.PublicQuote.Message = "حساب العميل المرتبط بالحجز غير موجود أو غير نشط.";
-                    return failed;
-                }
+                customer = await _context.Users.FirstOrDefaultAsync(item =>
+                    item.UserId == request.CustomerId.Value && item.Role == "Customer" && item.AccountState == "Active");
+                if (customer == null) { failed.PublicQuote.Message = "حساب العميل المرتبط بالحجز غير موجود أو غير نشط."; return failed; }
             }
             else
             {
-                if (string.IsNullOrWhiteSpace(request.GuestName) ||
-                    string.IsNullOrWhiteSpace(request.GuestPhone))
-                {
-                    failed.PublicQuote.Message = "اكتب اسم الضيف ورقم هاتفه، أو اربط الحجز بحساب عميل.";
-                    return failed;
-                }
+                if (string.IsNullOrWhiteSpace(request.GuestName) || string.IsNullOrWhiteSpace(request.GuestPhone))
+                { failed.PublicQuote.Message = "اكتب اسم الضيف ورقم هاتفه، أو اربط الحجز بحساب عميل."; return failed; }
 
                 var guestName = request.GuestName.Trim();
                 var guestPhone = request.GuestPhone.Trim();
                 var guestEmail = request.GuestEmail?.Trim();
-
-                if (guestName.Length < 2 || guestName.Length > 150 ||
-                    guestPhone.Length < 5 || guestPhone.Length > 50)
-                {
-                    failed.PublicQuote.Message = "بيانات الضيف غير مكتملة أو أطول من الحد المسموح.";
-                    return failed;
-                }
-
+                if (guestName.Length < 2 || guestName.Length > 150 || guestPhone.Length < 5 || guestPhone.Length > 50)
+                { failed.PublicQuote.Message = "بيانات الضيف غير مكتملة أو أطول من الحد المسموح."; return failed; }
                 if (!string.IsNullOrWhiteSpace(guestEmail) &&
-                    (guestEmail.Length > 150 ||
-                     !guestEmail.Contains('@') ||
-                     guestEmail.StartsWith('@') ||
-                     guestEmail.EndsWith('@')))
-                {
-                    failed.PublicQuote.Message = "البريد الإلكتروني للضيف غير صحيح.";
-                    return failed;
-                }
+                    (guestEmail.Length > 150 || !guestEmail.Contains('@') || guestEmail.StartsWith('@') || guestEmail.EndsWith('@')))
+                { failed.PublicQuote.Message = "البريد الإلكتروني للضيف غير صحيح."; return failed; }
             }
 
             var effectiveOwnerNotes = BuildManualOwnerNotes(request);
-            if (!string.IsNullOrWhiteSpace(effectiveOwnerNotes) &&
-                effectiveOwnerNotes.Length > 1000)
-            {
-                failed.PublicQuote.Message = "الملاحظات الداخلية مع تفاصيل الحجز الأخرى أطول من الحد المسموح.";
-                return failed;
-            }
-
-            if (!string.IsNullOrWhiteSpace(request.PromotionCode) &&
-                request.PromotionCode.Trim().Length > 50)
-            {
-                failed.PublicQuote.Message = "كود العرض أطول من الحد المسموح.";
-                return failed;
-            }
+            if (!string.IsNullOrWhiteSpace(effectiveOwnerNotes) && effectiveOwnerNotes.Length > 1000)
+            { failed.PublicQuote.Message = "الملاحظات الداخلية مع تفاصيل الحجز الأخرى أطول من الحد المسموح."; return failed; }
+            if (!string.IsNullOrWhiteSpace(request.PromotionCode) && request.PromotionCode.Trim().Length > 50)
+            { failed.PublicQuote.Message = "كود العرض أطول من الحد المسموح."; return failed; }
 
             var noticeError = ManualValidateMinimumNotice(place, startDate, null, now);
             if (!string.IsNullOrWhiteSpace(noticeError) && request.RoomId.HasValue)
-            {
-                failed.PublicQuote.Message = noticeError;
-                return failed;
-            }
+            { failed.PublicQuote.Message = noticeError; return failed; }
 
             Room? room = null;
             PlacePackage? package = null;
@@ -1823,52 +1287,20 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
             if (request.RoomId.HasValue)
             {
-                room = await _context.Rooms
-                    .FirstOrDefaultAsync(item =>
-                        item.RoomId == request.RoomId.Value &&
-                        item.PlaceId == place.PlaceId &&
-                        item.IsAvailable == true);
-
-                if (room == null)
-                {
-                    failed.PublicQuote.Message = "نوع الغرفة المختار غير موجود أو غير متاح.";
-                    return failed;
-                }
-
+                room = await _context.Rooms.FirstOrDefaultAsync(item =>
+                    item.RoomId == request.RoomId.Value && item.PlaceId == place.PlaceId && item.IsAvailable == true);
+                if (room == null) { failed.PublicQuote.Message = "نوع الغرفة المختار غير موجود أو غير متاح."; return failed; }
                 if (!endDate.HasValue || endDate.Value <= startDate)
-                {
-                    failed.PublicQuote.Message = "تاريخ الخروج يجب أن يكون بعد تاريخ الدخول.";
-                    return failed;
-                }
-
+                { failed.PublicQuote.Message = "تاريخ الخروج يجب أن يكون بعد تاريخ الدخول."; return failed; }
                 if (ManualContainsWeeklyClosedDate(place, startDate, endDate, true))
-                {
-                    failed.PublicQuote.Message = "الفترة تتضمن يوم إغلاق أسبوعي حسب سياسة المنشأة.";
-                    return failed;
-                }
+                { failed.PublicQuote.Message = "الفترة تتضمن يوم إغلاق أسبوعي حسب سياسة المنشأة."; return failed; }
 
-                var containsClosed = await _context.PlaceCalendarExceptions
-                    .AsNoTracking()
-                    .AnyAsync(item =>
-                        item.PlaceId == place.PlaceId &&
-                        item.ExceptionType == "Closed" &&
-                        item.ExceptionDate >= startDate &&
-                        item.ExceptionDate < endDate.Value);
+                var containsClosed = await _context.PlaceCalendarExceptions.AsNoTracking().AnyAsync(item =>
+                    item.PlaceId == place.PlaceId && item.ExceptionType == "Closed" &&
+                    item.ExceptionDate >= startDate && item.ExceptionDate < endDate.Value);
+                if (containsClosed) { failed.PublicQuote.Message = "الفترة تتضمن يومًا مغلقًا من التقويم."; return failed; }
 
-                if (containsClosed)
-                {
-                    failed.PublicQuote.Message = "الفترة تتضمن يومًا مغلقًا من التقويم.";
-                    return failed;
-                }
-
-                var availability = await GetRoomAvailabilityAsync(
-                    place,
-                    room,
-                    startDate,
-                    endDate.Value,
-                    now,
-                    includeCandidates: true);
-
+                var availability = await GetRoomAvailabilityAsync(place, room, startDate, endDate.Value, now, true);
                 if (quantity > availability.AvailableUnits)
                 {
                     failed.PublicQuote.Message = availability.AvailableUnits <= 0
@@ -1877,125 +1309,52 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     return failed;
                 }
 
-                var guests = Math.Max(0, request.AdultsCount) +
-                             Math.Max(0, request.ChildrenCount);
-                if (guests <= 0)
-                {
-                    failed.PublicQuote.Message = "حدد شخصًا واحدًا على الأقل.";
-                    return failed;
-                }
-
+                var guests = Math.Max(0, request.AdultsCount) + Math.Max(0, request.ChildrenCount);
+                if (guests <= 0) { failed.PublicQuote.Message = "حدد شخصًا واحدًا على الأقل."; return failed; }
                 var roomCapacity = room.MaxAdults + room.MaxChildren;
                 if (roomCapacity > 0 && guests > roomCapacity * quantity)
-                {
-                    failed.PublicQuote.Message =
-                        $"عدد الأشخاص أكبر من سعة الغرف المطلوبة ({roomCapacity * quantity}).";
-                    return failed;
-                }
+                { failed.PublicQuote.Message = $"عدد الأشخاص أكبر من سعة الغرف المطلوبة ({roomCapacity * quantity})."; return failed; }
 
                 nights = Math.Max(1, (endDate.Value - startDate).Days);
                 baseAmount = Math.Round(room.Price * nights * quantity, 2);
-
-                var requestedUnitIds = (request.SelectedRoomUnitIds ?? new List<int>())
-                    .Distinct()
-                    .ToList();
-
+                var requestedUnitIds = (request.SelectedRoomUnitIds ?? new List<int>()).Distinct().ToList();
                 if (requestedUnitIds.Count > 0)
                 {
                     if (requestedUnitIds.Count != quantity)
-                    {
-                        failed.PublicQuote.Message = "عدد الغرف الفعلية المختارة يجب أن يساوي الكمية المطلوبة.";
-                        return failed;
-                    }
-
-                    var candidatesById = availability.Candidates
-                        .ToDictionary(item => item.RoomUnitId);
-
+                    { failed.PublicQuote.Message = "عدد الغرف الفعلية المختارة يجب أن يساوي الكمية المطلوبة."; return failed; }
+                    var candidatesById = availability.Candidates.ToDictionary(item => item.RoomUnitId);
                     if (requestedUnitIds.Any(id => !candidatesById.ContainsKey(id)))
-                    {
-                        failed.PublicQuote.Message = "إحدى الغرف الفعلية المختارة لم تعد متاحة خلال الفترة.";
-                        return failed;
-                    }
-
-                    candidateUnits = requestedUnitIds
-                        .Select(id => candidatesById[id])
-                        .ToList();
+                    { failed.PublicQuote.Message = "إحدى الغرف الفعلية المختارة لم تعد متاحة خلال الفترة."; return failed; }
+                    candidateUnits = requestedUnitIds.Select(id => candidatesById[id]).ToList();
                 }
-                else
-                {
-                    candidateUnits = availability.Candidates.Take(quantity).ToList();
-                }
+                else candidateUnits = availability.Candidates.Take(quantity).ToList();
 
                 if (forCommit && candidateUnits.Count != quantity)
-                {
-                    failed.PublicQuote.Message = "تغير توفر الغرف قبل الحفظ. أعد التحقق من التوفر.";
-                    return failed;
-                }
+                { failed.PublicQuote.Message = "تغير توفر الغرف قبل الحفظ. أعد التحقق من التوفر."; return failed; }
             }
             else
             {
                 quantity = 1;
                 endDate = startDate;
-
-                package = await _context.PlacePackages
-                    .FirstOrDefaultAsync(item =>
-                        item.PackageId == request.PackageId!.Value &&
-                        item.PlaceId == place.PlaceId &&
-                        item.IsActive == true);
-
-                if (package == null)
-                {
-                    failed.PublicQuote.Message = "الباقة المختارة غير موجودة أو غير متاحة.";
-                    return failed;
-                }
-
+                package = await _context.PlacePackages.FirstOrDefaultAsync(item =>
+                    item.PackageId == request.PackageId!.Value && item.PlaceId == place.PlaceId && item.IsActive == true);
+                if (package == null) { failed.PublicQuote.Message = "الباقة المختارة غير موجودة أو غير متاحة."; return failed; }
                 if (ManualContainsWeeklyClosedDate(place, startDate, startDate, false))
-                {
-                    failed.PublicQuote.Message = "هذا اليوم مغلق أسبوعيًا حسب سياسة المنشأة.";
-                    return failed;
-                }
-
+                { failed.PublicQuote.Message = "هذا اليوم مغلق أسبوعيًا حسب سياسة المنشأة."; return failed; }
                 if (!ManualPackageFitsConfiguredShift(place, package))
-                {
-                    failed.PublicQuote.Message = "وقت الباقة خارج الفترات التشغيلية المفعلة.";
-                    return failed;
-                }
-
+                { failed.PublicQuote.Message = "وقت الباقة خارج الفترات التشغيلية المفعلة."; return failed; }
                 noticeError = ManualValidateMinimumNotice(place, startDate, package, now);
-                if (!string.IsNullOrWhiteSpace(noticeError))
-                {
-                    failed.PublicQuote.Message = noticeError;
-                    return failed;
-                }
+                if (!string.IsNullOrWhiteSpace(noticeError)) { failed.PublicQuote.Message = noticeError; return failed; }
 
-                var closed = await _context.PlaceCalendarExceptions
-                    .AsNoTracking()
-                    .AnyAsync(item =>
-                        item.PlaceId == place.PlaceId &&
-                        item.ExceptionType == "Closed" &&
-                        item.ExceptionDate == startDate);
-
-                if (closed)
-                {
-                    failed.PublicQuote.Message = "هذا اليوم مغلق من التقويم.";
-                    return failed;
-                }
-
+                var closed = await _context.PlaceCalendarExceptions.AsNoTracking().AnyAsync(item =>
+                    item.PlaceId == place.PlaceId && item.ExceptionType == "Closed" && item.ExceptionDate == startDate);
+                if (closed) { failed.PublicQuote.Message = "هذا اليوم مغلق من التقويم."; return failed; }
                 if (await ManualHasPackageBookingConflictAsync(place, package, startDate, now))
-                {
-                    failed.PublicQuote.Message = "الفترة المختارة محجوزة أو تتعارض مع وقت التجهيز.";
-                    return failed;
-                }
+                { failed.PublicQuote.Message = "الفترة المختارة محجوزة أو تتعارض مع وقت التجهيز."; return failed; }
 
-                var guests = Math.Max(0, request.AdultsCount) +
-                             Math.Max(0, request.ChildrenCount);
+                var guests = Math.Max(0, request.AdultsCount) + Math.Max(0, request.ChildrenCount);
                 if (guests > 0 && package.Capacity > 0 && guests > package.Capacity)
-                {
-                    failed.PublicQuote.Message =
-                        $"عدد الأشخاص أكبر من سعة الباقة ({package.Capacity}).";
-                    return failed;
-                }
-
+                { failed.PublicQuote.Message = $"عدد الأشخاص أكبر من سعة الباقة ({package.Capacity})."; return failed; }
                 baseAmount = Math.Round(package.Price, 2);
             }
 
@@ -2003,40 +1362,18 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 .Where(item => item.ServiceId > 0 && item.Quantity > 0)
                 .GroupBy(item => item.ServiceId)
                 .ToDictionary(group => group.Key, group => group.Sum(item => item.Quantity));
-
             var serviceIds = serviceQuantities.Keys.ToList();
-            var services = serviceIds.Count == 0
-                ? new List<PlaceAdditionalService>()
-                : await _context.PlaceAdditionalServices
-                    .Where(item =>
-                        serviceIds.Contains(item.ServiceId) &&
-                        item.PlaceId == place.PlaceId &&
-                        item.IsActive == true)
-                    .ToListAsync();
+            var services = serviceIds.Count == 0 ? new List<PlaceAdditionalService>()
+                : await _context.PlaceAdditionalServices.Where(item =>
+                    serviceIds.Contains(item.ServiceId) && item.PlaceId == place.PlaceId && item.IsActive == true).ToListAsync();
+            if (services.Count != serviceIds.Count) { failed.PublicQuote.Message = "إحدى الخدمات المختارة غير متاحة."; return failed; }
 
-            if (services.Count != serviceIds.Count)
-            {
-                failed.PublicQuote.Message = "إحدى الخدمات المختارة غير متاحة.";
-                return failed;
-            }
-
-            var servicesTotal = Math.Round(
-                services.Sum(item => item.Price * serviceQuantities[item.ServiceId]),
-                2);
-
-            var cleaningFee = Math.Round(
-                Math.Max(0m, place.PlacePolicy?.CleaningFee ?? 0m),
-                2);
-
-            var taxPercentage = Math.Clamp(
-                place.PlacePolicy?.TaxPercentage ?? 0m,
-                0m,
-                100m);
-
+            var servicesTotal = Math.Round(services.Sum(item => item.Price * serviceQuantities[item.ServiceId]), 2);
+            var cleaningFee = Math.Round(Math.Max(0m, place.PlacePolicy?.CleaningFee ?? 0m), 2);
+            var taxPercentage = Math.Clamp(place.PlacePolicy?.TaxPercentage ?? 0m, 0m, 100m);
             var originalBeforeTax = Math.Round(baseAmount + servicesTotal + cleaningFee, 2);
             var originalTax = Math.Round(originalBeforeTax * taxPercentage / 100m, 2);
             var originalTotal = Math.Round(originalBeforeTax + originalTax, 2);
-
             var serviceTotals = services.ToDictionary(
                 item => item.ServiceId,
                 item => Math.Round(item.Price * serviceQuantities[item.ServiceId], 2));
@@ -2058,106 +1395,56 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 request.PromotionId,
                 request.PromotionCode);
 
-            if ((request.PromotionId.HasValue || !string.IsNullOrWhiteSpace(request.PromotionCode)) &&
-                !promotion.IsApplied)
+            if ((request.PromotionId.HasValue || !string.IsNullOrWhiteSpace(request.PromotionCode)) && !promotion.IsApplied)
             {
                 failed.PublicQuote.Message = string.IsNullOrWhiteSpace(promotion.Message)
-                    ? "العرض لا ينطبق على هذا الحجز."
-                    : promotion.Message;
+                    ? "العرض لا ينطبق على هذا الحجز." : promotion.Message;
                 return failed;
             }
 
             var complimentaryServiceIds = new HashSet<int>();
-            if (promotion.IsApplied &&
-                promotion.AddsComplimentaryService &&
-                promotion.RewardServiceId.HasValue &&
-                promotion.RewardServiceId.Value > 0)
+            if (promotion.IsApplied && promotion.AddsComplimentaryService &&
+                promotion.RewardServiceId.HasValue && promotion.RewardServiceId.Value > 0)
             {
-                var rewardService = await _context.PlaceAdditionalServices
-                    .FirstOrDefaultAsync(item =>
-                        item.ServiceId == promotion.RewardServiceId.Value &&
-                        item.PlaceId == place.PlaceId &&
-                        item.IsActive == true);
-
-                if (rewardService == null)
-                {
-                    failed.PublicQuote.Message = "الخدمة المجانية لم تعد متاحة في هذه المنشأة.";
-                    return failed;
-                }
-
+                var rewardService = await _context.PlaceAdditionalServices.FirstOrDefaultAsync(item =>
+                    item.ServiceId == promotion.RewardServiceId.Value && item.PlaceId == place.PlaceId && item.IsActive == true);
+                if (rewardService == null) { failed.PublicQuote.Message = "الخدمة المجانية لم تعد متاحة في هذه المنشأة."; return failed; }
                 if (!serviceQuantities.ContainsKey(rewardService.ServiceId))
                 {
-                    serviceQuantities[rewardService.ServiceId] =
-                        Math.Max(1, promotion.RewardQuantity ?? 1);
+                    serviceQuantities[rewardService.ServiceId] = Math.Max(1, promotion.RewardQuantity ?? 1);
                     services.Add(rewardService);
                     complimentaryServiceIds.Add(rewardService.ServiceId);
                 }
             }
 
             var discount = promotion.IsApplied
-                ? Math.Round(
-                    Math.Min(
-                        Math.Max(0m, promotion.DiscountAmount),
-                        Math.Max(0m, baseAmount + servicesTotal)),
-                    2)
+                ? Math.Round(Math.Min(Math.Max(0m, promotion.DiscountAmount), Math.Max(0m, baseAmount + servicesTotal)), 2)
                 : 0m;
-
-            var discountedBeforeTax = Math.Round(
-                Math.Max(0m, originalBeforeTax - discount),
-                2);
-
+            var discountedBeforeTax = Math.Round(Math.Max(0m, originalBeforeTax - discount), 2);
             var taxAmount = Math.Round(discountedBeforeTax * taxPercentage / 100m, 2);
             var totalPrice = Math.Round(Math.Max(0m, discountedBeforeTax + taxAmount), 2);
-
             var depositAmount = ManualCalculateDepositAmount(place, totalPrice);
 
-            if (IsState(request.PaymentMode, "Collected") &&
-                totalPrice > 0m &&
-                request.PaidAmount <= 0m)
-            {
-                failed.PublicQuote.Message = "أدخل المبلغ المستلم فعليًا.";
-                return failed;
-            }
+            if (IsState(request.PaymentMode, "Collected") && totalPrice > 0m && request.PaidAmount <= 0m)
+            { failed.PublicQuote.Message = "أدخل المبلغ المستلم فعليًا."; return failed; }
 
-            var collected = totalPrice > 0m &&
-                            IsState(request.PaymentMode, "Collected") &&
-                            request.PaidAmount > 0m;
-
-            var normalizedPaidAmount = collected
-                ? Math.Round(Math.Max(0m, request.PaidAmount), 2)
-                : 0m;
-
+            var collected = totalPrice > 0m && IsState(request.PaymentMode, "Collected") && request.PaidAmount > 0m;
+            var normalizedPaidAmount = collected ? Math.Round(Math.Max(0m, request.PaidAmount), 2) : 0m;
             if (normalizedPaidAmount > totalPrice)
-            {
-                failed.PublicQuote.Message = "المبلغ المستلم لا يمكن أن يتجاوز إجمالي الحجز.";
-                return failed;
-            }
-
+            { failed.PublicQuote.Message = "المبلغ المستلم لا يمكن أن يتجاوز إجمالي الحجز."; return failed; }
             if (collected && depositAmount > 0m && normalizedPaidAmount < depositAmount)
             {
-                failed.PublicQuote.Message = $"المبلغ المستلم أقل من العربون المطلوب ({depositAmount:N0} ريال).";
+                failed.PublicQuote.Message = $"المبلغ المستلم أقل من العربون المطلوب ({DisplayMoney(depositAmount, displayCurrency)}).";
                 return failed;
             }
 
-            var defaultCommission = await _context.SystemSettings
-                .AsNoTracking()
+            var defaultCommission = await _context.SystemSettings.AsNoTracking()
                 .OrderByDescending(item => item.Id)
                 .Select(item => (decimal?)item.CommissionPercentage)
                 .FirstOrDefaultAsync() ?? 0m;
-
-            var commissionPercentage = Math.Clamp(
-                place.Category?.CommissionPercentage ?? defaultCommission,
-                0m,
-                100m);
-
-            var platformCommission = totalPrice <= 0m
-                ? 0m
-                : Math.Round(totalPrice * commissionPercentage / 100m, 2);
-
-            var proposedState = depositAmount > 0m && !collected
-                ? "AwaitingPayment"
-                : "Confirmed";
-
+            var commissionPercentage = Math.Clamp(place.Category?.CommissionPercentage ?? defaultCommission, 0m, 100m);
+            var platformCommission = totalPrice <= 0m ? 0m : Math.Round(totalPrice * commissionPercentage / 100m, 2);
+            var proposedState = depositAmount > 0m && !collected ? "AwaitingPayment" : "Confirmed";
             var paymentTimeout = Math.Max(1, place.PlacePolicy?.PaymentTimeout ?? 12);
 
             var publicQuote = new OwnerManualBookingQuoteDto
@@ -2181,9 +1468,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 DiscountAmount = discount,
                 TotalPrice = totalPrice,
                 DepositAmount = depositAmount,
-                RemainingAmount = Math.Round(
-                    Math.Max(0m, totalPrice - normalizedPaidAmount),
-                    2),
+                RemainingAmount = Math.Round(Math.Max(0m, totalPrice - normalizedPaidAmount), 2),
                 CommissionPercentage = commissionPercentage,
                 PlatformCommission = platformCommission,
                 PromotionId = promotion.IsApplied ? promotion.PromotionId : null,
@@ -2194,9 +1479,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 PromotionMessage = promotion.Message,
                 CanConfirmImmediately = proposedState == "Confirmed",
                 ProposedBookingState = proposedState,
-                TimerExpiredAt = proposedState == "AwaitingPayment"
-                    ? now.AddHours(paymentTimeout)
-                    : null,
+                TimerExpiredAt = proposedState == "AwaitingPayment" ? now.AddHours(paymentTimeout) : null,
                 AvailableUnits = candidateUnits.Select(item => new OwnerManualAssignedUnitPreviewDto
                 {
                     RoomUnitId = item.RoomUnitId,
@@ -2252,49 +1535,29 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             DateTime referenceTime,
             bool includeCandidates = false)
         {
-            var allUnits = await _context.RoomUnits
-                .AsNoTracking()
-                .Where(item =>
-                    item.PlaceId == place.PlaceId &&
-                    item.RoomId == room.RoomId)
+            var allUnits = await _context.RoomUnits.AsNoTracking()
+                .Where(item => item.PlaceId == place.PlaceId && item.RoomId == room.RoomId)
                 .OrderBy(item => item.FloorNumber)
                 .ThenBy(item => item.RoomNumber)
                 .ThenBy(item => item.RoomUnitId)
                 .ToListAsync();
 
-            if (allUnits.Count == 0)
-            {
-                return new RoomAvailabilityResult();
-            }
+            if (allUnits.Count == 0) return new RoomAvailabilityResult();
 
-            var activeUnits = allUnits
-                .Where(item => item.IsAvailable == true)
-                .ToList();
-
+            var activeUnits = allUnits.Where(item => item.IsAvailable == true).ToList();
             if (activeUnits.Count == 0)
             {
                 return new RoomAvailabilityResult
                 {
-                    UnitOptions = allUnits
-                        .Select(unit => BuildManualRoomUnitOption(
-                            unit,
-                            false,
-                            "Closed",
-                            "مغلقة / غير متاحة",
-                            null,
-                            null))
-                        .ToList()
+                    UnitOptions = allUnits.Select(unit => BuildManualRoomUnitOption(
+                        unit, false, "Closed", "مغلقة / غير متاحة", null, null)).ToList()
                 };
             }
 
-            var unitIds = activeUnits
-                .Select(item => item.RoomUnitId)
-                .ToList();
-
+            var unitIds = activeUnits.Select(item => item.RoomUnitId).ToList();
             var blockAdjacent = ManualRequiresAdjacentRoomBufferBlock(place);
 
-            var assignmentRows = await _context.BookingRoomUnits
-                .AsNoTracking()
+            var assignmentRows = await _context.BookingRoomUnits.AsNoTracking()
                 .Where(item =>
                     unitIds.Contains(item.RoomUnitId) &&
                     CalendarBlockingAssignmentStates.Contains(item.AssignmentStatus) &&
@@ -2302,9 +1565,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     (item.Booking.BookingState != "AwaitingPayment" ||
                      !item.Booking.TimerExpiredAt.HasValue ||
                      item.Booking.TimerExpiredAt > referenceTime) &&
-                    (blockAdjacent
-                        ? item.Booking.StartDate <= endDate
-                        : item.Booking.StartDate < endDate) &&
+                    (blockAdjacent ? item.Booking.StartDate <= endDate : item.Booking.StartDate < endDate) &&
                     (blockAdjacent
                         ? (item.Booking.EndDate ?? item.Booking.StartDate.AddDays(1)) >= startDate
                         : (item.Booking.EndDate ?? item.Booking.StartDate.AddDays(1)) > startDate))
@@ -2314,47 +1575,34 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     item.BookingId,
                     item.Booking.BookingState,
                     item.Booking.TimerExpiredAt
-                })
-                .ToListAsync();
+                }).ToListAsync();
 
             var assignmentByUnit = assignmentRows
                 .GroupBy(item => item.RoomUnitId)
                 .ToDictionary(
                     group => group.Key,
-                    group => group
-                        .OrderBy(item => ManualRoomUnitStatePriority(item.BookingState))
-                        .ThenBy(item => item.BookingId)
-                        .First());
+                    group => group.OrderBy(item => ManualRoomUnitStatePriority(item.BookingState))
+                        .ThenBy(item => item.BookingId).First());
 
-            var legacyReservedQuantity = await _context.Bookings
-                .AsNoTracking()
+            var legacyReservedQuantity = await _context.Bookings.AsNoTracking()
                 .Where(item =>
                     item.RoomId == room.RoomId &&
                     !item.BookingRoomUnits.Any() &&
                     BlockingBookingStates.Contains(item.BookingState ?? string.Empty) &&
-                    (item.BookingState != "AwaitingPayment" ||
-                     !item.TimerExpiredAt.HasValue ||
-                     item.TimerExpiredAt > referenceTime) &&
-                    (blockAdjacent
-                        ? item.StartDate <= endDate
-                        : item.StartDate < endDate) &&
+                    (item.BookingState != "AwaitingPayment" || !item.TimerExpiredAt.HasValue || item.TimerExpiredAt > referenceTime) &&
+                    (blockAdjacent ? item.StartDate <= endDate : item.StartDate < endDate) &&
                     (blockAdjacent
                         ? (item.EndDate ?? item.StartDate.AddDays(1)) >= startDate
                         : (item.EndDate ?? item.StartDate.AddDays(1)) > startDate))
                 .SumAsync(item => (int?)item.Quantity) ?? 0;
 
             var unassignedOperationalUnits = activeUnits
-                .Where(item => !assignmentByUnit.ContainsKey(item.RoomUnitId))
-                .ToList();
-
+                .Where(item => !assignmentByUnit.ContainsKey(item.RoomUnitId)).ToList();
             var legacyBlockedIds = unassignedOperationalUnits
                 .Take(Math.Max(0, legacyReservedQuantity))
-                .Select(item => item.RoomUnitId)
-                .ToHashSet();
-
+                .Select(item => item.RoomUnitId).ToHashSet();
             var candidates = unassignedOperationalUnits
-                .Where(item => !legacyBlockedIds.Contains(item.RoomUnitId))
-                .ToList();
+                .Where(item => !legacyBlockedIds.Contains(item.RoomUnitId)).ToList();
 
             var unitOptions = new List<OwnerManualRoomUnitOptionDto>();
             foreach (var unit in allUnits)
@@ -2365,9 +1613,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                         unit,
                         false,
                         "Closed",
-                        string.IsNullOrWhiteSpace(unit.Notes)
-                            ? "مغلقة / غير متاحة"
-                            : "مغلقة / صيانة",
+                        string.IsNullOrWhiteSpace(unit.Notes) ? "مغلقة / غير متاحة" : "مغلقة / صيانة",
                         null,
                         null));
                     continue;
@@ -2377,34 +1623,19 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 {
                     var state = NormalizeManualRoomUnitAvailabilityState(assignment.BookingState);
                     unitOptions.Add(BuildManualRoomUnitOption(
-                        unit,
-                        false,
-                        state.Code,
-                        state.Label,
-                        assignment.BookingId,
-                        assignment.TimerExpiredAt));
+                        unit, false, state.Code, state.Label, assignment.BookingId, assignment.TimerExpiredAt));
                     continue;
                 }
 
                 if (legacyBlockedIds.Contains(unit.RoomUnitId))
                 {
                     unitOptions.Add(BuildManualRoomUnitOption(
-                        unit,
-                        false,
-                        "LegacyReserved",
-                        "محجوزة بحجز سابق",
-                        null,
-                        null));
+                        unit, false, "LegacyReserved", "محجوزة بحجز سابق", null, null));
                     continue;
                 }
 
                 unitOptions.Add(BuildManualRoomUnitOption(
-                    unit,
-                    true,
-                    "Available",
-                    "متاحة",
-                    null,
-                    null));
+                    unit, true, "Available", "متاحة", null, null));
             }
 
             return new RoomAvailabilityResult
@@ -2451,8 +1682,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             };
         }
 
-        private static (string Code, string Label) NormalizeManualRoomUnitAvailabilityState(
-            string? bookingState)
+        private static (string Code, string Label) NormalizeManualRoomUnitAvailabilityState(string? bookingState)
         {
             return bookingState?.Trim() switch
             {
@@ -2464,52 +1694,33 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             };
         }
 
-        private async Task<int> GetOccupiedRoomUnitCountForDateAsync(
-            int placeId,
-            DateTime date)
+        private async Task<int> GetOccupiedRoomUnitCountForDateAsync(int placeId, DateTime date)
         {
             date = date.Date;
             var nextDate = date.AddDays(1);
             var now = DateTime.Now;
 
-            var unitIds = await _context.RoomUnits
-                .AsNoTracking()
+            var unitIds = await _context.RoomUnits.AsNoTracking()
                 .Where(item => item.PlaceId == placeId && item.IsAvailable == true)
-                .Select(item => item.RoomUnitId)
-                .ToListAsync();
+                .Select(item => item.RoomUnitId).ToListAsync();
+            if (unitIds.Count == 0) return 0;
 
-            if (unitIds.Count == 0)
-            {
-                return 0;
-            }
-
-            var assigned = await _context.BookingRoomUnits
-                .AsNoTracking()
+            var assigned = await _context.BookingRoomUnits.AsNoTracking()
                 .Where(item =>
                     unitIds.Contains(item.RoomUnitId) &&
                     CalendarBlockingAssignmentStates.Contains(item.AssignmentStatus) &&
                     BlockingBookingStates.Contains(item.Booking.BookingState ?? string.Empty) &&
-                    (item.Booking.BookingState != "AwaitingPayment" ||
-                     !item.Booking.TimerExpiredAt.HasValue ||
-                     item.Booking.TimerExpiredAt > now) &&
+                    (item.Booking.BookingState != "AwaitingPayment" || !item.Booking.TimerExpiredAt.HasValue || item.Booking.TimerExpiredAt > now) &&
                     item.Booking.StartDate < nextDate &&
                     (item.Booking.EndDate ?? item.Booking.StartDate.AddDays(1)) > date)
-                .Select(item => item.RoomUnitId)
-                .Distinct()
-                .CountAsync();
+                .Select(item => item.RoomUnitId).Distinct().CountAsync();
 
-            var legacy = await _context.Bookings
-                .AsNoTracking()
+            var legacy = await _context.Bookings.AsNoTracking()
                 .Where(item =>
-                    item.PlaceId == placeId &&
-                    item.RoomId.HasValue &&
-                    !item.BookingRoomUnits.Any() &&
+                    item.PlaceId == placeId && item.RoomId.HasValue && !item.BookingRoomUnits.Any() &&
                     BlockingBookingStates.Contains(item.BookingState ?? string.Empty) &&
-                    (item.BookingState != "AwaitingPayment" ||
-                     !item.TimerExpiredAt.HasValue ||
-                     item.TimerExpiredAt > now) &&
-                    item.StartDate < nextDate &&
-                    (item.EndDate ?? item.StartDate.AddDays(1)) > date)
+                    (item.BookingState != "AwaitingPayment" || !item.TimerExpiredAt.HasValue || item.TimerExpiredAt > now) &&
+                    item.StartDate < nextDate && (item.EndDate ?? item.StartDate.AddDays(1)) > date)
                 .SumAsync(item => (int?)item.Quantity) ?? 0;
 
             return Math.Min(unitIds.Count, assigned + Math.Max(0, legacy));
@@ -2533,83 +1744,50 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             string? requestedPromotionCode)
         {
             var result = new ManualPromotionResolution();
-            var explicitPromotion = requestedPromotionId.HasValue ||
-                                    !string.IsNullOrWhiteSpace(requestedPromotionCode);
-
+            var explicitPromotion = requestedPromotionId.HasValue || !string.IsNullOrWhiteSpace(requestedPromotionCode);
             var normalizedCode = requestedPromotionCode?.Trim() ?? string.Empty;
             var today = DateTime.Today;
 
-            var promotions = await _context.Promotions
-                .AsNoTracking()
+            var promotions = await _context.Promotions.AsNoTracking()
                 .Where(item =>
                     item.PlaceId == placeId &&
                     item.IsActive == true &&
                     (item.Status == "Active" || item.Status == "Scheduled") &&
-                    item.StartDate <= today &&
-                    item.EndDate >= today)
+                    item.StartDate <= today && item.EndDate >= today)
                 .OrderBy(item => item.EndDate)
                 .ThenByDescending(item => item.UpdatedAt ?? item.CreatedAt)
                 .ThenByDescending(item => item.PromotionId)
                 .ToListAsync();
 
             if (requestedPromotionId.HasValue && requestedPromotionId.Value > 0)
-            {
-                promotions = promotions
-                    .Where(item => item.PromotionId == requestedPromotionId.Value)
-                    .ToList();
-            }
+                promotions = promotions.Where(item => item.PromotionId == requestedPromotionId.Value).ToList();
             else if (!string.IsNullOrWhiteSpace(normalizedCode))
-            {
-                promotions = promotions
-                    .Where(item =>
-                        !string.IsNullOrWhiteSpace(item.PromoCode) &&
-                        string.Equals(
-                            item.PromoCode.Trim(),
-                            normalizedCode,
-                            StringComparison.OrdinalIgnoreCase))
-                    .ToList();
-            }
+                promotions = promotions.Where(item =>
+                    !string.IsNullOrWhiteSpace(item.PromoCode) &&
+                    string.Equals(item.PromoCode.Trim(), normalizedCode, StringComparison.OrdinalIgnoreCase)).ToList();
             else
-            {
-                promotions = promotions
-                    .Where(item => item.IsAutomatic == true)
-                    .ToList();
-            }
+                promotions = promotions.Where(item => item.IsAutomatic == true).ToList();
 
             if (promotions.Count == 0)
             {
-                if (explicitPromotion)
-                {
-                    result.Message = "العرض غير فعال أو لا يتبع المنشأة الحالية.";
-                }
-
+                if (explicitPromotion) result.Message = "العرض غير فعال أو لا يتبع المنشأة الحالية.";
                 return result;
             }
 
             var ids = promotions.Select(item => item.PromotionId).ToArray();
-
-            var usageCounts = await _context.Bookings
-                .AsNoTracking()
+            var usageCounts = await _context.Bookings.AsNoTracking()
                 .Where(item =>
-                    item.PromotionId.HasValue &&
-                    ids.Contains(item.PromotionId.Value) &&
-                    item.BookingState != "Cancelled" &&
-                    item.BookingState != "Rejected" &&
-                    item.BookingState != "Expired")
+                    item.PromotionId.HasValue && ids.Contains(item.PromotionId.Value) &&
+                    item.BookingState != "Cancelled" && item.BookingState != "Rejected" && item.BookingState != "Expired")
                 .GroupBy(item => item.PromotionId!.Value)
                 .Select(group => new { Id = group.Key, Count = group.Count() })
                 .ToDictionaryAsync(item => item.Id, item => item.Count);
 
             var customerUsage = customerId.HasValue && customerId.Value > 0
-                ? await _context.Bookings
-                    .AsNoTracking()
+                ? await _context.Bookings.AsNoTracking()
                     .Where(item =>
-                        item.CustomerId == customerId.Value &&
-                        item.PromotionId.HasValue &&
-                        ids.Contains(item.PromotionId.Value) &&
-                        item.BookingState != "Cancelled" &&
-                        item.BookingState != "Rejected" &&
-                        item.BookingState != "Expired")
+                        item.CustomerId == customerId.Value && item.PromotionId.HasValue && ids.Contains(item.PromotionId.Value) &&
+                        item.BookingState != "Cancelled" && item.BookingState != "Rejected" && item.BookingState != "Expired")
                     .GroupBy(item => item.PromotionId!.Value)
                     .Select(group => new { Id = group.Key, Count = group.Count() })
                     .ToDictionaryAsync(item => item.Id, item => item.Count)
@@ -2624,9 +1802,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 var evaluation = new ManualPromotionResolution
                 {
                     PromotionTitle = promotion.PromotionTitle?.Trim() ?? "عرض خاص",
-                    OfferMode = string.IsNullOrWhiteSpace(promotion.OfferMode)
-                        ? "Discount"
-                        : promotion.OfferMode.Trim(),
+                    OfferMode = string.IsNullOrWhiteSpace(promotion.OfferMode) ? "Discount" : promotion.OfferMode.Trim(),
                     RewardType = promotion.RewardType?.Trim() ?? string.Empty,
                     RequiredQuantity = promotion.RequiredQuantity,
                     RewardQuantity = promotion.RewardQuantity,
@@ -2643,35 +1819,20 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
                 if (promotion.RoomId.HasValue)
                 {
-                    if (roomId != promotion.RoomId)
-                    {
-                        firstFailure = FirstNonEmpty(firstFailure, "العرض مخصص لغرفة أخرى.");
-                        continue;
-                    }
-
+                    if (roomId != promotion.RoomId) { firstFailure = FirstNonEmpty(firstFailure, "العرض مخصص لغرفة أخرى."); continue; }
                     targetType = "Room";
                     eligible = baseAmount;
                 }
                 else if (promotion.PackageId.HasValue)
                 {
-                    if (packageId != promotion.PackageId)
-                    {
-                        firstFailure = FirstNonEmpty(firstFailure, "العرض مخصص لباقة أخرى.");
-                        continue;
-                    }
-
+                    if (packageId != promotion.PackageId) { firstFailure = FirstNonEmpty(firstFailure, "العرض مخصص لباقة أخرى."); continue; }
                     targetType = "Package";
                     eligible = baseAmount;
                 }
                 else if (promotion.ServiceId.HasValue)
                 {
-                    if (!serviceTotals.TryGetValue(promotion.ServiceId.Value, out eligible) ||
-                        eligible <= 0m)
-                    {
-                        firstFailure = FirstNonEmpty(firstFailure, "العرض مخصص لخدمة غير مختارة.");
-                        continue;
-                    }
-
+                    if (!serviceTotals.TryGetValue(promotion.ServiceId.Value, out eligible) || eligible <= 0m)
+                    { firstFailure = FirstNonEmpty(firstFailure, "العرض مخصص لخدمة غير مختارة."); continue; }
                     targetType = "Service";
                 }
                 else
@@ -2681,136 +1842,59 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 }
 
                 eligible = Math.Round(Math.Max(0m, eligible), 2);
-                if (eligible <= 0m)
-                {
-                    firstFailure = FirstNonEmpty(firstFailure, "لا توجد قيمة مؤهلة لتطبيق هذا العرض.");
-                    continue;
-                }
+                if (eligible <= 0m) { firstFailure = FirstNonEmpty(firstFailure, "لا توجد قيمة مؤهلة لتطبيق هذا العرض."); continue; }
+                if (promotion.MinimumBookingAmount.HasValue && promotion.MinimumBookingAmount.Value > 0m && minimumAmount < promotion.MinimumBookingAmount.Value)
+                { firstFailure = FirstNonEmpty(firstFailure, "قيمة الحجز أقل من الحد الأدنى للعرض."); continue; }
+                if (promotion.MinimumNights.HasValue && promotion.MinimumNights.Value > 0 && bookingDays < promotion.MinimumNights.Value)
+                { firstFailure = FirstNonEmpty(firstFailure, "عدد الليالي أقل من شرط العرض."); continue; }
+                if (promotion.MinimumPeople.HasValue && promotion.MinimumPeople.Value > 0 && totalGuests < promotion.MinimumPeople.Value)
+                { firstFailure = FirstNonEmpty(firstFailure, "عدد الأشخاص أقل من شرط العرض."); continue; }
 
-                if (promotion.MinimumBookingAmount.HasValue &&
-                    promotion.MinimumBookingAmount.Value > 0m &&
-                    minimumAmount < promotion.MinimumBookingAmount.Value)
-                {
-                    firstFailure = FirstNonEmpty(firstFailure, "قيمة الحجز أقل من الحد الأدنى للعرض.");
-                    continue;
-                }
-
-                if (promotion.MinimumNights.HasValue &&
-                    promotion.MinimumNights.Value > 0 &&
-                    bookingDays < promotion.MinimumNights.Value)
-                {
-                    firstFailure = FirstNonEmpty(firstFailure, "عدد الليالي أقل من شرط العرض.");
-                    continue;
-                }
-
-                if (promotion.MinimumPeople.HasValue &&
-                    promotion.MinimumPeople.Value > 0 &&
-                    totalGuests < promotion.MinimumPeople.Value)
-                {
-                    firstFailure = FirstNonEmpty(firstFailure, "عدد الأشخاص أقل من شرط العرض.");
-                    continue;
-                }
-
-                var lastStayDate = roomId.HasValue && endDate.HasValue &&
-                                   endDate.Value.Date > startDate.Date
-                    ? endDate.Value.Date.AddDays(-1)
-                    : startDate.Date;
-
-                if (promotion.StayStartDate.HasValue &&
-                    startDate.Date < promotion.StayStartDate.Value.Date)
-                {
-                    firstFailure = FirstNonEmpty(firstFailure, "تاريخ الحجز يسبق فترة العرض.");
-                    continue;
-                }
-
-                if (promotion.StayEndDate.HasValue &&
-                    lastStayDate > promotion.StayEndDate.Value.Date)
-                {
-                    firstFailure = FirstNonEmpty(firstFailure, "فترة الحجز تتجاوز فترة العرض.");
-                    continue;
-                }
+                var lastStayDate = roomId.HasValue && endDate.HasValue && endDate.Value.Date > startDate.Date
+                    ? endDate.Value.Date.AddDays(-1) : startDate.Date;
+                if (promotion.StayStartDate.HasValue && startDate.Date < promotion.StayStartDate.Value.Date)
+                { firstFailure = FirstNonEmpty(firstFailure, "تاريخ الحجز يسبق فترة العرض."); continue; }
+                if (promotion.StayEndDate.HasValue && lastStayDate > promotion.StayEndDate.Value.Date)
+                { firstFailure = FirstNonEmpty(firstFailure, "فترة الحجز تتجاوز فترة العرض."); continue; }
 
                 if (!string.IsNullOrWhiteSpace(promotion.ApplicableDaysCsv))
                 {
-                    var allowed = promotion.ApplicableDaysCsv
-                        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    var allowed = promotion.ApplicableDaysCsv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                         .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
                     var allAllowed = true;
-                    var exclusiveEnd = roomId.HasValue && endDate.HasValue
-                        ? endDate.Value.Date
-                        : startDate.Date.AddDays(1);
-
+                    var exclusiveEnd = roomId.HasValue && endDate.HasValue ? endDate.Value.Date : startDate.Date.AddDays(1);
                     for (var day = startDate.Date; day < exclusiveEnd; day = day.AddDays(1))
                     {
-                        if (!allowed.Contains(day.DayOfWeek.ToString()))
-                        {
-                            allAllowed = false;
-                            break;
-                        }
+                        if (!allowed.Contains(day.DayOfWeek.ToString())) { allAllowed = false; break; }
                     }
-
-                    if (!allAllowed)
-                    {
-                        firstFailure = FirstNonEmpty(firstFailure, "العرض لا يشمل جميع أيام الحجز.");
-                        continue;
-                    }
+                    if (!allAllowed) { firstFailure = FirstNonEmpty(firstFailure, "العرض لا يشمل جميع أيام الحجز."); continue; }
                 }
 
                 usageCounts.TryGetValue(promotion.PromotionId, out var totalUsage);
-                if (promotion.TotalUsageLimit.HasValue &&
-                    promotion.TotalUsageLimit.Value > 0 &&
-                    totalUsage >= promotion.TotalUsageLimit.Value)
-                {
-                    firstFailure = FirstNonEmpty(firstFailure, "انتهى الحد المتاح للعرض.");
-                    continue;
-                }
+                if (promotion.TotalUsageLimit.HasValue && promotion.TotalUsageLimit.Value > 0 && totalUsage >= promotion.TotalUsageLimit.Value)
+                { firstFailure = FirstNonEmpty(firstFailure, "انتهى الحد المتاح للعرض."); continue; }
 
-                if (promotion.PerCustomerUsageLimit.HasValue &&
-                    promotion.PerCustomerUsageLimit.Value > 0)
+                if (promotion.PerCustomerUsageLimit.HasValue && promotion.PerCustomerUsageLimit.Value > 0)
                 {
                     if (!customerId.HasValue || customerId.Value <= 0)
-                    {
-                        firstFailure = FirstNonEmpty(
-                            firstFailure,
-                            "هذا العرض له حد استخدام لكل عميل؛ اربط الحجز بحساب العميل لتطبيقه.");
-                        continue;
-                    }
-
+                    { firstFailure = FirstNonEmpty(firstFailure, "هذا العرض له حد استخدام لكل عميل؛ اربط الحجز بحساب العميل لتطبيقه."); continue; }
                     customerUsage.TryGetValue(promotion.PromotionId, out var usedByCustomer);
                     if (usedByCustomer >= promotion.PerCustomerUsageLimit.Value)
-                    {
-                        firstFailure = FirstNonEmpty(firstFailure, "العميل وصل إلى حد استخدام هذا العرض.");
-                        continue;
-                    }
+                    { firstFailure = FirstNonEmpty(firstFailure, "العميل وصل إلى حد استخدام هذا العرض."); continue; }
                 }
 
                 var requiresCode = promotion.IsAutomatic == false;
                 var storedCode = promotion.PromoCode?.Trim() ?? string.Empty;
                 if (requiresCode)
                 {
-                    if (string.IsNullOrWhiteSpace(storedCode))
-                    {
-                        firstFailure = FirstNonEmpty(firstFailure, "العرض يحتاج كودًا لكن لم يتم إعداد كود صالح له.");
-                        continue;
-                    }
-
+                    if (string.IsNullOrWhiteSpace(storedCode)) { firstFailure = FirstNonEmpty(firstFailure, "العرض يحتاج كودًا لكن لم يتم إعداد كود صالح له."); continue; }
                     if (!string.Equals(storedCode, normalizedCode, StringComparison.OrdinalIgnoreCase))
-                    {
-                        firstFailure = FirstNonEmpty(firstFailure, "أدخل كود العرض الصحيح.");
-                        continue;
-                    }
-
+                    { firstFailure = FirstNonEmpty(firstFailure, "أدخل كود العرض الصحيح."); continue; }
                     evaluation.PromotionCode = storedCode;
                 }
 
-                var normalizedOfferMode = string.Equals(
-                        evaluation.OfferMode,
-                        "ConditionalReward",
-                        StringComparison.OrdinalIgnoreCase)
-                    ? "ConditionalReward"
-                    : "Discount";
-
+                var normalizedOfferMode = string.Equals(evaluation.OfferMode, "ConditionalReward", StringComparison.OrdinalIgnoreCase)
+                    ? "ConditionalReward" : "Discount";
                 var normalizedRewardType = evaluation.RewardType;
                 decimal rawDiscount = 0m;
                 decimal benefitAmount = 0m;
@@ -2818,75 +1902,39 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
                 if (normalizedOfferMode == "Discount")
                 {
-                    var discountType = string.Equals(
-                            promotion.DiscountType,
-                            "FixedAmount",
-                            StringComparison.OrdinalIgnoreCase)
-                        ? "FixedAmount"
-                        : "Percentage";
-
+                    var discountType = string.Equals(promotion.DiscountType, "FixedAmount", StringComparison.OrdinalIgnoreCase)
+                        ? "FixedAmount" : "Percentage";
                     evaluation.DiscountType = discountType;
                     evaluation.OfferSummary = discountType == "Percentage"
-                        ? $"خصم {promotion.DiscountValue:0.##}%"
-                        : $"خصم بمبلغ {promotion.DiscountValue:N0}";
-
+                        ? $"خصم {promotion.DiscountValue:0.##}%" : "خصم بمبلغ ثابت";
                     rawDiscount = discountType == "Percentage"
-                        ? eligible * promotion.DiscountValue / 100m
-                        : promotion.DiscountValue;
-
-                    if (promotion.MaximumDiscountAmount.HasValue &&
-                        promotion.MaximumDiscountAmount.Value > 0m)
-                    {
+                        ? eligible * promotion.DiscountValue / 100m : promotion.DiscountValue;
+                    if (promotion.MaximumDiscountAmount.HasValue && promotion.MaximumDiscountAmount.Value > 0m)
                         rawDiscount = Math.Min(rawDiscount, promotion.MaximumDiscountAmount.Value);
-                    }
-
                     benefitAmount = rawDiscount;
                 }
-                else if (string.Equals(
-                             normalizedRewardType,
-                             "PercentageDiscount",
-                             StringComparison.OrdinalIgnoreCase))
+                else if (string.Equals(normalizedRewardType, "PercentageDiscount", StringComparison.OrdinalIgnoreCase))
                 {
                     evaluation.DiscountType = "Percentage";
-                    evaluation.OfferSummary =
-                        $"خصم {promotion.DiscountValue:0.##}% بعد تحقق شروط العرض";
+                    evaluation.OfferSummary = $"خصم {promotion.DiscountValue:0.##}% بعد تحقق شروط العرض";
                     rawDiscount = eligible * promotion.DiscountValue / 100m;
-
-                    if (promotion.MaximumDiscountAmount.HasValue &&
-                        promotion.MaximumDiscountAmount.Value > 0m)
-                    {
+                    if (promotion.MaximumDiscountAmount.HasValue && promotion.MaximumDiscountAmount.Value > 0m)
                         rawDiscount = Math.Min(rawDiscount, promotion.MaximumDiscountAmount.Value);
-                    }
-
                     benefitAmount = rawDiscount;
                 }
-                else if (string.Equals(
-                             normalizedRewardType,
-                             "FixedDiscount",
-                             StringComparison.OrdinalIgnoreCase))
+                else if (string.Equals(normalizedRewardType, "FixedDiscount", StringComparison.OrdinalIgnoreCase))
                 {
                     evaluation.DiscountType = "FixedAmount";
-                    evaluation.OfferSummary =
-                        $"خصم بمبلغ {promotion.DiscountValue:N0} بعد تحقق شروط العرض";
+                    evaluation.OfferSummary = "خصم بمبلغ ثابت بعد تحقق شروط العرض";
                     rawDiscount = promotion.DiscountValue;
-
-                    if (promotion.MaximumDiscountAmount.HasValue &&
-                        promotion.MaximumDiscountAmount.Value > 0m)
-                    {
+                    if (promotion.MaximumDiscountAmount.HasValue && promotion.MaximumDiscountAmount.Value > 0m)
                         rawDiscount = Math.Min(rawDiscount, promotion.MaximumDiscountAmount.Value);
-                    }
-
                     benefitAmount = rawDiscount;
                 }
-                else if (string.Equals(
-                             normalizedRewardType,
-                             "SpecialPrice",
-                             StringComparison.OrdinalIgnoreCase))
+                else if (string.Equals(normalizedRewardType, "SpecialPrice", StringComparison.OrdinalIgnoreCase))
                 {
                     evaluation.DiscountType = "SpecialPrice";
-
-                    if (!promotion.SpecialPrice.HasValue ||
-                        promotion.SpecialPrice.Value < 0m)
+                    if (!promotion.SpecialPrice.HasValue || promotion.SpecialPrice.Value < 0m)
                     {
                         evaluation.Message = "السعر الخاص في هذا العرض غير صالح.";
                         canApply = false;
@@ -2894,58 +1942,33 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     else
                     {
                         decimal specialTotal;
-
-                        if (roomId.HasValue &&
-                            (promotion.RoomId.HasValue || targetType == "Place"))
-                        {
-                            specialTotal = promotion.SpecialPrice.Value *
-                                           Math.Max(1, bookingDays) *
-                                           Math.Max(1, bookingQuantity);
-                        }
-                        else if (packageId.HasValue &&
-                                 (promotion.PackageId.HasValue || targetType == "Place"))
-                        {
-                            specialTotal = promotion.SpecialPrice.Value *
-                                           Math.Max(1, bookingQuantity);
-                        }
+                        if (roomId.HasValue && (promotion.RoomId.HasValue || targetType == "Place"))
+                            specialTotal = promotion.SpecialPrice.Value * Math.Max(1, bookingDays) * Math.Max(1, bookingQuantity);
+                        else if (packageId.HasValue && (promotion.PackageId.HasValue || targetType == "Place"))
+                            specialTotal = promotion.SpecialPrice.Value * Math.Max(1, bookingQuantity);
                         else if (targetType == "Service" && promotion.ServiceId.HasValue)
                         {
-                            var selectedQuantity = serviceQuantities.TryGetValue(
-                                promotion.ServiceId.Value,
-                                out var serviceQuantity)
-                                ? Math.Max(1, serviceQuantity)
-                                : 1;
-
+                            var selectedQuantity = serviceQuantities.TryGetValue(promotion.ServiceId.Value, out var serviceQuantity)
+                                ? Math.Max(1, serviceQuantity) : 1;
                             specialTotal = promotion.SpecialPrice.Value * selectedQuantity;
                         }
-                        else
-                        {
-                            specialTotal = promotion.SpecialPrice.Value;
-                        }
+                        else specialTotal = promotion.SpecialPrice.Value;
 
                         rawDiscount = Math.Max(0m, eligible - specialTotal);
                         benefitAmount = rawDiscount;
-                        evaluation.OfferSummary = $"سعر خاص {promotion.SpecialPrice.Value:N0}";
+                        evaluation.OfferSummary = "سعر خاص";
                     }
                 }
-                else if (string.Equals(
-                             normalizedRewardType,
-                             "FreeQuantity",
-                             StringComparison.OrdinalIgnoreCase))
+                else if (string.Equals(normalizedRewardType, "FreeQuantity", StringComparison.OrdinalIgnoreCase))
                 {
                     evaluation.DiscountType = "FreeQuantity";
-
                     int totalUnits;
                     decimal amountPerUnit;
                     string unitLabel;
                     var isNightBasedReward = roomId.HasValue;
-
-                    var requiredQuantity = isNightBasedReward &&
-                                           promotion.MinimumNights.HasValue &&
-                                           promotion.MinimumNights.Value > 0
+                    var requiredQuantity = isNightBasedReward && promotion.MinimumNights.HasValue && promotion.MinimumNights.Value > 0
                         ? promotion.MinimumNights.Value
                         : promotion.RequiredQuantity ?? promotion.MinimumNights ?? 1;
-
                     requiredQuantity = Math.Max(1, requiredQuantity);
                     var rewardQuantity = Math.Max(1, promotion.RewardQuantity ?? 1);
 
@@ -2958,13 +1981,9 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     else if (targetType == "Service" && promotion.ServiceId.HasValue)
                     {
                         var serviceId = promotion.ServiceId.Value;
-                        totalUnits = serviceQuantities.TryGetValue(serviceId, out var serviceQuantity)
-                            ? Math.Max(0, serviceQuantity)
-                            : 0;
-                        amountPerUnit = totalUnits > 0 &&
-                                        serviceTotals.TryGetValue(serviceId, out var serviceTotal)
-                            ? serviceTotal / totalUnits
-                            : 0m;
+                        totalUnits = serviceQuantities.TryGetValue(serviceId, out var serviceQuantity) ? Math.Max(0, serviceQuantity) : 0;
+                        amountPerUnit = totalUnits > 0 && serviceTotals.TryGetValue(serviceId, out var serviceTotal)
+                            ? serviceTotal / totalUnits : 0m;
                         unitLabel = "وحدة";
                     }
                     else
@@ -2974,23 +1993,14 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                         unitLabel = "وحدة";
                     }
 
-                    var completedRequirements = requiredQuantity > 0
-                        ? totalUnits / requiredQuantity
-                        : 0;
-
-                    var repeatCount = promotion.IsRewardRepeatable
-                        ? completedRequirements
-                        : completedRequirements > 0 ? 1 : 0;
-
+                    var completedRequirements = requiredQuantity > 0 ? totalUnits / requiredQuantity : 0;
+                    var repeatCount = promotion.IsRewardRepeatable ? completedRequirements : completedRequirements > 0 ? 1 : 0;
                     var calculatedFreeUnits = repeatCount * rewardQuantity;
-                    var freeUnits = Math.Min(
-                        Math.Max(0, totalUnits),
-                        Math.Max(0, calculatedFreeUnits));
+                    var freeUnits = Math.Min(Math.Max(0, totalUnits), Math.Max(0, calculatedFreeUnits));
 
                     if (freeUnits <= 0 || amountPerUnit <= 0m)
                     {
-                        evaluation.Message =
-                            $"للاستفادة من العرض اختر {requiredQuantity} {unitLabel} على الأقل؛ عند تحقق الشرط تحصل على {rewardQuantity} مجانًا.";
+                        evaluation.Message = $"للاستفادة من العرض اختر {requiredQuantity} {unitLabel} على الأقل؛ عند تحقق الشرط تحصل على {rewardQuantity} مجانًا.";
                         canApply = false;
                     }
                     else
@@ -3011,53 +2021,28 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                                 : $"احجز {requiredQuantity} واحصل على {rewardQuantity} مجانًا — مرة واحدة للحجز";
                     }
                 }
-                else if (string.Equals(
-                             normalizedRewardType,
-                             "FreeService",
-                             StringComparison.OrdinalIgnoreCase))
+                else if (string.Equals(normalizedRewardType, "FreeService", StringComparison.OrdinalIgnoreCase))
                 {
                     evaluation.DiscountType = "FreeService";
                     var rewardServiceId = promotion.RewardServiceId;
-
                     if (!rewardServiceId.HasValue || rewardServiceId.Value <= 0)
-                    {
-                        evaluation.Message = "الخدمة المجانية في هذا العرض غير محددة.";
-                        canApply = false;
-                    }
+                    { evaluation.Message = "الخدمة المجانية في هذا العرض غير محددة."; canApply = false; }
                     else
                     {
-                        var rewardService = await _context.PlaceAdditionalServices
-                            .AsNoTracking()
-                            .FirstOrDefaultAsync(service =>
-                                service.ServiceId == rewardServiceId.Value &&
-                                service.PlaceId == placeId &&
-                                service.IsActive == true);
-
+                        var rewardService = await _context.PlaceAdditionalServices.AsNoTracking().FirstOrDefaultAsync(service =>
+                            service.ServiceId == rewardServiceId.Value && service.PlaceId == placeId && service.IsActive == true);
                         if (rewardService == null)
-                        {
-                            evaluation.Message = "الخدمة المجانية لم تعد متاحة في هذه المنشأة.";
-                            canApply = false;
-                        }
+                        { evaluation.Message = "الخدمة المجانية لم تعد متاحة في هذه المنشأة."; canApply = false; }
                         else
                         {
                             var rewardQuantity = Math.Max(1, promotion.RewardQuantity ?? 1);
                             evaluation.RewardServiceId = rewardService.ServiceId;
-                            evaluation.RewardServiceName =
-                                rewardService.ServiceName?.Trim() ?? "خدمة إضافية";
+                            evaluation.RewardServiceName = rewardService.ServiceName?.Trim() ?? "خدمة إضافية";
                             evaluation.RewardQuantity = rewardQuantity;
-                            evaluation.AddsComplimentaryService =
-                                !serviceTotals.ContainsKey(rewardService.ServiceId);
-
+                            evaluation.AddsComplimentaryService = !serviceTotals.ContainsKey(rewardService.ServiceId);
                             var rewardValue = Math.Max(0m, rewardService.Price) * rewardQuantity;
-
-                            if (serviceTotals.TryGetValue(
-                                    rewardService.ServiceId,
-                                    out var selectedServiceTotal) &&
-                                selectedServiceTotal > 0m)
-                            {
+                            if (serviceTotals.TryGetValue(rewardService.ServiceId, out var selectedServiceTotal) && selectedServiceTotal > 0m)
                                 rawDiscount = Math.Min(selectedServiceTotal, rewardValue);
-                            }
-
                             benefitAmount = rewardValue;
                             evaluation.OfferSummary = rewardQuantity > 1
                                 ? $"{rewardQuantity} × {evaluation.RewardServiceName} مجانًا"
@@ -3065,59 +2050,30 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                         }
                     }
                 }
-                else if (string.Equals(
-                             normalizedRewardType,
-                             "ServiceSpecialPrice",
-                             StringComparison.OrdinalIgnoreCase))
+                else if (string.Equals(normalizedRewardType, "ServiceSpecialPrice", StringComparison.OrdinalIgnoreCase))
                 {
                     evaluation.DiscountType = "ServiceSpecialPrice";
                     var rewardServiceId = promotion.RewardServiceId ?? promotion.ServiceId;
-
-                    if (!rewardServiceId.HasValue ||
-                        !promotion.SpecialPrice.HasValue ||
-                        promotion.SpecialPrice.Value < 0m)
-                    {
-                        evaluation.Message = "بيانات سعر الخدمة الخاص غير مكتملة.";
-                        canApply = false;
-                    }
-                    else if (!serviceTotals.TryGetValue(
-                                 rewardServiceId.Value,
-                                 out var selectedServiceTotal) ||
-                             selectedServiceTotal <= 0m)
-                    {
-                        evaluation.Message = "أضف الخدمة المشمولة بالعرض أولًا للاستفادة من سعرها الخاص.";
-                        canApply = false;
-                    }
+                    if (!rewardServiceId.HasValue || !promotion.SpecialPrice.HasValue || promotion.SpecialPrice.Value < 0m)
+                    { evaluation.Message = "بيانات سعر الخدمة الخاص غير مكتملة."; canApply = false; }
+                    else if (!serviceTotals.TryGetValue(rewardServiceId.Value, out var selectedServiceTotal) || selectedServiceTotal <= 0m)
+                    { evaluation.Message = "أضف الخدمة المشمولة بالعرض أولًا للاستفادة من سعرها الخاص."; canApply = false; }
                     else
                     {
-                        var rewardService = await _context.PlaceAdditionalServices
-                            .AsNoTracking()
-                            .FirstOrDefaultAsync(service =>
-                                service.ServiceId == rewardServiceId.Value &&
-                                service.PlaceId == placeId &&
-                                service.IsActive == true);
-
+                        var rewardService = await _context.PlaceAdditionalServices.AsNoTracking().FirstOrDefaultAsync(service =>
+                            service.ServiceId == rewardServiceId.Value && service.PlaceId == placeId && service.IsActive == true);
                         if (rewardService == null)
-                        {
-                            evaluation.Message = "الخدمة ذات السعر الخاص لم تعد متاحة.";
-                            canApply = false;
-                        }
+                        { evaluation.Message = "الخدمة ذات السعر الخاص لم تعد متاحة."; canApply = false; }
                         else
                         {
-                            var selectedQuantity = serviceQuantities.TryGetValue(
-                                rewardServiceId.Value,
-                                out var serviceQuantity)
-                                ? Math.Max(1, serviceQuantity)
-                                : 1;
-
+                            var selectedQuantity = serviceQuantities.TryGetValue(rewardServiceId.Value, out var serviceQuantity)
+                                ? Math.Max(1, serviceQuantity) : 1;
                             var specialTotal = promotion.SpecialPrice.Value * selectedQuantity;
                             rawDiscount = Math.Max(0m, selectedServiceTotal - specialTotal);
                             benefitAmount = rawDiscount;
                             evaluation.RewardServiceId = rewardService.ServiceId;
-                            evaluation.RewardServiceName =
-                                rewardService.ServiceName?.Trim() ?? "خدمة إضافية";
-                            evaluation.OfferSummary =
-                                $"{evaluation.RewardServiceName} بسعر خاص {promotion.SpecialPrice.Value:N0}";
+                            evaluation.RewardServiceName = rewardService.ServiceName?.Trim() ?? "خدمة إضافية";
+                            evaluation.OfferSummary = $"{evaluation.RewardServiceName} بسعر خاص";
                         }
                     }
                 }
@@ -3127,59 +2083,27 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     canApply = false;
                 }
 
-                if (!canApply)
-                {
-                    firstFailure = FirstNonEmpty(firstFailure, evaluation.Message);
-                    continue;
-                }
+                if (!canApply) { firstFailure = FirstNonEmpty(firstFailure, evaluation.Message); continue; }
 
                 decimal discountCap = eligible;
-
-                if (string.Equals(
-                        normalizedRewardType,
-                        "FreeService",
-                        StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(
-                        normalizedRewardType,
-                        "ServiceSpecialPrice",
-                        StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(normalizedRewardType, "FreeService", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(normalizedRewardType, "ServiceSpecialPrice", StringComparison.OrdinalIgnoreCase))
                 {
-                    var rewardServiceIdForCap = evaluation.RewardServiceId ??
-                                                promotion.RewardServiceId ??
-                                                promotion.ServiceId;
-
+                    var rewardServiceIdForCap = evaluation.RewardServiceId ?? promotion.RewardServiceId ?? promotion.ServiceId;
                     if (rewardServiceIdForCap.HasValue &&
-                        serviceTotals.TryGetValue(
-                            rewardServiceIdForCap.Value,
-                            out var rewardServiceSelectedTotal) &&
+                        serviceTotals.TryGetValue(rewardServiceIdForCap.Value, out var rewardServiceSelectedTotal) &&
                         rewardServiceSelectedTotal > 0m)
-                    {
                         discountCap = rewardServiceSelectedTotal;
-                    }
-                    else if (string.Equals(
-                                 normalizedRewardType,
-                                 "FreeService",
-                                 StringComparison.OrdinalIgnoreCase) &&
+                    else if (string.Equals(normalizedRewardType, "FreeService", StringComparison.OrdinalIgnoreCase) &&
                              evaluation.AddsComplimentaryService)
-                    {
                         discountCap = 0m;
-                    }
                 }
 
-                rawDiscount = Math.Min(
-                    Math.Max(0m, discountCap),
-                    Math.Max(0m, rawDiscount));
-
+                rawDiscount = Math.Min(Math.Max(0m, discountCap), Math.Max(0m, rawDiscount));
                 evaluation.DiscountAmount = Math.Round(rawDiscount, 2);
-                evaluation.BenefitAmount = Math.Round(
-                    Math.Max(benefitAmount, evaluation.DiscountAmount),
-                    2);
-
-                var isNonMonetaryReward = string.Equals(
-                        normalizedRewardType,
-                        "FreeService",
-                        StringComparison.OrdinalIgnoreCase) &&
-                    evaluation.AddsComplimentaryService;
+                evaluation.BenefitAmount = Math.Round(Math.Max(benefitAmount, evaluation.DiscountAmount), 2);
+                var isNonMonetaryReward = string.Equals(normalizedRewardType, "FreeService", StringComparison.OrdinalIgnoreCase) &&
+                                          evaluation.AddsComplimentaryService;
 
                 if (evaluation.DiscountAmount <= 0m && !isNonMonetaryReward)
                 {
@@ -3188,7 +2112,6 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                         string.Equals(normalizedRewardType, "ServiceSpecialPrice", StringComparison.OrdinalIgnoreCase)
                             ? "السعر الخاص لا يقل عن السعر الحالي، لذلك لا يوجد توفير قابل للتطبيق."
                             : "قيمة التوفير المحسوبة لهذا العرض تساوي صفرًا.";
-
                     firstFailure = FirstNonEmpty(firstFailure, evaluation.Message);
                     continue;
                 }
@@ -3198,7 +2121,6 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 evaluation.Message = string.IsNullOrWhiteSpace(evaluation.OfferSummary)
                     ? "تم تطبيق أفضل عرض واحد صالح بدون تكديس."
                     : $"تم تطبيق العرض: {evaluation.OfferSummary}.";
-
                 candidates.Add(evaluation);
             }
 
@@ -3207,11 +2129,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 .ThenByDescending(item => item.DiscountAmount)
                 .ThenByDescending(item => item.DiscountValue)
                 .FirstOrDefault();
-
-            if (selected != null)
-            {
-                return selected;
-            }
+            if (selected != null) return selected;
 
             result.Message = firstFailure;
             return result;
@@ -3219,11 +2137,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
         private static decimal ManualCalculateDepositAmount(Place place, decimal totalPrice)
         {
-            if (totalPrice <= 0m)
-            {
-                return 0m;
-            }
-
+            if (totalPrice <= 0m) return 0m;
             var json = place.PlacePolicy?.DepositPoliciesJson;
             if (!string.IsNullOrWhiteSpace(json))
             {
@@ -3234,57 +2148,28 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     {
                         foreach (var policy in document.RootElement.EnumerateArray())
                         {
-                            if (!policy.TryGetProperty("val", out var valueElement))
-                            {
-                                continue;
-                            }
-
+                            if (!policy.TryGetProperty("val", out var valueElement)) continue;
                             var raw = valueElement.ValueKind == JsonValueKind.String
-                                ? valueElement.GetString()
-                                : valueElement.GetRawText();
-
-                            raw = NormalizeManualDigits(raw)
-                                .Trim()
-                                .Replace("٫", ".")
-                                .Replace(",", ".");
-
-                            if (!decimal.TryParse(
-                                    raw,
-                                    NumberStyles.Number,
-                                    CultureInfo.InvariantCulture,
-                                    out var value) ||
-                                value <= 0m)
-                            {
+                                ? valueElement.GetString() : valueElement.GetRawText();
+                            raw = NormalizeManualDigits(raw).Trim().Replace("٫", ".").Replace(",", ".");
+                            if (!decimal.TryParse(raw, NumberStyles.Number, CultureInfo.InvariantCulture, out var value) || value <= 0m)
                                 continue;
-                            }
 
                             var type = policy.TryGetProperty("type", out var typeElement)
-                                ? typeElement.GetString()?.Trim() ?? string.Empty
-                                : string.Empty;
-
+                                ? typeElement.GetString()?.Trim() ?? string.Empty : string.Empty;
                             var percentage = type.Contains("%") ||
                                              type.Contains("نسبة", StringComparison.OrdinalIgnoreCase) ||
                                              type.Contains("percent", StringComparison.OrdinalIgnoreCase);
-
-                            var amount = percentage
-                                ? totalPrice * value / 100m
-                                : value;
-
+                            var amount = percentage ? totalPrice * value / 100m : value;
                             return Math.Round(Math.Min(totalPrice, Math.Max(0m, amount)), 2);
                         }
                     }
                 }
-                catch (JsonException)
-                {
-                    // نرجع للحقول القديمة.
-                }
+                catch (JsonException) { }
             }
 
             if (place.IsDepositRequired && place.DepositAmount > 0m)
-            {
                 return Math.Round(Math.Min(place.DepositAmount, totalPrice), 2);
-            }
-
             return 0m;
         }
 
@@ -3295,48 +2180,27 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             bool isRoomBooking)
         {
             var closedDays = ReadWeeklyClosedDays(place);
-            if (closedDays.Count == 0)
-            {
-                return false;
-            }
-
+            if (closedDays.Count == 0) return false;
             var first = startDate.Date;
             var exclusiveEnd = isRoomBooking && endDate.HasValue && endDate.Value.Date > first
-                ? endDate.Value.Date
-                : first.AddDays(1);
-
+                ? endDate.Value.Date : first.AddDays(1);
             for (var day = first; day < exclusiveEnd; day = day.AddDays(1))
-            {
-                if (closedDays.Contains(day.DayOfWeek.ToString()))
-                {
-                    return true;
-                }
-            }
-
+                if (closedDays.Contains(day.DayOfWeek.ToString())) return true;
             return false;
         }
 
         private static HashSet<string> ReadWeeklyClosedDays(Place place)
         {
             var csv = place.PlacePolicy?.ClosedDaysCsv?.Trim();
-            if (string.IsNullOrWhiteSpace(csv))
-            {
-                return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            }
-
-            return csv
-                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            if (string.IsNullOrWhiteSpace(csv)) return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            return csv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
         }
 
         private static bool ManualTryParseClock(string? value, out TimeSpan clock)
         {
             clock = default;
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                return false;
-            }
-
+            if (string.IsNullOrWhiteSpace(value)) return false;
             return TimeSpan.TryParse(value.Trim(), CultureInfo.InvariantCulture, out clock) ||
                    TimeSpan.TryParse(value.Trim(), CultureInfo.CurrentCulture, out clock);
         }
@@ -3365,95 +2229,56 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
         {
             var result = new List<ManualShiftWindow>();
             if (string.IsNullOrWhiteSpace(json)) return result;
-
             try
             {
                 using var document = JsonDocument.Parse(json);
                 if (document.RootElement.ValueKind != JsonValueKind.Array) return result;
-
                 foreach (var item in document.RootElement.EnumerateArray())
                 {
                     if (item.ValueKind != JsonValueKind.Object) continue;
-
                     string? from = null;
                     string? to = null;
                     foreach (var property in item.EnumerateObject())
                     {
                         if (property.Value.ValueKind != JsonValueKind.String) continue;
-
                         if (property.Name.Equals("from", StringComparison.OrdinalIgnoreCase) ||
                             property.Name.Equals("start", StringComparison.OrdinalIgnoreCase) ||
                             property.Name.Equals("startTime", StringComparison.OrdinalIgnoreCase))
-                        {
                             from = property.Value.GetString();
-                        }
-
                         if (property.Name.Equals("to", StringComparison.OrdinalIgnoreCase) ||
                             property.Name.Equals("end", StringComparison.OrdinalIgnoreCase) ||
                             property.Name.Equals("endTime", StringComparison.OrdinalIgnoreCase))
-                        {
                             to = property.Value.GetString();
-                        }
                     }
-
-                    if (ManualTryParseClock(from, out var start) &&
-                        ManualTryParseClock(to, out var end) &&
-                        start != end)
-                    {
+                    if (ManualTryParseClock(from, out var start) && ManualTryParseClock(to, out var end) && start != end)
                         result.Add(new ManualShiftWindow { Start = start, End = end });
-                    }
                 }
             }
-            catch (JsonException)
-            {
-                // تجاهل JSON غير الصالح.
-            }
-
+            catch (JsonException) { }
             return result;
         }
 
         private static bool ManualPackageFitsConfiguredShift(Place place, PlacePackage package)
         {
-            if (!IsState(place.PlacePolicy?.OperationSystemMode, "Shifts"))
-            {
-                return true;
-            }
-
-            if (!package.StartTime.HasValue ||
-                !package.EndTime.HasValue ||
-                package.StartTime.Value == package.EndTime.Value)
-            {
+            if (!IsState(place.PlacePolicy?.OperationSystemMode, "Shifts")) return true;
+            if (!package.StartTime.HasValue || !package.EndTime.HasValue || package.StartTime.Value == package.EndTime.Value)
                 return false;
-            }
 
             var packageStart = package.StartTime.Value.TotalMinutes;
             var packageEnd = package.EndTime.Value.TotalMinutes;
-            if (package.EndTime.Value <= package.StartTime.Value)
-            {
-                packageEnd += TimeSpan.FromDays(1).TotalMinutes;
-            }
+            if (package.EndTime.Value <= package.StartTime.Value) packageEnd += TimeSpan.FromDays(1).TotalMinutes;
 
             foreach (var shift in ManualReadShiftWindows(place.PlacePolicy?.ShiftsJson))
             {
                 var shiftStart = shift.Start.TotalMinutes;
                 var shiftEnd = shift.End.TotalMinutes;
-                if (shift.End <= shift.Start)
-                {
-                    shiftEnd += TimeSpan.FromDays(1).TotalMinutes;
-                }
-
-                if (packageStart >= shiftStart && packageEnd <= shiftEnd)
-                {
-                    return true;
-                }
+                if (shift.End <= shift.Start) shiftEnd += TimeSpan.FromDays(1).TotalMinutes;
+                if (packageStart >= shiftStart && packageEnd <= shiftEnd) return true;
             }
-
             return false;
         }
 
-        private static (DateTime Start, DateTime End) ManualPackageInterval(
-            DateTime date,
-            PlacePackage package)
+        private static (DateTime Start, DateTime End) ManualPackageInterval(DateTime date, PlacePackage package)
         {
             var start = date.Date.Add(package.StartTime ?? TimeSpan.Zero);
             var end = date.Date.Add(package.EndTime ?? package.StartTime ?? TimeSpan.Zero);
@@ -3467,43 +2292,28 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             DateTime requestedDate,
             DateTime referenceTime)
         {
-            var bookings = await _context.Bookings
-                .AsNoTracking()
+            var bookings = await _context.Bookings.AsNoTracking()
                 .Include(item => item.Package)
                 .Where(item =>
-                    item.PlaceId == place.PlaceId &&
-                    item.PackageId.HasValue &&
+                    item.PlaceId == place.PlaceId && item.PackageId.HasValue &&
                     BlockingBookingStates.Contains(item.BookingState ?? string.Empty) &&
-                    (item.BookingState != "AwaitingPayment" ||
-                     !item.TimerExpiredAt.HasValue ||
-                     item.TimerExpiredAt > referenceTime) &&
+                    (item.BookingState != "AwaitingPayment" || !item.TimerExpiredAt.HasValue || item.TimerExpiredAt > referenceTime) &&
                     item.StartDate.Date >= requestedDate.Date.AddDays(-1) &&
                     item.StartDate.Date <= requestedDate.Date.AddDays(1))
                 .ToListAsync();
 
             if (bookings.Count == 0) return false;
-
             if (!IsState(place.PlacePolicy?.OperationSystemMode, "Shifts"))
-            {
-                return bookings.Any(item =>
-                    item.StartDate.Date == requestedDate.Date);
-            }
+                return bookings.Any(item => item.StartDate.Date == requestedDate.Date);
 
             var buffer = TimeSpan.FromHours(Math.Clamp(place.PlacePolicy?.BufferTimeHours ?? 0, 0, 24));
             var requested = ManualPackageInterval(requestedDate, requestedPackage);
-
             foreach (var booking in bookings)
             {
                 if (booking.Package == null) return true;
                 var existing = ManualPackageInterval(booking.StartDate, booking.Package);
-
-                if (existing.Start < requested.End.Add(buffer) &&
-                    existing.End.Add(buffer) > requested.Start)
-                {
-                    return true;
-                }
+                if (existing.Start < requested.End.Add(buffer) && existing.End.Add(buffer) > requested.Start) return true;
             }
-
             return false;
         }
 
@@ -3511,13 +2321,11 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
         {
             var bufferHours = Math.Clamp(place.PlacePolicy?.BufferTimeHours ?? 0, 0, 24);
             if (bufferHours <= 0) return false;
-
             var checkIn = ManualGetCheckIn(place);
             var checkOut = ManualGetCheckOut(place);
             var checkOutAt = DateTime.Today.Add(checkOut);
             var nextCheckInAt = DateTime.Today.Add(checkIn);
             if (nextCheckInAt < checkOutAt) nextCheckInAt = nextCheckInAt.AddDays(1);
-
             var naturalGap = Math.Max(0d, (nextCheckInAt - checkOutAt).TotalHours);
             return bufferHours > naturalGap;
         }
@@ -3530,11 +2338,9 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
         {
             var hours = Math.Max(0, place.PlacePolicy?.MinimumNoticeHours ?? 0);
             if (hours <= 0) return null;
-
             var startAt = package?.StartTime.HasValue == true
                 ? startDate.Date.Add(package.StartTime.Value)
                 : startDate.Date.Add(ManualGetCheckIn(place));
-
             return startAt < now.AddHours(hours)
                 ? $"يجب إنشاء الحجز قبل الموعد بـ {hours} ساعة على الأقل حسب سياسة المنشأة."
                 : null;
@@ -3543,35 +2349,11 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
         private static string BuildCalendarBookingStateReason(Booking booking)
         {
             var state = booking.BookingState?.Trim() ?? string.Empty;
-
-            if (IsState(state, "Cancelled"))
-            {
-                return FirstNonEmpty(
-                    string.Empty,
-                    booking.OwnerCancellationReason,
-                    booking.CancellationReason);
-            }
-
-            if (IsState(state, "Rejected"))
-            {
-                return booking.RejectionReason?.Trim() ?? string.Empty;
-            }
-
-            if (IsState(state, "Expired"))
-            {
-                return "انتهت مهلة دفع العربون.";
-            }
-
-            if (IsState(state, "NoShow"))
-            {
-                return "تم تسجيل عدم حضور العميل.";
-            }
-
-            if (IsState(state, "Completed"))
-            {
-                return "تم إكمال الحجز وإغلاقه بنجاح.";
-            }
-
+            if (IsState(state, "Cancelled")) return FirstNonEmpty(string.Empty, booking.OwnerCancellationReason, booking.CancellationReason);
+            if (IsState(state, "Rejected")) return booking.RejectionReason?.Trim() ?? string.Empty;
+            if (IsState(state, "Expired")) return "انتهت مهلة دفع العربون.";
+            if (IsState(state, "NoShow")) return "تم تسجيل عدم حضور العميل.";
+            if (IsState(state, "Completed")) return "تم إكمال الحجز وإغلاقه بنجاح.";
             return string.Empty;
         }
 
@@ -3602,80 +2384,35 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             int totalActiveUnits)
         {
             var bookingSystemId = place.Category?.BookingSystemId ?? 0;
-
             if (bookingSystemId == 1)
             {
-                if (supportsRooms && totalActiveUnits <= 1)
-                    return ("SingleUnit", "وحدة إقامة مستقلة");
-
+                if (supportsRooms && totalActiveUnits <= 1) return ("SingleUnit", "وحدة إقامة مستقلة");
                 return ("Lodging", "فندق / غرف وأجنحة");
             }
-
-            if (bookingSystemId == 2)
-            {
-                return ("Chalet", "شاليه / مزرعة وباقات");
-            }
-
-            if (bookingSystemId == 3 || bookingSystemId == 4)
-            {
-                return ("Venue", "قاعة / صالة وباقات");
-            }
+            if (bookingSystemId == 2) return ("Chalet", "شاليه / مزرعة وباقات");
+            if (bookingSystemId == 3 || bookingSystemId == 4) return ("Venue", "قاعة / صالة وباقات");
 
             var category = place.Category?.CategoryName?.Trim() ?? string.Empty;
             var normalized = category.ToLowerInvariant();
-
-            var venueLike =
-                normalized.Contains("قاعة") ||
-                normalized.Contains("صالة") ||
-                normalized.Contains("ملعب") ||
-                normalized.Contains("نادي");
-
-            var chaletLike =
-                normalized.Contains("شاليه") ||
-                normalized.Contains("مزرعة") ||
-                normalized.Contains("استراحة") ||
-                normalized.Contains("فيلا");
-
-            if (venueLike && supportsPackages)
-                return ("Venue", "قاعة / صالة وباقات");
-
-            if (chaletLike && supportsPackages)
-                return ("Chalet", "شاليه / مزرعة وباقات");
-
-            if (supportsRooms && supportsPackages)
-                return ("Hybrid", "إقامة وباقات");
-
-            if (supportsRooms)
-            {
-                if (totalActiveUnits <= 1)
-                    return ("SingleUnit", "وحدة إقامة مستقلة");
-
-                return ("Lodging", "فندق / غرف وأجنحة");
-            }
-
-            if (supportsPackages)
-                return ("Venue", "باقات وفترات");
-
+            var venueLike = normalized.Contains("قاعة") || normalized.Contains("صالة") || normalized.Contains("ملعب") || normalized.Contains("نادي");
+            var chaletLike = normalized.Contains("شاليه") || normalized.Contains("مزرعة") || normalized.Contains("استراحة") || normalized.Contains("فيلا");
+            if (venueLike && supportsPackages) return ("Venue", "قاعة / صالة وباقات");
+            if (chaletLike && supportsPackages) return ("Chalet", "شاليه / مزرعة وباقات");
+            if (supportsRooms && supportsPackages) return ("Hybrid", "إقامة وباقات");
+            if (supportsRooms) return totalActiveUnits <= 1
+                ? ("SingleUnit", "وحدة إقامة مستقلة")
+                : ("Lodging", "فندق / غرف وأجنحة");
+            if (supportsPackages) return ("Venue", "باقات وفترات");
             return ("Generic", "حجز عام");
         }
 
         private static string? BuildManualOwnerNotes(OwnerManualBookingRequestDto request)
         {
             var lines = new List<string>();
-
-            if (IsState(request.ManualBookingChannel, "Other") &&
-                !string.IsNullOrWhiteSpace(request.ManualBookingChannelOther))
-            {
+            if (IsState(request.ManualBookingChannel, "Other") && !string.IsNullOrWhiteSpace(request.ManualBookingChannelOther))
                 lines.Add($"قناة الحجز الأخرى: {request.ManualBookingChannelOther.Trim()}");
-            }
-
-            if (!string.IsNullOrWhiteSpace(request.OwnerInternalNotes))
-            {
-                lines.Add(request.OwnerInternalNotes.Trim());
-            }
-
-            if (lines.Count == 0) return null;
-            return string.Join(Environment.NewLine, lines);
+            if (!string.IsNullOrWhiteSpace(request.OwnerInternalNotes)) lines.Add(request.OwnerInternalNotes.Trim());
+            return lines.Count == 0 ? null : string.Join(Environment.NewLine, lines);
         }
 
         private static string NormalizeManualChannel(string? value)
@@ -3688,11 +2425,8 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
         private static string NormalizePhoneForSearch(string? value)
         {
             if (string.IsNullOrWhiteSpace(value)) return string.Empty;
-
             var normalized = NormalizeManualDigits(value);
-            return new string(normalized
-                .Where(character => char.IsDigit(character) || character == '+')
-                .ToArray());
+            return new string(normalized.Where(character => char.IsDigit(character) || character == '+').ToArray());
         }
 
         private static string NormalizeManualDigits(string? value)

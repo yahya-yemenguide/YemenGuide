@@ -24,6 +24,10 @@
 
     var promotionBookingCount =
         Convert.ToInt32(ViewBag.PromotionBookingCount ?? 0);
+
+    var displayCurrency = Convert.ToString(ViewBag.DisplayCurrency ?? "ريال يمني") ?? "ريال يمني";
+    var displayCurrencyCode = Convert.ToString(ViewBag.DisplayCurrencyCode ?? "YER") ?? "YER";
+    var displayCurrencySymbol = Convert.ToString(ViewBag.DisplayCurrencySymbol ?? "ر.ي") ?? "ر.ي";
 }
 
 @section Styles {
@@ -50,6 +54,9 @@
 
     <div class="owner-reservations-page"
      data-reservation-ui-version="4-promotions-luxury3d"
+     data-display-currency="@displayCurrency"
+     data-currency-code="@displayCurrencyCode"
+     data-currency-symbol="@displayCurrencySymbol"
      dir="rtl">
 
         <div class="container-fluid
@@ -1403,22 +1410,22 @@
 
                                         <div class="reservation-refund-item">
                                             <span>المبلغ المدفوع إلكترونيًا</span>
-                                            <strong id="modalRefundDeposit">0 ريال</strong>
+                                            <strong id="modalRefundDeposit">0 @displayCurrencySymbol</strong>
                                         </div>
 
                                         <div class="reservation-refund-item">
                                             <span>الغرامة</span>
-                                            <strong id="modalRefundFee">0 ريال</strong>
+                                            <strong id="modalRefundFee">0 @displayCurrencySymbol</strong>
                                         </div>
 
                                         <div class="reservation-refund-item">
                                             <span>مبلغ الاسترداد</span>
-                                            <strong id="modalRefundAmount">0 ريال</strong>
+                                            <strong id="modalRefundAmount">0 @displayCurrencySymbol</strong>
                                         </div>
 
                                         <div class="reservation-refund-item">
                                             <span>حصة المالك</span>
-                                            <strong id="modalRefundOwnerShare">0 ريال</strong>
+                                            <strong id="modalRefundOwnerShare">0 @displayCurrencySymbol</strong>
                                         </div>
 
                                         <div class="reservation-refund-item">
@@ -1529,4 +1536,184 @@
 
     <script src="~/js/owner/reservation-actions.js"
         asp-append-version="true"></script>
+
+    <script>
+        (() => {
+            "use strict";
+
+            const root = document.querySelector(".owner-reservations-page");
+            if (!root) return;
+
+            const currency = {
+                name: root.dataset.displayCurrency || "ريال يمني",
+                code: root.dataset.currencyCode || "YER",
+                symbol: root.dataset.currencySymbol || "ر.ي"
+            };
+
+            window.YGOwnerReservationCurrency = currency;
+
+            const isYer = currency.code === "YER";
+            const formatNumber = value => {
+                const number = Number(value || 0);
+                return new Intl.NumberFormat("en-US", {
+                    minimumFractionDigits: isYer ? 0 : 2,
+                    maximumFractionDigits: isYer ? 0 : 2
+                }).format(Number.isFinite(number) ? number : 0);
+            };
+            const money = value => `${formatNumber(value)} ${currency.symbol}`;
+
+            // يحافظ على JS الحالي بلا مصدر مستقل لأسعار الصرف:
+            // السيرفر يرسل القيم محوّلة، وهذه الطبقة تغيّر التنسيق/الرمز فقط.
+            const normalizeCurrencyText = text => {
+                if (isYer || !text) return text;
+                return String(text)
+                    .replace(/ريال\s+يمني/g, currency.symbol)
+                    .replace(/(^|\s)ريال(?=\s|$|[.,،؛:!؟<])/g, `$1${currency.symbol}`);
+            };
+
+            const shouldProcess = node => {
+                const parent = node.parentElement;
+                return Boolean(parent?.closest(
+                    ".owner-reservations-page, #premiumCenterModal, #ygCalendarManager, .yg-calendar-dialog-portal, .swal2-container"
+                ));
+            };
+
+            const normalizeNode = node => {
+                if (node.nodeType === Node.TEXT_NODE) {
+                    if (shouldProcess(node)) {
+                        const next = normalizeCurrencyText(node.nodeValue || "");
+                        if (next !== node.nodeValue) node.nodeValue = next;
+                    }
+                    return;
+                }
+
+                if (!(node instanceof Element)) return;
+                node.querySelectorAll("*").forEach(element => {
+                    Array.from(element.childNodes)
+                        .filter(child => child.nodeType === Node.TEXT_NODE)
+                        .forEach(child => normalizeNode(child));
+                });
+            };
+
+            const observer = new MutationObserver(records => {
+                records.forEach(record => {
+                    record.addedNodes.forEach(node => normalizeNode(node));
+                });
+            });
+            observer.observe(document.body, { childList: true, subtree: true });
+
+            let currentButton = null;
+            let lastCollectionAmount = null;
+            document.addEventListener("click", event => {
+                const button = event.target.closest?.(".compact-details-button");
+                if (button) currentButton = button;
+            }, true);
+
+            const repairRefundModal = button => {
+                if (!button) return;
+                const mappings = [
+                    ["modalRefundDeposit", "refundDeposit"],
+                    ["modalRefundFee", "refundFee"],
+                    ["modalRefundAmount", "refundAmount"],
+                    ["modalRefundOwnerShare", "refundOwnerShare"]
+                ];
+                mappings.forEach(([id, key]) => {
+                    const element = document.getElementById(id);
+                    if (!element) return;
+                    const raw = button.dataset[key];
+                    if (raw !== undefined && raw !== null && raw !== "") {
+                        element.textContent = money(raw);
+                    }
+                });
+            };
+
+            if (typeof window.openPremiumCenterModal === "function") {
+                const originalOpen = window.openPremiumCenterModal;
+                window.openPremiumCenterModal = function (button) {
+                    currentButton = button || currentButton;
+                    const result = originalOpen.apply(this, arguments);
+                    queueMicrotask(() => repairRefundModal(currentButton));
+                    window.setTimeout(() => repairRefundModal(currentButton), 50);
+                    return result;
+                };
+            }
+
+            // SweetAlert في الملف الحالي يكتب كلمة "ريال" في بعض رسائل التحصيل.
+            // نصلح الرمز، ونحافظ على كسور USD/SAR في نافذة التحصيل.
+            if (window.Swal && typeof window.Swal.fire === "function") {
+                const nativeFire = window.Swal.fire.bind(window.Swal);
+                window.Swal.fire = function (options, ...rest) {
+                    if (!options || typeof options !== "object") {
+                        return nativeFire(options, ...rest);
+                    }
+
+                    const patched = { ...options };
+                    if (typeof patched.text === "string") {
+                        patched.text = normalizeCurrencyText(patched.text);
+                    }
+                    if (typeof patched.html === "string") {
+                        patched.html = normalizeCurrencyText(patched.html);
+                    }
+
+                    const collectionDialog =
+                        patched.title === "تحصيل وإنهاء الحجز" &&
+                        patched.inputValue !== undefined;
+
+                    if (collectionDialog) {
+                        const precise = money(patched.inputValue);
+                        patched.html = String(patched.html || "").replace(
+                            /[\d٬,.]+\s*(?:ريال\s+يمني|ريال|ر\.ي|ر\.س|\$)/,
+                            precise
+                        );
+                    }
+
+                    if (patched.title === "يوجد مبلغ غير محصل" && currentButton && lastCollectionAmount !== null) {
+                        const originalRemaining = Number(currentButton.dataset.propertyRaw || 0);
+                        const remaining = Math.max(0, originalRemaining - Number(lastCollectionAmount || 0));
+                        patched.html = String(patched.html || "").replace(
+                            /[\d٬,.]+\s*(?:ريال\s+يمني|ريال|ر\.ي|ر\.س|\$)/,
+                            money(remaining)
+                        );
+                    }
+
+                    if (patched.title === "تم إنهاء الحجز" && currentButton && lastCollectionAmount !== null) {
+                        const originalRemaining = Number(currentButton.dataset.propertyRaw || 0);
+                        const collected = Math.max(0, Number(lastCollectionAmount || 0));
+                        const remaining = Math.max(0, originalRemaining - collected);
+                        const replacements = [money(collected), money(remaining)];
+                        let index = 0;
+                        patched.html = String(patched.html || "").replace(
+                            /[\d٬,.]+\s*(?:ريال\s+يمني|ريال|ر\.ي|ر\.س|\$)/g,
+                            match => replacements[index++] || normalizeCurrencyText(match)
+                        );
+                    }
+
+                    if (patched.title === "إلغاء الحجز من جهة المالك" && currentButton) {
+                        const raw = currentButton.dataset.onlineRaw;
+                        if (raw !== undefined) {
+                            patched.html = String(patched.html || "").replace(
+                                /[\d٬,.]+\s*(?:ريال\s+يمني|ريال|ر\.ي|ر\.س|\$)/,
+                                money(raw)
+                            );
+                        }
+                    }
+
+                    const resultPromise = nativeFire(patched, ...rest);
+                    if (!collectionDialog || !resultPromise || typeof resultPromise.then !== "function") {
+                        return resultPromise;
+                    }
+
+                    return resultPromise.then(result => {
+                        if (result?.isConfirmed) {
+                            const entered = Number(result.value);
+                            lastCollectionAmount = Number.isFinite(entered)
+                                ? entered
+                                : Number(patched.inputValue || 0);
+                        }
+                        return result;
+                    });
+                };
+            }
+        })();
+    </script>
 }

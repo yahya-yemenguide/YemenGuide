@@ -6,25 +6,14 @@
 @model IReadOnlyList<OwnerReservationItemDto>
 
 @functions {
-    private static string GetAvatarLetter(string? name)
-    {
-        return string.IsNullOrWhiteSpace(name)
-            ? "ع"
-            : name.Trim().Substring(0, 1).ToUpper();
-    }
+    private static string GetAvatarLetter(string? name) =>
+        string.IsNullOrWhiteSpace(name) ? "ع" : name.Trim().Substring(0, 1).ToUpper();
 
-    private static string GetShortDate(DateTime date)
-    {
-        return date.ToString("yyyy-MM-dd");
-    }
+    private static string GetShortDate(DateTime date) => date.ToString("yyyy-MM-dd");
 
     private static string GetPaymentMethodLabel(string? value)
     {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return "لم تُحدد";
-        }
-
+        if (string.IsNullOrWhiteSpace(value)) return "لم تُحدد";
         return value.Trim() switch
         {
             "Cash" => "نقدًا عند الوصول",
@@ -34,84 +23,45 @@
         };
     }
 
-    private static string GetPaymentStatusLabel(string? value)
+    private static string GetPaymentStatusLabel(string? value) => value?.Trim() switch
     {
-        return value?.Trim() switch
-        {
-            "FullyPaid" => "مدفوع بالكامل",
-            "Paid" => "مدفوع بالكامل",
-            "PartiallyPaid" => "مدفوع جزئيًا",
-            "UnderReview" => "قيد المراجعة",
-            "RefundPending" => "استرداد معلق",
-            _ => "غير مدفوع بالكامل"
-        };
-    }
+        "FullyPaid" => "مدفوع بالكامل",
+        "Paid" => "مدفوع بالكامل",
+        "PartiallyPaid" => "مدفوع جزئيًا",
+        "UnderReview" => "قيد المراجعة",
+        "RefundPending" => "استرداد معلق",
+        _ => "غير مدفوع بالكامل"
+    };
 
     private static string GetOperationalLabel(OwnerReservationItemDto booking)
     {
         var now = DateTime.Now;
-
-        if (now < booking.OperationalStartAt)
-        {
-            return "حجز قادم";
-        }
-
-        if (now < booking.OperationalEndAt)
-        {
-            return "جاري التنفيذ";
-        }
-
+        if (now < booking.OperationalStartAt) return "حجز قادم";
+        if (now < booking.OperationalEndAt) return "جاري التنفيذ";
         return "ينتظر الإغلاق";
     }
 
     private static string GetOperationalIcon(OwnerReservationItemDto booking)
     {
         var now = DateTime.Now;
-
-        if (now < booking.OperationalStartAt)
-        {
-            return "bi-calendar-event";
-        }
-
-        if (now < booking.OperationalEndAt)
-        {
-            return "bi-play-circle-fill";
-        }
-
+        if (now < booking.OperationalStartAt) return "bi-calendar-event";
+        if (now < booking.OperationalEndAt) return "bi-play-circle-fill";
         return "bi-exclamation-circle";
     }
 
     private static string GetOperationalBadgeClass(OwnerReservationItemDto booking)
     {
         var now = DateTime.Now;
-
-        if (now < booking.OperationalStartAt)
-        {
-            return "badge-glass-info";
-        }
-
-        if (now < booking.OperationalEndAt)
-        {
-            return "badge-glass-success";
-        }
-
+        if (now < booking.OperationalStartAt) return "badge-glass-info";
+        if (now < booking.OperationalEndAt) return "badge-glass-success";
         return "badge-glass-warning";
     }
 
     private static string GetOperationalRowClass(OwnerReservationItemDto booking)
     {
         var now = DateTime.Now;
-
-        if (now < booking.OperationalStartAt)
-        {
-            return "reservation-state-upcoming";
-        }
-
-        if (now < booking.OperationalEndAt)
-        {
-            return "reservation-state-active";
-        }
-
+        if (now < booking.OperationalStartAt) return "reservation-state-upcoming";
+        if (now < booking.OperationalEndAt) return "reservation-state-active";
         return "reservation-state-closing";
     }
 }
@@ -119,73 +69,54 @@
 @{
     var reservations = Model ?? Array.Empty<OwnerReservationItemDto>();
     var now = DateTime.Now;
-
-    var currentCount = reservations.Count(booking =>
-        now >= booking.OperationalStartAt &&
-        now < booking.OperationalEndAt);
-
-    var upcomingCount = reservations.Count(booking =>
-        now < booking.OperationalStartAt);
-
-    var needsClosingCount = reservations.Count(booking =>
-        now >= booking.OperationalEndAt);
-
+    var currentCount = reservations.Count(booking => now >= booking.OperationalStartAt && now < booking.OperationalEndAt);
+    var upcomingCount = reservations.Count(booking => now < booking.OperationalStartAt);
+    var needsClosingCount = reservations.Count(booking => now >= booking.OperationalEndAt);
     var promotionCount = reservations.Count(booking => booking.HasPromotion);
+
+    var displayCurrency = Convert.ToString(ViewBag.DisplayCurrency ?? "ريال يمني") ?? "ريال يمني";
+    var currencyCode = Convert.ToString(ViewBag.DisplayCurrencyCode ?? "YER") ?? "YER";
+    var currencySymbol = Convert.ToString(ViewBag.DisplayCurrencySymbol ?? "ر.ي") ?? "ر.ي";
+    var isYer = string.Equals(currencyCode, "YER", StringComparison.OrdinalIgnoreCase);
+
+    string Number(decimal value) => isYer
+        ? Math.Round(value, 0, MidpointRounding.AwayFromZero).ToString("N0")
+        : value.ToString("N2");
+    string Money(decimal value) => $"{Number(value)} {currencySymbol}";
+    string Raw(decimal value) => value.ToString("0.############################", CultureInfo.InvariantCulture);
+    string CurrencyLabel(string? text) => (text ?? string.Empty)
+        .Replace("ريال يمني", currencySymbol, StringComparison.OrdinalIgnoreCase)
+        .Replace("ريال", currencySymbol, StringComparison.OrdinalIgnoreCase);
 }
 
-<div class="active-reservations-container compact-reservations-view" dir="rtl">
+<div class="active-reservations-container compact-reservations-view"
+     data-display-currency="@displayCurrency"
+     data-currency-code="@currencyCode"
+     data-currency-symbol="@currencySymbol"
+     dir="rtl">
 
     <div class="compact-section-header">
         <div class="compact-section-heading">
-            <span class="compact-heading-icon active">
-                <i class="bi bi-calendar-check-fill"></i>
-            </span>
-
+            <span class="compact-heading-icon active"><i class="bi bi-calendar-check-fill"></i></span>
             <div>
                 <h5 class="compact-section-title">الحجوزات النشطة</h5>
-                <p class="compact-section-subtitle">
-                    المواعيد والصلاحيات محسوبة من الخادم، مع مهلة سماح قبل تسجيل عدم الحضور.
-                </p>
+                <p class="compact-section-subtitle">المواعيد والصلاحيات محسوبة من الخادم، مع مهلة سماح قبل تسجيل عدم الحضور.</p>
             </div>
         </div>
-
         <div class="compact-status-summary">
-            <span class="compact-summary-chip success">
-                <i class="bi bi-play-circle-fill"></i>
-                نشطة حاليًا
-                <strong>@currentCount</strong>
-            </span>
-
-            <span class="compact-summary-chip info">
-                <i class="bi bi-calendar-event"></i>
-                حجوزات قادمة
-                <strong>@upcomingCount</strong>
-            </span>
-
-            <span class="compact-summary-chip warning">
-                <i class="bi bi-exclamation-circle"></i>
-                تنتظر الإنهاء
-                <strong>@needsClosingCount</strong>
-            </span>
-            <span class="compact-summary-chip promotion">
-                <i class="bi bi-stars"></i>
-                حجوزات بعروض
-                <strong>@promotionCount</strong>
-            </span>
+            <span class="compact-summary-chip success"><i class="bi bi-play-circle-fill"></i> نشطة حاليًا <strong>@currentCount</strong></span>
+            <span class="compact-summary-chip info"><i class="bi bi-calendar-event"></i> حجوزات قادمة <strong>@upcomingCount</strong></span>
+            <span class="compact-summary-chip warning"><i class="bi bi-exclamation-circle"></i> تنتظر الإنهاء <strong>@needsClosingCount</strong></span>
+            <span class="compact-summary-chip promotion"><i class="bi bi-stars"></i> حجوزات بعروض <strong>@promotionCount</strong></span>
         </div>
     </div>
 
     @if (reservations.Count == 0)
     {
         <div class="premium-empty-state compact-empty-state">
-            <div class="empty-state-icon">
-                <i class="bi bi-calendar2-check"></i>
-            </div>
-
+            <div class="empty-state-icon"><i class="bi bi-calendar2-check"></i></div>
             <h5 class="fw-black text-dark mb-2">لا توجد حجوزات نشطة</h5>
-            <p class="text-muted mb-0">
-                ستظهر هنا الحجوزات المؤكدة بعد قبول الطلب أو اعتماد الدفع.
-            </p>
+            <p class="text-muted mb-0">ستظهر هنا الحجوزات المؤكدة بعد قبول الطلب أو اعتماد الدفع.</p>
         </div>
     }
     else
@@ -203,282 +134,190 @@
                             <th class="text-center">التفاصيل</th>
                         </tr>
                     </thead>
-
                     <tbody>
-                        @foreach (var booking in reservations)
-                        {
-                            var operationalLabel = GetOperationalLabel(booking);
-                            var operationalIcon = GetOperationalIcon(booking);
-                            var operationalBadgeClass = GetOperationalBadgeClass(booking);
-                            var operationalRowClass = GetOperationalRowClass(booking);
-                            var endDateText = booking.EndDate.HasValue
-                            ? GetShortDate(booking.EndDate.Value)
-                            : "نفس اليوم";
-                            var paymentMethodLabel = GetPaymentMethodLabel(booking.PaymentMethod);
-                            var paymentStatusLabel = GetPaymentStatusLabel(booking.PaymentStatus);
-                            var servicesText = booking.HasAdditionalServices
-                            ? string.Join("، ", booking.Services.Select(service =>
-                            $"{service.ServiceName} × {service.Quantity}"))
+                    @foreach (var booking in reservations)
+                    {
+                        var operationalLabel = GetOperationalLabel(booking);
+                        var operationalIcon = GetOperationalIcon(booking);
+                        var operationalBadgeClass = GetOperationalBadgeClass(booking);
+                        var operationalRowClass = GetOperationalRowClass(booking);
+                        var endDateText = booking.EndDate.HasValue ? GetShortDate(booking.EndDate.Value) : "نفس اليوم";
+                        var paymentMethodLabel = GetPaymentMethodLabel(booking.PaymentMethod);
+                        var paymentStatusLabel = GetPaymentStatusLabel(booking.PaymentStatus);
+                        var servicesText = booking.HasAdditionalServices
+                            ? string.Join("، ", booking.Services.Select(service => $"{service.ServiceName} × {service.Quantity}"))
                             : "لا توجد خدمات إضافية";
-                            var bookingTypeText = string.IsNullOrWhiteSpace(booking.BookingType)
-                            ? "حجز عادي"
-                            : booking.BookingType.Trim();
-                            var seatingSetupText = string.IsNullOrWhiteSpace(booking.SeatingSetup)
-                            ? "غير محدد"
-                            : booking.SeatingSetup.Trim();
+                        var bookingTypeText = string.IsNullOrWhiteSpace(booking.BookingType) ? "حجز عادي" : booking.BookingType.Trim();
+                        var seatingSetupText = string.IsNullOrWhiteSpace(booking.SeatingSetup) ? "غير محدد" : booking.SeatingSetup.Trim();
+                        var promotionLabel = CurrencyLabel(booking.PromotionDiscountLabel);
 
-                            <tr class="compact-reservation-row @operationalRowClass @(booking.HasPromotion ? "reservation-has-promotion" : string.Empty)"
-                        data-reservation-state="Confirmed">
+                        <tr class="compact-reservation-row @operationalRowClass @(booking.HasPromotion ? "reservation-has-promotion" : string.Empty)"
+                            data-reservation-state="Confirmed">
 
-                                <td class="compact-customer-column">
-                                    <div class="compact-customer-box">
-                                        <div class="avatar-letter-user compact-avatar"
-                                     style="background:linear-gradient(135deg,#10B981,#05203C);">
-                                            @GetAvatarLetter(booking.CustomerName)
-                                        </div>
-
-                                        <div class="compact-customer-info">
-                                            <div class="compact-booking-number">
-                                                حجز رقم #@booking.BookingId
+                            <td class="compact-customer-column">
+                                <div class="compact-customer-box">
+                                    <div class="avatar-letter-user compact-avatar" style="background:linear-gradient(135deg,#10B981,#05203C);">
+                                        @GetAvatarLetter(booking.CustomerName)
+                                    </div>
+                                    <div class="compact-customer-info">
+                                        <div class="compact-booking-number">حجز رقم #@booking.BookingId</div>
+                                        @if (booking.HasPromotion)
+                                        {
+                                            <div class="reservation-promo-ribbon">
+                                                <span class="reservation-promo-ribbon-orb"><i class="bi bi-stars"></i></span>
+                                                <span>حجز بعرض</span><strong>@promotionLabel</strong>
                                             </div>
-
-                                            @if (booking.HasPromotion)
-                                            {
-                                                <div class="reservation-promo-ribbon">
-                                                    <span class="reservation-promo-ribbon-orb">
-                                                        <i class="bi bi-stars"></i>
-                                                    </span>
-                                                    <span>حجز بعرض</span>
-                                                    <strong>@booking.PromotionDiscountLabel</strong>
-                                                </div>
-                                            }
-                                            <div class="compact-customer-name">
-                                                @booking.CustomerName
-                                            </div>
-                                            <div class="compact-customer-meta">
-                                                <i class="bi bi-telephone"></i>
-                                                @booking.CustomerPhone
-                                            </div>
-                                        </div>
+                                        }
+                                        <div class="compact-customer-name">@booking.CustomerName</div>
+                                        <div class="compact-customer-meta"><i class="bi bi-telephone"></i> @booking.CustomerPhone</div>
                                     </div>
-                                </td>
+                                </div>
+                            </td>
 
-                                <td class="compact-place-column">
-                                    <div class="compact-unit-name">
-                                        <i class="bi @(booking.HasRoom ? "bi-door-open" : "bi-box-seam")"></i>
-                                        <span>@booking.ReservationUnitName</span>
+                            <td class="compact-place-column">
+                                <div class="compact-unit-name"><i class="bi @(booking.HasRoom ? "bi-door-open" : "bi-box-seam")"></i><span>@booking.ReservationUnitName</span></div>
+                                @if (booking.HasAssignedRoomUnits)
+                                {
+                                    <div class="assigned-room-summary"><i class="bi bi-key-fill"></i><span>@booking.AssignedRoomUnitsText</span></div>
+                                }
+                            </td>
+
+                            <td class="compact-date-column">
+                                <div class="compact-date-range">
+                                    <div class="compact-date-item"><span class="compact-date-label">الدخول</span><strong>@GetShortDate(booking.StartDate)</strong></div>
+                                    <i class="bi bi-arrow-left compact-date-arrow"></i>
+                                    <div class="compact-date-item"><span class="compact-date-label">الخروج</span><strong>@endDateText</strong></div>
+                                </div>
+                                <div class="compact-period-note"><i class="bi bi-clock"></i> @booking.OperationalStartAt.ToString("HH:mm") — @booking.OperationalEndAt.ToString("yyyy-MM-dd HH:mm")</div>
+                            </td>
+
+                            <td class="compact-total-column">
+                                @if (booking.HasPromotion)
+                                {
+                                    <div class="reservation-promo-price-card" data-promo-tilt>
+                                        <div class="reservation-promo-price-head">
+                                            <span class="reservation-promo-title"><i class="bi bi-lightning-charge-fill"></i> @booking.PromotionTitleDisplay</span>
+                                            <span class="reservation-promo-discount-pill">@promotionLabel</span>
+                                        </div>
+                                        <div class="reservation-promo-price-flow">
+                                            <del>@Number(booking.DisplayOriginalTotalPrice)</del>
+                                            <i class="bi bi-arrow-left-short"></i>
+                                            <strong>@Number(booking.TotalPrice) <small>@currencySymbol</small></strong>
+                                        </div>
+                                        <div class="reservation-promo-saving"><i class="bi bi-gem"></i> التوفير النهائي <strong>@Number(booking.FinalSavingsAmount)</strong> @currencySymbol</div>
                                     </div>
-                                    @if (booking.HasAssignedRoomUnits)
-                                    {
-                                        <div class="assigned-room-summary">
-                                            <i class="bi bi-key-fill"></i>
-                                            <span>@booking.AssignedRoomUnitsText</span>
-                                        </div>
-                                    }
-                                </td>
+                                }
+                                else
+                                {
+                                    <div class="compact-total-price">@Number(booking.TotalPrice)</div>
+                                    <span class="compact-currency">@currencySymbol</span>
+                                }
+                                <div class="compact-period-note"><i class="bi bi-cash-stack"></i> المتبقي: @Money(booking.RemainingAmount)</div>
+                                <div class="compact-period-note"><i class="bi bi-credit-card"></i> @paymentStatusLabel</div>
+                            </td>
 
-                                <td class="compact-date-column">
-                                    <div class="compact-date-range">
-                                        <div class="compact-date-item">
-                                            <span class="compact-date-label">الدخول</span>
-                                            <strong>@GetShortDate(booking.StartDate)</strong>
-                                        </div>
+                            <td class="compact-state-column">
+                                <span class="badge @operationalBadgeClass compact-state-badge"><i class="bi @operationalIcon"></i> @operationalLabel</span>
+                                <div class="compact-state-note success"><i class="bi bi-shield-check"></i> الحجز مؤكد</div>
+                                @if (!booking.CanMarkNoShowNow)
+                                {
+                                    <div class="compact-state-note warning"><i class="bi bi-person-x"></i> عدم الحضور يتاح: @booking.NoShowAvailableAt.ToString("yyyy-MM-dd HH:mm")</div>
+                                }
+                                @if (!booking.CanCompleteNow)
+                                {
+                                    <div class="compact-state-note info"><i class="bi bi-check2-circle"></i> الإنهاء يتاح: @booking.OperationalEndAt.ToString("yyyy-MM-dd HH:mm")</div>
+                                }
+                                @if (booking.CanCompleteNow)
+                                {
+                                    <div class="compact-state-note success"><i class="bi bi-unlock"></i> متاح للتحصيل والإنهاء</div>
+                                }
+                            </td>
 
-                                        <i class="bi bi-arrow-left compact-date-arrow"></i>
-
-                                        <div class="compact-date-item">
-                                            <span class="compact-date-label">الخروج</span>
-                                            <strong>@endDateText</strong>
-                                        </div>
-                                    </div>
-
-                                    <div class="compact-period-note">
-                                        <i class="bi bi-clock"></i>
-                                        @booking.OperationalStartAt.ToString("HH:mm")
-                                        —
-                                        @booking.OperationalEndAt.ToString("yyyy-MM-dd HH:mm")
-                                    </div>
-                                </td>
-
-                                <td class="compact-total-column">
-                                    @if (booking.HasPromotion)
-                                    {
-                                        <div class="reservation-promo-price-card"
-                                 data-promo-tilt>
-
-                                            <div class="reservation-promo-price-head">
-                                                <span class="reservation-promo-title">
-                                                    <i class="bi bi-lightning-charge-fill"></i>
-                                                    @booking.PromotionTitleDisplay
-                                                </span>
-
-                                                <span class="reservation-promo-discount-pill">
-                                                    @booking.PromotionDiscountLabel
-                                                </span>
-                                            </div>
-
-                                            <div class="reservation-promo-price-flow">
-                                                <del>
-                                                    @booking.DisplayOriginalTotalPrice.ToString("N0")
-                                                </del>
-
-                                                <i class="bi bi-arrow-left-short"></i>
-
-                                                <strong>
-                                                    @booking.TotalPrice.ToString("N0")
-                                                    <small>ريال</small>
-                                                </strong>
-                                            </div>
-
-                                            <div class="reservation-promo-saving">
-                                                <i class="bi bi-gem"></i>
-                                                التوفير النهائي
-                                                <strong>
-                                                    @booking.FinalSavingsAmount.ToString("N0")
-                                                </strong>
-                                                ريال
-                                            </div>
-
-                                        </div>
-                                    }
-                                    else
-                                    {
-                                        <div class="compact-total-price">
-                                            @booking.TotalPrice.ToString("N0")
-                                        </div>
-                                        <span class="compact-currency">ريال يمني</span>
-                                    }
-
-                                    <div class="compact-period-note">
-                                        <i class="bi bi-cash-stack"></i>
-                                        المتبقي: @booking.RemainingAmount.ToString("N0") ريال
-                                    </div>
-
-                                    <div class="compact-period-note">
-                                        <i class="bi bi-credit-card"></i>
-                                        @paymentStatusLabel
-                                    </div>
-                                </td>
-
-                                <td class="compact-state-column">
-                                    <span class="badge @operationalBadgeClass compact-state-badge">
-                                        <i class="bi @operationalIcon"></i>
-                                        @operationalLabel
-                                    </span>
-
-                                    <div class="compact-state-note success">
-                                        <i class="bi bi-shield-check"></i>
-                                        الحجز مؤكد
-                                    </div>
-
-                                    @if (!booking.CanMarkNoShowNow)
-                                    {
-                                        <div class="compact-state-note warning">
-                                            <i class="bi bi-person-x"></i>
-                                            عدم الحضور يتاح:
-                                            @booking.NoShowAvailableAt.ToString("yyyy-MM-dd HH:mm")
-                                        </div>
-                                    }
-
-                                    @if (!booking.CanCompleteNow)
-                                    {
-                                        <div class="compact-state-note info">
-                                            <i class="bi bi-check2-circle"></i>
-                                            الإنهاء يتاح:
-                                            @booking.OperationalEndAt.ToString("yyyy-MM-dd HH:mm")
-                                        </div>
-                                    }
-
-                                    @if (booking.CanCompleteNow)
-                                    {
-                                        <div class="compact-state-note success">
-                                            <i class="bi bi-unlock"></i>
-                                            متاح للتحصيل والإنهاء
-                                        </div>
-                                    }
-                                </td>
-
-                                <td class="compact-action-column text-center">
-                                    <button type="button"
-                                    class="compact-details-button"
-                                    title="عرض تفاصيل الحجز وإدارته"
-                                    aria-label="عرض تفاصيل الحجز رقم @booking.BookingId"
-                                    onclick="openPremiumCenterModal(this)"
-                                    data-id="@booking.BookingId"
-                                    data-customer-id="@booking.CustomerId"
-                                    data-place-id="@booking.PlaceId"
-                                    data-customer="@booking.CustomerName"
-                                    data-phone="@booking.CustomerPhone"
-                                    data-place="@booking.PlaceName"
-                                    data-unit="@booking.ReservationUnitName"
-                                    data-unit-type="@booking.ReservationUnitType"
-                                    data-has-assigned-rooms="@(booking.HasAssignedRoomUnits ? "true" : "false")"
-                                    data-assigned-rooms="@booking.AssignedRoomUnitsText"
-                                    data-start="@GetShortDate(booking.StartDate)"
-                                    data-end="@endDateText"
-                                    data-start-iso="@booking.StartDate.ToString("O")"
-                                    data-end-iso="@(booking.EndDate?.ToString("O") ?? string.Empty)"
-                                    data-operational-start="@booking.OperationalStartAt.ToString("O")"
-                                    data-operational-end="@booking.OperationalEndAt.ToString("O")"
-                                    data-no-show-available-at="@booking.NoShowAvailableAt.ToString("O")"
-                                    data-no-show-grace-minutes="@booking.NoShowGraceMinutes"
-                                    data-total="@($"{booking.TotalPrice:N0} ريال يمني")"
-                                    data-total-raw="@booking.TotalPrice.ToString(CultureInfo.InvariantCulture)"
-                                    data-has-promotion="@(booking.HasPromotion ? "true" : "false")"
-                                    data-promotion-id="@(booking.PromotionId?.ToString() ?? string.Empty)"
-                                    data-promotion-title="@booking.PromotionTitleDisplay"
-                                    data-promotion-code="@(booking.PromotionCodeSnapshot ?? string.Empty)"
-                                    data-discount-type="@(booking.DiscountTypeSnapshot ?? string.Empty)"
-                                    data-discount-value="@(booking.DiscountValueSnapshot?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)"
-                                    data-discount-label="@booking.PromotionDiscountLabel"
-                                    data-original-total="@($"{booking.DisplayOriginalTotalPrice:N0} ريال يمني")"
-                                    data-original-total-raw="@booking.DisplayOriginalTotalPrice.ToString(CultureInfo.InvariantCulture)"
-                                    data-discount-amount="@($"{booking.DiscountAmount:N0} ريال يمني")"
-                                    data-discount-amount-raw="@booking.DiscountAmount.ToString(CultureInfo.InvariantCulture)"
-                                    data-final-savings="@($"{booking.FinalSavingsAmount:N0} ريال يمني")"
-                                    data-method="@paymentMethodLabel"
-                                    data-status="Confirmed"
-                                    data-payment-status="@booking.PaymentStatus"
-                                    data-payment-label="@paymentStatusLabel"
-                                    data-deposit="@($"{booking.DepositAmount:N0} ريال يمني")"
-                                    data-deposit-raw="@booking.DepositAmount.ToString(CultureInfo.InvariantCulture)"
-                                    data-online-payment-type="@(booking.OnlinePaymentType ?? string.Empty)"
-                                    data-online-payment-type-label="@booking.OnlinePaymentTypeLabel"
-                                    data-expected-online="@($"{booking.ExpectedOnlinePaymentAmount:N0} ريال يمني")"
-                                    data-expected-online-raw="@booking.ExpectedOnlinePaymentAmount.ToString(CultureInfo.InvariantCulture)"
-                                    data-expected-remaining="@($"{booking.ExpectedRemainingAfterApproval:N0} ريال يمني")"
-                                    data-expected-remaining-raw="@booking.ExpectedRemainingAfterApproval.ToString(CultureInfo.InvariantCulture)"
-                                    data-payment-confirmed="@(booking.IsPaymentConfirmed ? "true" : "false")"
-                                    data-commission-status="@booking.CommissionStatus"
-                                    data-ref="@(booking.TransferReferenceNumber ?? string.Empty)"
-                                    data-online="@($"{booking.AmountPaidOnline:N0} ريال يمني")"
-                                    data-online-raw="@booking.AmountPaidOnline.ToString(CultureInfo.InvariantCulture)"
-                                    data-property="@($"{booking.RemainingAmount:N0} ريال يمني")"
-                                    data-property-raw="@booking.RemainingAmount.ToString(CultureInfo.InvariantCulture)"
-                                    data-collected="@($"{booking.AmountCollectedAtProperty:N0} ريال يمني")"
-                                    data-total-collected="@($"{booking.TotalCollectedAmount:N0} ريال يمني")"
-                                    data-image="@(booking.PaymentNotificationImage ?? string.Empty)"
-                                    data-reason="@(booking.RejectionReason ?? string.Empty)"
-                                    data-services="@servicesText"
-                                    data-quantity="@booking.Quantity"
-                                    data-adults="@booking.AdultsCount"
-                                    data-children="@booking.ChildrenCount"
-                                    data-booking-type="@bookingTypeText"
-                                    data-seating="@seatingSetupText"
-                                    data-created="@(booking.CreatedAt?.ToString("yyyy-MM-dd HH:mm") ?? "غير محدد")"
-                                    data-accepted-at="@(booking.AcceptedAt?.ToString("O") ?? string.Empty)"
-                                    data-payment-approved-at="@(booking.PaymentApprovedAt?.ToString("O") ?? string.Empty)"
-                                    data-last-status-at="@(booking.LastStatusChangedAt?.ToString("O") ?? string.Empty)"
-                                    data-can-complete="@(booking.CanCompleteNow ? "true" : "false")"
-                                    data-can-no-show="@(booking.CanMarkNoShowNow ? "true" : "false")"
-                                    data-can-owner-cancel="@(booking.CanOwnerCancel ? "true" : "false")"
-                                    data-action-note="@booking.ActionAvailabilityText">
-                                        <i class="bi bi-eye"></i>
-                                        <span>عرض التفاصيل</span>
-                                    </button>
-                                </td>
-                            </tr>
-                        }
+                            <td class="compact-action-column text-center">
+                                <button type="button"
+                                        class="compact-details-button"
+                                        title="عرض تفاصيل الحجز وإدارته"
+                                        aria-label="عرض تفاصيل الحجز رقم @booking.BookingId"
+                                        onclick="openPremiumCenterModal(this)"
+                                        data-id="@booking.BookingId"
+                                        data-customer-id="@booking.CustomerId"
+                                        data-place-id="@booking.PlaceId"
+                                        data-customer="@booking.CustomerName"
+                                        data-phone="@booking.CustomerPhone"
+                                        data-place="@booking.PlaceName"
+                                        data-unit="@booking.ReservationUnitName"
+                                        data-unit-type="@booking.ReservationUnitType"
+                                        data-has-assigned-rooms="@(booking.HasAssignedRoomUnits ? "true" : "false")"
+                                        data-assigned-rooms="@booking.AssignedRoomUnitsText"
+                                        data-start="@GetShortDate(booking.StartDate)"
+                                        data-end="@endDateText"
+                                        data-start-iso="@booking.StartDate.ToString("O")"
+                                        data-end-iso="@(booking.EndDate?.ToString("O") ?? string.Empty)"
+                                        data-operational-start="@booking.OperationalStartAt.ToString("O")"
+                                        data-operational-end="@booking.OperationalEndAt.ToString("O")"
+                                        data-no-show-available-at="@booking.NoShowAvailableAt.ToString("O")"
+                                        data-no-show-grace-minutes="@booking.NoShowGraceMinutes"
+                                        data-total="@Money(booking.TotalPrice)"
+                                        data-total-raw="@Raw(booking.TotalPrice)"
+                                        data-currency="@displayCurrency"
+                                        data-currency-code="@currencyCode"
+                                        data-currency-symbol="@currencySymbol"
+                                        data-has-promotion="@(booking.HasPromotion ? "true" : "false")"
+                                        data-promotion-id="@(booking.PromotionId?.ToString() ?? string.Empty)"
+                                        data-promotion-title="@booking.PromotionTitleDisplay"
+                                        data-promotion-code="@(booking.PromotionCodeSnapshot ?? string.Empty)"
+                                        data-discount-type="@(booking.DiscountTypeSnapshot ?? string.Empty)"
+                                        data-discount-value="@(booking.DiscountValueSnapshot?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)"
+                                        data-discount-label="@promotionLabel"
+                                        data-original-total="@Money(booking.DisplayOriginalTotalPrice)"
+                                        data-original-total-raw="@Raw(booking.DisplayOriginalTotalPrice)"
+                                        data-discount-amount="@Money(booking.DiscountAmount)"
+                                        data-discount-amount-raw="@Raw(booking.DiscountAmount)"
+                                        data-final-savings="@Money(booking.FinalSavingsAmount)"
+                                        data-method="@paymentMethodLabel"
+                                        data-status="Confirmed"
+                                        data-payment-status="@booking.PaymentStatus"
+                                        data-payment-label="@paymentStatusLabel"
+                                        data-deposit="@Money(booking.DepositAmount)"
+                                        data-deposit-raw="@Raw(booking.DepositAmount)"
+                                        data-online-payment-type="@(booking.OnlinePaymentType ?? string.Empty)"
+                                        data-online-payment-type-label="@booking.OnlinePaymentTypeLabel"
+                                        data-expected-online="@Money(booking.ExpectedOnlinePaymentAmount)"
+                                        data-expected-online-raw="@Raw(booking.ExpectedOnlinePaymentAmount)"
+                                        data-expected-remaining="@Money(booking.ExpectedRemainingAfterApproval)"
+                                        data-expected-remaining-raw="@Raw(booking.ExpectedRemainingAfterApproval)"
+                                        data-payment-confirmed="@(booking.IsPaymentConfirmed ? "true" : "false")"
+                                        data-commission-status="@booking.CommissionStatus"
+                                        data-ref="@(booking.TransferReferenceNumber ?? string.Empty)"
+                                        data-online="@Money(booking.AmountPaidOnline)"
+                                        data-online-raw="@Raw(booking.AmountPaidOnline)"
+                                        data-property="@Money(booking.RemainingAmount)"
+                                        data-property-raw="@Raw(booking.RemainingAmount)"
+                                        data-collected="@Money(booking.AmountCollectedAtProperty)"
+                                        data-collected-raw="@Raw(booking.AmountCollectedAtProperty)"
+                                        data-total-collected="@Money(booking.TotalCollectedAmount)"
+                                        data-total-collected-raw="@Raw(booking.TotalCollectedAmount)"
+                                        data-image="@(booking.PaymentNotificationImage ?? string.Empty)"
+                                        data-reason="@(booking.RejectionReason ?? string.Empty)"
+                                        data-services="@servicesText"
+                                        data-quantity="@booking.Quantity"
+                                        data-adults="@booking.AdultsCount"
+                                        data-children="@booking.ChildrenCount"
+                                        data-booking-type="@bookingTypeText"
+                                        data-seating="@seatingSetupText"
+                                        data-created="@(booking.CreatedAt?.ToString("yyyy-MM-dd HH:mm") ?? "غير محدد")"
+                                        data-accepted-at="@(booking.AcceptedAt?.ToString("O") ?? string.Empty)"
+                                        data-payment-approved-at="@(booking.PaymentApprovedAt?.ToString("O") ?? string.Empty)"
+                                        data-last-status-at="@(booking.LastStatusChangedAt?.ToString("O") ?? string.Empty)"
+                                        data-can-complete="@(booking.CanCompleteNow ? "true" : "false")"
+                                        data-can-no-show="@(booking.CanMarkNoShowNow ? "true" : "false")"
+                                        data-can-owner-cancel="@(booking.CanOwnerCancel ? "true" : "false")"
+                                        data-action-note="@booking.ActionAvailabilityText">
+                                    <i class="bi bi-eye"></i><span>عرض التفاصيل</span>
+                                </button>
+                            </td>
+                        </tr>
+                    }
                     </tbody>
                 </table>
             </div>
