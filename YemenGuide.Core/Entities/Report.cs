@@ -14,7 +14,6 @@ namespace YemenGuide.Core.Entities
         public int ReporterId { get; set; }
         public int? AgainstUserId { get; set; }
         public string ReportReason { get; set; } = null!;
-        public string? RequiredAction { get; set; }
         public int? PlaceId { get; set; }
         public string? EvidenceImage { get; set; }
         public string ReportStatus { get; set; } = null!;
@@ -26,12 +25,17 @@ namespace YemenGuide.Core.Entities
         public string? WithdrawnReason { get; set; }
         public string? OwnerReply { get; set; }
         public DateTime? OwnerReplyDate { get; set; }
+        public string? ReporterReply { get; set; }
+        public DateTime? ReporterReplyDate { get; set; }
         public DateTime? EscalatedAt { get; set; }
         public DateTime? WarningIssuedAt { get; set; }
         public string ReportNumber { get; set; } = null!;
         public string RequestKind { get; set; } = null!;
         public string? Title { get; set; }
         public string? Category { get; set; }
+        public string? OtherReportTypeDescription { get; set; }
+        public string? OtherCategoryDescription { get; set; }
+        public string? RequiredAction { get; set; }
         public string Priority { get; set; } = null!;
         public int? BookingId { get; set; }
         public int? PromotionId { get; set; }
@@ -46,10 +50,6 @@ namespace YemenGuide.Core.Entities
         public DateTime? ClosedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
         public byte[] RowVersion { get; set; } = null!;
-        public string? ReporterReply { get; set; }
-        public DateTime? ReporterReplyDate { get; set; }
-        public string? OtherReportTypeDescription { get; set; }
-        public string? OtherCategoryDescription { get; set; }
 
         public virtual Advertisement? Advertisement { get; set; }
         public virtual User? AgainstUser { get; set; }

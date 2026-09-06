@@ -15,10 +15,10 @@ namespace YemenGuide.Core.Entities
         public decimal? LowBalanceThreshold { get; set; }
         public string AccountStatus { get; set; } = null!;
         public DateTime? LastTopUpAt { get; set; }
-        public DateTime? CreatedAt { get; set; }
-        public DateTime? UpdatedAt { get; set; }
         public DateTime? DebtStartedAt { get; set; }
         public DateTime? DebtDueAt { get; set; }
+        public DateTime? CreatedAt { get; set; }
+        public DateTime? UpdatedAt { get; set; }
         public byte[] RowVersion { get; set; } = null!;
 
         public virtual Place Place { get; set; } = null!;

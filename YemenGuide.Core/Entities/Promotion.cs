@@ -16,16 +16,6 @@ namespace YemenGuide.Core.Entities
         public int OwnerId { get; set; }
         public int PlaceId { get; set; }
         public string PromotionTitle { get; set; } = null!;
-
-        // منطق العروض الجديد
-        public string OfferMode { get; set; } = "Discount";
-        public string? RewardType { get; set; }
-        public int? RequiredQuantity { get; set; }
-        public int? RewardQuantity { get; set; }
-        public bool IsRewardRepeatable { get; set; }
-        public int? RewardServiceId { get; set; }
-        public decimal? SpecialPrice { get; set; }
-
         public string? DiscountType { get; set; }
         public decimal DiscountValue { get; set; }
         public DateTime StartDate { get; set; }
@@ -57,12 +47,19 @@ namespace YemenGuide.Core.Entities
         public string? RejectionReason { get; set; }
         public DateTime? PausedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
+        public string OfferMode { get; set; } = null!;
+        public string? RewardType { get; set; }
+        public int? RequiredQuantity { get; set; }
+        public int? RewardQuantity { get; set; }
+        public int? RewardServiceId { get; set; }
+        public decimal? SpecialPrice { get; set; }
+        public bool IsRewardRepeatable { get; set; }
 
         public virtual User Owner { get; set; } = null!;
         public virtual PlacePackage? P { get; set; }
         public virtual Place Place { get; set; } = null!;
         public virtual PlaceAdditionalService? PlaceAdditionalService { get; set; }
-        public virtual PlaceAdditionalService? RewardService { get; set; }
+        public virtual PlaceAdditionalService? PlaceAdditionalServiceNavigation { get; set; }
         public virtual User? ReviewedByUser { get; set; }
         public virtual Room? Room { get; set; }
         public virtual ICollection<Advertisement> Advertisements { get; set; }

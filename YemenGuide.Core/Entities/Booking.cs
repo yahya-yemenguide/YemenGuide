@@ -17,6 +17,13 @@ namespace YemenGuide.Core.Entities
 
         public int BookingId { get; set; }
         public int? CustomerId { get; set; }
+        public string BookingSource { get; set; } = null!;
+        public string? ManualBookingChannel { get; set; }
+        public int? CreatedByUserId { get; set; }
+        public string? GuestName { get; set; }
+        public string? GuestPhone { get; set; }
+        public string? GuestEmail { get; set; }
+        public string? OwnerInternalNotes { get; set; }
         public int PlaceId { get; set; }
         public int? RoomId { get; set; }
         public int? PackageId { get; set; }
@@ -49,7 +56,6 @@ namespace YemenGuide.Core.Entities
         public string? PaymentProofRejectionReason { get; set; }
         public DateTime? PaymentProofRejectedAt { get; set; }
         public int PaymentProofReviewCount { get; set; }
-        public byte[] RowVersion { get; set; } = null!;
         public int? PromotionId { get; set; }
         public decimal OriginalTotalPrice { get; set; }
         public decimal DiscountAmount { get; set; }
@@ -58,13 +64,7 @@ namespace YemenGuide.Core.Entities
         public string? DiscountTypeSnapshot { get; set; }
         public decimal? DiscountValueSnapshot { get; set; }
         public int? AdvertisementId { get; set; }
-        public string BookingSource { get; set; } = null!;
-        public string? ManualBookingChannel { get; set; }
-        public int? CreatedByUserId { get; set; }
-        public string? GuestName { get; set; }
-        public string? GuestPhone { get; set; }
-        public string? GuestEmail { get; set; }
-        public string? OwnerInternalNotes { get; set; }
+        public byte[] RowVersion { get; set; } = null!;
 
         public virtual Advertisement? Advertisement { get; set; }
         public virtual User? CreatedByUser { get; set; }

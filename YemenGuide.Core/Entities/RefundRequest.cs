@@ -19,15 +19,15 @@ namespace YemenGuide.Core.Entities
         public string? Reason { get; set; }
         public string? ReferenceNumber { get; set; }
         public string? ProofImage { get; set; }
-        public DateTime? RequestedAt { get; set; }
-        public DateTime? ProcessedAt { get; set; }
-        public int? ProcessedByUserId { get; set; }
-        public string? Notes { get; set; }
         public int? RefundWalletId { get; set; }
         public string? RefundAccountNumber { get; set; }
         public string? RefundBeneficiaryName { get; set; }
         public DateTime? TransferredAt { get; set; }
         public DateTime? CustomerConfirmedAt { get; set; }
+        public DateTime? RequestedAt { get; set; }
+        public DateTime? ProcessedAt { get; set; }
+        public int? ProcessedByUserId { get; set; }
+        public string? Notes { get; set; }
 
         public virtual Booking Booking { get; set; } = null!;
         public virtual User? Customer { get; set; }

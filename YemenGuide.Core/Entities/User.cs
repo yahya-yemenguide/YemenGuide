@@ -12,6 +12,7 @@ namespace YemenGuide.Core.Entities
             AdminRoles = new HashSet<AdminRole>();
             AdvertisementEvents = new HashSet<AdvertisementEvent>();
             AdvertisementOwners = new HashSet<Advertisement>();
+            AdvertisementRefundedByUsers = new HashSet<Advertisement>();
             AdvertisementReviewedByUsers = new HashSet<Advertisement>();
             BookingCreatedByUsers = new HashSet<Booking>();
             BookingCustomers = new HashSet<Booking>();
@@ -54,8 +55,6 @@ namespace YemenGuide.Core.Entities
         public DateTime? LastSeen { get; set; }
         public int WarningCount { get; set; }
         public DateTime? LastWarningDate { get; set; }
-        public DateTime? FreeTrialStartedAt { get; set; }
-        public DateTime? FreeTrialEndsAt { get; set; }
         public bool IsEmailVerified { get; set; }
         public string? VerificationCode { get; set; }
         public DateTime? CodeExpiry { get; set; }
@@ -73,6 +72,8 @@ namespace YemenGuide.Core.Entities
         public bool IsAgreedToTerms { get; set; }
         public DateTime? AgreedToTermsDate { get; set; }
         public string PreferredLanguage { get; set; } = null!;
+        public DateTime? FreeTrialStartedAt { get; set; }
+        public DateTime? FreeTrialEndsAt { get; set; }
         public int? AdminRoleId { get; set; }
         public string? EmployeeNumber { get; set; }
         public string? Department { get; set; }
@@ -88,6 +89,7 @@ namespace YemenGuide.Core.Entities
         public virtual ICollection<AdminRole> AdminRoles { get; set; }
         public virtual ICollection<AdvertisementEvent> AdvertisementEvents { get; set; }
         public virtual ICollection<Advertisement> AdvertisementOwners { get; set; }
+        public virtual ICollection<Advertisement> AdvertisementRefundedByUsers { get; set; }
         public virtual ICollection<Advertisement> AdvertisementReviewedByUsers { get; set; }
         public virtual ICollection<Booking> BookingCreatedByUsers { get; set; }
         public virtual ICollection<Booking> BookingCustomers { get; set; }

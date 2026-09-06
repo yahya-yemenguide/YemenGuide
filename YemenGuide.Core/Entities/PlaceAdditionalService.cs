@@ -8,7 +8,8 @@ namespace YemenGuide.Core.Entities
         public PlaceAdditionalService()
         {
             BookingAdditionalServices = new HashSet<BookingAdditionalService>();
-            Promotions = new HashSet<Promotion>();
+            PromotionPlaceAdditionalServiceNavigations = new HashSet<Promotion>();
+            PromotionPlaceAdditionalServices = new HashSet<Promotion>();
         }
 
         public int ServiceId { get; set; }
@@ -22,6 +23,7 @@ namespace YemenGuide.Core.Entities
 
         public virtual Place Place { get; set; } = null!;
         public virtual ICollection<BookingAdditionalService> BookingAdditionalServices { get; set; }
-        public virtual ICollection<Promotion> Promotions { get; set; }
+        public virtual ICollection<Promotion> PromotionPlaceAdditionalServiceNavigations { get; set; }
+        public virtual ICollection<Promotion> PromotionPlaceAdditionalServices { get; set; }
     }
 }

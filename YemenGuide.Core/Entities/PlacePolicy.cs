@@ -18,6 +18,7 @@ namespace YemenGuide.Core.Entities
         public int NonRefundableDiscount { get; set; }
         public int FreeCancellationHours { get; set; }
         public bool? ImmediateGracePeriod { get; set; }
+        public int NoShowGraceMinutes { get; set; }
         public string PenaltyType { get; set; } = null!;
         public decimal PenaltyValue { get; set; }
         public bool? ConfiscateOnNoShow { get; set; }
@@ -46,7 +47,6 @@ namespace YemenGuide.Core.Entities
         public bool AllowParties { get; set; }
         public bool AllowQatInside { get; set; }
         public DateTime CreatedAt { get; set; }
-        public int NoShowGraceMinutes { get; set; }
 
         public virtual Place Place { get; set; } = null!;
     }

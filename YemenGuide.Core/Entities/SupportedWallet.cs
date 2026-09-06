@@ -7,6 +7,7 @@ namespace YemenGuide.Core.Entities
     {
         public SupportedWallet()
         {
+            Advertisements = new HashSet<Advertisement>();
             OwnerWallets = new HashSet<OwnerWallet>();
             RefundRequests = new HashSet<RefundRequest>();
         }
@@ -18,6 +19,7 @@ namespace YemenGuide.Core.Entities
         public DateTime? CreatedAt { get; set; }
 
         public virtual PlatformWallet? PlatformWallet { get; set; }
+        public virtual ICollection<Advertisement> Advertisements { get; set; }
         public virtual ICollection<OwnerWallet> OwnerWallets { get; set; }
         public virtual ICollection<RefundRequest> RefundRequests { get; set; }
     }

@@ -9,8 +9,8 @@ namespace YemenGuide.Core.Entities
         public int BookingId { get; set; }
         public decimal DepositAmount { get; set; }
         public decimal PlatformCommission { get; set; }
-        public string? OnlinePaymentType { get; set; }
         public string? TransferReferenceNumber { get; set; }
+        public string? OnlinePaymentType { get; set; }
         public decimal AmountPaidOnline { get; set; }
         public decimal AmountToPayAtProperty { get; set; }
         public decimal CommissionRateSnapshot { get; set; }
