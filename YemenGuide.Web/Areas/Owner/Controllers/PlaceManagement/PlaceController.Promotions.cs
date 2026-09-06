@@ -57,8 +57,8 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 .AsNoTracking()
                 .Include(item => item.Room)
                 .Include(item => item.P)
+                .Include(item => item.PlaceAdditionalServiceNavigation)
                 .Include(item => item.PlaceAdditionalService)
-                .Include(item => item.RewardService)
                 .Where(item => item.OwnerId == ownerId && item.PlaceId == activePlace.PlaceId)
                 .OrderByDescending(item => item.UpdatedAt ?? item.CreatedAt)
                 .ThenByDescending(item => item.PromotionId)
@@ -972,7 +972,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     ? "غرفة أو جناح"
                     : BuildRoomTargetLabel(promotion.Room.RoomType, promotion.Room.RoomNumber),
                 "Package" => promotion.P?.PackageName ?? "باقة",
-                "Service" => promotion.PlaceAdditionalService?.ServiceName ?? "خدمة إضافية",
+                "Service" => promotion.PlaceAdditionalServiceNavigation?.ServiceName ?? "خدمة إضافية",
                 _ => "المنشأة كاملة"
             };
         }
@@ -1008,11 +1008,11 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                         ? $"{promotion.RewardQuantity.Value} مجانًا (يتكرر العرض)"
                         : $"{promotion.RewardQuantity.Value} مجانًا",
                 "FreeService"
-                    => $"خدمة {promotion.RewardService?.ServiceName ?? "إضافية"} مجانًا",
+                    => $"خدمة {promotion.PlaceAdditionalService?.ServiceName ?? "إضافية"} مجانًا",
                 "SpecialPrice" when promotion.SpecialPrice.HasValue
                     => $"سعر خاص {promotion.SpecialPrice.Value:N0} ريال",
                 "ServiceSpecialPrice" when promotion.SpecialPrice.HasValue
-                    => $"{promotion.RewardService?.ServiceName ?? "الخدمة"} بسعر {promotion.SpecialPrice.Value:N0} ريال",
+                    => $"{promotion.PlaceAdditionalService?.ServiceName ?? "الخدمة"} بسعر {promotion.SpecialPrice.Value:N0} ريال",
                 _ => "مكافأة خاصة"
             };
 
