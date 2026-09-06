@@ -5,7 +5,6 @@ using Microsoft.EntityFrameworkCore.Metadata;
 using YemenGuide.Core.Entities;
 using YemenGuide.Core.Helpers;
 
-
 namespace YemenGuide.Data
 {
     public partial class AppDbContext : DbContext
@@ -18,22 +17,23 @@ namespace YemenGuide.Data
             : base(options)
         {
         }
-
-
         public virtual DbSet<AdminAuditLog> AdminAuditLogs { get; set; } = null!;
         public virtual DbSet<AdminPermission> AdminPermissions { get; set; } = null!;
         public virtual DbSet<AdminRole> AdminRoles { get; set; } = null!;
         public virtual DbSet<AdminRolePermission> AdminRolePermissions { get; set; } = null!;
         public virtual DbSet<Advertisement> Advertisements { get; set; } = null!;
+        public virtual DbSet<AdvertisementEvent> AdvertisementEvents { get; set; } = null!;
+        public virtual DbSet<AdvertisementMedium> AdvertisementMedia { get; set; } = null!;
         public virtual DbSet<AdvertisementPlan> AdvertisementPlans { get; set; } = null!;
+        public virtual DbSet<AdvertisementTarget> AdvertisementTargets { get; set; } = null!;
         public virtual DbSet<Booking> Bookings { get; set; } = null!;
         public virtual DbSet<BookingAdditionalService> BookingAdditionalServices { get; set; } = null!;
+        public virtual DbSet<BookingRoomUnit> BookingRoomUnits { get; set; } = null!;
         public virtual DbSet<Category> Categories { get; set; } = null!;
         public virtual DbSet<Chat> Chats { get; set; } = null!;
         public virtual DbSet<City> Cities { get; set; } = null!;
         public virtual DbSet<CommissionTransaction> CommissionTransactions { get; set; } = null!;
         public virtual DbSet<Favorite> Favorites { get; set; } = null!;
-        public virtual DbSet<FinancialDocument> FinancialDocuments { get; set; } = null!;
         public virtual DbSet<FinancialRecord> FinancialRecords { get; set; } = null!;
         public virtual DbSet<HeroSlide> HeroSlides { get; set; } = null!;
         public virtual DbSet<Notification> Notifications { get; set; } = null!;
@@ -54,14 +54,15 @@ namespace YemenGuide.Data
         public virtual DbSet<Review> Reviews { get; set; } = null!;
         public virtual DbSet<ReviewLike> ReviewLikes { get; set; } = null!;
         public virtual DbSet<Room> Rooms { get; set; } = null!;
+        public virtual DbSet<RoomUnit> RoomUnits { get; set; } = null!;
         public virtual DbSet<SupportedWallet> SupportedWallets { get; set; } = null!;
         public virtual DbSet<SystemSetting> SystemSettings { get; set; } = null!;
         public virtual DbSet<User> Users { get; set; } = null!;
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
-            // الاتصال بقاعدة البيانات يُضبط من appsettings.json و Program.cs.
-            // لا تضع Connection String أو كلمات مرور داخل هذا الملف.
+            // إعداد يدوي: الاتصال بقاعدة البيانات يُضبط من appsettings.json و Program.cs.
+            // لا نضع Connection String أو كلمات مرور داخل هذا الملف.
         }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -187,6 +188,10 @@ namespace YemenGuide.Data
 
             modelBuilder.Entity<Advertisement>(entity =>
             {
+                entity.HasIndex(e => new { e.Status, e.PaymentStatus, e.PlacementTypeSnapshot, e.StartAt, e.EndAt, e.PrioritySnapshot, e.LastServedAt }, "IX_Advertisements_ActiveServing");
+
+                entity.HasIndex(e => new { e.BillingModelSnapshot, e.Status, e.SpentAmount, e.TotalBudget }, "IX_Advertisements_BudgetStatus");
+
                 entity.HasIndex(e => new { e.OwnerId, e.Status }, "IX_Advertisements_OwnerID_Status");
 
                 entity.HasIndex(e => new { e.PaymentStatus, e.SubmittedAt }, "IX_Advertisements_PaymentStatus");
@@ -205,9 +210,19 @@ namespace YemenGuide.Data
 
                 entity.Property(e => e.AdvertisementTitle).HasMaxLength(150);
 
+                entity.Property(e => e.BillingModelSnapshot)
+                    .HasMaxLength(20)
+                    .HasDefaultValueSql("(N'Flat')");
+
                 entity.Property(e => e.ButtonText)
                     .HasMaxLength(50)
                     .HasDefaultValueSql("(N'عرض المنشأة')");
+
+                entity.Property(e => e.CancellationReason).HasMaxLength(500);
+
+                entity.Property(e => e.CostPerClickSnapshot).HasColumnType("decimal(18, 2)");
+
+                entity.Property(e => e.CostPerThousandSnapshot).HasColumnType("decimal(18, 2)");
 
                 entity.Property(e => e.CreatedAt)
                     .HasColumnType("datetime")
@@ -215,13 +230,29 @@ namespace YemenGuide.Data
 
                 entity.Property(e => e.Currency).HasMaxLength(50);
 
+                entity.Property(e => e.DailyBudget).HasColumnType("decimal(18, 2)");
+
+                entity.Property(e => e.DestinationPath).HasMaxLength(500);
+
+                entity.Property(e => e.DestinationType)
+                    .HasMaxLength(20)
+                    .HasDefaultValueSql("(N'Place')");
+
+                entity.Property(e => e.DeviceTarget)
+                    .HasMaxLength(20)
+                    .HasDefaultValueSql("(N'All')");
+
                 entity.Property(e => e.DurationTypeSnapshot).HasMaxLength(20);
 
                 entity.Property(e => e.EndAt).HasColumnType("datetime");
 
+                entity.Property(e => e.FrequencyCapPerUserPerDay).HasDefaultValueSql("((3))");
+
                 entity.Property(e => e.ImagePath).HasMaxLength(255);
 
                 entity.Property(e => e.OwnerId).HasColumnName("OwnerID");
+
+                entity.Property(e => e.PauseReason).HasMaxLength(500);
 
                 entity.Property(e => e.PausedAt).HasColumnType("datetime");
 
@@ -241,7 +272,28 @@ namespace YemenGuide.Data
 
                 entity.Property(e => e.ReceiptImage).HasMaxLength(255);
 
+                // إعداد يدوي: تاريخا طلب الاسترداد وتنفيذه محفوظان كـ datetime2.
+                entity.Property(e => e.RefundRequestedAt).HasColumnType("datetime2");
+
                 entity.Property(e => e.ReferenceNumber).HasMaxLength(100);
+
+                entity.Property(e => e.RefundAccountNumber).HasMaxLength(100);
+
+                entity.Property(e => e.RefundAmount).HasColumnType("decimal(18, 2)");
+
+                entity.Property(e => e.RefundBeneficiaryName).HasMaxLength(150);
+
+                entity.Property(e => e.RefundNote).HasMaxLength(500);
+
+                entity.Property(e => e.RefundProofImage).HasMaxLength(255);
+
+                entity.Property(e => e.RefundReferenceNumber).HasMaxLength(100);
+
+                entity.Property(e => e.RefundWalletId).HasColumnName("RefundWalletID");
+
+                entity.Property(e => e.RefundedAt).HasColumnType("datetime2");
+
+                entity.Property(e => e.RefundedByUserId).HasColumnName("RefundedByUserID");
 
                 entity.Property(e => e.RejectionReason).HasMaxLength(500);
 
@@ -251,11 +303,15 @@ namespace YemenGuide.Data
 
                 entity.Property(e => e.ReviewedByUserId).HasColumnName("ReviewedByUserID");
 
+                entity.Property(e => e.RotationWeight).HasDefaultValueSql("((100))");
+
                 entity.Property(e => e.RowVersion)
                     .IsRowVersion()
                     .IsConcurrencyToken();
 
                 entity.Property(e => e.ShortDescription).HasMaxLength(300);
+
+                entity.Property(e => e.SpentAmount).HasColumnType("decimal(18, 2)");
 
                 entity.Property(e => e.StartAt).HasColumnType("datetime");
 
@@ -268,6 +324,18 @@ namespace YemenGuide.Data
                     .HasDefaultValueSql("(N'Draft')");
 
                 entity.Property(e => e.SubmittedAt).HasColumnType("datetime");
+
+                entity.Property(e => e.TargetLatitude).HasColumnType("decimal(9, 6)");
+
+                entity.Property(e => e.TargetLongitude).HasColumnType("decimal(9, 6)");
+
+                entity.Property(e => e.TargetRadiusKm).HasColumnType("decimal(8, 2)");
+
+                entity.Property(e => e.TargetingMode)
+                    .HasMaxLength(20)
+                    .HasDefaultValueSql("(N'All')");
+
+                entity.Property(e => e.TotalBudget).HasColumnType("decimal(18, 2)");
 
                 entity.Property(e => e.TransferDate).HasColumnType("datetime");
 
@@ -305,10 +373,112 @@ namespace YemenGuide.Data
                     .HasForeignKey(d => d.PromotionId)
                     .HasConstraintName("FK_Advertisements_Promotions");
 
+                entity.HasOne(d => d.RefundWallet)
+                    .WithMany(p => p.Advertisements)
+                    .HasForeignKey(d => d.RefundWalletId)
+                    .HasConstraintName("FK_Advertisements_RefundWallet");
+
+                entity.HasOne(d => d.RefundedByUser)
+                    .WithMany(p => p.AdvertisementRefundedByUsers)
+                    .HasForeignKey(d => d.RefundedByUserId)
+                    .HasConstraintName("FK_Advertisements_RefundedBy");
+
                 entity.HasOne(d => d.ReviewedByUser)
                     .WithMany(p => p.AdvertisementReviewedByUsers)
                     .HasForeignKey(d => d.ReviewedByUserId)
                     .HasConstraintName("FK_Advertisements_ReviewedBy");
+            });
+
+            modelBuilder.Entity<AdvertisementEvent>(entity =>
+            {
+                entity.HasIndex(e => new { e.AdvertisementId, e.EventType, e.EventAt }, "IX_AdvertisementEvents_Advertisement_EventAt");
+
+                entity.HasIndex(e => new { e.UserId, e.EventAt }, "IX_AdvertisementEvents_User_EventAt")
+                    .HasFilter("([UserID] IS NOT NULL)");
+
+                entity.HasIndex(e => new { e.AdvertisementId, e.EventType, e.RequestKey }, "UQ_AdvertisementEvents_RequestKey")
+                    .IsUnique()
+                    .HasFilter("([RequestKey] IS NOT NULL)");
+
+                entity.Property(e => e.AdvertisementEventId).HasColumnName("AdvertisementEventID");
+
+                entity.Property(e => e.AdvertisementId).HasColumnName("AdvertisementID");
+
+                entity.Property(e => e.BookingId).HasColumnName("BookingID");
+
+                entity.Property(e => e.CostAmount).HasColumnType("decimal(18, 4)");
+
+                entity.Property(e => e.DeviceType).HasMaxLength(20);
+
+                entity.Property(e => e.EventAt).HasDefaultValueSql("(sysdatetime())");
+
+                entity.Property(e => e.EventType).HasMaxLength(30);
+
+                entity.Property(e => e.IpHash).HasMaxLength(128);
+
+                entity.Property(e => e.PlacementType).HasMaxLength(30);
+
+                entity.Property(e => e.RequestKey).HasMaxLength(128);
+
+                entity.Property(e => e.SessionKey).HasMaxLength(100);
+
+                entity.Property(e => e.UserAgentHash).HasMaxLength(128);
+
+                entity.Property(e => e.UserId).HasColumnName("UserID");
+
+                entity.Property(e => e.VisitorHash).HasMaxLength(128);
+
+                entity.HasOne(d => d.Advertisement)
+                    .WithMany(p => p.AdvertisementEvents)
+                    .HasForeignKey(d => d.AdvertisementId)
+                    .OnDelete(DeleteBehavior.ClientSetNull)
+                    .HasConstraintName("FK_AdvertisementEvents_Advertisements");
+
+                entity.HasOne(d => d.Booking)
+                    .WithMany(p => p.AdvertisementEvents)
+                    .HasForeignKey(d => d.BookingId)
+                    .HasConstraintName("FK_AdvertisementEvents_Bookings");
+
+                entity.HasOne(d => d.User)
+                    .WithMany(p => p.AdvertisementEvents)
+                    .HasForeignKey(d => d.UserId)
+                    .HasConstraintName("FK_AdvertisementEvents_Users");
+            });
+
+            modelBuilder.Entity<AdvertisementMedium>(entity =>
+            {
+                entity.HasKey(e => e.AdvertisementMediaId);
+
+                entity.HasIndex(e => new { e.AdvertisementId, e.IsActive, e.DisplayOrder }, "IX_AdvertisementMedia_Advertisement_Order");
+
+                entity.HasIndex(e => e.AdvertisementId, "UQ_AdvertisementMedia_OnePrimary")
+                    .IsUnique()
+                    .HasFilter("([IsPrimary]=(1))");
+
+                entity.Property(e => e.AdvertisementMediaId).HasColumnName("AdvertisementMediaID");
+
+                entity.Property(e => e.AdvertisementId).HasColumnName("AdvertisementID");
+
+                entity.Property(e => e.AltText).HasMaxLength(200);
+
+                entity.Property(e => e.CreatedAt)
+                    .HasColumnType("datetime2")
+                    .HasDefaultValueSql("(sysdatetime())");
+
+                entity.Property(e => e.FilePath).HasMaxLength(500);
+
+                entity.Property(e => e.IsActive)
+                    .IsRequired()
+                    .HasDefaultValueSql("((1))");
+
+                entity.Property(e => e.MediaType).HasMaxLength(20);
+
+                entity.Property(e => e.ThumbnailPath).HasMaxLength(500);
+
+                entity.HasOne(d => d.Advertisement)
+                    .WithOne(p => p.AdvertisementMedium)
+                    .HasForeignKey<AdvertisementMedium>(d => d.AdvertisementId)
+                    .HasConstraintName("FK_AdvertisementMedia_Advertisements");
             });
 
             modelBuilder.Entity<AdvertisementPlan>(entity =>
@@ -320,6 +490,14 @@ namespace YemenGuide.Data
 
                 entity.Property(e => e.AdvertisementPlanId).HasColumnName("AdvertisementPlanID");
 
+                entity.Property(e => e.BillingModel)
+                    .HasMaxLength(20)
+                    .HasDefaultValueSql("(N'Flat')");
+
+                entity.Property(e => e.CostPerClick).HasColumnType("decimal(18, 2)");
+
+                entity.Property(e => e.CostPerThousandImpressions).HasColumnType("decimal(18, 2)");
+
                 entity.Property(e => e.CreatedAt)
                     .HasColumnType("datetime")
                     .HasDefaultValueSql("(getdate())");
@@ -327,6 +505,8 @@ namespace YemenGuide.Data
                 entity.Property(e => e.Currency)
                     .HasMaxLength(50)
                     .HasDefaultValueSql("(N'ريال يمني')");
+
+                entity.Property(e => e.DefaultDailyBudget).HasColumnType("decimal(18, 2)");
 
                 entity.Property(e => e.Description).HasMaxLength(500);
 
@@ -337,6 +517,10 @@ namespace YemenGuide.Data
                     .HasDefaultValueSql("((1))");
 
                 entity.Property(e => e.MaxActiveAdvertisements).HasDefaultValueSql("((1))");
+
+                entity.Property(e => e.MaxMediaItems).HasDefaultValueSql("((5))");
+
+                entity.Property(e => e.MinimumTotalBudget).HasColumnType("decimal(18, 2)");
 
                 entity.Property(e => e.PlacementType).HasMaxLength(30);
 
@@ -349,10 +533,57 @@ namespace YemenGuide.Data
                     .HasDefaultValueSql("(getdate())");
             });
 
+            modelBuilder.Entity<AdvertisementTarget>(entity =>
+            {
+                entity.HasIndex(e => new { e.CategoryId, e.AdvertisementId }, "IX_AdvertisementTargets_Category_Advertisement")
+                    .HasFilter("([CategoryID] IS NOT NULL)");
+
+                entity.HasIndex(e => new { e.CityId, e.AdvertisementId }, "IX_AdvertisementTargets_City_Advertisement")
+                    .HasFilter("([CityID] IS NOT NULL)");
+
+                entity.HasIndex(e => new { e.AdvertisementId, e.CategoryId }, "UQ_AdvertisementTargets_Category")
+                    .IsUnique()
+                    .HasFilter("([CategoryID] IS NOT NULL)");
+
+                entity.HasIndex(e => new { e.AdvertisementId, e.CityId }, "UQ_AdvertisementTargets_City")
+                    .IsUnique()
+                    .HasFilter("([CityID] IS NOT NULL)");
+
+                entity.Property(e => e.AdvertisementTargetId).HasColumnName("AdvertisementTargetID");
+
+                entity.Property(e => e.AdvertisementId).HasColumnName("AdvertisementID");
+
+                entity.Property(e => e.CategoryId).HasColumnName("CategoryID");
+
+                entity.Property(e => e.CityId).HasColumnName("CityID");
+
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("(sysdatetime())");
+
+                entity.HasOne(d => d.Advertisement)
+                    .WithMany(p => p.AdvertisementTargets)
+                    .HasForeignKey(d => d.AdvertisementId)
+                    .HasConstraintName("FK_AdvertisementTargets_Advertisements");
+
+                entity.HasOne(d => d.Category)
+                    .WithMany(p => p.AdvertisementTargets)
+                    .HasForeignKey(d => d.CategoryId)
+                    .HasConstraintName("FK_AdvertisementTargets_Categories");
+
+                entity.HasOne(d => d.City)
+                    .WithMany(p => p.AdvertisementTargets)
+                    .HasForeignKey(d => d.CityId)
+                    .HasConstraintName("FK_AdvertisementTargets_Cities");
+            });
+
             modelBuilder.Entity<Booking>(entity =>
             {
                 entity.HasIndex(e => e.AdvertisementId, "IX_Bookings_AdvertisementID")
                     .HasFilter("([AdvertisementID] IS NOT NULL)");
+
+                entity.HasIndex(e => e.GuestPhone, "IX_Bookings_GuestPhone")
+                    .HasFilter("([GuestPhone] IS NOT NULL)");
+
+                entity.HasIndex(e => new { e.PlaceId, e.BookingSource, e.StartDate }, "IX_Bookings_Place_BookingSource_StartDate");
 
                 entity.HasIndex(e => e.PromotionId, "IX_Bookings_PromotionID")
                     .HasFilter("([PromotionID] IS NOT NULL)");
@@ -363,30 +594,15 @@ namespace YemenGuide.Data
 
                 entity.Property(e => e.AdvertisementId).HasColumnName("AdvertisementID");
 
+                entity.Property(e => e.BookingSource)
+                    .HasMaxLength(20)
+                    .HasDefaultValueSql("(N'Online')");
+
                 entity.Property(e => e.BookingState)
                     .HasMaxLength(20)
                     .HasDefaultValueSql("(N'Pending')");
 
                 entity.Property(e => e.BookingType).HasMaxLength(50);
-
-                // إعداد يدوي: تواريخ دورة حياة الحجز محفوظة بصيغة datetime2.
-                entity.Property(e => e.LastStatusChangedAt)
-                    .HasColumnType("datetime2");
-
-                entity.Property(e => e.AcceptedAt)
-                    .HasColumnType("datetime2");
-
-                entity.Property(e => e.PaymentApprovedAt)
-                    .HasColumnType("datetime2");
-
-                entity.Property(e => e.CompletedAt)
-                    .HasColumnType("datetime2");
-
-                entity.Property(e => e.NoShowAt)
-                    .HasColumnType("datetime2");
-
-                entity.Property(e => e.ClosedAt)
-                    .HasColumnType("datetime2");
 
                 entity.Property(e => e.CancellationReason).HasMaxLength(500);
 
@@ -397,6 +613,8 @@ namespace YemenGuide.Data
                 entity.Property(e => e.CreatedAt)
                     .HasColumnType("datetime")
                     .HasDefaultValueSql("(getdate())");
+
+                entity.Property(e => e.CreatedByUserId).HasColumnName("CreatedByUserID");
 
                 entity.Property(e => e.CustomerId).HasColumnName("CustomerID");
 
@@ -410,9 +628,32 @@ namespace YemenGuide.Data
 
                 entity.Property(e => e.EndDate).HasColumnType("datetime");
 
+                entity.Property(e => e.GuestEmail).HasMaxLength(150);
+
+                entity.Property(e => e.GuestName).HasMaxLength(150);
+
+                entity.Property(e => e.GuestPhone).HasMaxLength(50);
+
+                entity.Property(e => e.ManualBookingChannel).HasMaxLength(20);
+
+                // إعداد يدوي: تواريخ دورة حياة الحجز محفوظة بصيغة datetime2.
+                entity.Property(e => e.LastStatusChangedAt).HasColumnType("datetime2");
+
+                entity.Property(e => e.AcceptedAt).HasColumnType("datetime2");
+
+                entity.Property(e => e.PaymentApprovedAt).HasColumnType("datetime2");
+
+                entity.Property(e => e.CompletedAt).HasColumnType("datetime2");
+
+                entity.Property(e => e.NoShowAt).HasColumnType("datetime2");
+
+                entity.Property(e => e.ClosedAt).HasColumnType("datetime2");
+
                 entity.Property(e => e.OriginalTotalPrice).HasColumnType("decimal(18, 2)");
 
                 entity.Property(e => e.OwnerCancellationReason).HasMaxLength(500);
+
+                entity.Property(e => e.OwnerInternalNotes).HasMaxLength(1000);
 
                 entity.Property(e => e.PackageId).HasColumnName("PackageID");
 
@@ -422,11 +663,10 @@ namespace YemenGuide.Data
 
                 entity.Property(e => e.PaymentProofRejectionReason).HasMaxLength(500);
 
-                entity.Property(e => e.PaymentProofRejectedAt)
-                    .HasColumnType("datetime2");
+                // إعداد يدوي: حقول مراجعة إثبات الدفع.
+                entity.Property(e => e.PaymentProofRejectedAt).HasColumnType("datetime2");
 
-                entity.Property(e => e.PaymentProofReviewCount)
-                    .HasDefaultValueSql("((0))");
+                entity.Property(e => e.PaymentProofReviewCount).HasDefaultValueSql("((0))");
 
                 entity.Property(e => e.PaymentStatus)
                     .HasMaxLength(20)
@@ -465,11 +705,15 @@ namespace YemenGuide.Data
                     .HasForeignKey(d => d.AdvertisementId)
                     .HasConstraintName("FK_Bookings_Advertisements");
 
+                entity.HasOne(d => d.CreatedByUser)
+                    .WithMany(p => p.BookingCreatedByUsers)
+                    .HasForeignKey(d => d.CreatedByUserId)
+                    .HasConstraintName("FK_Bookings_CreatedByUser");
+
                 entity.HasOne(d => d.Customer)
-                    .WithMany(p => p.Bookings)
+                    .WithMany(p => p.BookingCustomers)
                     .HasForeignKey(d => d.CustomerId)
-                    .OnDelete(DeleteBehavior.ClientSetNull)
-                    .HasConstraintName("FK__Bookings__Custom__5BE2A6F2");
+                    .HasConstraintName("FK_Bookings_Customers");
 
                 entity.HasOne(d => d.Package)
                     .WithMany(p => p.Bookings)
@@ -480,7 +724,7 @@ namespace YemenGuide.Data
                     .WithMany(p => p.Bookings)
                     .HasForeignKey(d => d.PlaceId)
                     .OnDelete(DeleteBehavior.ClientSetNull)
-                    .HasConstraintName("FK__Bookings__PlaceI__5CD6CB2B");
+                    .HasConstraintName("FK_Bookings_Places");
 
                 entity.HasOne(d => d.Promotion)
                     .WithMany(p => p.Bookings)
@@ -520,9 +764,43 @@ namespace YemenGuide.Data
                     .HasConstraintName("FK_BookingAdditionalServices_Services");
             });
 
+            modelBuilder.Entity<BookingRoomUnit>(entity =>
+            {
+                entity.HasIndex(e => new { e.RoomUnitId, e.AssignmentStatus }, "IX_BookingRoomUnits_RoomUnit_Status");
+
+                entity.HasIndex(e => new { e.BookingId, e.RoomUnitId }, "UQ_BookingRoomUnits_Booking_RoomUnit")
+                    .IsUnique();
+
+                entity.Property(e => e.BookingRoomUnitId).HasColumnName("BookingRoomUnitID");
+
+                entity.Property(e => e.AssignedAt).HasDefaultValueSql("(sysdatetime())");
+
+                // إعداد يدوي: العمود في قاعدة البيانات datetime2.
+                entity.Property(e => e.ReleasedAt).HasColumnType("datetime2");
+
+                entity.Property(e => e.AssignmentStatus)
+                    .HasMaxLength(20)
+                    .HasDefaultValueSql("(N'Held')");
+
+                entity.Property(e => e.BookingId).HasColumnName("BookingID");
+
+                entity.Property(e => e.RoomUnitId).HasColumnName("RoomUnitID");
+
+                entity.HasOne(d => d.Booking)
+                    .WithMany(p => p.BookingRoomUnits)
+                    .HasForeignKey(d => d.BookingId)
+                    .HasConstraintName("FK_BookingRoomUnits_Bookings");
+
+                entity.HasOne(d => d.RoomUnit)
+                    .WithMany(p => p.BookingRoomUnits)
+                    .HasForeignKey(d => d.RoomUnitId)
+                    .OnDelete(DeleteBehavior.ClientSetNull)
+                    .HasConstraintName("FK_BookingRoomUnits_RoomUnits");
+            });
+
             modelBuilder.Entity<Category>(entity =>
             {
-                entity.HasIndex(e => e.CategoryName, "UQ__Categori__8517B2E07D089925")
+                entity.HasIndex(e => e.CategoryName, "UQ_Categories_CategoryName")
                     .IsUnique();
 
                 entity.Property(e => e.CategoryId).HasColumnName("CategoryID");
@@ -534,6 +812,10 @@ namespace YemenGuide.Data
                 entity.Property(e => e.IconClass)
                     .HasMaxLength(50)
                     .HasDefaultValueSql("(N'bi-star')");
+
+                entity.Property(e => e.OwnerCanAddPlaces)
+                    .IsRequired()
+                    .HasDefaultValueSql("((1))");
 
                 entity.Property(e => e.ThemeColor)
                     .HasMaxLength(20)
@@ -581,7 +863,7 @@ namespace YemenGuide.Data
                     .HasForeignKey(d => d.ReceiverId)
                     // إعداد يدوي: منع الحذف المتسلسل وتجنب Multiple Cascade Paths.
                     .OnDelete(DeleteBehavior.Restrict)
-                    .HasConstraintName("FK__Chats__ReceiverI__6B24EA82");
+                    .HasConstraintName("FK_Chats_Receiver");
 
                 entity.HasOne(d => d.Report)
                     .WithMany(p => p.Chats)
@@ -593,17 +875,19 @@ namespace YemenGuide.Data
                     .HasForeignKey(d => d.SenderId)
                     // إعداد يدوي: منع الحذف المتسلسل وتجنب Multiple Cascade Paths.
                     .OnDelete(DeleteBehavior.Restrict)
-                    .HasConstraintName("FK__Chats__SenderID__6A30C649");
+                    .HasConstraintName("FK_Chats_Sender");
             });
 
             modelBuilder.Entity<City>(entity =>
             {
-                entity.HasIndex(e => e.CityName, "UQ__Cities__886159E59F0CADCD")
+                entity.HasIndex(e => e.CityName, "UQ_Cities_CityName")
                     .IsUnique();
 
                 entity.Property(e => e.CityId).HasColumnName("CityID");
 
                 entity.Property(e => e.CityName).HasMaxLength(50);
+
+                entity.Property(e => e.ExchangeRateRegion).HasMaxLength(10);
 
                 entity.Property(e => e.ThemeColor)
                     .HasMaxLength(20)
@@ -612,6 +896,15 @@ namespace YemenGuide.Data
 
             modelBuilder.Entity<CommissionTransaction>(entity =>
             {
+                entity.HasIndex(e => e.BookingId, "IX_CommissionTransactions_BookingID")
+                    .HasFilter("([BookingID] IS NOT NULL)");
+
+                entity.HasIndex(e => new { e.PlaceId, e.CreatedAt }, "IX_CommissionTransactions_Place_CreatedAt");
+
+                entity.HasIndex(e => new { e.PlatformWalletId, e.ReferenceNumber }, "UQ_CommissionTransactions_TopUpReference")
+                    .IsUnique()
+                    .HasFilter("([TransactionType]=N'TopUp' AND [PlatformWalletID] IS NOT NULL AND [ReferenceNumber] IS NOT NULL)");
+
                 entity.Property(e => e.CommissionTransactionId).HasColumnName("CommissionTransactionID");
 
                 entity.Property(e => e.Amount).HasColumnType("decimal(18, 2)");
@@ -712,95 +1005,13 @@ namespace YemenGuide.Data
                 entity.HasOne(d => d.Place)
                     .WithMany(p => p.Favorites)
                     .HasForeignKey(d => d.PlaceId)
-                    .HasConstraintName("FK__Favorites__Place__5812160E");
+                    .HasConstraintName("FK_Favorites_Places");
 
                 entity.HasOne(d => d.User)
                     .WithMany(p => p.Favorites)
                     .HasForeignKey(d => d.UserId)
                     .OnDelete(DeleteBehavior.ClientSetNull)
-                    .HasConstraintName("FK__Favorites__UserI__571DF1D5");
-            });
-
-            modelBuilder.Entity<FinancialDocument>(entity =>
-            {
-                entity.HasIndex(e => e.BookingId, "IX_FinancialDocuments_BookingID")
-                    .HasFilter("([BookingID] IS NOT NULL)");
-
-                entity.HasIndex(e => e.CommissionTransactionId, "IX_FinancialDocuments_CommissionTransactionID")
-                    .HasFilter("([CommissionTransactionID] IS NOT NULL)");
-
-                entity.HasIndex(e => e.PlaceId, "IX_FinancialDocuments_PlaceID")
-                    .HasFilter("([PlaceID] IS NOT NULL)");
-
-                entity.HasIndex(e => e.DocumentNumber, "UQ_FinancialDocuments_DocumentNumber")
-                    .IsUnique();
-
-                entity.Property(e => e.FinancialDocumentId).HasColumnName("FinancialDocumentID");
-
-                entity.Property(e => e.BookingId).HasColumnName("BookingID");
-
-                entity.Property(e => e.CommissionAmount)
-                    .HasColumnType("decimal(18, 2)")
-                    .HasDefaultValueSql("((0.00))");
-
-                entity.Property(e => e.CommissionPercentage)
-                    .HasColumnType("decimal(5, 2)")
-                    .HasDefaultValueSql("((0.00))");
-
-                entity.Property(e => e.CommissionTransactionId).HasColumnName("CommissionTransactionID");
-
-                entity.Property(e => e.CreatedByUserId).HasColumnName("CreatedByUserID");
-
-                entity.Property(e => e.Currency).HasMaxLength(50);
-
-                entity.Property(e => e.DocumentNumber).HasMaxLength(50);
-
-                entity.Property(e => e.DocumentType).HasMaxLength(40);
-
-                entity.Property(e => e.IssuedAt)
-                    .HasColumnType("datetime")
-                    .HasDefaultValueSql("(getdate())");
-
-                entity.Property(e => e.OwnerId).HasColumnName("OwnerID");
-
-                entity.Property(e => e.PlaceId).HasColumnName("PlaceID");
-
-                entity.Property(e => e.Status)
-                    .HasMaxLength(20)
-                    .HasDefaultValueSql("(N'Issued')");
-
-                entity.Property(e => e.Subtotal)
-                    .HasColumnType("decimal(18, 2)")
-                    .HasDefaultValueSql("((0.00))");
-
-                entity.Property(e => e.TotalAmount)
-                    .HasColumnType("decimal(18, 2)")
-                    .HasDefaultValueSql("((0.00))");
-
-                entity.HasOne(d => d.Booking)
-                    .WithMany(p => p.FinancialDocuments)
-                    .HasForeignKey(d => d.BookingId)
-                    .HasConstraintName("FK_FinancialDocuments_Bookings");
-
-                entity.HasOne(d => d.CommissionTransaction)
-                    .WithMany(p => p.FinancialDocuments)
-                    .HasForeignKey(d => d.CommissionTransactionId)
-                    .HasConstraintName("FK_FinancialDocuments_CommissionTransactions");
-
-                entity.HasOne(d => d.CreatedByUser)
-                    .WithMany(p => p.FinancialDocumentCreatedByUsers)
-                    .HasForeignKey(d => d.CreatedByUserId)
-                    .HasConstraintName("FK_FinancialDocuments_CreatedBy");
-
-                entity.HasOne(d => d.Owner)
-                    .WithMany(p => p.FinancialDocumentOwners)
-                    .HasForeignKey(d => d.OwnerId)
-                    .HasConstraintName("FK_FinancialDocuments_Owners");
-
-                entity.HasOne(d => d.Place)
-                    .WithMany(p => p.FinancialDocuments)
-                    .HasForeignKey(d => d.PlaceId)
-                    .HasConstraintName("FK_FinancialDocuments_Places");
+                    .HasConstraintName("FK_Favorites_Users");
             });
 
             modelBuilder.Entity<FinancialRecord>(entity =>
@@ -836,15 +1047,9 @@ namespace YemenGuide.Data
 
                 entity.Property(e => e.CommissionHeldAt).HasColumnType("datetime");
 
-                entity.Property(e => e.CommissionPaymentStatus)
-                    .HasMaxLength(30)
-                    .HasDefaultValueSql("(N'Unpaid')");
-
                 entity.Property(e => e.CommissionRateSnapshot)
                     .HasColumnType("decimal(5, 2)")
                     .HasDefaultValueSql("((0.00))");
-
-                entity.Property(e => e.CommissionReceiptImage).HasMaxLength(255);
 
                 entity.Property(e => e.CommissionReleasedAt).HasColumnType("datetime");
 
@@ -852,15 +1057,15 @@ namespace YemenGuide.Data
                     .HasMaxLength(30)
                     .HasDefaultValueSql("(N'Calculated')");
 
-                entity.Property(e => e.CustomerId).HasColumnName("CustomerID");
-
                 entity.Property(e => e.DepositAmount).HasColumnType("decimal(18, 2)");
 
-                entity.Property(e => e.IsPaymentConfirmed).HasDefaultValueSql("((0))");
+                entity.Property(e => e.OnlinePaymentType).HasMaxLength(20);
 
                 entity.Property(e => e.PlatformCommission).HasColumnType("decimal(18, 2)");
 
-                entity.Property(e => e.SettledAt).HasColumnType("datetime");
+                entity.Property(e => e.RowVersion)
+                    .IsRowVersion()
+                    .IsConcurrencyToken();
 
                 entity.Property(e => e.TransferReferenceNumber).HasMaxLength(100);
 
@@ -871,13 +1076,7 @@ namespace YemenGuide.Data
                 entity.HasOne(d => d.Booking)
                     .WithOne(p => p.FinancialRecord)
                     .HasForeignKey<FinancialRecord>(d => d.BookingId)
-                    .HasConstraintName("FK__Financial__Booki__60A75C0F");
-
-                entity.HasOne(d => d.Customer)
-                    .WithMany(p => p.FinancialRecords)
-                    .HasForeignKey(d => d.CustomerId)
-                    .OnDelete(DeleteBehavior.ClientSetNull)
-                    .HasConstraintName("FK__Financial__Custo__619B8048");
+                    .HasConstraintName("FK_FinancialRecords_Bookings");
             });
 
             modelBuilder.Entity<HeroSlide>(entity =>
@@ -907,6 +1106,11 @@ namespace YemenGuide.Data
 
             modelBuilder.Entity<Notification>(entity =>
             {
+                entity.HasIndex(e => new { e.ReferenceType, e.ReferenceId }, "IX_Notifications_Reference")
+                    .HasFilter("([ReferenceID] IS NOT NULL)");
+
+                entity.HasIndex(e => new { e.UserId, e.NotificationState, e.CreatedAt }, "IX_Notifications_User_State_CreatedAt");
+
                 entity.Property(e => e.NotificationId).HasColumnName("NotificationID");
 
                 entity.Property(e => e.CreatedAt)
@@ -917,12 +1121,26 @@ namespace YemenGuide.Data
                     .HasMaxLength(20)
                     .HasDefaultValueSql("(N'Unread')");
 
+                entity.Property(e => e.NotificationTitle).HasMaxLength(150);
+
+                entity.Property(e => e.NotificationType)
+                    .HasMaxLength(50)
+                    .HasDefaultValueSql("(N'General')");
+
+                entity.Property(e => e.ReadAt).HasColumnType("datetime");
+
+                entity.Property(e => e.ReferenceId).HasColumnName("ReferenceID");
+
+                entity.Property(e => e.ReferenceType).HasMaxLength(50);
+
+                entity.Property(e => e.TargetUrl).HasMaxLength(500);
+
                 entity.Property(e => e.UserId).HasColumnName("UserID");
 
                 entity.HasOne(d => d.User)
                     .WithMany(p => p.Notifications)
                     .HasForeignKey(d => d.UserId)
-                    .HasConstraintName("FK__Notificat__UserI__6EF57B66");
+                    .HasConstraintName("FK_Notifications_Users");
             });
 
             modelBuilder.Entity<OwnerWallet>(entity =>
@@ -1021,24 +1239,27 @@ namespace YemenGuide.Data
                     .WithMany(p => p.Places)
                     .HasForeignKey(d => d.CategoryId)
                     .OnDelete(DeleteBehavior.ClientSetNull)
-                    .HasConstraintName("FK__Places__Category__48CFD27E");
+                    .HasConstraintName("FK_Places_Category");
 
                 entity.HasOne(d => d.City)
                     .WithMany(p => p.Places)
                     .HasForeignKey(d => d.CityId)
                     .OnDelete(DeleteBehavior.ClientSetNull)
-                    .HasConstraintName("FK__Places__CityID__49C3F6B7");
+                    .HasConstraintName("FK_Places_City");
 
                 entity.HasOne(d => d.Owner)
                     .WithMany(p => p.Places)
                     .HasForeignKey(d => d.OwnerId)
                     .OnDelete(DeleteBehavior.SetNull)
-                    .HasConstraintName("FK__Places__OwnerID__47DBAE45");
+                    .HasConstraintName("FK_Places_Owner");
             });
 
             modelBuilder.Entity<PlaceAdditionalService>(entity =>
             {
                 entity.HasKey(e => e.ServiceId);
+
+                entity.HasIndex(e => new { e.ServiceId, e.PlaceId }, "UQ_PlaceAdditionalServices_ServiceID_PlaceID")
+                    .IsUnique();
 
                 entity.Property(e => e.ServiceId).HasColumnName("ServiceID");
 
@@ -1092,7 +1313,7 @@ namespace YemenGuide.Data
             {
                 entity.HasKey(e => e.ExceptionId);
 
-                entity.HasIndex(e => new { e.PlaceId, e.ExceptionDate }, "UQ_Place_Date")
+                entity.HasIndex(e => new { e.PlaceId, e.ExceptionDate }, "UQ_PlaceCalendarExceptions_Place_Date")
                     .IsUnique();
 
                 entity.Property(e => e.ExceptionId).HasColumnName("ExceptionID");
@@ -1114,7 +1335,7 @@ namespace YemenGuide.Data
                 entity.HasOne(d => d.Place)
                     .WithMany(p => p.PlaceCalendarExceptions)
                     .HasForeignKey(d => d.PlaceId)
-                    .HasConstraintName("FK_CalendarExceptions_Places");
+                    .HasConstraintName("FK_PlaceCalendarExceptions_Places");
             });
 
             modelBuilder.Entity<PlaceCommissionAccount>(entity =>
@@ -1152,6 +1373,10 @@ namespace YemenGuide.Data
 
                 entity.Property(e => e.PlaceId).HasColumnName("PlaceID");
 
+                entity.Property(e => e.RowVersion)
+                    .IsRowVersion()
+                    .IsConcurrencyToken();
+
                 entity.Property(e => e.UpdatedAt)
                     .HasColumnType("datetime")
                     .HasDefaultValueSql("(getdate())");
@@ -1176,12 +1401,15 @@ namespace YemenGuide.Data
                 entity.HasOne(d => d.Place)
                     .WithMany(p => p.PlaceImages)
                     .HasForeignKey(d => d.PlaceId)
-                    .HasConstraintName("FK__PlaceImag__Place__4CA06362");
+                    .HasConstraintName("FK_PlaceImages_Places");
             });
 
             modelBuilder.Entity<PlacePackage>(entity =>
             {
                 entity.HasKey(e => e.PackageId);
+
+                entity.HasIndex(e => new { e.PackageId, e.PlaceId }, "UQ_PlacePackages_PackageID_PlaceID")
+                    .IsUnique();
 
                 entity.Property(e => e.PackageId).HasColumnName("PackageID");
 
@@ -1201,11 +1429,10 @@ namespace YemenGuide.Data
 
                 entity.Property(e => e.Price).HasColumnType("decimal(18, 2)");
 
-                entity.Property(e => e.StartTime)
-                    .HasColumnType("time");
+                // إعداد يدوي: أوقات الباقة محفوظة كـ TIME في SQL Server.
+                entity.Property(e => e.StartTime).HasColumnType("time");
 
-                entity.Property(e => e.EndTime)
-                    .HasColumnType("time");
+                entity.Property(e => e.EndTime).HasColumnType("time");
 
                 entity.Property(e => e.TimeFrame).HasMaxLength(100);
 
@@ -1323,7 +1550,8 @@ namespace YemenGuide.Data
 
                 entity.HasOne(d => d.Place)
                     .WithOne(p => p.PlacePolicy)
-                    .HasForeignKey<PlacePolicy>(d => d.PlaceId);
+                    .HasForeignKey<PlacePolicy>(d => d.PlaceId)
+                    .HasConstraintName("FK_PlacePolicies_Places");
             });
 
             modelBuilder.Entity<PlaceSpace>(entity =>
@@ -1354,12 +1582,12 @@ namespace YemenGuide.Data
 
             modelBuilder.Entity<PlatformWallet>(entity =>
             {
-                entity.HasIndex(e => e.WalletId, "UQ_PlatformWallets_WalletID")
-                    .IsUnique();
-
                 entity.HasIndex(e => e.IsPrimary, "UQ_PlatformWallets_Primary")
                     .IsUnique()
-                    .HasFilter("[IsPrimary] = 1");
+                    .HasFilter("([IsPrimary]=(1))");
+
+                entity.HasIndex(e => e.WalletId, "UQ_PlatformWallets_WalletID")
+                    .IsUnique();
 
                 entity.Property(e => e.PlatformWalletId).HasColumnName("PlatformWalletID");
 
@@ -1416,9 +1644,9 @@ namespace YemenGuide.Data
 
                 entity.Property(e => e.ImagePath).HasMaxLength(255);
 
-                entity.Property(e => e.IsActive)
-                    .IsRequired()
-                    .HasDefaultValueSql("((1))");
+                // إعداد يدوي: القيمة الافتراضية لتكرار مكافأة العرض.
+                entity.Property(e => e.IsRewardRepeatable)
+                    .HasDefaultValue(false);
 
                 entity.Property(e => e.IsAutomatic)
                     .IsRequired()
@@ -1427,6 +1655,10 @@ namespace YemenGuide.Data
                 entity.Property(e => e.MaximumDiscountAmount).HasColumnType("decimal(18, 2)");
 
                 entity.Property(e => e.MinimumBookingAmount).HasColumnType("decimal(18, 2)");
+
+                entity.Property(e => e.OfferMode)
+                    .HasMaxLength(20)
+                    .HasDefaultValueSql("(N'Discount')");
 
                 entity.Property(e => e.OwnerId).HasColumnName("OwnerID");
 
@@ -1446,11 +1678,17 @@ namespace YemenGuide.Data
 
                 entity.Property(e => e.ReviewedByUserId).HasColumnName("ReviewedByUserID");
 
+                entity.Property(e => e.RewardServiceId).HasColumnName("RewardServiceID");
+
+                entity.Property(e => e.RewardType).HasMaxLength(30);
+
                 entity.Property(e => e.RoomId).HasColumnName("RoomID");
 
                 entity.Property(e => e.ServiceId).HasColumnName("ServiceID");
 
                 entity.Property(e => e.ShortDescription).HasMaxLength(250);
+
+                entity.Property(e => e.SpecialPrice).HasColumnType("decimal(18, 2)");
 
                 entity.Property(e => e.StartDate).HasColumnType("date");
 
@@ -1474,15 +1712,9 @@ namespace YemenGuide.Data
                     .OnDelete(DeleteBehavior.ClientSetNull)
                     .HasConstraintName("FK_Promotions_Owner");
 
-                entity.HasOne(d => d.Package)
-                    .WithMany(p => p.Promotions)
-                    .HasForeignKey(d => d.PackageId)
-                    .HasConstraintName("FK_Promotions_PlacePackages");
-
                 entity.HasOne(d => d.Place)
                     .WithMany(p => p.Promotions)
                     .HasForeignKey(d => d.PlaceId)
-                    .OnDelete(DeleteBehavior.Cascade)
                     .HasConstraintName("FK_Promotions_Places");
 
                 entity.HasOne(d => d.ReviewedByUser)
@@ -1490,19 +1722,38 @@ namespace YemenGuide.Data
                     .HasForeignKey(d => d.ReviewedByUserId)
                     .HasConstraintName("FK_Promotions_ReviewedBy");
 
+                entity.HasOne(d => d.P)
+                    .WithMany(p => p.Promotions)
+                    .HasPrincipalKey(p => new { p.PackageId, p.PlaceId })
+                    .HasForeignKey(d => new { d.PackageId, d.PlaceId })
+                    .HasConstraintName("FK_Promotions_PlacePackages");
+
+                entity.HasOne(d => d.PlaceAdditionalService)
+                    .WithMany(p => p.PromotionPlaceAdditionalServices)
+                    .HasPrincipalKey(p => new { p.ServiceId, p.PlaceId })
+                    .HasForeignKey(d => new { d.RewardServiceId, d.PlaceId })
+                    .HasConstraintName("FK_Promotions_RewardService");
+
                 entity.HasOne(d => d.Room)
                     .WithMany(p => p.Promotions)
-                    .HasForeignKey(d => d.RoomId)
+                    .HasPrincipalKey(p => new { p.RoomId, p.PlaceId })
+                    .HasForeignKey(d => new { d.RoomId, d.PlaceId })
                     .HasConstraintName("FK_Promotions_Rooms");
 
-                entity.HasOne(d => d.Service)
-                    .WithMany(p => p.Promotions)
-                    .HasForeignKey(d => d.ServiceId)
+                entity.HasOne(d => d.PlaceAdditionalServiceNavigation)
+                    .WithMany(p => p.PromotionPlaceAdditionalServiceNavigations)
+                    .HasPrincipalKey(p => new { p.ServiceId, p.PlaceId })
+                    .HasForeignKey(d => new { d.ServiceId, d.PlaceId })
                     .HasConstraintName("FK_Promotions_PlaceAdditionalServices");
             });
 
             modelBuilder.Entity<RefundRequest>(entity =>
             {
+                entity.HasIndex(e => new { e.PlaceId, e.Status, e.RequestedAt }, "IX_RefundRequests_Place_Status");
+
+                entity.HasIndex(e => e.RefundWalletId, "IX_RefundRequests_RefundWalletID")
+                    .HasFilter("([RefundWalletID] IS NOT NULL)");
+
                 entity.Property(e => e.RefundRequestId).HasColumnName("RefundRequestID");
 
                 entity.Property(e => e.BookingId).HasColumnName("BookingID");
@@ -1539,9 +1790,15 @@ namespace YemenGuide.Data
 
                 entity.Property(e => e.ReferenceNumber).HasMaxLength(100);
 
+                entity.Property(e => e.RefundAccountNumber).HasMaxLength(100);
+
                 entity.Property(e => e.RefundAmount)
                     .HasColumnType("decimal(18, 2)")
                     .HasDefaultValueSql("((0.00))");
+
+                entity.Property(e => e.RefundBeneficiaryName).HasMaxLength(150);
+
+                entity.Property(e => e.RefundWalletId).HasColumnName("RefundWalletID");
 
                 entity.Property(e => e.RequestedAt)
                     .HasColumnType("datetime")
@@ -1560,7 +1817,6 @@ namespace YemenGuide.Data
                 entity.HasOne(d => d.Customer)
                     .WithMany(p => p.RefundRequestCustomers)
                     .HasForeignKey(d => d.CustomerId)
-                    .OnDelete(DeleteBehavior.ClientSetNull)
                     .HasConstraintName("FK_RefundRequests_Customers");
 
                 entity.HasOne(d => d.Place)
@@ -1573,6 +1829,11 @@ namespace YemenGuide.Data
                     .WithMany(p => p.RefundRequestProcessedByUsers)
                     .HasForeignKey(d => d.ProcessedByUserId)
                     .HasConstraintName("FK_RefundRequests_ProcessedBy");
+
+                entity.HasOne(d => d.RefundWallet)
+                    .WithMany(p => p.RefundRequests)
+                    .HasForeignKey(d => d.RefundWalletId)
+                    .HasConstraintName("FK_RefundRequests_RefundWallet");
             });
 
             modelBuilder.Entity<Report>(entity =>
@@ -1617,6 +1878,10 @@ namespace YemenGuide.Data
 
                 entity.Property(e => e.EvidenceImage).HasMaxLength(255);
 
+                entity.Property(e => e.OtherCategoryDescription).HasMaxLength(200);
+
+                entity.Property(e => e.OtherReportTypeDescription).HasMaxLength(200);
+
                 entity.Property(e => e.OwnerReplyDate).HasColumnType("datetime");
 
                 entity.Property(e => e.Priority)
@@ -1639,11 +1904,15 @@ namespace YemenGuide.Data
 
                 entity.Property(e => e.ReporterId).HasColumnName("ReporterID");
 
+                entity.Property(e => e.ReporterReplyDate).HasColumnType("datetime");
+
                 entity.Property(e => e.ReporterReplyDeadline).HasColumnType("datetime");
 
                 entity.Property(e => e.RequestKind)
                     .HasMaxLength(20)
                     .HasDefaultValueSql("(N'Report')");
+
+                entity.Property(e => e.RequiredAction).HasMaxLength(30);
 
                 entity.Property(e => e.ResolutionAction).HasMaxLength(100);
 
@@ -1693,7 +1962,7 @@ namespace YemenGuide.Data
                     .WithMany(p => p.Reports)
                     .HasForeignKey(d => d.PlaceId)
                     .OnDelete(DeleteBehavior.SetNull)
-                    .HasConstraintName("FK__Reports__PlaceId__72C60C4A");
+                    .HasConstraintName("FK_Reports_Places");
 
                 entity.HasOne(d => d.Promotion)
                     .WithMany(p => p.Reports)
@@ -1704,7 +1973,7 @@ namespace YemenGuide.Data
                     .WithMany(p => p.ReportReporters)
                     .HasForeignKey(d => d.ReporterId)
                     .OnDelete(DeleteBehavior.ClientSetNull)
-                    .HasConstraintName("FK__Reports__Reporte__71D1E811");
+                    .HasConstraintName("FK_Reports_Reporter");
 
                 entity.HasOne(d => d.ResolvedByUser)
                     .WithMany(p => p.ReportResolvedByUsers)
@@ -1733,18 +2002,19 @@ namespace YemenGuide.Data
 
                 entity.HasOne(d => d.ParentReview)
                     .WithMany(p => p.InverseParentReview)
-                    .HasForeignKey(d => d.ParentReviewId);
+                    .HasForeignKey(d => d.ParentReviewId)
+                    .HasConstraintName("FK_Reviews_Parent");
 
                 entity.HasOne(d => d.Place)
                     .WithMany(p => p.Reviews)
                     .HasForeignKey(d => d.PlaceId)
-                    .HasConstraintName("FK__Reviews__PlaceID__66603565");
+                    .HasConstraintName("FK_Reviews_Places");
 
                 entity.HasOne(d => d.User)
                     .WithMany(p => p.Reviews)
                     .HasForeignKey(d => d.UserId)
                     .OnDelete(DeleteBehavior.ClientSetNull)
-                    .HasConstraintName("FK__Reviews__UserID__656C112C");
+                    .HasConstraintName("FK_Reviews_Users");
             });
 
             modelBuilder.Entity<ReviewLike>(entity =>
@@ -1771,13 +2041,22 @@ namespace YemenGuide.Data
 
             modelBuilder.Entity<Room>(entity =>
             {
+                entity.HasIndex(e => new { e.RoomId, e.PlaceId }, "UQ_Rooms_RoomID_PlaceID")
+                    .IsUnique();
+
                 entity.Property(e => e.RoomId).HasColumnName("RoomID");
+
+                entity.Property(e => e.AreaSquareMeters).HasColumnType("decimal(8, 2)");
+
+                entity.Property(e => e.BedType).HasMaxLength(50);
 
                 entity.Property(e => e.Description).HasMaxLength(500);
 
                 entity.Property(e => e.IsAvailable)
                     .IsRequired()
                     .HasDefaultValueSql("((1))");
+
+                entity.Property(e => e.MaxAdults).HasDefaultValueSql("((1))");
 
                 entity.Property(e => e.PlaceId).HasColumnName("PlaceID");
 
@@ -1793,6 +2072,46 @@ namespace YemenGuide.Data
                     .WithMany(p => p.Rooms)
                     .HasForeignKey(d => d.PlaceId)
                     .HasConstraintName("FK_Rooms_Places");
+            });
+
+            modelBuilder.Entity<RoomUnit>(entity =>
+            {
+                // إعداد يدوي: تثبيت المفتاح الأساسي صراحةً.
+                entity.HasKey(e => e.RoomUnitId);
+
+                entity.HasIndex(e => new { e.PlaceId, e.RoomNumber }, "UQ_RoomUnits_Place_RoomNumber")
+                    .IsUnique();
+
+                entity.Property(e => e.RoomUnitId).HasColumnName("RoomUnitID");
+
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("(sysdatetime())");
+
+                entity.Property(e => e.FloorLabel).HasMaxLength(50);
+
+                entity.Property(e => e.IsAvailable)
+                    .IsRequired()
+                    .HasDefaultValueSql("((1))");
+
+                entity.Property(e => e.Notes).HasMaxLength(250);
+
+                entity.Property(e => e.PlaceId).HasColumnName("PlaceID");
+
+                entity.Property(e => e.RoomId).HasColumnName("RoomID");
+
+                entity.Property(e => e.RoomNumber).HasMaxLength(50);
+
+                entity.HasOne(d => d.Place)
+                    .WithMany(p => p.RoomUnits)
+                    .HasForeignKey(d => d.PlaceId)
+                    // إعداد يدوي: قاعدة البيانات تستخدم NO ACTION لهذا المفتاح.
+                    .OnDelete(DeleteBehavior.NoAction)
+                    .HasConstraintName("FK_RoomUnits_Places");
+
+                entity.HasOne(d => d.Room)
+                    .WithMany(p => p.RoomUnits)
+                    .HasPrincipalKey(p => new { p.RoomId, p.PlaceId })
+                    .HasForeignKey(d => new { d.RoomId, d.PlaceId })
+                    .HasConstraintName("FK_RoomUnits_Rooms");
             });
 
             modelBuilder.Entity<SupportedWallet>(entity =>
@@ -1831,6 +2150,11 @@ namespace YemenGuide.Data
                     .IsRequired()
                     .HasDefaultValueSql("((1))");
 
+                // إعداد يدوي: القيمة الافتراضية لتفعيل الفترة التجريبية للمالك.
+                entity.Property(e => e.OwnerFreeTrialEnabled)
+                    .IsRequired()
+                    .HasDefaultValueSql("((0))");
+
                 entity.Property(e => e.AutoUpdateExchangeRates)
                     .IsRequired()
                     .HasDefaultValueSql("((1))");
@@ -1857,6 +2181,23 @@ namespace YemenGuide.Data
                     .HasColumnType("decimal(18, 2)")
                     .HasDefaultValueSql("((2000.00))");
 
+                entity.Property(e => e.DefaultWalletLogoPath)
+                    .HasMaxLength(255)
+                    .HasDefaultValueSql("(N'/images/wallets/default-wallet.png')");
+
+                // إعداد يدوي: أعمدة متابعة تحديث أسعار الصرف من نوع datetime2.
+                entity.Property(e => e.ExchangeRateLastAttemptAt).HasColumnType("datetime2");
+
+                entity.Property(e => e.ExchangeRateLastUpdatedAt).HasColumnType("datetime2");
+
+                entity.Property(e => e.ExchangeRateLastError).HasMaxLength(500);
+
+                entity.Property(e => e.ExchangeRateLastSource).HasMaxLength(100);
+
+                entity.Property(e => e.ExchangeRateLastStatus)
+                    .HasMaxLength(20)
+                    .HasDefaultValueSql("(N'Never')");
+
                 entity.Property(e => e.FacebookLink).HasMaxLength(255);
 
                 entity.Property(e => e.FaviconPath).HasMaxLength(255);
@@ -1877,11 +2218,56 @@ namespace YemenGuide.Data
 
                 entity.Property(e => e.LogoPath).HasMaxLength(255);
 
+                entity.Property(e => e.MaintenanceAffectOwners)
+                    .IsRequired()
+                    .HasDefaultValueSql("((1))");
+
                 entity.Property(e => e.MaintenanceMessage).HasMaxLength(500);
+
+                entity.Property(e => e.MaintenanceShowContact)
+                    .IsRequired()
+                    .HasDefaultValueSql("((1))");
+
+                entity.Property(e => e.MaintenanceTitle)
+                    .HasMaxLength(150)
+                    .HasDefaultValueSql("(N'نعود إليكم قريبًا')");
+
+                entity.Property(e => e.MaintenanceType)
+                    .HasMaxLength(20)
+                    .HasDefaultValueSql("(N'Full')");
+
+                // إعداد يدوي: إعدادات الصيانة الإضافية.
+                entity.Property(e => e.MaintenanceStartAt).HasColumnType("datetime2");
+
+                entity.Property(e => e.MaintenanceEndAt).HasColumnType("datetime2");
+
+                entity.Property(e => e.MaintenanceBlockBookings).HasDefaultValueSql("((0))");
+
+                entity.Property(e => e.MaintenanceBlockPayments).HasDefaultValueSql("((0))");
+
+                entity.Property(e => e.MaintenanceBlockOwnerChanges).HasDefaultValueSql("((0))");
+
+                entity.Property(e => e.MaintenanceBlockMessages).HasDefaultValueSql("((0))");
+
+                entity.Property(e => e.MaintenanceBlockReviews).HasDefaultValueSql("((0))");
+
+                entity.Property(e => e.MaintenanceBlockRegistrations).HasDefaultValueSql("((0))");
+
+                entity.Property(e => e.MaxImageCount).HasDefaultValueSql("((10))");
+
+                entity.Property(e => e.MaxImageSize).HasDefaultValueSql("((5))");
 
                 entity.Property(e => e.MinimumCommissionTopUp)
                     .HasColumnType("decimal(18, 2)")
                     .HasDefaultValueSql("((20000.00))");
+
+                entity.Property(e => e.OwnerFreeTrialDays).HasDefaultValueSql("((14))");
+
+                entity.Property(e => e.PlatformOwnerUserId).HasColumnName("PlatformOwnerUserID");
+
+                entity.Property(e => e.RequiredCommissionGuaranteeBalance)
+                    .HasColumnType("decimal(18, 2)")
+                    .HasDefaultValueSql("((0.00))");
 
                 entity.Property(e => e.SanaaSarRate)
                     .HasColumnType("decimal(18, 2)")
@@ -1911,30 +2297,28 @@ namespace YemenGuide.Data
 
                 entity.Property(e => e.WhatsAppNumber).HasMaxLength(50);
 
-                entity.Property(e => e.YertoSar)
-                    .HasColumnType("decimal(18, 2)")
-                    .HasDefaultValueSql("((140.00))");
-
-                entity.Property(e => e.YertoUsd)
-                    .HasColumnType("decimal(18, 2)")
-                    .HasDefaultValueSql("((537.00))");
+                entity.HasOne(d => d.PlatformOwnerUser)
+                    .WithMany(p => p.SystemSettings)
+                    .HasForeignKey(d => d.PlatformOwnerUserId)
+                    .OnDelete(DeleteBehavior.SetNull)
+                    .HasConstraintName("FK_SystemSettings_PlatformOwnerUser");
             });
 
             modelBuilder.Entity<User>(entity =>
             {
+                entity.HasIndex(e => e.ContactInfo, "UQ_Users_ContactInfo")
+                    .IsUnique()
+                    .HasFilter("([ContactInfo] IS NOT NULL AND [ContactInfo]<>N'')");
+
                 entity.HasIndex(e => e.EmployeeNumber, "UQ_Users_EmployeeNumber")
                     .IsUnique()
                     .HasFilter("([EmployeeNumber] IS NOT NULL AND [EmployeeNumber]<>N'')");
 
-                entity.HasIndex(e => e.ContactInfo, "UQ__Users__ContactInfo")
-                    .IsUnique()
-                    .HasFilter("([ContactInfo] IS NOT NULL AND [ContactInfo]<>N'')");
-
-                entity.HasIndex(e => e.PhoneNumber, "UQ__Users__PhoneNumber")
+                entity.HasIndex(e => e.PhoneNumber, "UQ_Users_PhoneNumber")
                     .IsUnique()
                     .HasFilter("([PhoneNumber] IS NOT NULL AND [PhoneNumber]<>N'')");
 
-                entity.HasIndex(e => e.Username, "UQ__Users__Username")
+                entity.HasIndex(e => e.Username, "UQ_Users_Username")
                     .IsUnique();
 
                 entity.Property(e => e.UserId).HasColumnName("UserID");
@@ -1968,6 +2352,11 @@ namespace YemenGuide.Data
                 entity.Property(e => e.EmployeeNumber).HasMaxLength(30);
 
                 entity.Property(e => e.EmploymentStatus).HasMaxLength(20);
+
+                // إعداد يدوي: تواريخ الفترة التجريبية محفوظة كـ datetime2.
+                entity.Property(e => e.FreeTrialStartedAt).HasColumnType("datetime2");
+
+                entity.Property(e => e.FreeTrialEndsAt).HasColumnType("datetime2");
 
                 entity.Property(e => e.EndDate).HasColumnType("date");
 
