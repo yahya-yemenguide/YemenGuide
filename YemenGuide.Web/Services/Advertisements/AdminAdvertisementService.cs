@@ -10,7 +10,9 @@ using YemenGuide.Core.DTOs.Admin;
 using YemenGuide.Core.DTOs.Notifications;
 using YemenGuide.Core.Entities;
 using YemenGuide.Data;
+using YemenGuide.Web.Services;
 using YemenGuide.Web.Services.Employees;
+using YemenGuide.Web.Services.ExchangeRates;
 using YemenGuide.Web.Services.Notifications;
 
 namespace YemenGuide.Web.Services.Advertisements
@@ -19,12 +21,17 @@ namespace YemenGuide.Web.Services.Advertisements
     {
         private const string UnifiedPlacement = "SearchTop";
         private const string RefundPendingMarker = "[REFUND_PENDING]";
+        private const decimal FallbackSanaaUsdRate = 537m;
+        private const decimal FallbackSanaaSarRate = 140m;
+
         private readonly AppDbContext _context;
         private readonly IAdminPermissionService _permissions;
         private readonly IAdminAuditService _audit;
         private readonly IAdvertisementPricingService _pricing;
         private readonly ILogger<AdminAdvertisementService> _logger;
         private readonly INotificationService _notificationService;
+        private readonly CurrencyDisplayService _currencyDisplayService;
+        private readonly CurrencyService _currencyService;
 
         public AdminAdvertisementService(
             AppDbContext context,
@@ -32,7 +39,9 @@ namespace YemenGuide.Web.Services.Advertisements
             IAdminAuditService audit,
             IAdvertisementPricingService pricing,
             ILogger<AdminAdvertisementService> logger,
-            INotificationService notificationService)
+            INotificationService notificationService,
+            CurrencyDisplayService currencyDisplayService,
+            CurrencyService currencyService)
         {
             _context = context;
             _permissions = permissions;
@@ -40,6 +49,8 @@ namespace YemenGuide.Web.Services.Advertisements
             _pricing = pricing;
             _logger = logger;
             _notificationService = notificationService;
+            _currencyDisplayService = currencyDisplayService;
+            _currencyService = currencyService;
         }
 
         public async Task<AdminAdvertisementManagementPageDto> GetManagementPageAsync(
@@ -49,11 +60,26 @@ namespace YemenGuide.Web.Services.Advertisements
         {
             var model = new AdminAdvertisementManagementPageDto
             {
-                CanView = await _permissions.HasPermissionAsync(adminUserId, AdminPermissionKeys.Advertisements.View, cancellationToken),
-                CanReview = await _permissions.HasPermissionAsync(adminUserId, AdminPermissionKeys.Advertisements.Review, cancellationToken),
-                CanManagePlans = await _permissions.HasPermissionAsync(adminUserId, AdminPermissionKeys.Advertisements.ManagePlans, cancellationToken),
-                CanControl = await _permissions.HasPermissionAsync(adminUserId, AdminPermissionKeys.Advertisements.Control, cancellationToken),
-                CanViewReports = await _permissions.HasPermissionAsync(adminUserId, AdminPermissionKeys.Advertisements.Reports, cancellationToken)
+                CanView = await _permissions.HasPermissionAsync(
+                    adminUserId,
+                    AdminPermissionKeys.Advertisements.View,
+                    cancellationToken),
+                CanReview = await _permissions.HasPermissionAsync(
+                    adminUserId,
+                    AdminPermissionKeys.Advertisements.Review,
+                    cancellationToken),
+                CanManagePlans = await _permissions.HasPermissionAsync(
+                    adminUserId,
+                    AdminPermissionKeys.Advertisements.ManagePlans,
+                    cancellationToken),
+                CanControl = await _permissions.HasPermissionAsync(
+                    adminUserId,
+                    AdminPermissionKeys.Advertisements.Control,
+                    cancellationToken),
+                CanViewReports = await _permissions.HasPermissionAsync(
+                    adminUserId,
+                    AdminPermissionKeys.Advertisements.Reports,
+                    cancellationToken)
             };
 
             model.DefaultTab = NormalizeTab(tab, model);
@@ -66,23 +92,28 @@ namespace YemenGuide.Web.Services.Advertisements
                 ? await GetPlansAsync(adminUserId, cancellationToken)
                 : new AdminPlacementPlansTabDto();
             model.Reports = model.CanViewReports
-                ? await GetReportsAsync(new AdminAdvertisementReportFilterDto(), cancellationToken)
+                ? await GetReportsAsync(
+                    new AdminAdvertisementReportFilterDto(),
+                    cancellationToken)
                 : new AdminAdvertisementReportsDto();
+
             return model;
         }
 
-        public async Task<AdminAdvertisementOverviewDto> GetOverviewAsync(CancellationToken cancellationToken = default)
+        public async Task<AdminAdvertisementOverviewDto> GetOverviewAsync(
+            CancellationToken cancellationToken = default)
         {
             var ads = _context.Advertisements.AsNoTracking();
             var now = DateTime.Now;
             var today = now.Date;
             var tomorrow = today.AddDays(1);
             var endingSoonAt = now.AddDays(3);
-            var todayEvents = _context.AdvertisementEvents.AsNoTracking()
+            var displayCurrency = await GetDisplayCurrencyAsync(cancellationToken);
+
+            var todayEvents = _context.AdvertisementEvents
+                .AsNoTracking()
                 .Where(x => x.EventAt >= today && x.EventAt < tomorrow);
 
-            // لقطة اليوم في النظرة العامة تستخدم المستخدمين/الزوار المختلفين،
-            // حتى تتطابق الأرقام مع تعريف المشاهدات والنقرات في التقارير.
             var todayInteractionRows = await todayEvents
                 .Where(x => x.EventType == "Impression" || x.EventType == "Click")
                 .Select(x => new
@@ -96,38 +127,80 @@ namespace YemenGuide.Web.Services.Advertisements
                 })
                 .ToListAsync(cancellationToken);
 
+            // الإيراد الإجمالي قد يحتوي إعلانات من North وSouth، لذلك لا نقسم
+            // مجموع YER على سعر واحد. نحول كل إعلان حسب سوق مدينة منشأته ثم نجمع.
+            var paidRevenueRows = await ads
+                .Where(x => x.PaymentStatus == "Paid")
+                .Select(x => new
+                {
+                    Amount = x.TransferredAmount ?? x.PriceSnapshot,
+                    Region = x.Place.City.ExchangeRateRegion
+                })
+                .ToListAsync(cancellationToken);
+
+            var paidRevenue = paidRevenueRows.Sum(x =>
+                ConvertDisplayMoney(
+                    x.Amount,
+                    displayCurrency,
+                    x.Region));
+
             var model = new AdminAdvertisementOverviewDto
             {
-                AwaitingPaymentCount = await ads.CountAsync(x => x.Status == "AwaitingPayment", cancellationToken),
-                PendingPaymentReviewCount = await ads.CountAsync(x => x.PaymentStatus == "PendingReview", cancellationToken),
-                PendingReviewCount = await ads.CountAsync(x => x.Status == "Pending" && x.PaymentStatus != "PendingReview", cancellationToken),
-                RefundPendingCount = await ads.CountAsync(x =>
-                    x.Status == "Cancelled" &&
-                    x.PaymentStatus == "Paid" &&
-                    x.CancellationReason != null &&
-                    x.CancellationReason.StartsWith(RefundPendingMarker), cancellationToken),
-                ScheduledCount = await ads.CountAsync(x => x.Status == "Scheduled", cancellationToken),
-                ActiveCount = await ads.CountAsync(x => x.Status == "Active", cancellationToken),
-                PausedCount = await ads.CountAsync(x => x.Status == "Paused", cancellationToken),
-                ExpiredCount = await ads.CountAsync(x => x.Status == "Expired", cancellationToken),
-                EndingSoonCount = await ads.CountAsync(x => x.Status == "Active" && x.EndAt.HasValue &&
-                    x.EndAt.Value >= now && x.EndAt.Value <= endingSoonAt, cancellationToken),
+                AwaitingPaymentCount = await ads.CountAsync(
+                    x => x.Status == "AwaitingPayment",
+                    cancellationToken),
+                PendingPaymentReviewCount = await ads.CountAsync(
+                    x => x.PaymentStatus == "PendingReview",
+                    cancellationToken),
+                PendingReviewCount = await ads.CountAsync(
+                    x => x.Status == "Pending" && x.PaymentStatus != "PendingReview",
+                    cancellationToken),
+                RefundPendingCount = await ads.CountAsync(
+                    x => x.Status == "Cancelled" &&
+                         x.PaymentStatus == "Paid" &&
+                         x.CancellationReason != null &&
+                         x.CancellationReason.StartsWith(RefundPendingMarker),
+                    cancellationToken),
+                ScheduledCount = await ads.CountAsync(
+                    x => x.Status == "Scheduled",
+                    cancellationToken),
+                ActiveCount = await ads.CountAsync(
+                    x => x.Status == "Active",
+                    cancellationToken),
+                PausedCount = await ads.CountAsync(
+                    x => x.Status == "Paused",
+                    cancellationToken),
+                ExpiredCount = await ads.CountAsync(
+                    x => x.Status == "Expired",
+                    cancellationToken),
+                EndingSoonCount = await ads.CountAsync(
+                    x => x.Status == "Active" &&
+                         x.EndAt.HasValue &&
+                         x.EndAt.Value >= now &&
+                         x.EndAt.Value <= endingSoonAt,
+                    cancellationToken),
 
-                // النظام الجديد لا يعتمد على ميزانية CPC/CPM.
                 BudgetRiskCount = 0,
-                ActivePlacementCount = await _context.AdvertisementPlans.AsNoTracking()
-                    .CountAsync(x => x.IsActive == true &&
-                                     x.PlacementType == UnifiedPlacement &&
-                                     x.BillingModel == "Flat" &&
-                                     x.PlanName != "الإعلان الموحد - مدة محددة", cancellationToken),
+                ActivePlacementCount = await _context.AdvertisementPlans
+                    .AsNoTracking()
+                    .CountAsync(
+                        x => x.IsActive == true &&
+                             x.PlacementType == UnifiedPlacement &&
+                             x.BillingModel == "Flat" &&
+                             x.PlanName != "الإعلان الموحد - مدة محددة",
+                        cancellationToken),
 
-                PaidRevenue = await ads.Where(x => x.PaymentStatus == "Paid")
-                    .SumAsync(x => (decimal?)(x.TransferredAmount ?? x.PriceSnapshot), cancellationToken) ?? 0m,
-
+                PaidRevenue = paidRevenue,
                 SpentAmount = 0m,
-                Impressions = await ads.SumAsync(x => (long?)x.ImpressionsCount, cancellationToken) ?? 0,
-                Clicks = await ads.SumAsync(x => (long?)x.ClicksCount, cancellationToken) ?? 0,
-                Conversions = await ads.SumAsync(x => (long?)x.ConversionsCount, cancellationToken) ?? 0,
+                Impressions = await ads.SumAsync(
+                    x => (long?)x.ImpressionsCount,
+                    cancellationToken) ?? 0,
+                Clicks = await ads.SumAsync(
+                    x => (long?)x.ClicksCount,
+                    cancellationToken) ?? 0,
+                Conversions = await ads.SumAsync(
+                    x => (long?)x.ConversionsCount,
+                    cancellationToken) ?? 0,
                 TodaySpentAmount = 0m,
                 TodayImpressions = todayInteractionRows
                     .Where(x => x.EventType == "Impression")
@@ -149,8 +222,12 @@ namespace YemenGuide.Web.Services.Advertisements
                         x.SessionKey))
                     .Distinct()
                     .LongCount(),
-                TodayBookingStarts = await todayEvents.LongCountAsync(x => x.EventType == "BookingStarted", cancellationToken),
-                TodayConversions = await todayEvents.LongCountAsync(x => x.EventType == "BookingCompleted", cancellationToken),
+                TodayBookingStarts = await todayEvents.LongCountAsync(
+                    x => x.EventType == "BookingStarted",
+                    cancellationToken),
+                TodayConversions = await todayEvents.LongCountAsync(
+                    x => x.EventType == "BookingCompleted",
+                    cancellationToken),
                 GeneratedAt = now
             };
 
@@ -162,18 +239,25 @@ namespace YemenGuide.Web.Services.Advertisements
                      x.PaymentStatus == "Paid" &&
                      x.CancellationReason != null &&
                      x.CancellationReason.StartsWith(RefundPendingMarker)) ||
-                    (x.Status == "Active" && x.EndAt.HasValue && x.EndAt >= now && x.EndAt <= endingSoonAt))
-                .OrderByDescending(x => x.Status == "Cancelled" &&
-                                        x.PaymentStatus == "Paid" &&
-                                        x.CancellationReason != null &&
-                                        x.CancellationReason.StartsWith(RefundPendingMarker))
+                    (x.Status == "Active" &&
+                     x.EndAt.HasValue &&
+                     x.EndAt >= now &&
+                     x.EndAt <= endingSoonAt))
+                .OrderByDescending(x =>
+                    x.Status == "Cancelled" &&
+                    x.PaymentStatus == "Paid" &&
+                    x.CancellationReason != null &&
+                    x.CancellationReason.StartsWith(RefundPendingMarker))
                 .ThenByDescending(x => x.PaymentStatus == "PendingReview")
                 .ThenByDescending(x => x.Status == "Pending")
                 .ThenBy(x => x.SubmittedAt ?? x.CreatedAt)
                 .Take(5)
                 .ToListAsync(cancellationToken);
 
-            model.NeedsAttention = attention.Select(MapCard).ToList();
+            model.NeedsAttention = attention
+                .Select(x => MapCard(x, displayCurrency))
+                .ToList();
+
             return model;
         }
 
@@ -186,57 +270,84 @@ namespace YemenGuide.Web.Services.Advertisements
             filter.Page = Math.Max(1, filter.Page);
             filter.PageSize = Math.Clamp(filter.PageSize, 6, 48);
 
+            var displayCurrency = await GetDisplayCurrencyAsync(cancellationToken);
             var baseQuery = _context.Advertisements.AsNoTracking();
+
             var model = new AdminAdvertisementsTabDto
             {
                 Filter = filter,
                 AllCount = await baseQuery.CountAsync(cancellationToken),
-                AwaitingPaymentCount = await baseQuery.CountAsync(x => x.Status == "AwaitingPayment", cancellationToken),
-                PendingCount = await baseQuery.CountAsync(x => x.Status == "Pending", cancellationToken),
-                ScheduledCount = await baseQuery.CountAsync(x => x.Status == "Scheduled", cancellationToken),
-                ActiveCount = await baseQuery.CountAsync(x => x.Status == "Active", cancellationToken),
-                PausedCount = await baseQuery.CountAsync(x => x.Status == "Paused", cancellationToken),
-                ExpiredCount = await baseQuery.CountAsync(x => x.Status == "Expired", cancellationToken),
-                RejectedCount = await baseQuery.CountAsync(x => x.Status == "Rejected", cancellationToken),
-                NeedsActionCount = await baseQuery.CountAsync(x =>
-                    x.PaymentStatus == "PendingReview" ||
-                    x.Status == "Pending" ||
-                    (x.Status == "Cancelled" &&
-                     x.PaymentStatus == "Paid" &&
-                     x.CancellationReason != null &&
-                     x.CancellationReason.StartsWith(RefundPendingMarker)), cancellationToken),
-                RunningCount = await baseQuery.CountAsync(x =>
-                    x.Status == "Active" || x.Status == "Scheduled", cancellationToken),
-                // الأقسام العلوية تكون غير متداخلة قدر الإمكان:
-                // الإعلان الملغي الذي ما زال يحتاج مراجعة دفع أو تنفيذ استرداد يبقى في «تحتاج إجراء»
-                // ولا يُحسب «مغلقًا» إلا بعد انتهاء الإجراء المالي المطلوب.
-                ClosedCount = await baseQuery.CountAsync(x =>
-                    x.Status == "Expired" ||
-                    x.Status == "Rejected" ||
-                    (x.Status == "Cancelled" &&
-                     x.PaymentStatus != "PendingReview" &&
-                     !(x.PaymentStatus == "Paid" &&
-                       x.CancellationReason != null &&
-                       x.CancellationReason.StartsWith(RefundPendingMarker))), cancellationToken),
-                CanReview = await _permissions.HasPermissionAsync(adminUserId, AdminPermissionKeys.Advertisements.Review, cancellationToken),
-                CanControl = await _permissions.HasPermissionAsync(adminUserId, AdminPermissionKeys.Advertisements.Control, cancellationToken)
+                AwaitingPaymentCount = await baseQuery.CountAsync(
+                    x => x.Status == "AwaitingPayment",
+                    cancellationToken),
+                PendingCount = await baseQuery.CountAsync(
+                    x => x.Status == "Pending",
+                    cancellationToken),
+                ScheduledCount = await baseQuery.CountAsync(
+                    x => x.Status == "Scheduled",
+                    cancellationToken),
+                ActiveCount = await baseQuery.CountAsync(
+                    x => x.Status == "Active",
+                    cancellationToken),
+                PausedCount = await baseQuery.CountAsync(
+                    x => x.Status == "Paused",
+                    cancellationToken),
+                ExpiredCount = await baseQuery.CountAsync(
+                    x => x.Status == "Expired",
+                    cancellationToken),
+                RejectedCount = await baseQuery.CountAsync(
+                    x => x.Status == "Rejected",
+                    cancellationToken),
+                NeedsActionCount = await baseQuery.CountAsync(
+                    x => x.PaymentStatus == "PendingReview" ||
+                         x.Status == "Pending" ||
+                         (x.Status == "Cancelled" &&
+                          x.PaymentStatus == "Paid" &&
+                          x.CancellationReason != null &&
+                          x.CancellationReason.StartsWith(RefundPendingMarker)),
+                    cancellationToken),
+                RunningCount = await baseQuery.CountAsync(
+                    x => x.Status == "Active" || x.Status == "Scheduled",
+                    cancellationToken),
+                ClosedCount = await baseQuery.CountAsync(
+                    x => x.Status == "Expired" ||
+                         x.Status == "Rejected" ||
+                         (x.Status == "Cancelled" &&
+                          x.PaymentStatus != "PendingReview" &&
+                          !(x.PaymentStatus == "Paid" &&
+                            x.CancellationReason != null &&
+                            x.CancellationReason.StartsWith(RefundPendingMarker))),
+                    cancellationToken),
+                CanReview = await _permissions.HasPermissionAsync(
+                    adminUserId,
+                    AdminPermissionKeys.Advertisements.Review,
+                    cancellationToken),
+                CanControl = await _permissions.HasPermissionAsync(
+                    adminUserId,
+                    AdminPermissionKeys.Advertisements.Control,
+                    cancellationToken)
             };
 
             IQueryable<Advertisement> query = AdsWithRelations();
+
             if (!string.IsNullOrWhiteSpace(filter.Search))
             {
                 var search = filter.Search.Trim();
-                query = query.Where(x => x.AdvertisementTitle.Contains(search) ||
-                                         x.Place.PlaceNameAndDesc.Contains(search) ||
-                                         x.Owner.FullName.Contains(search) ||
-                                         (x.ReferenceNumber != null && x.ReferenceNumber.Contains(search)));
+                query = query.Where(x =>
+                    x.AdvertisementTitle.Contains(search) ||
+                    x.Place.PlaceNameAndDesc.Contains(search) ||
+                    x.Owner.FullName.Contains(search) ||
+                    (x.ReferenceNumber != null && x.ReferenceNumber.Contains(search)));
             }
 
             if (!IsAll(filter.ExactStatus))
             {
                 query = query.Where(x => x.Status == filter.ExactStatus);
             }
-            else if (string.Equals(filter.Status, "NeedsAction", StringComparison.OrdinalIgnoreCase))
+            else if (string.Equals(
+                         filter.Status,
+                         "NeedsAction",
+                         StringComparison.OrdinalIgnoreCase))
             {
                 query = query.Where(x =>
                     x.PaymentStatus == "PendingReview" ||
@@ -246,15 +357,25 @@ namespace YemenGuide.Web.Services.Advertisements
                      x.CancellationReason != null &&
                      x.CancellationReason.StartsWith(RefundPendingMarker)));
             }
-            else if (string.Equals(filter.Status, "Running", StringComparison.OrdinalIgnoreCase))
+            else if (string.Equals(
+                         filter.Status,
+                         "Running",
+                         StringComparison.OrdinalIgnoreCase))
             {
-                query = query.Where(x => x.Status == "Active" || x.Status == "Scheduled");
+                query = query.Where(x =>
+                    x.Status == "Active" || x.Status == "Scheduled");
             }
-            else if (string.Equals(filter.Status, "Paused", StringComparison.OrdinalIgnoreCase))
+            else if (string.Equals(
+                         filter.Status,
+                         "Paused",
+                         StringComparison.OrdinalIgnoreCase))
             {
                 query = query.Where(x => x.Status == "Paused");
             }
-            else if (string.Equals(filter.Status, "Closed", StringComparison.OrdinalIgnoreCase))
+            else if (string.Equals(
+                         filter.Status,
+                         "Closed",
+                         StringComparison.OrdinalIgnoreCase))
             {
                 query = query.Where(x =>
                     x.Status == "Expired" ||
@@ -267,22 +388,31 @@ namespace YemenGuide.Web.Services.Advertisements
             }
             else if (!IsAll(filter.Status))
             {
-                // دعم الروابط القديمة التي ترسل الحالة الدقيقة في Status.
                 query = query.Where(x => x.Status == filter.Status);
             }
-            if (!IsAll(filter.BillingModel)) query = query.Where(x => x.BillingModelSnapshot == filter.BillingModel);
-            if (!IsAll(filter.PaymentStatus)) query = query.Where(x => x.PaymentStatus == filter.PaymentStatus);
+
+            if (!IsAll(filter.BillingModel))
+                query = query.Where(x => x.BillingModelSnapshot == filter.BillingModel);
+
+            if (!IsAll(filter.PaymentStatus))
+                query = query.Where(x => x.PaymentStatus == filter.PaymentStatus);
 
             model.TotalCount = await query.CountAsync(cancellationToken);
-            model.TotalPages = Math.Max(1, (int)Math.Ceiling(model.TotalCount / (double)filter.PageSize));
-            if (filter.Page > model.TotalPages) filter.Page = model.TotalPages;
+            model.TotalPages = Math.Max(
+                1,
+                (int)Math.Ceiling(model.TotalCount / (double)filter.PageSize));
+
+            if (filter.Page > model.TotalPages)
+                filter.Page = model.TotalPages;
 
             var orderedQuery = filter.SortBy switch
             {
                 "Oldest" => query.OrderBy(x => x.SubmittedAt ?? x.CreatedAt),
-                "HighestBudget" => query.OrderByDescending(x => x.TotalBudget ?? x.PriceSnapshot),
+                "HighestBudget" => query.OrderByDescending(
+                    x => x.TotalBudget ?? x.PriceSnapshot),
                 "MostViewed" => query.OrderByDescending(x => x.ImpressionsCount),
-                "NeedsAction" => query.OrderByDescending(x =>
+                "NeedsAction" => query
+                    .OrderByDescending(x =>
                         x.Status == "Cancelled" &&
                         x.PaymentStatus == "Paid" &&
                         x.CancellationReason != null &&
@@ -298,7 +428,10 @@ namespace YemenGuide.Web.Services.Advertisements
                 .Take(filter.PageSize)
                 .ToListAsync(cancellationToken);
 
-            model.Items = items.Select(MapCard).ToList();
+            model.Items = items
+                .Select(x => MapCard(x, displayCurrency))
+                .ToList();
+
             return model;
         }
 
@@ -309,15 +442,33 @@ namespace YemenGuide.Web.Services.Advertisements
         {
             var ad = await AdsWithRelations()
                 .Include(x => x.ReviewedByUser)
-                .FirstOrDefaultAsync(x => x.AdvertisementId == advertisementId, cancellationToken);
+                .FirstOrDefaultAsync(
+                    x => x.AdvertisementId == advertisementId,
+                    cancellationToken);
 
-            if (ad == null) return null;
+            if (ad == null)
+                return null;
 
+            var displayCurrency = await GetDisplayCurrencyAsync(cancellationToken);
+            var region = ad.Place?.City?.ExchangeRateRegion;
             var durationDays = Math.Max(1, ad.DurationDaysSnapshot);
-            var totalAmount = ad.PriceSnapshot;
-            var dailyPrice = durationDays > 0
-                ? decimal.Round(totalAmount / durationDays, 2, MidpointRounding.AwayFromZero)
-                : totalAmount;
+
+            var totalAmount = ConvertDisplayMoney(
+                ad.PriceSnapshot,
+                displayCurrency,
+                region);
+
+            var dailyPriceYer = durationDays > 0
+                ? decimal.Round(
+                    ad.PriceSnapshot / durationDays,
+                    2,
+                    MidpointRounding.AwayFromZero)
+                : ad.PriceSnapshot;
+
+            var dailyPrice = ConvertDisplayMoney(
+                dailyPriceYer,
+                displayCurrency,
+                region);
 
             var refundDestinations = await (
                 from ownerWallet in _context.OwnerWallets.AsNoTracking()
@@ -367,6 +518,20 @@ namespace YemenGuide.Web.Services.Advertisements
                     .FirstOrDefaultAsync(cancellationToken);
             }
 
+            decimal? transferredAmount = ad.TransferredAmount.HasValue
+                ? ConvertDisplayMoney(
+                    ad.TransferredAmount.Value,
+                    displayCurrency,
+                    region)
+                : null;
+
+            decimal? refundAmount = ad.RefundAmount.HasValue
+                ? ConvertDisplayMoney(
+                    ad.RefundAmount.Value,
+                    displayCurrency,
+                    region)
+                : null;
+
             return new AdminAdvertisementDetailsDto
             {
                 AdvertisementId = ad.AdvertisementId,
@@ -395,21 +560,19 @@ namespace YemenGuide.Web.Services.Advertisements
                 PaymentStatus = ad.PaymentStatus,
                 PaymentStatusLabel = AdvertisementLookups.PaymentLabel(ad.PaymentStatus),
 
-                // Price يبقى إجمالي قيمة الإعلان للتوافق مع الأجزاء القديمة.
                 Price = totalAmount,
                 CostPerClick = null,
                 CostPerThousand = null,
                 TotalBudget = null,
                 DailyBudget = null,
                 SpentAmount = 0m,
-                Currency = ad.Currency,
+                Currency = displayCurrency,
 
                 StartImmediately = ad.StartImmediately == true,
                 RequestedStartAt = ad.RequestedStartAt,
                 StartAt = ad.StartAt,
                 EndAt = ad.EndAt,
 
-                // الاستهداف الجديد موحّد للجميع، والجهاز هو الاختيار الوحيد.
                 TargetingMode = "All",
                 DeviceTarget = ad.DeviceTarget,
                 FrequencyCap = ad.FrequencyCapPerUserPerDay,
@@ -417,13 +580,13 @@ namespace YemenGuide.Web.Services.Advertisements
                 DestinationPath = null,
 
                 PlatformWalletId = ad.PlatformWalletId,
-                TransferredAmount = ad.TransferredAmount,
+                TransferredAmount = transferredAmount,
                 ReferenceNumber = ad.ReferenceNumber,
                 TransferDate = ad.TransferDate,
                 ReceiptImage = ad.ReceiptImage,
 
                 RefundRequestedAt = ad.RefundRequestedAt,
-                RefundAmount = ad.RefundAmount,
+                RefundAmount = refundAmount,
                 RefundWalletId = ad.RefundWalletId,
                 RefundWalletName = refundWalletName,
                 RefundAccountNumber = ad.RefundAccountNumber,
@@ -459,17 +622,20 @@ namespace YemenGuide.Web.Services.Advertisements
                     adminUserId,
                     AdminPermissionKeys.Advertisements.Control,
                     cancellationToken),
-                CanRefund = IsRefundPending(ad) && await _permissions.HasPermissionAsync(
-                    adminUserId,
-                    AdminPermissionKeys.Advertisements.Control,
-                    cancellationToken)
+                CanRefund = IsRefundPending(ad) &&
+                            await _permissions.HasPermissionAsync(
+                                adminUserId,
+                                AdminPermissionKeys.Advertisements.Control,
+                                cancellationToken)
             };
         }
 
-        public async Task<AdminPlacementPlansTabDto> GetPlansAsync(int adminUserId, CancellationToken cancellationToken = default)
+        public async Task<AdminPlacementPlansTabDto> GetPlansAsync(
+            int adminUserId,
+            CancellationToken cancellationToken = default)
         {
-            // لا نعرض طرق التسعير القديمة CPC/CPM في النظام الجديد.
-            // تبقى بياناتها في القاعدة للتوافق التاريخي فقط.
+            var displayCurrency = await GetDisplayCurrencyAsync(cancellationToken);
+
             var plans = await _context.AdvertisementPlans
                 .AsNoTracking()
                 .Include(x => x.Advertisements)
@@ -500,36 +666,51 @@ namespace YemenGuide.Web.Services.Advertisements
                 Icon = "bi-stars"
             };
 
-            group.PricingOptions = plans.Select(x => new AdminAdvertisementPlanCardDto
-            {
-                AdvertisementPlanId = x.AdvertisementPlanId,
-                PlanName = x.PlanName,
-                DailyPrice = x.Price,
-                DisplayWeight = x.DisplayPriority,
-                IsActive = x.IsActive == true,
-                Description = x.Description,
-                AdvertisementCount = x.Advertisements.Count,
-                ActiveAdvertisementCount = x.Advertisements.Count(a =>
-                    a.Status == "Active" || a.Status == "Scheduled"),
+            // الباقة نفسها ليست مرتبطة بمدينة محددة، لذلك نستخدم سوق صنعاء
+            // كمرجع موحد لعرض/تحرير سعر الباقة الإدارية. عند شراء الإعلان
+            // فعليًا يبقى التخزين YER ويستخدم صاحب المنشأة منطق منطقته.
+            group.PricingOptions = plans
+                .Select(x =>
+                {
+                    var displayPrice = ConvertDisplayMoney(
+                        x.Price,
+                        displayCurrency,
+                        ExchangeRateRegionResolver.SanaaMarket);
 
-                // توافق مؤقت مع أي جزء قديم لم يتم تحديثه بعد.
-                PlacementType = UnifiedPlacement,
-                PlacementLabel = "صفحة البحث",
-                BillingModel = "Flat",
-                BillingLabel = "سعر يومي",
-                UnitPrice = x.Price,
-                MaxActiveAdvertisements = x.MaxActiveAdvertisements,
-                DisplayPriority = x.DisplayPriority,
-                MaxMediaItems = 1,
-                AllowVideo = true
-            }).ToList();
+                    return new AdminAdvertisementPlanCardDto
+                    {
+                        AdvertisementPlanId = x.AdvertisementPlanId,
+                        PlanName = x.PlanName,
+                        DailyPrice = displayPrice,
+                        DisplayWeight = x.DisplayPriority,
+                        IsActive = x.IsActive == true,
+                        Description = x.Description,
+                        AdvertisementCount = x.Advertisements.Count,
+                        ActiveAdvertisementCount = x.Advertisements.Count(a =>
+                            a.Status == "Active" || a.Status == "Scheduled"),
+                        PlacementType = UnifiedPlacement,
+                        PlacementLabel = "صفحة البحث",
+                        BillingModel = "Flat",
+                        BillingLabel = "سعر يومي",
+                        UnitPrice = displayPrice,
+                        MaxActiveAdvertisements = x.MaxActiveAdvertisements,
+                        DisplayPriority = x.DisplayPriority,
+                        MaxMediaItems = 1,
+                        AllowVideo = true
+                    };
+                })
+                .ToList();
 
             model.Placements.Add(group);
             return model;
         }
 
-        public async Task<AdminAdvertisementPlanUpsertDto?> GetPlanFormAsync(int? planId, CancellationToken cancellationToken = default)
+        public async Task<AdminAdvertisementPlanUpsertDto?> GetPlanFormAsync(
+            int? planId,
+            CancellationToken cancellationToken = default)
         {
+            var displayCurrency = await GetDisplayCurrencyAsync(cancellationToken);
+
             if (!planId.HasValue || planId.Value <= 0)
             {
                 return new AdminAdvertisementPlanUpsertDto
@@ -546,25 +727,30 @@ namespace YemenGuide.Web.Services.Advertisements
 
             var plan = await _context.AdvertisementPlans
                 .AsNoTracking()
-                .FirstOrDefaultAsync(x =>
-                    x.AdvertisementPlanId == planId.Value &&
-                    x.PlacementType == UnifiedPlacement,
+                .FirstOrDefaultAsync(
+                    x => x.AdvertisementPlanId == planId.Value &&
+                         x.PlacementType == UnifiedPlacement,
                     cancellationToken);
 
-            if (plan == null) return null;
+            if (plan == null)
+                return null;
+
+            var displayPrice = ConvertDisplayMoney(
+                plan.Price,
+                displayCurrency,
+                ExchangeRateRegionResolver.SanaaMarket);
 
             return new AdminAdvertisementPlanUpsertDto
             {
                 AdvertisementPlanId = plan.AdvertisementPlanId,
                 PlanName = plan.PlanName,
-                DailyPrice = plan.Price,
+                DailyPrice = displayPrice,
                 DisplayWeight = Math.Clamp(plan.DisplayPriority, 1, 100),
                 Description = plan.Description,
                 IsActive = plan.IsActive == true,
-
                 PlacementType = UnifiedPlacement,
                 BillingModel = "Flat",
-                UnitPrice = plan.Price,
+                UnitPrice = displayPrice,
                 MaxActiveAdvertisements = int.MaxValue,
                 DisplayPriority = Math.Clamp(plan.DisplayPriority, 1, 100),
                 MaxMediaItems = 1,
@@ -579,16 +765,13 @@ namespace YemenGuide.Web.Services.Advertisements
             filter ??= new AdminAdvertisementReportFilterDto();
             NormalizeReportFilter(filter, out var start, out var end);
 
+            var displayCurrency = await GetDisplayCurrencyAsync(cancellationToken);
             var allAds = _context.Advertisements.AsNoTracking();
             var reportAds = allAds.Where(x =>
                 x.PlacementTypeSnapshot == UnifiedPlacement &&
                 x.BillingModelSnapshot == "Flat");
             var scopedAds = ApplyReportScope(reportAds, filter);
 
-            // ندخل الإعلان في نطاق التقرير إذا:
-            // 1) أُنشئ خلال الفترة، أو
-            // 2) كانت حملته الفعلية متقاطعة مع الفترة المحددة.
-            // بهذا لا تبقى المسودات القديمة ذات EndAt = NULL ظاهرة في كل التقارير للأبد.
             var periodAds = scopedAds.Where(x =>
                 (x.CreatedAt >= start && x.CreatedAt < end) ||
                 (x.StartAt.HasValue &&
@@ -598,8 +781,6 @@ namespace YemenGuide.Web.Services.Advertisements
 
             var periodAdIds = periodAds.Select(x => x.AdvertisementId);
 
-            // نقرأ أحداث الفترة مرة واحدة فقط ثم نبني منها كل مؤشرات التقرير.
-            // المشاهدات والنقرات هنا فريدة حسب هوية المستخدم/الزائر داخل كل إعلان.
             var eventRows = await _context.AdvertisementEvents
                 .AsNoTracking()
                 .Where(x =>
@@ -635,12 +816,19 @@ namespace YemenGuide.Web.Services.Advertisements
                     x.CreatedAt,
                     x.DurationDaysSnapshot,
                     x.PrioritySnapshot,
-                    x.PriceSnapshot
+                    x.PriceSnapshot,
+                    Region = x.Place.City.ExchangeRateRegion
                 })
                 .ToListAsync(cancellationToken);
 
+            decimal Money(decimal amountInYer, string? region) =>
+                ConvertDisplayMoney(amountInYer, displayCurrency, region);
+
             var paidRows = advertisementRows
-                .Where(x => string.Equals(x.PaymentStatus, "Paid", StringComparison.OrdinalIgnoreCase))
+                .Where(x => string.Equals(
+                    x.PaymentStatus,
+                    "Paid",
+                    StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
             var model = new AdminAdvertisementReportsDto
@@ -650,20 +838,20 @@ namespace YemenGuide.Web.Services.Advertisements
                 To = end.AddTicks(-1),
                 GeneratedAt = DateTime.Now,
                 TotalAdvertisements = advertisementRows.Count,
-
-                // النظام الحالي سعر يومي ثابت للباقة، والمبلغ النهائي محفوظ Snapshot
-                // بعد ضرب سعر اليوم × عدد الأيام التي اختارها المالك.
-                PaidRevenue = paidRows.Sum(x => x.PriceSnapshot),
+                PaidRevenue = paidRows.Sum(x => Money(x.PriceSnapshot, x.Region)),
                 PaidAdvertisements = paidRows.Count,
                 RefundedAdvertisements = advertisementRows.Count(x =>
-                    string.Equals(x.PaymentStatus, "Refunded", StringComparison.OrdinalIgnoreCase)),
+                    string.Equals(
+                        x.PaymentStatus,
+                        "Refunded",
+                        StringComparison.OrdinalIgnoreCase)),
                 PendingPayments = advertisementRows.Count(x =>
-                    string.Equals(x.PaymentStatus, "PendingReview", StringComparison.OrdinalIgnoreCase)),
-
-                // CPC/CPM والميزانيات لم تعد جزءًا من النظام الجديد.
+                    string.Equals(
+                        x.PaymentStatus,
+                        "PendingReview",
+                        StringComparison.OrdinalIgnoreCase)),
                 SpentAmount = 0m,
                 RemainingBudget = 0m,
-
                 Impressions = eventRows
                     .Where(x => x.EventType == "Impression")
                     .Select(x => ReportInteractionKey(
@@ -674,7 +862,6 @@ namespace YemenGuide.Web.Services.Advertisements
                         x.SessionKey))
                     .Distinct()
                     .LongCount(),
-
                 Clicks = eventRows
                     .Where(x => x.EventType == "Click")
                     .Select(x => ReportInteractionKey(
@@ -685,7 +872,6 @@ namespace YemenGuide.Web.Services.Advertisements
                         x.SessionKey))
                     .Distinct()
                     .LongCount(),
-
                 BookingStarts = eventRows
                     .Where(x => x.EventType == "BookingStarted")
                     .Select(x => ReportBookingKey(
@@ -694,7 +880,6 @@ namespace YemenGuide.Web.Services.Advertisements
                         x.BookingId))
                     .Distinct()
                     .LongCount(),
-
                 Conversions = eventRows
                     .Where(x => x.EventType == "BookingCompleted")
                     .Select(x => ReportBookingKey(
@@ -735,9 +920,11 @@ namespace YemenGuide.Web.Services.Advertisements
 
             var advertisementOptions = reportAds;
             if (filter.PlaceId.HasValue)
-                advertisementOptions = advertisementOptions.Where(x => x.PlaceId == filter.PlaceId.Value);
+                advertisementOptions = advertisementOptions.Where(
+                    x => x.PlaceId == filter.PlaceId.Value);
             if (filter.AdvertisementPlanId.HasValue)
-                advertisementOptions = advertisementOptions.Where(x => x.AdvertisementPlanId == filter.AdvertisementPlanId.Value);
+                advertisementOptions = advertisementOptions.Where(
+                    x => x.AdvertisementPlanId == filter.AdvertisementPlanId.Value);
 
             model.AdvertisementOptions = await advertisementOptions
                 .OrderByDescending(x => x.CreatedAt)
@@ -809,13 +996,16 @@ namespace YemenGuide.Web.Services.Advertisements
                 })
                 .ToList();
 
-            // يبقى هذا الملخص للتوافق مع الـDTO، لكن النظام الجديد لديه مكان ظهور واحد فقط.
             model.PlacementMetrics = advertisementRows
                 .GroupBy(x => x.PlacementType)
                 .Select(g =>
                 {
-                    var ids = g.Select(x => x.AdvertisementId).ToHashSet();
-                    var relatedEvents = eventRows.Where(x => ids.Contains(x.AdvertisementId)).ToList();
+                    var ids = g
+                        .Select(x => x.AdvertisementId)
+                        .ToHashSet();
+                    var relatedEvents = eventRows
+                        .Where(x => ids.Contains(x.AdvertisementId))
+                        .ToList();
 
                     return new AdminPlacementMetricDto
                     {
@@ -856,7 +1046,6 @@ namespace YemenGuide.Web.Services.Advertisements
                 .OrderByDescending(x => x.Impressions)
                 .ToList();
 
-            // للتوافق التاريخي فقط. جميع الإعلانات الجديدة سعر يومي Flat.
             model.BillingMetrics = advertisementRows
                 .GroupBy(x => x.BillingModel)
                 .Select(g => new AdminBillingMetricDto
@@ -865,8 +1054,11 @@ namespace YemenGuide.Web.Services.Advertisements
                     BillingLabel = AdvertisementLookups.BillingLabel(g.Key),
                     Advertisements = g.Count(),
                     PaidAmount = g
-                        .Where(x => string.Equals(x.PaymentStatus, "Paid", StringComparison.OrdinalIgnoreCase))
-                        .Sum(x => x.PriceSnapshot),
+                        .Where(x => string.Equals(
+                            x.PaymentStatus,
+                            "Paid",
+                            StringComparison.OrdinalIgnoreCase))
+                        .Sum(x => Money(x.PriceSnapshot, x.Region)),
                     SpentAmount = 0m
                 })
                 .OrderByDescending(x => x.PaidAmount)
@@ -879,7 +1071,7 @@ namespace YemenGuide.Web.Services.Advertisements
                     PaymentStatus = g.Key,
                     PaymentStatusLabel = AdvertisementLookups.PaymentLabel(g.Key),
                     Advertisements = g.Count(),
-                    Amount = g.Sum(x => x.PriceSnapshot)
+                    Amount = g.Sum(x => Money(x.PriceSnapshot, x.Region))
                 })
                 .OrderByDescending(x => x.Amount)
                 .ToList();
@@ -928,45 +1120,63 @@ namespace YemenGuide.Web.Services.Advertisements
                             .LongCount()
                     });
 
-            model.TopAdvertisements = advertisementRows.Select(x =>
-            {
-                eventByAdvertisement.TryGetValue(x.AdvertisementId, out var metric);
-
-                var safeDuration = Math.Clamp(x.DurationDaysSnapshot, 1, 365);
-                var dailyPrice = decimal.Round(
-                    x.PriceSnapshot / safeDuration,
-                    2,
-                    MidpointRounding.AwayFromZero);
-
-                return new AdminAdvertisementReportItemDto
+            model.TopAdvertisements = advertisementRows
+                .Select(x =>
                 {
-                    AdvertisementId = x.AdvertisementId,
-                    PlaceId = x.PlaceId,
-                    AdvertisementPlanId = x.AdvertisementPlanId,
-                    Title = x.Title,
-                    PlaceName = x.PlaceName,
-                    PlanName = x.PlanName,
-                    DisplayWeight = x.PrioritySnapshot,
-                    DurationDays = safeDuration,
-                    DailyPrice = dailyPrice,
-                    TotalAmount = x.PriceSnapshot,
-                    PlacementLabel = "صفحة البحث - أعلى الفئات",
-                    BillingLabel = "سعر يومي",
-                    StatusLabel = AdminStatusLabel(x.Status, x.PaymentStatus),
-                    PaymentStatusLabel = AdvertisementLookups.PaymentLabel(x.PaymentStatus),
-                    CreatedAt = x.CreatedAt,
-                    PaidAmount = string.Equals(x.PaymentStatus, "Paid", StringComparison.OrdinalIgnoreCase)
-                        ? x.PriceSnapshot
-                        : 0m,
-                    SpentAmount = 0m,
-                    Impressions = metric?.Impressions ?? 0,
-                    Clicks = metric?.Clicks ?? 0,
-                    BookingStarts = metric?.BookingStarts ?? 0,
-                    Conversions = metric?.Conversions ?? 0
-                };
-            }).ToList();
+                    eventByAdvertisement.TryGetValue(
+                        x.AdvertisementId,
+                        out var metric);
 
-            model.TopAdvertisements = SortReportItems(model.TopAdvertisements, filter).ToList();
+                    var safeDuration = Math.Clamp(
+                        x.DurationDaysSnapshot,
+                        1,
+                        365);
+
+                    var dailyPriceYer = decimal.Round(
+                        x.PriceSnapshot / safeDuration,
+                        2,
+                        MidpointRounding.AwayFromZero);
+
+                    var dailyPrice = Money(dailyPriceYer, x.Region);
+                    var totalAmount = Money(x.PriceSnapshot, x.Region);
+
+                    return new AdminAdvertisementReportItemDto
+                    {
+                        AdvertisementId = x.AdvertisementId,
+                        PlaceId = x.PlaceId,
+                        AdvertisementPlanId = x.AdvertisementPlanId,
+                        Title = x.Title,
+                        PlaceName = x.PlaceName,
+                        PlanName = x.PlanName,
+                        DisplayWeight = x.PrioritySnapshot,
+                        DurationDays = safeDuration,
+                        DailyPrice = dailyPrice,
+                        TotalAmount = totalAmount,
+                        PlacementLabel = "صفحة البحث - أعلى الفئات",
+                        BillingLabel = "سعر يومي",
+                        StatusLabel = AdminStatusLabel(x.Status, x.PaymentStatus),
+                        PaymentStatusLabel = AdvertisementLookups.PaymentLabel(x.PaymentStatus),
+                        CreatedAt = x.CreatedAt,
+                        PaidAmount = string.Equals(
+                            x.PaymentStatus,
+                            "Paid",
+                            StringComparison.OrdinalIgnoreCase)
+                                ? totalAmount
+                                : 0m,
+                        SpentAmount = 0m,
+                        Impressions = metric?.Impressions ?? 0,
+                        Clicks = metric?.Clicks ?? 0,
+                        BookingStarts = metric?.BookingStarts ?? 0,
+                        Conversions = metric?.Conversions ?? 0
+                    };
+                })
+                .ToList();
+
+            model.TopAdvertisements = SortReportItems(
+                    model.TopAdvertisements,
+                    filter)
+                .ToList();
+
             return model;
         }
 
@@ -979,7 +1189,13 @@ namespace YemenGuide.Web.Services.Advertisements
             {
                 request ??= new AdminAdvertisementPlanUpsertDto();
 
-                // القيم التالية ثابتة داخليًا ولا يختارها الأدمن.
+                // الواجهة تعرض سعر الباقة بعملة بروفايل الأدمن، لكن قاعدة البيانات
+                // يجب أن تبقى YER. بما أن الباقة عامة وغير مرتبطة بمدينة نستخدم
+                // سوق صنعاء كمرجع ثابت ذهابًا وإيابًا لهذا السعر الإداري.
+                request.DailyPrice = await ConvertPlanInputToYerAsync(
+                    request.DailyPrice,
+                    cancellationToken);
+
                 request.PlacementType = UnifiedPlacement;
                 request.BillingModel = "Flat";
                 request.UnitPrice = request.DailyPrice;
@@ -1001,27 +1217,33 @@ namespace YemenGuide.Web.Services.Advertisements
 
                 if (request.AdvertisementPlanId.GetValueOrDefault() > 0)
                 {
-                    plan = await _context.AdvertisementPlans.FirstOrDefaultAsync(
-                        x => x.AdvertisementPlanId == request.AdvertisementPlanId.Value,
-                        cancellationToken);
+                    plan = await _context.AdvertisementPlans
+                        .FirstOrDefaultAsync(
+                            x => x.AdvertisementPlanId ==
+                                 request.AdvertisementPlanId.Value,
+                            cancellationToken);
 
                     if (plan == null)
-                        return AdminAdvertisementOperationResult.Fail("الباقة غير موجودة.");
+                        return AdminAdvertisementOperationResult.Fail(
+                            "الباقة غير موجودة.");
 
                     oldValues = PlanAudit(plan);
                 }
 
                 var duplicateName = await _context.AdvertisementPlans
                     .AsNoTracking()
-                    .AnyAsync(x =>
-                        x.AdvertisementPlanId != request.AdvertisementPlanId.GetValueOrDefault() &&
-                        x.PlacementType == UnifiedPlacement &&
-                        x.PlanName == request.PlanName,
+                    .AnyAsync(
+                        x => x.AdvertisementPlanId !=
+                             request.AdvertisementPlanId.GetValueOrDefault() &&
+                             x.PlacementType == UnifiedPlacement &&
+                             x.PlanName == request.PlanName,
                         cancellationToken);
 
                 if (duplicateName)
+                {
                     return AdminAdvertisementOperationResult.Fail(
                         "يوجد بالفعل باقة بنفس الاسم. اختر اسمًا مختلفًا.");
+                }
 
                 if (plan == null)
                 {
@@ -1049,7 +1271,6 @@ namespace YemenGuide.Web.Services.Advertisements
                         "تعذر حفظ الباقة في قاعدة البيانات. تحقق من أن اسم الباقة غير مكرر ثم حاول مرة أخرى.");
                 }
 
-                // سجل العمليات مهم، لكن فشل السجل لا يجب أن يحول عملية حفظ ناجحة إلى HTTP 500.
                 try
                 {
                     await _audit.LogAsync(
@@ -1131,7 +1352,8 @@ namespace YemenGuide.Web.Services.Advertisements
             CancellationToken cancellationToken = default)
         {
             if (advertisementPlanId <= 0)
-                return AdminAdvertisementOperationResult.Fail("معرّف الباقة غير صحيح.");
+                return AdminAdvertisementOperationResult.Fail(
+                    "معرّف الباقة غير صحيح.");
 
             var plan = await _context.AdvertisementPlans
                 .FirstOrDefaultAsync(
@@ -1155,7 +1377,6 @@ namespace YemenGuide.Web.Services.Advertisements
 
             var oldValues = PlanAudit(plan);
             var planName = plan.PlanName;
-
             _context.AdvertisementPlans.Remove(plan);
 
             try
@@ -1164,7 +1385,11 @@ namespace YemenGuide.Web.Services.Advertisements
             }
             catch (DbUpdateException exception)
             {
-                _logger.LogError(exception, "تعذر حذف باقة الإعلانات رقم {PlanId}.", advertisementPlanId);
+                _logger.LogError(
+                    exception,
+                    "تعذر حذف باقة الإعلانات رقم {PlanId}.",
+                    advertisementPlanId);
+
                 return AdminAdvertisementOperationResult.Fail(
                     "تعذر حذف الباقة لأنها مرتبطة ببيانات أخرى. يمكنك إيقافها بدلًا من ذلك.");
             }
@@ -1199,45 +1424,75 @@ namespace YemenGuide.Web.Services.Advertisements
             int adminUserId,
             CancellationToken cancellationToken = default)
         {
-            var ad = await _context.Advertisements.FirstOrDefaultAsync(x => x.AdvertisementId == request.AdvertisementId, cancellationToken);
-            if (ad == null) return AdminAdvertisementOperationResult.Fail("الإعلان غير موجود.");
-            if (ad.PaymentStatus != "PendingReview") return AdminAdvertisementOperationResult.Fail("إثبات الدفع ليس قيد المراجعة حالياً.");
+            var ad = await _context.Advertisements.FirstOrDefaultAsync(
+                x => x.AdvertisementId == request.AdvertisementId,
+                cancellationToken);
+
+            if (ad == null)
+                return AdminAdvertisementOperationResult.Fail("الإعلان غير موجود.");
+
+            if (ad.PaymentStatus != "PendingReview")
+            {
+                return AdminAdvertisementOperationResult.Fail(
+                    "إثبات الدفع ليس قيد المراجعة حالياً.");
+            }
 
             var decision = request.Decision?.Trim();
+
             if (string.Equals(decision, "Approve", StringComparison.OrdinalIgnoreCase))
             {
-                var expected = ad.BillingModelSnapshot == "Flat" ? ad.PriceSnapshot : ad.TotalBudget ?? ad.PriceSnapshot;
-                if (!ad.TransferredAmount.HasValue || ad.TransferredAmount.Value < expected)
-                    return AdminAdvertisementOperationResult.Fail("المبلغ المحول أقل من المبلغ المطلوب للإعلان.");
-                if (string.IsNullOrWhiteSpace(ad.ReceiptImage) || string.IsNullOrWhiteSpace(ad.ReferenceNumber))
-                    return AdminAdvertisementOperationResult.Fail("بيانات إثبات الدفع غير مكتملة.");
+                var expected = ad.BillingModelSnapshot == "Flat"
+                    ? ad.PriceSnapshot
+                    : ad.TotalBudget ?? ad.PriceSnapshot;
+
+                if (!ad.TransferredAmount.HasValue ||
+                    ad.TransferredAmount.Value < expected)
+                {
+                    return AdminAdvertisementOperationResult.Fail(
+                        "المبلغ المحول أقل من المبلغ المطلوب للإعلان.");
+                }
+
+                if (string.IsNullOrWhiteSpace(ad.ReceiptImage) ||
+                    string.IsNullOrWhiteSpace(ad.ReferenceNumber))
+                {
+                    return AdminAdvertisementOperationResult.Fail(
+                        "بيانات إثبات الدفع غير مكتملة.");
+                }
 
                 ad.PaymentStatus = "Paid";
+
                 if (ad.Status == "Cancelled")
                 {
-                    // أُلغي الإعلان قبل بدء العرض بينما كان إثبات الدفع قيد المراجعة.
-                    // بعد اعتماد الحوالة يصبح المبلغ بانتظار تنفيذ الاسترداد من الإدارة.
-                    ad.CancellationReason = EnsureRefundPendingMarker(ad.CancellationReason);
+                    ad.CancellationReason = EnsureRefundPendingMarker(
+                        ad.CancellationReason);
                     ad.RefundRequestedAt ??= DateTime.Now;
                 }
                 else if (ad.Status == "AwaitingPayment")
                 {
                     ad.Status = "Pending";
                 }
+
                 ad.RejectionReason = null;
             }
-            else if (string.Equals(decision, "Reject", StringComparison.OrdinalIgnoreCase))
+            else if (string.Equals(
+                         decision,
+                         "Reject",
+                         StringComparison.OrdinalIgnoreCase))
             {
-                if (string.IsNullOrWhiteSpace(request.Reason)) return AdminAdvertisementOperationResult.Fail("اكتب سبب رفض إثبات الدفع.");
+                if (string.IsNullOrWhiteSpace(request.Reason))
+                {
+                    return AdminAdvertisementOperationResult.Fail(
+                        "اكتب سبب رفض إثبات الدفع.");
+                }
+
                 ad.PaymentStatus = "Rejected";
+
                 if (ad.Status != "Cancelled")
                 {
                     ad.Status = "AwaitingPayment";
                 }
                 else
                 {
-                    // ألغى المالك الإعلان بينما كان إثبات الدفع قيد المراجعة، ثم رُفض الإثبات.
-                    // لا يوجد مبلغ مؤكد لاسترداده؛ نغلق طلب الاسترداد الشرطي ونحتفظ بالإعلان ملغياً.
                     ad.RefundRequestedAt = null;
                     ad.RefundAmount = null;
                     ad.RefundWalletId = null;
@@ -1249,16 +1504,31 @@ namespace YemenGuide.Web.Services.Advertisements
                     ad.RefundedByUserId = null;
                     ad.RefundNote = null;
                 }
+
                 ad.RejectionReason = Clean(request.Reason, 500);
             }
-            else return AdminAdvertisementOperationResult.Fail("قرار مراجعة الدفع غير صحيح.");
+            else
+            {
+                return AdminAdvertisementOperationResult.Fail(
+                    "قرار مراجعة الدفع غير صحيح.");
+            }
 
             ad.ReviewedAt = DateTime.Now;
             ad.ReviewedByUserId = adminUserId;
             ad.UpdatedAt = DateTime.Now;
+
             await _context.SaveChangesAsync(cancellationToken);
-            await _audit.LogAsync(adminUserId, "Advertisements.PaymentReviewed", "Advertisement", ad.AdvertisementId.ToString(),
-                "مراجعة إثبات دفع إعلان.", null, new { decision, ad.PaymentStatus, request.Reason }, cancellationToken: cancellationToken);
+
+            await _audit.LogAsync(
+                adminUserId,
+                "Advertisements.PaymentReviewed",
+                "Advertisement",
+                ad.AdvertisementId.ToString(),
+                "مراجعة إثبات دفع إعلان.",
+                null,
+                new { decision, ad.PaymentStatus, request.Reason },
+                cancellationToken: cancellationToken);
+
             var paymentMessage = ad.PaymentStatus == "Paid"
                 ? (ad.Status == "Cancelled"
                     ? "تم اعتماد الدفع. الإعلان ملغى قبل بدء العرض والمبلغ الآن بانتظار تنفيذ الاسترداد."
@@ -1266,6 +1536,7 @@ namespace YemenGuide.Web.Services.Advertisements
                 : (ad.Status == "Cancelled"
                     ? "تم رفض إثبات الدفع مع إبقاء الإعلان ملغى."
                     : "تم رفض إثبات الدفع وإبلاغ المالك بالسبب.");
+
             return AdminAdvertisementOperationResult.Ok(paymentMessage);
         }
 
@@ -1274,45 +1545,97 @@ namespace YemenGuide.Web.Services.Advertisements
             int adminUserId,
             CancellationToken cancellationToken = default)
         {
-            var ad = await _context.Advertisements.FirstOrDefaultAsync(x => x.AdvertisementId == request.AdvertisementId, cancellationToken);
-            if (ad == null) return AdminAdvertisementOperationResult.Fail("الإعلان غير موجود.");
-            if (ad.Status != "Pending" && ad.Status != "Rejected") return AdminAdvertisementOperationResult.Fail("الإعلان ليس في حالة تسمح بالمراجعة.");
+            var ad = await _context.Advertisements.FirstOrDefaultAsync(
+                x => x.AdvertisementId == request.AdvertisementId,
+                cancellationToken);
+
+            if (ad == null)
+                return AdminAdvertisementOperationResult.Fail("الإعلان غير موجود.");
+
+            if (ad.Status != "Pending" && ad.Status != "Rejected")
+            {
+                return AdminAdvertisementOperationResult.Fail(
+                    "الإعلان ليس في حالة تسمح بالمراجعة.");
+            }
 
             var decision = request.Decision?.Trim();
+
             if (string.Equals(decision, "Approve", StringComparison.OrdinalIgnoreCase))
             {
-                if (ad.PaymentStatus != "Paid") return AdminAdvertisementOperationResult.Fail("يجب اعتماد الدفع قبل الموافقة على الإعلان.");
+                if (ad.PaymentStatus != "Paid")
+                {
+                    return AdminAdvertisementOperationResult.Fail(
+                        "يجب اعتماد الدفع قبل الموافقة على الإعلان.");
+                }
+
                 var now = DateTime.Now;
-                var requestedStart = ad.StartImmediately == true ? now : ad.RequestedStartAt ?? now;
+                var requestedStart = ad.StartImmediately == true
+                    ? now
+                    : ad.RequestedStartAt ?? now;
                 var originalStart = ad.StartAt ?? ad.RequestedStartAt ?? requestedStart;
                 var durationDays = ad.EndAt.HasValue && ad.EndAt > originalStart
-                    ? (int)Math.Ceiling((ad.EndAt.Value - originalStart).TotalDays - 0.000001d)
+                    ? (int)Math.Ceiling(
+                        (ad.EndAt.Value - originalStart).TotalDays - 0.000001d)
                     : Math.Max(1, ad.DurationDaysSnapshot);
+
                 durationDays = Math.Clamp(durationDays, 1, 365);
                 var duration = TimeSpan.FromDays(durationDays);
                 ad.StartAt = requestedStart < now ? now : requestedStart;
                 ad.EndAt = ad.StartAt.Value.Add(duration);
-                ad.Status = ad.StartAt.Value > now.AddMinutes(1) ? "Scheduled" : "Active";
+                ad.Status = ad.StartAt.Value > now.AddMinutes(1)
+                    ? "Scheduled"
+                    : "Active";
                 ad.RejectionReason = null;
             }
-            else if (string.Equals(decision, "Reject", StringComparison.OrdinalIgnoreCase) ||
-                     string.Equals(decision, "Changes", StringComparison.OrdinalIgnoreCase))
+            else if (string.Equals(
+                         decision,
+                         "Reject",
+                         StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(
+                         decision,
+                         "Changes",
+                         StringComparison.OrdinalIgnoreCase))
             {
-                if (string.IsNullOrWhiteSpace(request.Reason)) return AdminAdvertisementOperationResult.Fail("اكتب سبب الرفض أو التعديلات المطلوبة.");
+                if (string.IsNullOrWhiteSpace(request.Reason))
+                {
+                    return AdminAdvertisementOperationResult.Fail(
+                        "اكتب سبب الرفض أو التعديلات المطلوبة.");
+                }
+
                 ad.Status = "Rejected";
-                ad.RejectionReason = string.Equals(decision, "Changes", StringComparison.OrdinalIgnoreCase)
-                    ? "مطلوب تعديل: " + Clean(request.Reason, 485)
-                    : Clean(request.Reason, 500);
+                ad.RejectionReason = string.Equals(
+                    decision,
+                    "Changes",
+                    StringComparison.OrdinalIgnoreCase)
+                        ? "مطلوب تعديل: " + Clean(request.Reason, 485)
+                        : Clean(request.Reason, 500);
             }
-            else return AdminAdvertisementOperationResult.Fail("قرار المراجعة غير صحيح.");
+            else
+            {
+                return AdminAdvertisementOperationResult.Fail(
+                    "قرار المراجعة غير صحيح.");
+            }
 
             ad.ReviewedAt = DateTime.Now;
             ad.ReviewedByUserId = adminUserId;
             ad.UpdatedAt = DateTime.Now;
+
             await _context.SaveChangesAsync(cancellationToken);
-            await _audit.LogAsync(adminUserId, "Advertisements.ContentReviewed", "Advertisement", ad.AdvertisementId.ToString(),
-                "مراجعة محتوى إعلان.", null, new { decision, ad.Status, ad.RejectionReason }, cancellationToken: cancellationToken);
-            return AdminAdvertisementOperationResult.Ok(ad.Status is "Active" or "Scheduled" ? "تم اعتماد الإعلان بنجاح." : "تمت إعادة الإعلان للمالك مع الملاحظة.");
+
+            await _audit.LogAsync(
+                adminUserId,
+                "Advertisements.ContentReviewed",
+                "Advertisement",
+                ad.AdvertisementId.ToString(),
+                "مراجعة محتوى إعلان.",
+                null,
+                new { decision, ad.Status, ad.RejectionReason },
+                cancellationToken: cancellationToken);
+
+            return AdminAdvertisementOperationResult.Ok(
+                ad.Status is "Active" or "Scheduled"
+                    ? "تم اعتماد الإعلان بنجاح."
+                    : "تمت إعادة الإعلان للمالك مع الملاحظة.");
         }
 
         public async Task<AdminAdvertisementOperationResult> ProcessRefundAsync(
@@ -1322,19 +1645,31 @@ namespace YemenGuide.Web.Services.Advertisements
         {
             var ad = await _context.Advertisements
                 .Include(x => x.Owner)
-                .FirstOrDefaultAsync(x => x.AdvertisementId == request.AdvertisementId, cancellationToken);
+                .Include(x => x.Place)
+                    .ThenInclude(x => x.City)
+                .FirstOrDefaultAsync(
+                    x => x.AdvertisementId == request.AdvertisementId,
+                    cancellationToken);
 
             if (ad == null)
                 return AdminAdvertisementOperationResult.Fail("الإعلان غير موجود.");
 
             if (!IsRefundPending(ad))
-                return AdminAdvertisementOperationResult.Fail("هذا الإعلان لا يملك مبلغ استرداد معلقاً.");
+            {
+                return AdminAdvertisementOperationResult.Fail(
+                    "هذا الإعلان لا يملك مبلغ استرداد معلقاً.");
+            }
 
-            if (ad.RefundedAt.HasValue || string.Equals(ad.PaymentStatus, "Refunded", StringComparison.OrdinalIgnoreCase))
-                return AdminAdvertisementOperationResult.Fail("تم تنفيذ استرداد هذا الإعلان مسبقاً.");
+            if (ad.RefundedAt.HasValue ||
+                string.Equals(
+                    ad.PaymentStatus,
+                    "Refunded",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return AdminAdvertisementOperationResult.Fail(
+                    "تم تنفيذ استرداد هذا الإعلان مسبقاً.");
+            }
 
-            // إذا اختار المالك وجهة الاسترداد عند الإلغاء فهي الوجهة المعتمدة للعملية.
-            // الإدارة توثق التحويل ولا تغيّر حساب الاستلام الذي حدده المالك.
             var hasOwnerSelectedDestination =
                 ad.RefundRequestedAt.HasValue &&
                 ad.RefundWalletId.HasValue &&
@@ -1358,16 +1693,18 @@ namespace YemenGuide.Web.Services.Advertisements
 
             var wallet = await _context.SupportedWallets
                 .AsNoTracking()
-                .FirstOrDefaultAsync(x =>
-                    x.WalletId == request.RefundWalletId &&
-                    (hasOwnerSelectedDestination || x.IsActive == true),
+                .FirstOrDefaultAsync(
+                    x => x.WalletId == request.RefundWalletId &&
+                         (hasOwnerSelectedDestination || x.IsActive == true),
                     cancellationToken);
 
             if (wallet == null)
+            {
                 return AdminAdvertisementOperationResult.Fail(
                     hasOwnerSelectedDestination
                         ? "وسيلة الاسترداد التي اختارها المالك لم تعد موجودة."
                         : "وسيلة الاسترداد غير موجودة أو غير مفعلة.");
+            }
 
             var accountNumber = Clean(request.RefundAccountNumber, 100);
             var beneficiaryName = Clean(request.RefundBeneficiaryName, 150);
@@ -1376,57 +1713,84 @@ namespace YemenGuide.Web.Services.Advertisements
             var note = Clean(request.RefundNote, 500);
 
             if (string.IsNullOrWhiteSpace(accountNumber))
-                return AdminAdvertisementOperationResult.Fail("رقم الحساب أو المحفظة التي تم رد المبلغ إليها مطلوب.");
+            {
+                return AdminAdvertisementOperationResult.Fail(
+                    "رقم الحساب أو المحفظة التي تم رد المبلغ إليها مطلوب.");
+            }
 
             if (string.IsNullOrWhiteSpace(beneficiaryName))
                 return AdminAdvertisementOperationResult.Fail("اسم المستفيد مطلوب.");
 
-            if (string.IsNullOrWhiteSpace(referenceNumber) || referenceNumber.Length < 3)
-                return AdminAdvertisementOperationResult.Fail("رقم مرجع عملية الاسترداد مطلوب.");
-
-            if (string.IsNullOrWhiteSpace(proofImage) ||
-                !proofImage.StartsWith("/uploads/advertisements/refunds/", StringComparison.OrdinalIgnoreCase))
+            if (string.IsNullOrWhiteSpace(referenceNumber) ||
+                referenceNumber.Length < 3)
             {
-                return AdminAdvertisementOperationResult.Fail("إثبات تحويل مبلغ الاسترداد مطلوب.");
+                return AdminAdvertisementOperationResult.Fail(
+                    "رقم مرجع عملية الاسترداد مطلوب.");
             }
 
-            if (request.OwnerWalletId.HasValue && request.OwnerWalletId.Value > 0)
+            if (string.IsNullOrWhiteSpace(proofImage) ||
+                !proofImage.StartsWith(
+                    "/uploads/advertisements/refunds/",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return AdminAdvertisementOperationResult.Fail(
+                    "إثبات تحويل مبلغ الاسترداد مطلوب.");
+            }
+
+            if (request.OwnerWalletId.HasValue &&
+                request.OwnerWalletId.Value > 0)
             {
                 var ownerDestination = await _context.OwnerWallets
                     .AsNoTracking()
-                    .FirstOrDefaultAsync(x =>
-                        x.OwnerWalletId == request.OwnerWalletId.Value &&
-                        x.OwnerId == ad.OwnerId &&
-                        x.IsActive == true,
+                    .FirstOrDefaultAsync(
+                        x => x.OwnerWalletId == request.OwnerWalletId.Value &&
+                             x.OwnerId == ad.OwnerId &&
+                             x.IsActive == true,
                         cancellationToken);
 
                 if (ownerDestination == null)
-                    return AdminAdvertisementOperationResult.Fail("محفظة المالك المختارة لم تعد متاحة.");
+                {
+                    return AdminAdvertisementOperationResult.Fail(
+                        "محفظة المالك المختارة لم تعد متاحة.");
+                }
 
                 if (ownerDestination.WalletId != request.RefundWalletId ||
-                    !string.Equals(ownerDestination.AccountNumber?.Trim(), accountNumber, StringComparison.OrdinalIgnoreCase) ||
-                    !string.Equals(ownerDestination.BeneficiaryName?.Trim(), beneficiaryName, StringComparison.OrdinalIgnoreCase))
+                    !string.Equals(
+                        ownerDestination.AccountNumber?.Trim(),
+                        accountNumber,
+                        StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(
+                        ownerDestination.BeneficiaryName?.Trim(),
+                        beneficiaryName,
+                        StringComparison.OrdinalIgnoreCase))
                 {
-                    return AdminAdvertisementOperationResult.Fail("بيانات محفظة المالك تغيرت. أعد فتح الإعلان واختر المحفظة من جديد.");
+                    return AdminAdvertisementOperationResult.Fail(
+                        "بيانات محفظة المالك تغيرت. أعد فتح الإعلان واختر المحفظة من جديد.");
                 }
             }
 
             var duplicateReference = await _context.Advertisements
                 .AsNoTracking()
-                .AnyAsync(x =>
-                    x.AdvertisementId != ad.AdvertisementId &&
-                    x.RefundReferenceNumber != null &&
-                    x.RefundReferenceNumber == referenceNumber,
+                .AnyAsync(
+                    x => x.AdvertisementId != ad.AdvertisementId &&
+                         x.RefundReferenceNumber != null &&
+                         x.RefundReferenceNumber == referenceNumber,
                     cancellationToken);
 
             if (duplicateReference)
-                return AdminAdvertisementOperationResult.Fail("رقم مرجع الاسترداد مستخدم في استرداد إعلان آخر.");
+            {
+                return AdminAdvertisementOperationResult.Fail(
+                    "رقم مرجع الاسترداد مستخدم في استرداد إعلان آخر.");
+            }
 
-            if (!ad.TransferredAmount.HasValue || ad.TransferredAmount.Value <= 0m)
-                return AdminAdvertisementOperationResult.Fail("لا يوجد مبلغ محول فعلي صالح للاسترداد لهذا الإعلان.");
+            if (!ad.TransferredAmount.HasValue ||
+                ad.TransferredAmount.Value <= 0m)
+            {
+                return AdminAdvertisementOperationResult.Fail(
+                    "لا يوجد مبلغ محول فعلي صالح للاسترداد لهذا الإعلان.");
+            }
 
             var refundAmount = ad.TransferredAmount.Value;
-
             var now = DateTime.Now;
             var cleanReason = CleanCancellationReason(ad.CancellationReason);
 
@@ -1444,6 +1808,8 @@ namespace YemenGuide.Web.Services.Advertisements
             ad.CancellationReason = cleanReason;
             ad.UpdatedAt = now;
 
+            // إشعار المالك يبقى بالقيمة المحاسبية الأصلية المسجلة للإعلان؛
+            // لا نستبدلها بعملة الأدمن حتى لا نخلط تفضيل مستخدم بمستخدم آخر.
             _notificationService.Queue(new CreateNotificationDto
             {
                 UserId = ad.OwnerId,
@@ -1464,10 +1830,13 @@ namespace YemenGuide.Web.Services.Advertisements
             }
             catch (DbUpdateException exception)
             {
-                _logger.LogError(exception,
+                _logger.LogError(
+                    exception,
                     "Failed to process advertisement refund for advertisement {AdvertisementId}",
                     ad.AdvertisementId);
-                return AdminAdvertisementOperationResult.Fail("تعذر حفظ عملية الاسترداد. لم يتم اعتمادها، حاول مرة أخرى.");
+
+                return AdminAdvertisementOperationResult.Fail(
+                    "تعذر حفظ عملية الاسترداد. لم يتم اعتمادها، حاول مرة أخرى.");
             }
 
             try
@@ -1494,13 +1863,20 @@ namespace YemenGuide.Web.Services.Advertisements
             }
             catch (Exception exception)
             {
-                _logger.LogWarning(exception,
+                _logger.LogWarning(
+                    exception,
                     "Refund was completed but audit logging failed for advertisement {AdvertisementId}",
                     ad.AdvertisementId);
             }
 
+            var displayCurrency = await GetDisplayCurrencyAsync(cancellationToken);
+            var displayRefund = ConvertDisplayMoney(
+                refundAmount,
+                displayCurrency,
+                ad.Place?.City?.ExchangeRateRegion);
+
             return AdminAdvertisementOperationResult.Ok(
-                $"تم توثيق استرداد {refundAmount:N2} {ad.Currency} وإشعار المالك بنجاح.",
+                $"تم توثيق استرداد {FormatDisplayMoney(displayRefund, displayCurrency)} وإشعار المالك بنجاح.",
                 ad.AdvertisementId);
         }
 
@@ -1509,8 +1885,13 @@ namespace YemenGuide.Web.Services.Advertisements
             int adminUserId,
             CancellationToken cancellationToken = default)
         {
-            var ad = await _context.Advertisements.FirstOrDefaultAsync(x => x.AdvertisementId == request.AdvertisementId, cancellationToken);
-            if (ad == null) return AdminAdvertisementOperationResult.Fail("الإعلان غير موجود.");
+            var ad = await _context.Advertisements.FirstOrDefaultAsync(
+                x => x.AdvertisementId == request.AdvertisementId,
+                cancellationToken);
+
+            if (ad == null)
+                return AdminAdvertisementOperationResult.Fail("الإعلان غير موجود.");
+
             var oldStatus = ad.Status;
             var oldPaymentStatus = ad.PaymentStatus;
             var action = request.Action?.Trim();
@@ -1519,19 +1900,43 @@ namespace YemenGuide.Web.Services.Advertisements
 
             if (string.Equals(action, "Pause", StringComparison.OrdinalIgnoreCase))
             {
-                if (ad.Status is not ("Active" or "Scheduled")) return AdminAdvertisementOperationResult.Fail("لا يمكن إيقاف الإعلان في حالته الحالية.");
-                if (string.IsNullOrWhiteSpace(request.Reason)) return AdminAdvertisementOperationResult.Fail("اكتب سبب إيقاف الإعلان.");
+                if (ad.Status is not ("Active" or "Scheduled"))
+                {
+                    return AdminAdvertisementOperationResult.Fail(
+                        "لا يمكن إيقاف الإعلان في حالته الحالية.");
+                }
+
+                if (string.IsNullOrWhiteSpace(request.Reason))
+                    return AdminAdvertisementOperationResult.Fail("اكتب سبب إيقاف الإعلان.");
+
                 ad.Status = "Paused";
                 ad.PausedAt = now;
                 ad.PauseReason = Clean(request.Reason, 500);
             }
             else if (string.Equals(action, "Resume", StringComparison.OrdinalIgnoreCase))
             {
-                if (ad.Status != "Paused") return AdminAdvertisementOperationResult.Fail("الإعلان غير متوقف حالياً.");
-                if (ad.PaymentStatus != "Paid") return AdminAdvertisementOperationResult.Fail("لا يمكن استئناف إعلان غير مدفوع.");
-                if (ad.EndAt.HasValue && ad.EndAt <= now) return AdminAdvertisementOperationResult.Fail("انتهت مدة الإعلان ولا يمكن استئنافه.");
-                if (ad.TotalBudget.HasValue && ad.SpentAmount >= ad.TotalBudget.Value) return AdminAdvertisementOperationResult.Fail("نفدت ميزانية الإعلان.");
-                ad.Status = ad.StartAt.HasValue && ad.StartAt > now ? "Scheduled" : "Active";
+                if (ad.Status != "Paused")
+                    return AdminAdvertisementOperationResult.Fail("الإعلان غير متوقف حالياً.");
+
+                if (ad.PaymentStatus != "Paid")
+                    return AdminAdvertisementOperationResult.Fail("لا يمكن استئناف إعلان غير مدفوع.");
+
+                if (ad.EndAt.HasValue && ad.EndAt <= now)
+                {
+                    return AdminAdvertisementOperationResult.Fail(
+                        "انتهت مدة الإعلان ولا يمكن استئنافه.");
+                }
+
+                if (ad.TotalBudget.HasValue &&
+                    ad.SpentAmount >= ad.TotalBudget.Value)
+                {
+                    return AdminAdvertisementOperationResult.Fail(
+                        "نفدت ميزانية الإعلان.");
+                }
+
+                ad.Status = ad.StartAt.HasValue && ad.StartAt > now
+                    ? "Scheduled"
+                    : "Active";
                 ad.PausedAt = null;
                 ad.PauseReason = null;
             }
@@ -1542,80 +1947,74 @@ namespace YemenGuide.Web.Services.Advertisements
             }
             else if (string.Equals(action, "Cancel", StringComparison.OrdinalIgnoreCase))
             {
-                if (ad.Status is "Expired" or "Cancelled") return AdminAdvertisementOperationResult.Fail("الإعلان منتهٍ أو ملغى مسبقاً.");
-                if (string.IsNullOrWhiteSpace(request.Reason)) return AdminAdvertisementOperationResult.Fail("اكتب سبب إلغاء الإعلان.");
+                if (ad.Status is "Expired" or "Cancelled")
+                {
+                    return AdminAdvertisementOperationResult.Fail(
+                        "الإعلان منتهٍ أو ملغى مسبقاً.");
+                }
+
+                if (string.IsNullOrWhiteSpace(request.Reason))
+                    return AdminAdvertisementOperationResult.Fail("اكتب سبب إلغاء الإعلان.");
+
                 ad.Status = "Cancelled";
                 ad.CancellationReason = Clean(request.Reason, 500);
             }
-            else return AdminAdvertisementOperationResult.Fail("العملية المطلوبة غير صحيحة.");
+            else
+            {
+                return AdminAdvertisementOperationResult.Fail(
+                    "العملية المطلوبة غير صحيحة.");
+            }
 
             ad.UpdatedAt = now;
             await _context.SaveChangesAsync(cancellationToken);
-            await _audit.LogAsync(adminUserId, "Advertisements.StatusChanged", "Advertisement", ad.AdvertisementId.ToString(),
+
+            await _audit.LogAsync(
+                adminUserId,
+                "Advertisements.StatusChanged",
+                "Advertisement",
+                ad.AdvertisementId.ToString(),
                 "تغيير حالة إعلان.",
                 new { status = oldStatus, paymentStatus = oldPaymentStatus },
-                new { ad.Status, ad.PaymentStatus, request.Reason }, cancellationToken: cancellationToken);
+                new { ad.Status, ad.PaymentStatus, request.Reason },
+                cancellationToken: cancellationToken);
+
             return AdminAdvertisementOperationResult.Ok(resultMessage);
         }
 
         private IQueryable<Advertisement> AdsWithRelations() =>
-            _context.Advertisements.AsNoTracking()
+            _context.Advertisements
+                .AsNoTracking()
                 .Include(x => x.Owner)
                 .Include(x => x.Place)
+                    .ThenInclude(x => x.City)
                 .Include(x => x.AdvertisementPlan)
                 .Include(x => x.Promotion)
                 .Include(x => x.AdvertisementMedium)
                 .AsSplitQuery();
 
-        private async Task<List<AdminPlacementMetricDto>> BuildPlacementMetricsAsync(
-            DateTime? from,
-            DateTime? to,
-            CancellationToken cancellationToken)
-        {
-            var query = _context.Advertisements.AsNoTracking();
-            if (from.HasValue) query = query.Where(x => x.CreatedAt >= from.Value);
-            if (to.HasValue) query = query.Where(x => x.CreatedAt < to.Value);
-            var raw = await query.GroupBy(x => x.PlacementTypeSnapshot)
-                .Select(g => new
-                {
-                    PlacementType = g.Key,
-                    Advertisements = g.Count(),
-                    Impressions = g.Sum(x => x.ImpressionsCount),
-                    Clicks = g.Sum(x => x.ClicksCount),
-                    Conversions = g.Sum(x => x.ConversionsCount),
-                    SpentAmount = g.Sum(x => x.SpentAmount)
-                })
-                .OrderByDescending(x => x.Impressions)
-                .Take(8)
-                .ToListAsync(cancellationToken);
-            return raw.Select(x => new AdminPlacementMetricDto
-            {
-                PlacementType = x.PlacementType,
-                PlacementLabel = "صفحة البحث - أعلى الفئات",
-                Advertisements = x.Advertisements,
-                Impressions = x.Impressions,
-                Clicks = x.Clicks,
-                Conversions = x.Conversions,
-                SpentAmount = x.SpentAmount
-            }).ToList();
-        }
-
-        private static AdminAdvertisementCardDto MapCard(Advertisement ad)
+        private AdminAdvertisementCardDto MapCard(
+            Advertisement ad,
+            string displayCurrency)
         {
             string? attention = IsRefundPending(ad)
                 ? "استرداد مبلغ إعلان بانتظار التنفيذ"
                 : ad.PaymentStatus == "PendingReview"
                     ? "إثبات الدفع بانتظار المراجعة"
                     : ad.Status switch
-                {
-                    "Pending" => "محتوى الإعلان بانتظار المراجعة",
-                    "AwaitingPayment" => "بانتظار استكمال أو تصحيح الدفع",
-                    "Active" when ad.EndAt.HasValue &&
-                                  ad.EndAt >= DateTime.Now &&
-                                  ad.EndAt <= DateTime.Now.AddDays(3)
-                        => "ينتهي خلال أقل من ثلاثة أيام",
-                    _ => null
-                };
+                    {
+                        "Pending" => "محتوى الإعلان بانتظار المراجعة",
+                        "AwaitingPayment" => "بانتظار استكمال أو تصحيح الدفع",
+                        "Active" when ad.EndAt.HasValue &&
+                                      ad.EndAt >= DateTime.Now &&
+                                      ad.EndAt <= DateTime.Now.AddDays(3)
+                            => "ينتهي خلال أقل من ثلاثة أيام",
+                        _ => null
+                    };
+
+            var price = ConvertDisplayMoney(
+                ad.PriceSnapshot,
+                displayCurrency,
+                ad.Place?.City?.ExchangeRateRegion);
 
             return new AdminAdvertisementCardDto
             {
@@ -1636,8 +2035,8 @@ namespace YemenGuide.Web.Services.Advertisements
                 StatusLabel = AdminStatusLabel(ad.Status, ad.PaymentStatus),
                 PaymentStatus = ad.PaymentStatus,
                 PaymentStatusLabel = AdvertisementLookups.PaymentLabel(ad.PaymentStatus),
-                Price = ad.PriceSnapshot,
-                Currency = ad.Currency,
+                Price = price,
+                Currency = displayCurrency,
                 TotalBudget = null,
                 SpentAmount = 0m,
                 Impressions = ad.ImpressionsCount,
@@ -1658,38 +2057,27 @@ namespace YemenGuide.Web.Services.Advertisements
             ad.Place.CoverImage ??
             ad.Place.LogoImage;
 
-        private static decimal UnitPrice(AdvertisementPlan plan) => plan.Price;
-
-        private static void ApplyPlan(AdvertisementPlan plan, AdminAdvertisementPlanUpsertDto request)
+        private static void ApplyPlan(
+            AdvertisementPlan plan,
+            AdminAdvertisementPlanUpsertDto request)
         {
             plan.PlanName = request.PlanName.Trim();
-
-            // ثوابت النظام الجديد.
             plan.PlacementType = UnifiedPlacement;
             plan.DurationType = "Daily";
             plan.DurationDays = 1;
-            plan.Currency = "ريال يمني";
+
+            // التخزين المحاسبي يظل YER دائمًا.
+            plan.Currency = CurrencyDisplayService.YemeniRial;
             plan.BillingModel = "Flat";
-
-            // Price أصبح سعر اليوم.
             plan.Price = request.DailyPrice;
-
-            // لا يوجد CPC/CPM أو ميزانيات في النظام الجديد.
             plan.CostPerClick = null;
             plan.CostPerThousandImpressions = null;
             plan.MinimumTotalBudget = null;
             plan.DefaultDailyBudget = null;
-
-            // لا نقيّد عدد الإعلانات عبر الباقة.
             plan.MaxActiveAdvertisements = int.MaxValue;
-
-            // DisplayPriority أصبح وزن الظهور.
             plan.DisplayPriority = request.DisplayWeight;
-
-            // كل إعلان له وسيط واحد: صورة أو فيديو، والفيديو متاح لكل الباقات.
             plan.MaxMediaItems = 1;
             plan.AllowVideo = true;
-
             plan.Description = Clean(request.Description, 500);
             plan.IsActive = request.IsActive;
             plan.UpdatedAt = DateTime.Now;
@@ -1706,12 +2094,111 @@ namespace YemenGuide.Web.Services.Advertisements
             plan.IsActive
         };
 
-        private static string NormalizeTab(string? tab, AdminAdvertisementManagementPageDto model)
+        private async Task<string> GetDisplayCurrencyAsync(
+            CancellationToken cancellationToken)
+        {
+            var currency = await _currencyDisplayService.GetPreferredCurrencyAsync(
+                cancellationToken);
+
+            var normalized = CurrencyDisplayService.NormalizeCurrency(currency);
+            return string.IsNullOrWhiteSpace(normalized)
+                ? CurrencyDisplayService.YemeniRial
+                : normalized;
+        }
+
+        private decimal ConvertDisplayMoney(
+            decimal amountInYer,
+            string displayCurrency,
+            string? exchangeRateRegion)
+        {
+            return _currencyService.ConvertAmount(
+                amountInYer,
+                displayCurrency,
+                exchangeRateRegion);
+        }
+
+        private async Task<decimal> ConvertPlanInputToYerAsync(
+            decimal amountInDisplayCurrency,
+            CancellationToken cancellationToken)
+        {
+            var currency = await GetDisplayCurrencyAsync(cancellationToken);
+
+            if (currency == CurrencyDisplayService.YemeniRial)
+            {
+                return Math.Round(
+                    amountInDisplayCurrency,
+                    2,
+                    MidpointRounding.AwayFromZero);
+            }
+
+            var rates = await _context.SystemSettings
+                .AsNoTracking()
+                .OrderBy(x => x.Id)
+                .Select(x => new
+                {
+                    x.SanaaUsdRate,
+                    x.SanaaSarRate
+                })
+                .FirstOrDefaultAsync(cancellationToken);
+
+            var usdRate = rates?.SanaaUsdRate ?? FallbackSanaaUsdRate;
+            var sarRate = rates?.SanaaSarRate ?? FallbackSanaaSarRate;
+
+            if (usdRate <= 0m)
+                usdRate = FallbackSanaaUsdRate;
+
+            if (sarRate <= 0m)
+                sarRate = FallbackSanaaSarRate;
+
+            var result = currency switch
+            {
+                CurrencyDisplayService.UsDollar =>
+                    amountInDisplayCurrency * usdRate,
+                CurrencyDisplayService.SaudiRiyal =>
+                    amountInDisplayCurrency * sarRate,
+                _ => amountInDisplayCurrency
+            };
+
+            return Math.Round(
+                result,
+                2,
+                MidpointRounding.AwayFromZero);
+        }
+
+        private static string FormatDisplayMoney(
+            decimal convertedAmount,
+            string displayCurrency)
+        {
+            var number = CurrencyDisplayService.FormatNumber(
+                convertedAmount,
+                displayCurrency);
+
+            return CurrencyDisplayService.NormalizeCurrency(displayCurrency) switch
+            {
+                CurrencyDisplayService.UsDollar => $"${number}",
+                CurrencyDisplayService.SaudiRiyal => $"{number} ر.س",
+                _ => $"{number} ر.ي"
+            };
+        }
+
+        private static string NormalizeTab(
+            string? tab,
+            AdminAdvertisementManagementPageDto model)
         {
             var normalized = tab?.Trim().ToLowerInvariant();
-            if (normalized == "ads" && model.CanView) return "ads";
-            if (normalized == "placements" && model.CanManagePlans) return "placements";
-            if (normalized == "reports" && model.CanViewReports) return "reports";
+
+            if (normalized == "ads" && model.CanView)
+                return "ads";
+
+            if ((normalized == "plans" || normalized == "placements") &&
+                model.CanManagePlans)
+            {
+                return "plans";
+            }
+
+            if (normalized == "reports" && model.CanViewReports)
+                return "reports";
+
             return "overview";
         }
 
@@ -1721,15 +2208,22 @@ namespace YemenGuide.Web.Services.Advertisements
         {
             if (filter.PlaceId.HasValue)
                 query = query.Where(x => x.PlaceId == filter.PlaceId.Value);
+
             if (filter.AdvertisementId.HasValue)
                 query = query.Where(x => x.AdvertisementId == filter.AdvertisementId.Value);
+
             if (filter.AdvertisementPlanId.HasValue)
-                query = query.Where(x => x.AdvertisementPlanId == filter.AdvertisementPlanId.Value);
-            // النظام الجديد موحّد بسعر يومي؛ نتجاهل فلتر طرق التسعير القديمة.
+            {
+                query = query.Where(
+                    x => x.AdvertisementPlanId == filter.AdvertisementPlanId.Value);
+            }
+
             if (!IsAll(filter.Status))
                 query = query.Where(x => x.Status == filter.Status);
+
             if (!IsAll(filter.PaymentStatus))
                 query = query.Where(x => x.PaymentStatus == filter.PaymentStatus);
+
             if (!string.IsNullOrWhiteSpace(filter.Search))
             {
                 var search = filter.Search.Trim();
@@ -1739,6 +2233,7 @@ namespace YemenGuide.Web.Services.Advertisements
                     x.Owner.FullName.Contains(search) ||
                     (x.ReferenceNumber != null && x.ReferenceNumber.Contains(search)));
             }
+
             return query;
         }
 
@@ -1749,33 +2244,70 @@ namespace YemenGuide.Web.Services.Advertisements
         {
             end = (filter.To ?? DateTime.Today).Date.AddDays(1);
             start = (filter.From ?? end.AddDays(-30)).Date;
-            if (start >= end) start = end.AddDays(-30);
-            if ((end - start).TotalDays > 366) start = end.AddDays(-366);
+
+            if (start >= end)
+                start = end.AddDays(-30);
+
+            if ((end - start).TotalDays > 366)
+                start = end.AddDays(-366);
 
             filter.From = start;
             filter.To = end.AddDays(-1);
-            filter.PlaceId = filter.PlaceId.GetValueOrDefault() > 0 ? filter.PlaceId : null;
-            filter.AdvertisementId = filter.AdvertisementId.GetValueOrDefault() > 0 ? filter.AdvertisementId : null;
-            filter.AdvertisementPlanId = filter.AdvertisementPlanId.GetValueOrDefault() > 0
-                ? filter.AdvertisementPlanId
+            filter.PlaceId = filter.PlaceId.GetValueOrDefault() > 0
+                ? filter.PlaceId
                 : null;
+            filter.AdvertisementId = filter.AdvertisementId.GetValueOrDefault() > 0
+                ? filter.AdvertisementId
+                : null;
+            filter.AdvertisementPlanId =
+                filter.AdvertisementPlanId.GetValueOrDefault() > 0
+                    ? filter.AdvertisementPlanId
+                    : null;
             filter.PlacementType = "All";
             filter.BillingModel = "All";
-            filter.Status = NormalizeReportChoice(filter.Status,
-                new[] { "Draft", "AwaitingPayment", "Pending", "Scheduled", "Active", "Paused", "Expired", "Rejected", "Cancelled" });
-            filter.PaymentStatus = NormalizeReportChoice(filter.PaymentStatus,
+            filter.Status = NormalizeReportChoice(
+                filter.Status,
+                new[]
+                {
+                    "Draft", "AwaitingPayment", "Pending", "Scheduled",
+                    "Active", "Paused", "Expired", "Rejected", "Cancelled"
+                });
+            filter.PaymentStatus = NormalizeReportChoice(
+                filter.PaymentStatus,
                 new[] { "Unpaid", "PendingReview", "Paid", "Rejected", "Refunded" });
             filter.Search = Clean(filter.Search, 100);
-            filter.SortBy = NormalizeReportChoice(filter.SortBy,
-                new[] { "Impressions", "Clicks", "BookingStarts", "Conversions", "Revenue", "SpentAmount", "Newest" });
-            if (IsAll(filter.SortBy)) filter.SortBy = "Impressions";
-            filter.SortDirection = string.Equals(filter.SortDirection, "Asc", StringComparison.OrdinalIgnoreCase) ? "Asc" : "Desc";
+            filter.SortBy = NormalizeReportChoice(
+                filter.SortBy,
+                new[]
+                {
+                    "Impressions", "Clicks", "BookingStarts", "Conversions",
+                    "Revenue", "SpentAmount", "Newest"
+                });
+
+            if (IsAll(filter.SortBy))
+                filter.SortBy = "Impressions";
+
+            filter.SortDirection = string.Equals(
+                filter.SortDirection,
+                "Asc",
+                StringComparison.OrdinalIgnoreCase)
+                    ? "Asc"
+                    : "Desc";
         }
 
-        private static string NormalizeReportChoice(string? value, IEnumerable<string> allowed)
+        private static string NormalizeReportChoice(
+            string? value,
+            IEnumerable<string> allowed)
         {
-            if (IsAll(value)) return "All";
-            return allowed.FirstOrDefault(x => string.Equals(x, value, StringComparison.OrdinalIgnoreCase)) ?? "All";
+            if (IsAll(value))
+                return "All";
+
+            return allowed.FirstOrDefault(x =>
+                       string.Equals(
+                           x,
+                           value,
+                           StringComparison.OrdinalIgnoreCase)) ??
+                   "All";
         }
 
         private static string BuildReportScopeLabel(
@@ -1786,20 +2318,32 @@ namespace YemenGuide.Web.Services.Advertisements
         {
             if (filter.AdvertisementId.HasValue)
             {
-                var advertisement = advertisements.FirstOrDefault(x => x.Id == filter.AdvertisementId.Value);
-                return advertisement == null ? "تقرير إعلان محدد" : $"تقرير الإعلان: {advertisement.Label}";
+                var advertisement = advertisements.FirstOrDefault(
+                    x => x.Id == filter.AdvertisementId.Value);
+
+                return advertisement == null
+                    ? "تقرير إعلان محدد"
+                    : $"تقرير الإعلان: {advertisement.Label}";
             }
 
             if (filter.PlaceId.HasValue)
             {
-                var place = places.FirstOrDefault(x => x.Id == filter.PlaceId.Value);
-                return place == null ? "تقرير منشأة محددة" : $"تقرير المنشأة: {place.Label}";
+                var place = places.FirstOrDefault(
+                    x => x.Id == filter.PlaceId.Value);
+
+                return place == null
+                    ? "تقرير منشأة محددة"
+                    : $"تقرير المنشأة: {place.Label}";
             }
 
             if (filter.AdvertisementPlanId.HasValue)
             {
-                var plan = plans.FirstOrDefault(x => x.Id == filter.AdvertisementPlanId.Value);
-                return plan == null ? "تقرير باقة محددة" : $"تقرير الباقة: {plan.Label}";
+                var plan = plans.FirstOrDefault(
+                    x => x.Id == filter.AdvertisementPlanId.Value);
+
+                return plan == null
+                    ? "تقرير باقة محددة"
+                    : $"تقرير الباقة: {plan.Label}";
             }
 
             return "التقرير العام للمنصة";
@@ -1818,17 +2362,25 @@ namespace YemenGuide.Web.Services.Advertisements
 
             if (filter.AdvertisementPlanId.HasValue)
             {
-                var plan = plans.FirstOrDefault(x => x.Id == filter.AdvertisementPlanId.Value);
+                var plan = plans.FirstOrDefault(
+                    x => x.Id == filter.AdvertisementPlanId.Value);
+
                 values.Add(plan == null
                     ? $"الباقة: #{filter.AdvertisementPlanId.Value}"
                     : $"الباقة: {plan.Label}");
             }
 
             if (!IsAll(filter.Status))
-                values.Add($"الحالة: {AdvertisementLookups.StatusLabel(filter.Status)}");
+            {
+                values.Add(
+                    $"الحالة: {AdvertisementLookups.StatusLabel(filter.Status)}");
+            }
 
             if (!IsAll(filter.PaymentStatus))
-                values.Add($"الدفع: {AdvertisementLookups.PaymentLabel(filter.PaymentStatus)}");
+            {
+                values.Add(
+                    $"الدفع: {AdvertisementLookups.PaymentLabel(filter.PaymentStatus)}");
+            }
 
             if (!string.IsNullOrWhiteSpace(filter.Search))
                 values.Add($"البحث: {filter.Search}");
@@ -1852,7 +2404,6 @@ namespace YemenGuide.Web.Services.Advertisements
             if (!string.IsNullOrWhiteSpace(sessionKey))
                 return $"{advertisementId}|S:{sessionKey}";
 
-            // fallback آمن للبيانات القديمة التي لا تحتوي هوية زائر.
             return $"{advertisementId}|E:{advertisementEventId}";
         }
 
@@ -1870,29 +2421,61 @@ namespace YemenGuide.Web.Services.Advertisements
             IEnumerable<AdminAdvertisementReportItemDto> items,
             AdminAdvertisementReportFilterDto filter)
         {
-            var ascending = string.Equals(filter.SortDirection, "Asc", StringComparison.OrdinalIgnoreCase);
+            var ascending = string.Equals(
+                filter.SortDirection,
+                "Asc",
+                StringComparison.OrdinalIgnoreCase);
+
             return filter.SortBy switch
             {
-                "Clicks" => ascending ? items.OrderBy(x => x.Clicks) : items.OrderByDescending(x => x.Clicks),
-                "BookingStarts" => ascending ? items.OrderBy(x => x.BookingStarts) : items.OrderByDescending(x => x.BookingStarts),
-                "Conversions" => ascending ? items.OrderBy(x => x.Conversions) : items.OrderByDescending(x => x.Conversions),
-                "Revenue" => ascending ? items.OrderBy(x => x.PaidAmount) : items.OrderByDescending(x => x.PaidAmount),
-                "SpentAmount" => ascending ? items.OrderBy(x => x.SpentAmount) : items.OrderByDescending(x => x.SpentAmount),
-                "Newest" => ascending ? items.OrderBy(x => x.CreatedAt) : items.OrderByDescending(x => x.CreatedAt),
-                _ => ascending ? items.OrderBy(x => x.Impressions) : items.OrderByDescending(x => x.Impressions)
+                "Clicks" => ascending
+                    ? items.OrderBy(x => x.Clicks)
+                    : items.OrderByDescending(x => x.Clicks),
+                "BookingStarts" => ascending
+                    ? items.OrderBy(x => x.BookingStarts)
+                    : items.OrderByDescending(x => x.BookingStarts),
+                "Conversions" => ascending
+                    ? items.OrderBy(x => x.Conversions)
+                    : items.OrderByDescending(x => x.Conversions),
+                "Revenue" => ascending
+                    ? items.OrderBy(x => x.PaidAmount)
+                    : items.OrderByDescending(x => x.PaidAmount),
+                "SpentAmount" => ascending
+                    ? items.OrderBy(x => x.SpentAmount)
+                    : items.OrderByDescending(x => x.SpentAmount),
+                "Newest" => ascending
+                    ? items.OrderBy(x => x.CreatedAt)
+                    : items.OrderByDescending(x => x.CreatedAt),
+                _ => ascending
+                    ? items.OrderBy(x => x.Impressions)
+                    : items.OrderByDescending(x => x.Impressions)
             };
         }
 
-        private static string AdminStatusLabel(string? status, string? paymentStatus)
+        private static string AdminStatusLabel(
+            string? status,
+            string? paymentStatus)
         {
-            if (string.Equals(status, "Pending", StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(paymentStatus, "Paid", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(
+                    status,
+                    "Pending",
+                    StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(
+                    paymentStatus,
+                    "Paid",
+                    StringComparison.OrdinalIgnoreCase))
             {
                 return "بانتظار اعتماد الإعلان";
             }
 
-            if (string.Equals(status, "Pending", StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(paymentStatus, "PendingReview", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(
+                    status,
+                    "Pending",
+                    StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(
+                    paymentStatus,
+                    "PendingReview",
+                    StringComparison.OrdinalIgnoreCase))
             {
                 return "بانتظار مراجعة الدفع";
             }
@@ -1904,29 +2487,45 @@ namespace YemenGuide.Web.Services.Advertisements
             ad.Status == "Cancelled" &&
             ad.PaymentStatus == "Paid" &&
             !string.IsNullOrWhiteSpace(ad.CancellationReason) &&
-            ad.CancellationReason.StartsWith(RefundPendingMarker, StringComparison.Ordinal);
+            ad.CancellationReason.StartsWith(
+                RefundPendingMarker,
+                StringComparison.Ordinal);
 
         private static string EnsureRefundPendingMarker(string? reason)
         {
             var cleanReason = CleanCancellationReason(reason);
-            return RefundPendingMarker + (string.IsNullOrWhiteSpace(cleanReason) ? "إلغاء المالك قبل بدء العرض." : cleanReason);
+
+            return RefundPendingMarker +
+                   (string.IsNullOrWhiteSpace(cleanReason)
+                       ? "إلغاء المالك قبل بدء العرض."
+                       : cleanReason);
         }
 
         private static string? CleanCancellationReason(string? reason)
         {
-            if (string.IsNullOrWhiteSpace(reason)) return null;
-            return reason.StartsWith(RefundPendingMarker, StringComparison.Ordinal)
-                ? reason[RefundPendingMarker.Length..].Trim()
-                : reason.Trim();
+            if (string.IsNullOrWhiteSpace(reason))
+                return null;
+
+            return reason.StartsWith(
+                RefundPendingMarker,
+                StringComparison.Ordinal)
+                    ? reason[RefundPendingMarker.Length..].Trim()
+                    : reason.Trim();
         }
 
-        private static bool IsAll(string? value) => string.IsNullOrWhiteSpace(value) || string.Equals(value, "All", StringComparison.OrdinalIgnoreCase);
+        private static bool IsAll(string? value) =>
+            string.IsNullOrWhiteSpace(value) ||
+            string.Equals(value, "All", StringComparison.OrdinalIgnoreCase);
 
         private static string? Clean(string? value, int max)
         {
-            if (string.IsNullOrWhiteSpace(value)) return null;
+            if (string.IsNullOrWhiteSpace(value))
+                return null;
+
             var cleaned = value.Trim();
-            return cleaned.Length <= max ? cleaned : cleaned[..max];
+            return cleaned.Length <= max
+                ? cleaned
+                : cleaned[..max];
         }
     }
 }

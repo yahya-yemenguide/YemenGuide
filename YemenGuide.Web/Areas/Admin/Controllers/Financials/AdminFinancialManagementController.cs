@@ -11,7 +11,9 @@ using Microsoft.Extensions.Logging;
 using YemenGuide.Core.Constants;
 using YemenGuide.Core.DTOs.Admin;
 using YemenGuide.Web.Filters;
+using YemenGuide.Web.Services;
 using YemenGuide.Web.Services.Employees;
+using YemenGuide.Web.Services.ExchangeRates;
 using YemenGuide.Web.Services.Finance;
 
 namespace YemenGuide.Web.Areas.Admin.Controllers.Financials
@@ -25,13 +27,22 @@ namespace YemenGuide.Web.Areas.Admin.Controllers.Financials
         private const string PartialViewPath =
             "~/Areas/Admin/Views/AdminFinancials/_AdminFinancialManagement.cshtml";
 
+        // الإعدادات المالية العامة لا ترتبط بمنشأة/مدينة بعينها،
+        // لذلك نستخدم سوق صنعاء كمرجع الصرف الافتراضي لهذه القيم العامة فقط.
+        private const string FinancialSettingsRegion =
+            ExchangeRateRegionResolver.SanaaMarket;
+
         private readonly IAdminFinancialService _adminFinancialService;
         private readonly IAdminPermissionService _adminPermissionService;
+        private readonly CurrencyDisplayService _currencyDisplayService;
+        private readonly CurrencyService _currencyService;
         private readonly ILogger<AdminFinancialManagementController> _logger;
 
         public AdminFinancialManagementController(
             IAdminFinancialService adminFinancialService,
             IAdminPermissionService adminPermissionService,
+            CurrencyDisplayService currencyDisplayService,
+            CurrencyService currencyService,
             ILogger<AdminFinancialManagementController> logger)
         {
             _adminFinancialService = adminFinancialService ??
@@ -39,6 +50,12 @@ namespace YemenGuide.Web.Areas.Admin.Controllers.Financials
 
             _adminPermissionService = adminPermissionService ??
                 throw new ArgumentNullException(nameof(adminPermissionService));
+
+            _currencyDisplayService = currencyDisplayService ??
+                throw new ArgumentNullException(nameof(currencyDisplayService));
+
+            _currencyService = currencyService ??
+                throw new ArgumentNullException(nameof(currencyService));
 
             _logger = logger ??
                 throw new ArgumentNullException(nameof(logger));
@@ -76,9 +93,14 @@ namespace YemenGuide.Web.Areas.Admin.Controllers.Financials
                     return Forbid();
                 }
 
+                var displayCurrency =
+                    await _currencyDisplayService.GetPreferredCurrencyAsync(
+                        cancellationToken);
+
                 var model = new AdminFinancialManagementPageDto
                 {
-                    LoadedAt = DateTime.Now
+                    LoadedAt = DateTime.Now,
+                    Currency = displayCurrency
                 };
 
                 if (canManageSettings)
@@ -87,11 +109,11 @@ namespace YemenGuide.Web.Areas.Admin.Controllers.Financials
                         await _adminFinancialService.GetFinancialSettingsAsync(
                             cancellationToken);
 
-                    model.Currency =
-                        string.IsNullOrWhiteSpace(
-                            model.Settings.Settings.DefaultCurrency)
-                            ? "ريال يمني"
-                            : model.Settings.Settings.DefaultCurrency.Trim();
+                    // الخدمة المالية تتعمد إبقاء Settings بقيم YER الخام.
+                    // هنا فقط نحول نسخة العرض إلى عملة بروفايل الأدمن.
+                    ConvertSettingsForDisplay(
+                        model.Settings.Settings,
+                        displayCurrency);
                 }
                 else
                 {
@@ -100,22 +122,11 @@ namespace YemenGuide.Web.Areas.Admin.Controllers.Financials
 
                 if (canManagePlatformWallets)
                 {
+                    // هذه الصفحة يطبق عليها AdminFinancialService التحويل أصلًا.
                     model.PlatformWallets =
                         await _adminFinancialService.GetPlatformWalletsAsync(
                             walletFilter ?? new AdminPlatformWalletFilterDto(),
                             cancellationToken);
-
-                    if (!canManageSettings)
-                    {
-                        var shell =
-                            await _adminFinancialService.GetShellAsync(
-                                AdminFinancialTabs.Overview,
-                                cancellationToken);
-
-                        model.Currency = string.IsNullOrWhiteSpace(shell.Currency)
-                            ? "ريال يمني"
-                            : shell.Currency.Trim();
-                    }
                 }
                 else
                 {
@@ -195,6 +206,16 @@ namespace YemenGuide.Web.Areas.Admin.Controllers.Financials
 
             try
             {
+                var displayCurrency =
+                    await _currencyDisplayService.GetPreferredCurrencyAsync(
+                        cancellationToken);
+
+                // القيم وصلت من الحقول بعملة بروفايل الأدمن؛
+                // نعيدها إلى YER قبل تمريرها لخدمة الحفظ وقاعدة البيانات.
+                ConvertSettingsInputToYer(
+                    request,
+                    displayCurrency);
+
                 var result =
                     await _adminFinancialService.SaveFinancialSettingsAsync(
                         request,
@@ -214,11 +235,18 @@ namespace YemenGuide.Web.Areas.Admin.Controllers.Financials
                     await _adminFinancialService.GetFinancialSettingsAsync(
                         cancellationToken);
 
+                // نجعل الاستجابة نفسها متوافقة مع عملة العرض أيضًا،
+                // حتى لو استخدمتها الواجهة لاحقًا بدون Reload.
+                ConvertSettingsForDisplay(
+                    updated.Settings,
+                    displayCurrency);
+
                 return Ok(new
                 {
                     success = true,
                     message = result.Message,
                     entityId = result.EntityId,
+                    currency = displayCurrency,
                     settings = updated.Settings,
                     categoryCommissions = updated.CategoryCommissions,
                     loadedAt = updated.LoadedAt
@@ -505,6 +533,69 @@ namespace YemenGuide.Web.Areas.Admin.Controllers.Financials
                     message = "تعذر تعيين الحساب الرئيسي. لم يتم تنفيذ التغيير."
                 });
             }
+        }
+
+        private void ConvertSettingsForDisplay(
+            AdminFinancialSettingsDto? settings,
+            string displayCurrency)
+        {
+            if (settings == null)
+            {
+                return;
+            }
+
+            settings.MinimumCommissionTopUp =
+                _currencyService.ConvertAmount(
+                    settings.MinimumCommissionTopUp,
+                    displayCurrency,
+                    FinancialSettingsRegion);
+
+            settings.DefaultLowBalanceThreshold =
+                _currencyService.ConvertAmount(
+                    settings.DefaultLowBalanceThreshold,
+                    displayCurrency,
+                    FinancialSettingsRegion);
+
+            settings.DefaultCommissionDebtLimit =
+                _currencyService.ConvertAmount(
+                    settings.DefaultCommissionDebtLimit,
+                    displayCurrency,
+                    FinancialSettingsRegion);
+
+            settings.RequiredCommissionGuaranteeBalance =
+                _currencyService.ConvertAmount(
+                    settings.RequiredCommissionGuaranteeBalance,
+                    displayCurrency,
+                    FinancialSettingsRegion);
+        }
+
+        private void ConvertSettingsInputToYer(
+            AdminFinancialSettingsUpdateDto request,
+            string displayCurrency)
+        {
+            request.MinimumCommissionTopUp =
+                _currencyService.ConvertToYer(
+                    request.MinimumCommissionTopUp,
+                    displayCurrency,
+                    FinancialSettingsRegion);
+
+            request.DefaultLowBalanceThreshold =
+                _currencyService.ConvertToYer(
+                    request.DefaultLowBalanceThreshold,
+                    displayCurrency,
+                    FinancialSettingsRegion);
+
+            request.DefaultCommissionDebtLimit =
+                _currencyService.ConvertToYer(
+                    request.DefaultCommissionDebtLimit,
+                    displayCurrency,
+                    FinancialSettingsRegion);
+
+            request.RequiredCommissionGuaranteeBalance =
+                _currencyService.ConvertToYer(
+                    request.RequiredCommissionGuaranteeBalance,
+                    displayCurrency,
+                    FinancialSettingsRegion);
         }
 
         private static bool TryNormalizeAccountNumber(

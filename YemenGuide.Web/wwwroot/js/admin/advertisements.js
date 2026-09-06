@@ -4,6 +4,9 @@
     const app = document.getElementById("adminAdvertisementsApp");
     if (!app) return;
 
+    const displayCurrency = String(app.dataset.displayCurrency || "ريال يمني").trim() || "ريال يمني";
+    const currencySymbol = String(app.dataset.currencySymbol || "ر.ي").trim() || "ر.ي";
+
     const token = app.querySelector('input[name="__RequestVerificationToken"]')?.value || "";
     const urls = {
         overview: app.dataset.overviewUrl || "",
@@ -69,11 +72,8 @@
             button.setAttribute("aria-selected", active ? "true" : "false");
         });
 
-        // أزرار الطباعة والحفظ تظهر في الشريط العلوي فقط عند فتح تبويب التقارير.
         const reportToolbar = app.querySelector("[data-report-toolbar]");
-        if (reportToolbar) {
-            reportToolbar.hidden = tab !== "reports";
-        }
+        if (reportToolbar) reportToolbar.hidden = tab !== "reports";
 
         if (push) {
             const url = new URL(window.location.href);
@@ -88,9 +88,7 @@
             );
         }
 
-        if (tab === "reports") {
-            window.setTimeout(() => loadReports(), 30);
-        }
+        if (tab === "reports") window.setTimeout(() => loadReports(), 30);
     }
 
     function onClick(event) {
@@ -286,7 +284,6 @@
         if (!grid || !data) return;
 
         if (count) count.textContent = number(data.totalCount);
-
         updateSubtabCounts(data);
 
         const items = Array.isArray(data.items) ? data.items : [];
@@ -319,7 +316,6 @@
                     <img src="${image}" alt="" onerror="this.src='/images/default-category.jpg'">
                     ${attention}
                 </button>
-
                 <div class="admx-ad-row__main">
                     <div class="admx-ad-row__title">
                         <h3>${esc(item.title)}</h3>
@@ -328,14 +324,12 @@
                     </div>
                     <p>${esc(item.placeName)} <span>•</span> ${esc(item.ownerName || "")}</p>
                 </div>
-
                 <div class="admx-ad-row__metrics">
                     <span><small>الباقة</small><strong>${esc(item.planName || "—")}</strong></span>
                     <span><small>وزن الظهور</small><strong>${number(item.displayWeight)}</strong></span>
                     <span><small>المشاهدات</small><strong>${number(item.impressions)}</strong></span>
                     <span><small>النقرات</small><strong>${number(item.clicks)}</strong></span>
                 </div>
-
                 <button type="button" class="admx-row-open" data-admx-details="${toInt(item.advertisementId)}" title="عرض التفاصيل">
                     <i class="bi bi-chevron-left"></i>
                 </button>
@@ -408,7 +402,6 @@
     function toggleAdsMobileFilter(button) {
         const panel = document.getElementById("admxAdsAdvancedFilter");
         if (!panel) return;
-
         const open = panel.classList.toggle("is-open");
         button.classList.toggle("is-active", open);
         button.setAttribute("aria-expanded", open ? "true" : "false");
@@ -422,7 +415,6 @@
         setField(form, "PaymentStatus", "All");
         setField(form, "BillingModel", "All");
         setField(form, "SortBy", "Newest");
-        setField(form, "Status", "All");
         setField(form, "ExactStatus", "All");
         setField(form, "Page", "1");
         app.querySelectorAll("[data-ad-group]").forEach(button => {
@@ -452,9 +444,7 @@
         const device = deviceLabel(item.deviceTarget);
         const appearanceTime = item.startImmediately
             ? "بعد موافقة الإدارة"
-            : (item.requestedStartAt
-                ? `من ${dateTime(item.requestedStartAt)}`
-                : "تاريخ مستقبلي محدد");
+            : (item.requestedStartAt ? `من ${dateTime(item.requestedStartAt)}` : "تاريخ مستقبلي محدد");
         const isRefundedCancellation = item.status === "Cancelled" && item.paymentStatus === "Refunded";
         const statusLabel = isRefundedCancellation ? "ملغي" : item.statusLabel;
         const paymentStatusLabel = isRefundedCancellation ? "تم الاسترداد" : item.paymentStatusLabel;
@@ -477,11 +467,9 @@
         if (canControl && item.status === "Active") {
             actions.push(`<button type="button" class="admx-swal-action is-warning" data-ad-action="pause"><i class="bi bi-pause-circle"></i> إيقاف مؤقت</button>`);
         }
-
         if (canControl && item.status === "Paused") {
             actions.push(`<button type="button" class="admx-swal-action is-success" data-ad-action="resume"><i class="bi bi-play-circle"></i> استئناف</button>`);
         }
-
         if (canControl && !["Cancelled", "Expired"].includes(item.status)) {
             actions.push(`<button type="button" class="admx-swal-action is-danger ghost" data-ad-action="cancel"><i class="bi bi-x-octagon"></i> إلغاء الإعلان</button>`);
         }
@@ -489,7 +477,6 @@
         const promotion = item.promotionName
             ? `<article><small>العرض المرتبط</small><strong>${esc(item.promotionName)}</strong></article>`
             : "";
-
         const paymentMeta = item.referenceNumber
             ? `<article><small>رقم الحوالة</small><strong>${esc(item.referenceNumber)}</strong></article>`
             : "";
@@ -512,11 +499,7 @@
                         <span class="billing"><i class="bi bi-box-seam"></i>${esc(item.planName || "باقة إعلانية")}</span>
                     </div>
 
-                    <div class="admx-luxury-review__section-title">
-                        <i class="bi bi-info-circle"></i>
-                        <span>بيانات الإعلان</span>
-                    </div>
-
+                    <div class="admx-luxury-review__section-title"><i class="bi bi-info-circle"></i><span>بيانات الإعلان</span></div>
                     <div class="admx-luxury-review__info">
                         <article><small>المنشأة</small><strong>${esc(item.placeName || "—")}</strong></article>
                         <article><small>المالك</small><strong>${esc(item.ownerName || "—")}</strong></article>
@@ -527,11 +510,7 @@
                         ${promotion}
                     </div>
 
-                    <div class="admx-luxury-review__section-title">
-                        <i class="bi bi-calendar3"></i>
-                        <span>المدة والسعر</span>
-                    </div>
-
+                    <div class="admx-luxury-review__section-title"><i class="bi bi-calendar3"></i><span>المدة والسعر</span></div>
                     <div class="admx-luxury-review__info">
                         <article><small>سعر اليوم</small><strong>${money(item.dailyPrice)}</strong></article>
                         <article><small>الإجمالي</small><strong>${money(item.totalAmount ?? item.price)}</strong></article>
@@ -540,11 +519,7 @@
                         <article><small>نهاية العرض</small><strong>${dateTime(item.endAt)}</strong></article>
                     </div>
 
-                    <div class="admx-luxury-review__section-title">
-                        <i class="bi bi-graph-up-arrow"></i>
-                        <span>الأداء</span>
-                    </div>
-
+                    <div class="admx-luxury-review__section-title"><i class="bi bi-graph-up-arrow"></i><span>الأداء</span></div>
                     <div class="admx-luxury-review__performance">
                         <article><i class="bi bi-eye"></i><small>المشاهدات</small><strong>${number(item.impressions)}</strong></article>
                         <article><i class="bi bi-cursor"></i><small>النقرات</small><strong>${number(item.clicks)}</strong></article>
@@ -558,16 +533,10 @@
                     </a>` : ""}
 
                     ${item.rejectionReason ? `
-                    <div class="admx-luxury-review__note">
-                        <i class="bi bi-exclamation-circle"></i>
-                        <div><strong>ملاحظة المراجعة</strong><p>${esc(item.rejectionReason)}</p></div>
-                    </div>` : ""}
+                    <div class="admx-luxury-review__note"><i class="bi bi-exclamation-circle"></i><div><strong>ملاحظة المراجعة</strong><p>${esc(item.rejectionReason)}</p></div></div>` : ""}
 
                     ${item.cancellationReason ? `
-                    <div class="admx-luxury-review__note">
-                        <i class="bi bi-arrow-counterclockwise"></i>
-                        <div><strong>${item.canRefund ? "طلب استرداد" : "سبب الإلغاء"}</strong><p>${esc(item.cancellationReason)}</p></div>
-                    </div>` : ""}
+                    <div class="admx-luxury-review__note"><i class="bi bi-arrow-counterclockwise"></i><div><strong>${item.canRefund ? "طلب استرداد" : "سبب الإلغاء"}</strong><p>${esc(item.cancellationReason)}</p></div></div>` : ""}
 
                     ${item.canRefund ? `
                     <div class="admx-luxury-review__note">
@@ -577,10 +546,7 @@
 
                     ${(item.refundedAt || item.refundProofImage || item.paymentStatus === "Refunded") ? `
                     <div class="admx-refund-proof">
-                        <div class="admx-refund-proof__head">
-                            <i class="bi bi-patch-check-fill"></i>
-                            <div><strong>تم تنفيذ الاسترداد</strong><small>${dateTime(item.refundedAt)}</small></div>
-                        </div>
+                        <div class="admx-refund-proof__head"><i class="bi bi-patch-check-fill"></i><div><strong>تم تنفيذ الاسترداد</strong><small>${dateTime(item.refundedAt)}</small></div></div>
                         <div class="admx-refund-proof__grid">
                             <article><small>المبلغ المسترد</small><strong>${money(item.refundAmount ?? item.transferredAmount ?? 0)}</strong></article>
                             <article><small>الوسيلة</small><strong>${esc(item.refundWalletName || "—")}</strong></article>
@@ -606,8 +572,7 @@
             customClass: swalClasses("admx-swal-review"),
             didOpen: popup => {
                 popup.querySelectorAll("[data-ad-action]").forEach(button => {
-                    button.addEventListener("click", () =>
-                        handleAdAction(item, button.dataset.adAction));
+                    button.addEventListener("click", () => handleAdAction(item, button.dataset.adAction));
                 });
             }
         });
@@ -659,41 +624,18 @@
                 <label class="is-wide">
                     <span>محفظة المالك المحفوظة</span>
                     <select id="admxRefundDestination">
-                        <option value="">اختر محفظة المالك</option>
-                        ${destinationOptions}
+                        <option value="">اختر محفظة المالك</option>${destinationOptions}
                     </select>
                 </label>` : "")}
 
                 <div class="admx-swal-form-grid">
                     ${ownerSelectedRefundDestination ? "" : `
-                    <label>
-                        <span>وسيلة الاسترداد</span>
-                        <select id="admxRefundWallet">
-                            <option value="">اختر الوسيلة</option>
-                            ${walletOptions}
-                        </select>
-                    </label>
-                    <label>
-                        <span>رقم الحساب / المحفظة</span>
-                        <input id="admxRefundAccount" type="text" maxlength="100" autocomplete="off">
-                    </label>
-                    <label>
-                        <span>اسم المستفيد</span>
-                        <input id="admxRefundBeneficiary" type="text" maxlength="150" autocomplete="off">
-                    </label>`}
-                    <label>
-                        <span>رقم مرجع الاسترداد</span>
-                        <input id="admxRefundReference" type="text" maxlength="100" autocomplete="off">
-                    </label>
-                    <label class="is-wide">
-                        <span>صورة إثبات التحويل</span>
-                        <input id="admxRefundProof" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp">
-                        <small class="admx-refund-form__hint">JPG / PNG / WEBP — بحد أقصى 8 MB.</small>
-                    </label>
-                    <label class="is-wide">
-                        <span>ملاحظة للإسترداد <em>اختياري</em></span>
-                        <textarea id="admxRefundNote" maxlength="500" placeholder="أي ملاحظة تساعد المالك على التحقق من العملية..."></textarea>
-                    </label>
+                    <label><span>وسيلة الاسترداد</span><select id="admxRefundWallet"><option value="">اختر الوسيلة</option>${walletOptions}</select></label>
+                    <label><span>رقم الحساب / المحفظة</span><input id="admxRefundAccount" type="text" maxlength="100" autocomplete="off"></label>
+                    <label><span>اسم المستفيد</span><input id="admxRefundBeneficiary" type="text" maxlength="150" autocomplete="off"></label>`}
+                    <label><span>رقم مرجع الاسترداد</span><input id="admxRefundReference" type="text" maxlength="100" autocomplete="off"></label>
+                    <label class="is-wide"><span>صورة إثبات التحويل</span><input id="admxRefundProof" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"><small class="admx-refund-form__hint">JPG / PNG / WEBP — بحد أقصى 8 MB.</small></label>
+                    <label class="is-wide"><span>ملاحظة للإسترداد <em>اختياري</em></span><textarea id="admxRefundNote" maxlength="500" placeholder="أي ملاحظة تساعد المالك على التحقق من العملية..."></textarea></label>
                 </div>
             </div>`;
 
@@ -713,7 +655,6 @@
                 const wallet = popup.querySelector("#admxRefundWallet");
                 const account = popup.querySelector("#admxRefundAccount");
                 const beneficiary = popup.querySelector("#admxRefundBeneficiary");
-
                 destination?.addEventListener("change", () => {
                     const option = destination.options[destination.selectedIndex];
                     if (!option?.value) return;
@@ -740,43 +681,17 @@
                 const note = String(popup.querySelector("#admxRefundNote")?.value || "").trim();
                 const proof = popup.querySelector("#admxRefundProof")?.files?.[0];
 
-                if (!walletId) {
-                    window.Swal?.showValidationMessage("اختر وسيلة الاسترداد.");
-                    return false;
-                }
-                if (!account) {
-                    window.Swal?.showValidationMessage("اكتب رقم الحساب أو المحفظة التي رُد إليها المبلغ.");
-                    return false;
-                }
-                if (!beneficiary) {
-                    window.Swal?.showValidationMessage("اكتب اسم المستفيد.");
-                    return false;
-                }
-                if (reference.length < 3) {
-                    window.Swal?.showValidationMessage("اكتب رقم مرجع عملية الاسترداد.");
-                    return false;
-                }
-                if (!proof) {
-                    window.Swal?.showValidationMessage("ارفع صورة إثبات تحويل مبلغ الاسترداد.");
-                    return false;
-                }
-                if (proof.size > 8 * 1024 * 1024) {
-                    window.Swal?.showValidationMessage("حجم الإثبات يجب ألا يتجاوز 8 ميجابايت.");
-                    return false;
-                }
-                if (!/^image\/(jpeg|png|webp)$/i.test(proof.type || "")) {
-                    window.Swal?.showValidationMessage("الإثبات يجب أن يكون صورة JPG أو PNG أو WEBP.");
-                    return false;
-                }
+                if (!walletId) { window.Swal?.showValidationMessage("اختر وسيلة الاسترداد."); return false; }
+                if (!account) { window.Swal?.showValidationMessage("اكتب رقم الحساب أو المحفظة التي رُد إليها المبلغ."); return false; }
+                if (!beneficiary) { window.Swal?.showValidationMessage("اكتب اسم المستفيد."); return false; }
+                if (reference.length < 3) { window.Swal?.showValidationMessage("اكتب رقم مرجع عملية الاسترداد."); return false; }
+                if (!proof) { window.Swal?.showValidationMessage("ارفع صورة إثبات تحويل مبلغ الاسترداد."); return false; }
+                if (proof.size > 8 * 1024 * 1024) { window.Swal?.showValidationMessage("حجم الإثبات يجب ألا يتجاوز 8 ميجابايت."); return false; }
+                if (!/^image\/(jpeg|png|webp)$/i.test(proof.type || "")) { window.Swal?.showValidationMessage("الإثبات يجب أن يكون صورة JPG أو PNG أو WEBP."); return false; }
 
                 return {
                     ownerWalletId: ownerSelectedRefundDestination ? 0 : (toInt(destination?.value) || 0),
-                    walletId,
-                    account,
-                    beneficiary,
-                    reference,
-                    note,
-                    proof
+                    walletId, account, beneficiary, reference, note, proof
                 };
             }
         });
@@ -863,15 +778,8 @@
         try {
             const response = await requestJson(cfg.url, { method: "POST", body });
             await notify("success", "تمت العملية", response?.message || "تم حفظ التغيير بنجاح.");
-
-            // بعد اعتماد محتوى الإعلان يصبح Active أو Scheduled في الخدمة،
-            // لذلك ننقله بصريًا مباشرة من «تحتاج إجراء» إلى «تعمل».
-            if (action === "content-approve") {
-                selectAdGroup("Running");
-            } else {
-                await loadAds(toInt(document.getElementById("admxAdsFilter")?.elements.Page?.value) || 1);
-            }
-
+            if (action === "content-approve") selectAdGroup("Running");
+            else await loadAds(toInt(document.getElementById("admxAdsFilter")?.elements.Page?.value) || 1);
             await refreshOverview(false);
             await refreshReportsAfterMutation();
         } catch (error) {
@@ -882,35 +790,18 @@
     function togglePlanCards(button) {
         const section = button.closest('[data-admx-section="plans"]');
         if (!section) return;
-
-        const extraCards = Array.from(
-            section.querySelectorAll('[data-extra-plan="true"]')
-        );
-
-        if (!extraCards.length) {
-            button.hidden = true;
-            return;
-        }
+        const extraCards = Array.from(section.querySelectorAll('[data-extra-plan="true"]'));
+        if (!extraCards.length) { button.hidden = true; return; }
 
         const expanded = button.getAttribute("aria-expanded") === "true";
         const nextExpanded = !expanded;
-
-        extraCards.forEach(card => {
-            card.style.display = nextExpanded ? "" : "none";
-        });
-
+        extraCards.forEach(card => { card.style.display = nextExpanded ? "" : "none"; });
         button.setAttribute("aria-expanded", nextExpanded ? "true" : "false");
 
         const label = button.querySelector("[data-plan-more-label]");
         const icon = button.querySelector("[data-plan-more-icon]");
         const hiddenCount = Number(button.dataset.hiddenCount || extraCards.length);
-
-        if (label) {
-            label.textContent = nextExpanded
-                ? "عرض أقل"
-                : `عرض المزيد (${hiddenCount})`;
-        }
-
+        if (label) label.textContent = nextExpanded ? "عرض أقل" : `عرض المزيد (${hiddenCount})`;
         if (icon) {
             icon.classList.toggle("bi-chevron-down", !nextExpanded);
             icon.classList.toggle("bi-chevron-up", nextExpanded);
@@ -919,7 +810,6 @@
 
     async function openPlanModal(id) {
         if (!urls.planForm) return;
-
         showLoading("جاري تجهيز الباقة...");
         try {
             const query = id ? `?id=${encodeURIComponent(id)}` : "";
@@ -937,27 +827,20 @@
         const html = `
             <form class="admx-plan-clean" id="admxSwalPlanForm" autocomplete="off">
                 <input type="hidden" name="AdvertisementPlanId" value="${model.advertisementPlanId || ""}">
-
                 <header class="admx-plan-clean__head">
                     <span><i class="bi bi-wallet2"></i></span>
                     <div>
                         <small>صفحة البحث - أعلى الفئات</small>
                         <h3>${editing ? "تعديل إعدادات الباقة" : "إضافة باقة إعلانية"}</h3>
-                        <p>حدد اسم الباقة وسعر اليوم ووزن الظهور. وزن الظهور يزيد فرصة الاختيار مقارنة بالإعلانات الأخرى ولا يمثل نسبة ظهور مضمونة.</p>
+                        <p>حدد اسم الباقة وسعر اليوم ووزن الظهور. السعر هنا بعملة بروفايلك الحالية: ${esc(displayCurrency)}.</p>
                     </div>
                 </header>
 
                 <section class="admx-plan-clean__budget">
                     <label>
                         <span>اسم الباقة</span>
-                        <input type="text"
-                               name="PlanName"
-                               maxlength="100"
-                               value="${esc(model.planName || "")}"
-                               placeholder="مثال: الباقة المميزة"
-                               required>
+                        <input type="text" name="PlanName" maxlength="100" value="${esc(model.planName || "")}" placeholder="مثال: الباقة المميزة" required>
                     </label>
-
                     <label>
                         <span>سعر اليوم</span>
                         <div class="admx-plan-money">
@@ -972,10 +855,9 @@
                                    value="${numValue(model.dailyPrice)}"
                                    placeholder="0"
                                    required>
-                            <b>ر.ي</b>
+                            <b>${esc(currencySymbol)}</b>
                         </div>
                     </label>
-
                     <label>
                         <span>وزن الظهور</span>
                         <input type="text"
@@ -990,22 +872,15 @@
                                required>
                         <small>من 1 إلى 100. كلما ارتفع الوزن زادت فرصة ظهور الإعلان مقارنة بالإعلانات الأخرى.</small>
                     </label>
-
                     <label class="is-wide">
                         <span>وصف الباقة <small>(اختياري)</small></span>
-                        <textarea name="Description"
-                                  maxlength="500"
-                                  rows="3"
-                                  placeholder="وصف قصير يظهر للمالك عند اختيار الباقة.">${esc(model.description || "")}</textarea>
+                        <textarea name="Description" maxlength="500" rows="3" placeholder="وصف قصير يظهر للمالك عند اختيار الباقة.">${esc(model.description || "")}</textarea>
                     </label>
                 </section>
 
                 <section class="admx-plan-clean__toggles">
                     <label>
-                        <span>
-                            <strong>الباقة مفعّلة</strong>
-                            <small>عند تفعيلها تظهر للملاك عند إنشاء إعلان جديد.</small>
-                        </span>
+                        <span><strong>الباقة مفعّلة</strong><small>عند تفعيلها تظهر للملاك عند إنشاء إعلان جديد.</small></span>
                         <input type="checkbox" name="IsActive" ${model.isActive !== false ? "checked" : ""}>
                     </label>
                 </section>
@@ -1025,7 +900,6 @@
                 popup.querySelectorAll("[data-english-number]").forEach(field => {
                     const normalize = () => {
                         let value = toEnglishDigits(String(field.value || ""));
-
                         if (field.dataset.englishNumber === "integer") {
                             value = value.replace(/[^0-9]/g, "");
                             if (value) {
@@ -1033,32 +907,23 @@
                                 value = Number.isFinite(n) ? String(n) : "";
                             }
                         } else {
-                            value = value
-                                .replace(/,/g, ".")
-                                .replace(/[^0-9.]/g, "");
-
+                            value = value.replace(/,/g, ".").replace(/[^0-9.]/g, "");
                             const firstDot = value.indexOf(".");
                             if (firstDot >= 0) {
-                                value =
-                                    value.slice(0, firstDot + 1) +
-                                    value.slice(firstDot + 1).replace(/\./g, "");
+                                value = value.slice(0, firstDot + 1) + value.slice(firstDot + 1).replace(/\./g, "");
                             }
                         }
-
                         field.value = value;
                     };
 
                     field.addEventListener("focus", () => {
-                        if (field.dataset.replaceOnType === "true" &&
-                            field.dataset.didInitialSelect !== "true") {
+                        if (field.dataset.replaceOnType === "true" && field.dataset.didInitialSelect !== "true") {
                             field.dataset.didInitialSelect = "true";
                             window.setTimeout(() => field.select(), 0);
                         }
                     });
-
                     field.addEventListener("input", normalize);
-                    field.addEventListener("paste", () =>
-                        window.setTimeout(normalize, 0));
+                    field.addEventListener("paste", () => window.setTimeout(normalize, 0));
                 });
             },
             preConfirm: async () => {
@@ -1069,18 +934,9 @@
                 const dailyPrice = Number(form.elements.DailyPrice.value || 0);
                 const displayWeight = Number(form.elements.DisplayWeight.value || 0);
 
-                if (name.length < 2) {
-                    Swal.showValidationMessage("اكتب اسمًا واضحًا للباقة.");
-                    return false;
-                }
-                if (!dailyPrice || dailyPrice <= 0) {
-                    Swal.showValidationMessage("سعر اليوم يجب أن يكون أكبر من صفر.");
-                    return false;
-                }
-                if (!displayWeight || displayWeight < 1 || displayWeight > 100) {
-                    Swal.showValidationMessage("وزن الظهور يجب أن يكون بين 1 و100.");
-                    return false;
-                }
+                if (name.length < 2) { Swal.showValidationMessage("اكتب اسمًا واضحًا للباقة."); return false; }
+                if (!dailyPrice || dailyPrice <= 0) { Swal.showValidationMessage("سعر اليوم يجب أن يكون أكبر من صفر."); return false; }
+                if (!displayWeight || displayWeight < 1 || displayWeight > 100) { Swal.showValidationMessage("وزن الظهور يجب أن يكون بين 1 و100."); return false; }
 
                 const body = new FormData(form);
                 body.set("PlanName", name);
@@ -1097,20 +953,13 @@
             }
         }).then(async result => {
             if (!result?.isConfirmed) return;
-
-            await notify(
-                "success",
-                editing ? "تم حفظ التعديلات" : "تم إنشاء الباقة",
-                result.value?.message || "تم حفظ الباقة بنجاح."
-            );
-
+            await notify("success", editing ? "تم حفظ التعديلات" : "تم إنشاء الباقة", result.value?.message || "تم حفظ الباقة بنجاح.");
             window.location.reload();
         });
     }
 
     async function deletePlan(id, planName, linkedAdvertisements) {
         if (!id || !urls.deletePlan) return;
-
         if (linkedAdvertisements > 0) {
             await fire({
                 icon: "info",
@@ -1133,27 +982,15 @@
             focusCancel: true,
             customClass: swalClasses("admx-swal-confirm")
         });
-
         if (!result?.isConfirmed) return;
 
         const body = new FormData();
         body.append("advertisementPlanId", String(id));
         appendToken(body);
-
         showLoading("جاري حذف الباقة...");
-
         try {
-            const response = await requestJson(urls.deletePlan, {
-                method: "POST",
-                body
-            });
-
-            await notify(
-                "success",
-                "تم الحذف",
-                response?.message || "تم حذف الباقة بنجاح."
-            );
-
+            const response = await requestJson(urls.deletePlan, { method: "POST", body });
+            await notify("success", "تم الحذف", response?.message || "تم حذف الباقة بنجاح.");
             window.location.reload();
         } catch (error) {
             await notify("error", "تعذر حذف الباقة", error.message);
@@ -1164,9 +1001,7 @@
         const result = await fire({
             icon: nextActive ? "question" : "warning",
             title: nextActive ? "تفعيل الباقة؟" : "إيقاف الباقة؟",
-            text: nextActive
-                ? "ستصبح هذه الباقة متاحة للمالك."
-                : "لن تتأثر الإعلانات السابقة، لكن لن يمكن إنشاء إعلانات جديدة بهذه الباقة.",
+            text: nextActive ? "ستصبح هذه الباقة متاحة للمالك." : "لن تتأثر الإعلانات السابقة، لكن لن يمكن إنشاء إعلانات جديدة بهذه الباقة.",
             showCancelButton: true,
             confirmButtonText: nextActive ? "تفعيل" : "إيقاف",
             cancelButtonText: "رجوع",
@@ -1179,7 +1014,6 @@
         body.append("AdvertisementPlanId", String(id));
         body.append("IsActive", nextActive ? "true" : "false");
         appendToken(body);
-
         showLoading("جاري تحديث الباقة...");
         try {
             const response = await requestJson(urls.planStatus, { method: "POST", body });
@@ -1198,22 +1032,16 @@
             setText('[data-overview-today-clicks]', number(data.todayClicks));
             setText('[data-overview-active]', number(data.activeCount));
             setText('[data-overview-needs-review]', number((data.pendingPaymentReviewCount || 0) + (data.pendingReviewCount || 0) + (data.refundPendingCount || 0)));
-            if (showSuccessMessage) {
-                notify("success", "تم التحديث", "تم تحديث مؤشرات النظرة العامة.", true);
-            }
+            if (showSuccessMessage) notify("success", "تم التحديث", "تم تحديث مؤشرات النظرة العامة.", true);
         } catch (error) {
-            if (showSuccessMessage) {
-                notify("error", "تعذر التحديث", error.message);
-            } else {
-                console.warn("تعذر تحديث مؤشرات الإعلانات بعد العملية.", error);
-            }
+            if (showSuccessMessage) notify("error", "تعذر التحديث", error.message);
+            else console.warn("تعذر تحديث مؤشرات الإعلانات بعد العملية.", error);
         }
     }
 
     async function refreshReportsAfterMutation() {
         const form = document.getElementById("admxReportsFilter");
         if (!form || !urls.reports) return;
-
         try {
             const params = reportParams(form);
             currentReportQuery = params.toString();
@@ -1221,7 +1049,6 @@
             const data = await requestJson(`${urls.reports}?${currentReportQuery}${separator}_ts=${Date.now()}`);
             renderReports(data);
         } catch (error) {
-            // لا نفشل عملية الاعتماد/الإلغاء/الاسترداد إذا تعذر فقط تحديث التقرير بالخلفية.
             console.warn("تعذر تحديث تقارير الإعلانات تلقائيًا بعد العملية.", error);
         }
     }
@@ -1245,9 +1072,7 @@
     }
 
     function reportParams(form) {
-        const params = formQuery(form, [
-            "From", "To", "AdvertisementPlanId", "PlaceId", "AdvertisementId"
-        ]);
+        const params = formQuery(form, ["From", "To", "AdvertisementPlanId", "PlaceId", "AdvertisementId"]);
         params.set("BillingModel", "All");
         params.set("Status", "All");
         params.set("PaymentStatus", "All");
@@ -1267,20 +1092,16 @@
                 ${reportKpi("bi-eye", "المشاهدات الفريدة", data.impressions, "مستخدمون أو زوار مختلفون")}
                 ${reportKpi("bi-cursor", "النقرات الفريدة", data.clicks, "مستخدمون أو زوار مختلفون")}
                 ${reportKpi("bi-check2-circle", "الحجوزات المكتملة", data.conversions)}
-                ${reportKpi("bi-cash-stack", "إيرادات الإعلانات", data.paidRevenue, "مبالغ دفع معتمدة · ر.ي", true)}`;
+                ${reportKpi("bi-cash-stack", "إيرادات الإعلانات", data.paidRevenue, `مبالغ دفع معتمدة · ${displayCurrency}`, true, true)}`;
         }
 
         renderPerformanceChart(Array.isArray(data.dailyMetrics) ? data.dailyMetrics : []);
-
-        // ملخص حالات الدفع كان يُرسم من Razor فقط، لذلك كان يبقى قديمًا حتى Refresh كامل للصفحة.
-        // الآن يتحدث من نفس استجابة التقرير مع بقية المؤشرات.
         setText('[data-report-paid-count]', number(data.paidAdvertisements ?? 0));
         setText('[data-report-pending-count]', number(data.pendingPayments ?? 0));
         setText('[data-report-refunded-count]', number(data.refundedAdvertisements ?? 0));
 
         const table = document.querySelector("#admxTopAdsTable tbody");
         const items = Array.isArray(data.topAdvertisements) ? data.topAdvertisements : [];
-
         if (table) {
             table.innerHTML = items.length
                 ? items.slice(0, 30).map(item => `
@@ -1289,25 +1110,13 @@
                         <td><strong>${esc(item.planName)}</strong><small>نسبة الظهور ${number(item.displayWeight)}%</small></td>
                         <td><strong>${esc(item.statusLabel)}</strong><small>${esc(item.paymentStatusLabel)}</small></td>
                         <td>${number(item.durationDays)} يوم</td>
-                        <td>${number(item.dailyPrice)} ر.ي</td>
-                        <td>${number(item.totalAmount)} ر.ي</td>
+                        <td>${money(item.dailyPrice)}</td>
+                        <td>${money(item.totalAmount)}</td>
                         <td>${number(item.impressions)}</td>
                         <td>${number(item.clicks)}</td>
                         <td>${number(item.conversions)}</td>
                     </tr>`).join("")
                 : `<tr><td colspan="9"><div class="admx-empty-state"><strong>لا توجد بيانات في الفترة المحددة</strong></div></td></tr>`;
-        }
-    }
-
-    function renderInitialCharts() {
-        const reportSection = app.querySelector('[data-admx-section="reports"]');
-        if (!reportSection || typeof window.ApexCharts !== "function") return;
-
-        const rows = Array.from(document.querySelectorAll("#admxTopAdsTable tbody tr"));
-        // الرسم الحقيقي يُعاد من endpoint عند فتح التقارير أو تطبيق الفلاتر.
-        // نترك مساحة نظيفة في أول تحميل، ثم نطلب التقرير إذا كان التبويب الحالي هو reports.
-        if (activeTab === "reports") {
-            loadReports();
         }
     }
 
@@ -1347,10 +1156,7 @@
             ],
             colors: ["#00A6DA", "#FF5A5F"],
             stroke: { curve: "smooth", width: [3, 2] },
-            fill: {
-                type: "gradient",
-                gradient: { shadeIntensity: 1, opacityFrom: .24, opacityTo: .02, stops: [0, 90, 100] }
-            },
+            fill: { type: "gradient", gradient: { shadeIntensity: 1, opacityFrom: .24, opacityTo: .02, stops: [0, 90, 100] } },
             dataLabels: { enabled: false },
             xaxis: {
                 categories,
@@ -1358,16 +1164,9 @@
                 axisBorder: { show: false },
                 axisTicks: { show: false }
             },
-            yaxis: {
-                labels: { style: { colors: "#738797", fontSize: "10px" } }
-            },
+            yaxis: { labels: { style: { colors: "#738797", fontSize: "10px" } } },
             grid: { borderColor: "#e8f1f4", strokeDashArray: 4 },
-            legend: {
-                position: "top",
-                horizontalAlign: "right",
-                fontSize: "11px",
-                labels: { colors: "#05203C" }
-            },
+            legend: { position: "top", horizontalAlign: "right", fontSize: "11px", labels: { colors: "#05203C" } },
             tooltip: { shared: true, intersect: false }
         };
 
@@ -1410,34 +1209,24 @@
         const form = document.getElementById("admxReportsFilter");
         if (!form) return;
         const query = reportParams(form).toString();
-
         if (kind === "pdf") {
             if (!urls.pdf) return;
             window.open(`${urls.pdf}?${query}`, "_blank", "noopener");
             return;
         }
-
         if (!urls.print) return;
         window.open(`${urls.print}?${query}`, "_blank", "noopener");
     }
 
-    function reportKpi(icon, label, value, note = "", moneyClass = false) {
+    function reportKpi(icon, label, value, note = "", moneyClass = false, isMoney = false) {
         return `<article class="${moneyClass ? "is-coral" : ""}">
             <span><i class="bi ${icon}"></i></span>
             <div>
                 <small>${esc(label)}</small>
-                <strong>${number(value)}</strong>
+                <strong>${isMoney ? money(value) : number(value)}</strong>
                 ${note ? `<em>${esc(note)}</em>` : ""}
             </div>
         </article>`;
-    }
-
-    function info(label, value, icon) {
-        return `<div><span><i class="bi ${icon}"></i></span><small>${esc(label)}</small><strong>${esc(value || "—")}</strong></div>`;
-    }
-
-    function metric(label, value, icon) {
-        return `<div><i class="bi ${icon}"></i><small>${esc(label)}</small><strong>${number(value)}</strong></div>`;
     }
 
     function toEnglishDigits(value) {
@@ -1451,14 +1240,6 @@
         if (normalized === "mobile") return "الجوال";
         if (normalized === "desktop") return "الكمبيوتر";
         return "جميع الأجهزة";
-    }
-
-    function billingLabel(value) {
-        return value === "CPC" ? "مقابل النقرات" : value === "CPM" ? "مقابل ألف ظهور" : "مدة محددة";
-    }
-
-    function billingIcon(value) {
-        return value === "CPC" ? "bi-cursor-fill" : value === "CPM" ? "bi-eye-fill" : "bi-calendar-range-fill";
     }
 
     function setBusy(element, busy, label) {
@@ -1541,23 +1322,13 @@
         };
     }
 
-    function date(value) {
-        if (!value) return "—";
-        const d = new Date(value);
-        return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString("ar-YE");
-    }
-
     function dateTime(value) {
         if (!value) return "—";
         const d = new Date(value);
         return Number.isNaN(d.getTime())
             ? "—"
             : d.toLocaleString("ar-YE", {
-                year: "numeric",
-                month: "2-digit",
-                day: "2-digit",
-                hour: "2-digit",
-                minute: "2-digit"
+                year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"
             });
     }
 
@@ -1567,14 +1338,20 @@
         return Number.isNaN(d.getTime()) ? "" : `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
     }
 
+    // مهم: الخادم يعيد المبلغ محولًا بالفعل. هذه الدالة للتنسيق فقط ولا تعمل سعر صرف.
     function money(value) {
         const n = Number(value || 0);
-        return `${number(n)} ر.ي`;
+        const formatted = number(n);
+        return displayCurrency === "دولار أمريكي"
+            ? `$${formatted}`
+            : `${formatted} ${currencySymbol}`;
     }
 
     function number(value) {
         const n = Number(value || 0);
-        return Number.isFinite(n) ? n.toLocaleString("ar-YE", { maximumFractionDigits: 2 }) : "0";
+        return Number.isFinite(n)
+            ? n.toLocaleString("ar-YE", { maximumFractionDigits: 2 })
+            : "0";
     }
 
     function numValue(value) {

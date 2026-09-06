@@ -1,36 +1,51 @@
 ﻿@using YemenGuide.Core.DTOs.Admin
+@using YemenGuide.Web.Services.ExchangeRates
 @using System.Globalization
 @model AdminFinancialManagementPageDto
 
 @{
     var canManageSettings =
-        ViewData["CanManageSettings"] is bool settingsAllowed &&
-        settingsAllowed;
+        ViewData["CanManageSettings"] is bool settingsAllowed && settingsAllowed;
 
     var canManageWallets =
-        ViewData["CanManagePlatformWallets"] is bool walletsAllowed &&
-        walletsAllowed;
+        ViewData["CanManagePlatformWallets"] is bool walletsAllowed && walletsAllowed;
 
     var settingsPage = Model?.Settings ?? new AdminFinancialSettingsPageDto();
     var settings = settingsPage.Settings ?? new AdminFinancialSettingsDto();
     var wallets = Model?.PlatformWallets ?? new AdminPlatformWalletPageDto();
+
     var currency = string.IsNullOrWhiteSpace(Model?.Currency)
-        ? "ريال يمني"
-        : Model.Currency;
-    var settingsCurrency = string.IsNullOrWhiteSpace(settings?.DefaultCurrency)
-        ? "ريال يمني"
-        : settings.DefaultCurrency;
+        ? CurrencyDisplayService.YemeniRial
+        : CurrencyDisplayService.NormalizeCurrency(Model.Currency);
+
+    if (string.IsNullOrWhiteSpace(currency))
+    {
+        currency = CurrencyDisplayService.YemeniRial;
+    }
+
+    // القيم المالية في هذه النافذة تعرض بعملة بروفايل الأدمن.
+    // DefaultCurrency أدناه يظل إعدادًا عامًا للنظام ولا يغير عملة العرض الحالية.
+    var settingsCurrency = currency;
+    var settingsCurrencySymbol = CurrencyDisplayService.GetCurrencySymbol(currency);
+
+    string MoneyNumber(decimal value) =>
+        currency == CurrencyDisplayService.YemeniRial
+            ? Math.Round(value, 0, MidpointRounding.AwayFromZero).ToString("N0")
+            : value.ToString("N2");
 
     var defaultManagementTab = canManageSettings ? "general" : "wallets";
 }
 
-<div class="afm afm--tabs" data-financial-management-root data-afm-default-tab="@defaultManagementTab">
+<div class="afm afm--tabs"
+     data-financial-management-root
+     data-afm-default-tab="@defaultManagementTab"
+     data-display-currency="@currency"
+     data-display-currency-symbol="@settingsCurrencySymbol">
+
     <header class="afm-header afm-header--compact">
         <div class="afm-header__identity">
             <span class="afm-header__mark"><i class="bi bi-sliders2"></i></span>
-            <div>
-                <h2>إدارة المالية</h2>
-            </div>
+            <div><h2>إدارة المالية</h2></div>
         </div>
 
         <button type="button"
@@ -108,6 +123,7 @@
                         <div>
                             <h3>الإعدادات العامة</h3>
                             <p>القيم الافتراضية التي تتحكم في دورة العمولة والرصيد.</p>
+                            <small>المبالغ المالية معروضة الآن بعملة بروفايلك: <strong>@currency</strong>، وتُحفظ داخليًا بالريال اليمني.</small>
                         </div>
                     </div>
 
@@ -129,13 +145,14 @@
                         </div>
 
                         <div class="afm-field">
-                            <label for="defaultCurrency">العملة</label>
+                            <label for="defaultCurrency">العملة الافتراضية للنظام</label>
                             <input id="defaultCurrency"
                                    type="text"
                                    name="DefaultCurrency"
                                    maxlength="50"
                                    value="@settings.DefaultCurrency"
                                    required />
+                            <small>هذه القيمة تخص الإعداد الافتراضي للنظام، وليست عملة العرض المختارة في بروفايلك.</small>
                         </div>
 
                         <div class="afm-field">
@@ -270,9 +287,7 @@
                                        value="true"
                                        data-trial-enabled
                                        checked="@(settings.OwnerFreeTrialEnabled ? "checked" : null)" />
-                                <span class="afm-trial-switch__control" aria-hidden="true">
-                                    <span></span>
-                                </span>
+                                <span class="afm-trial-switch__control" aria-hidden="true"><span></span></span>
                                 <span class="afm-trial-switch__copy">
                                     <strong>تفعيل الفترة التجريبية للملاك الجدد</strong>
                                     <small>تُمنح مرة واحدة للمالك عند بدء تشغيل أول منشأة مؤهلة للحجوزات.</small>
@@ -465,7 +480,7 @@
                     <div><small>الإجمالي</small><strong>@wallets.Summary.TotalCount</strong></div>
                     <div><small>نشطة</small><strong>@wallets.Summary.ActiveCount</strong></div>
                     <div><small>طلبات معلقة</small><strong>@wallets.Summary.PendingTopUpsCount</strong></div>
-                    <div><small>الشحنات المعتمدة</small><strong>@wallets.Summary.CompletedTopUpsAmount.ToString("N0") @currency</strong></div>
+                    <div><small>الشحنات المعتمدة</small><strong>@MoneyNumber(wallets.Summary.CompletedTopUpsAmount) @currency</strong></div>
                 </div>
 
                 @if (wallets.Wallets.Count == 0)
@@ -622,9 +637,7 @@
                                     <option value="">اختر الحساب المدعوم</option>
                                     @foreach (var supported in wallets.SupportedWallets.Where(x => x.IsActive))
                                     {
-                                        <option value="@supported.WalletId">
-                                            @supported.WalletName
-                                        </option>
+                                        <option value="@supported.WalletId">@supported.WalletName</option>
                                     }
                                 </select>
                             </div>
