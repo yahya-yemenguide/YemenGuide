@@ -7520,7 +7520,7 @@
    ========================================================================== */
 
 .oad-swal-builder .oad-cb-start .oad-cb-choices {
-    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     align-items: stretch !important;
 }
 
@@ -7528,14 +7528,15 @@
     display: none !important;
     min-width: 0 !important;
     width: 100% !important;
-    margin: 0 !important;
+    margin: 8px 0 0 !important;
     padding: 0 !important;
     visibility: hidden !important;
     opacity: 0 !important;
 }
 
+    /* يعمل بطريقتين: class من JavaScript + :has كنسخة احتياطية مباشرة من CSS. */
     .oad-swal-builder .oad-cb-start .oad-cb-datewrap.is-visible,
-    .oad-swal-builder .oad-cb-start .oad-cb-choices:has(input[name="StartImmediately"][value="false"]:checked) > .oad-cb-datewrap {
+    .oad-swal-builder .oad-cb-start:has(input[name="StartImmediately"][value="false"]:checked) .oad-cb-datewrap {
         display: flex !important;
         visibility: visible !important;
         opacity: 1 !important;
@@ -7566,7 +7567,7 @@
             font-weight: 900 !important;
         }
 
-.oad-swal-builder .oad-cb-start input[name="RequestedStartAt"] {
+.oad-swal-builder .oad-cb-start input[name="RequestedStartAt"]:not([type="hidden"]) {
     display: block !important;
     width: 100% !important;
     min-width: 0 !important;
@@ -7610,3 +7611,702 @@
         grid-column: auto !important;
     }
 }
+
+/* ============================================================
+   Owner Ads — Refund destination & refund proof
+   ============================================================ */
+.oad-ad-card__badges {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.oad-refund-badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    padding: 4px 9px;
+    border-radius: 999px;
+    font-size: .68rem;
+    font-weight: 900;
+    white-space: nowrap;
+}
+
+.oad-refund-badge.is-pending {
+    color: #9a650d;
+    background: #fff7df;
+    border: 1px solid #f3df9d;
+}
+
+.oad-refund-badge.is-done {
+    color: #117553;
+    background: #eaf8f2;
+    border: 1px solid #c9eadc;
+}
+
+.oad-confirm-popup--refund {
+    width: min(620px, calc(100vw - 24px)) !important;
+}
+
+.oad-cancel-refund {
+    text-align: right;
+    display: grid;
+    gap: 14px;
+    margin-top: 8px;
+}
+
+.oad-cancel-refund__intro {
+    margin: 0;
+    padding: 12px 14px;
+    border-radius: 14px;
+    color: #405d70;
+    background: #f7fbfd;
+    border: 1px solid #e2eef3;
+    line-height: 1.8;
+    font-size: .84rem;
+}
+
+.oad-cancel-refund__field {
+    display: grid;
+    gap: 7px;
+}
+
+.oad-cancel-refund__field > span {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: #173a52;
+    font-size: .78rem;
+    font-weight: 900;
+}
+
+.oad-cancel-refund__field select,
+.oad-cancel-refund__field textarea {
+    width: 100%;
+    border: 1px solid #d9e8ee;
+    border-radius: 13px;
+    background: #fff;
+    color: #16354c;
+    outline: 0;
+    font: inherit;
+}
+
+.oad-cancel-refund__field select {
+    min-height: 46px;
+    padding: 0 12px;
+}
+
+.oad-cancel-refund__field textarea {
+    min-height: 110px;
+    padding: 11px 12px;
+    resize: vertical;
+}
+
+.oad-cancel-refund__field select:focus,
+.oad-cancel-refund__field textarea:focus {
+    border-color: rgba(0,166,218,.65);
+    box-shadow: 0 0 0 3px rgba(0,166,218,.09);
+}
+
+.oad-cancel-refund__policy {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    padding: 11px 13px;
+    border: 1px solid #caeadf;
+    border-radius: 13px;
+    color: #1d6d55;
+    background: #effaf6;
+    font-size: .76rem;
+    line-height: 1.7;
+}
+
+.oad-cancel-refund__policy i {
+    margin-top: 2px;
+    font-size: 1rem;
+}
+
+.oad-detail-refund {
+    margin-top: 12px;
+    padding: 15px;
+    border: 1px solid #d8ece5;
+    border-radius: 17px;
+    background: linear-gradient(180deg,#fbfffd,#f3fbf8);
+}
+
+.oad-detail-refund[hidden] {
+    display: none !important;
+}
+
+.oad-detail-refund > header {
+    display: flex;
+    align-items: flex-start;
+    gap: 11px;
+    margin-bottom: 12px;
+}
+
+.oad-detail-refund__icon {
+    width: 42px;
+    height: 42px;
+    flex: 0 0 42px;
+    display: grid;
+    place-items: center;
+    border-radius: 13px;
+    color: #14845d;
+    background: #e7f7f0;
+}
+
+.oad-detail-refund header small {
+    color: #6f8794;
+    font-size: .67rem;
+    font-weight: 800;
+}
+
+.oad-detail-refund header h3 {
+    margin: 2px 0 0;
+    color: #0f684a;
+    font-size: 1rem;
+    font-weight: 900;
+}
+
+.oad-detail-refund header p {
+    margin: 4px 0 0;
+    color: #6f8794;
+    font-size: .73rem;
+    line-height: 1.65;
+}
+
+.oad-detail-refund dl {
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(2,minmax(0,1fr));
+    gap: 8px;
+}
+
+.oad-detail-refund dl > div {
+    min-width: 0;
+    padding: 10px 11px;
+    border: 1px solid #e0eee9;
+    border-radius: 12px;
+    background: #fff;
+}
+
+.oad-detail-refund dt {
+    color: #7b909b;
+    font-size: .66rem;
+}
+
+.oad-detail-refund dd {
+    margin: 4px 0 0;
+    color: #183b51;
+    font-size: .78rem;
+    font-weight: 900;
+    overflow-wrap: anywhere;
+}
+
+.oad-detail-refund__proof {
+    margin-top: 9px;
+}
+
+.oad-detail-refund__proof a,
+.oad-detail-refund__proof span {
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 9px 12px;
+    border-radius: 12px;
+    font-size: .76rem;
+    font-weight: 900;
+    text-decoration: none;
+}
+
+.oad-detail-refund__proof a {
+    color: #087fa4;
+    background: #eefaff;
+    border: 1px solid #d2edf7;
+}
+
+.oad-detail-refund__proof span {
+    color: #86641d;
+    background: #fff9e9;
+    border: 1px solid #f0e2af;
+}
+
+@media (max-width: 640px) {
+    .oad-detail-refund dl {
+        grid-template-columns: 1fr;
+    }
+
+    .oad-cancel-refund__intro,
+    .oad-cancel-refund__policy {
+        font-size: .72rem;
+    }
+}
+
+
+/* ===== Future start picker — English calendar + hour/minute ===== */
+.oad-swal-builder .oad-cb-start input[type="hidden"][name="RequestedStartAt"] {
+    display: none !important;
+}
+
+.oad-swal-builder .oad-cb-date {
+    position: relative !important;
+}
+
+.oad-swal-builder .oad-datetime-trigger {
+    width: 100%;
+    min-height: 46px;
+    padding: 9px 12px;
+    border: 1px solid #bcdde8;
+    border-radius: 10px;
+    background: #fff;
+    color: #05203c;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    font-family: var(--f);
+    font-size: .86rem;
+    font-weight: 900;
+    cursor: pointer;
+    direction: ltr;
+    text-align: left;
+}
+
+.oad-swal-builder .oad-datetime-trigger i {
+    color: var(--cyan);
+    font-size: 1rem;
+}
+
+.oad-swal-builder .oad-datetime-trigger.is-invalid {
+    border-color: #ef6671 !important;
+    box-shadow: 0 0 0 3px rgba(239,102,113,.11);
+}
+
+.oad-swal-builder .oad-future-picker {
+    width: min(100%, 350px);
+    margin: 8px auto 0;
+    padding: 9px 10px 10px;
+    border: 1px solid #cde4ec;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 10px 24px rgba(5,32,60,.11);
+    direction: ltr;
+    color: #16354c;
+    font-family: Arial, sans-serif !important;
+}
+
+.oad-swal-builder .oad-future-picker[hidden] {
+    display: none !important;
+}
+
+.oad-swal-builder .oad-future-picker *,
+.oad-swal-builder .oad-future-picker button,
+.oad-swal-builder .oad-future-picker select {
+    font-family: Arial, sans-serif !important;
+}
+
+.oad-swal-builder .oad-future-picker__head {
+    display: grid;
+    grid-template-columns: 30px 1fr 30px;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+
+.oad-swal-builder .oad-future-picker__head strong {
+    text-align: center;
+    font-size: .82rem;
+    font-weight: 700;
+}
+
+.oad-swal-builder .oad-future-picker__head button {
+    width: 29px;
+    height: 29px;
+    border: 0;
+    border-radius: 8px;
+    background: #eefaff;
+    color: #087fa4;
+    cursor: pointer;
+}
+
+.oad-swal-builder .oad-future-picker__head button:disabled {
+    opacity: .35;
+    cursor: not-allowed;
+}
+
+.oad-swal-builder .oad-future-picker__week,
+.oad-swal-builder .oad-future-picker__days {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 3px;
+}
+
+.oad-swal-builder .oad-future-picker__week {
+    margin-bottom: 3px;
+}
+
+.oad-swal-builder .oad-future-picker__week span {
+    text-align: center;
+    color: #748997;
+    font-size: .60rem;
+    font-weight: 700;
+}
+
+.oad-swal-builder .oad-future-picker__blank,
+.oad-swal-builder .oad-future-picker__day {
+    min-height: 29px;
+}
+
+.oad-swal-builder .oad-future-picker__day {
+    border: 0;
+    border-radius: 8px;
+    background: #f6fafc;
+    color: #16354c;
+    font-size: .70rem;
+    cursor: pointer;
+}
+
+.oad-swal-builder .oad-future-picker__day:hover:not(:disabled) {
+    background: #e7f8fd;
+}
+
+.oad-swal-builder .oad-future-picker__day.is-today {
+    box-shadow: inset 0 0 0 1px #7ccfe6;
+}
+
+.oad-swal-builder .oad-future-picker__day.is-selected {
+    background: #00a6da;
+    color: #fff;
+    font-weight: 700;
+}
+
+.oad-swal-builder .oad-future-picker__day:disabled {
+    opacity: .3;
+    cursor: not-allowed;
+}
+
+.oad-swal-builder .oad-future-picker__time {
+    margin-top: 7px;
+    padding-top: 7px;
+    border-top: 1px solid #e4eef2;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: end;
+    gap: 6px;
+}
+
+.oad-swal-builder .oad-future-picker__time label span {
+    display: block;
+    margin-bottom: 3px;
+    color: #748997;
+    font-size: .60rem;
+    font-weight: 700;
+}
+
+.oad-swal-builder .oad-future-picker__time select {
+    width: 100%;
+    min-height: 32px;
+    border: 1px solid #cde4ec;
+    border-radius: 8px;
+    background: #fff;
+    color: #16354c;
+    text-align: center;
+}
+
+.oad-swal-builder .oad-future-picker__colon {
+    padding-bottom: 6px;
+    font-weight: 700;
+}
+
+.oad-swal-builder .oad-future-picker__error {
+    margin-top: 8px;
+    padding: 7px 9px;
+    border-radius: 8px;
+    background: #fff2f3;
+    color: #a83c47;
+    font-size: .72rem;
+    font-weight: 700;
+}
+
+.oad-swal-builder .oad-future-picker__actions {
+    margin-top: 7px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+}
+
+.oad-swal-builder .oad-future-picker__actions button {
+    min-height: 32px;
+    border: 1px solid #d6e6ec;
+    border-radius: 8px;
+    background: #fff;
+    color: #16354c;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.oad-swal-builder .oad-future-picker__actions button.is-primary {
+    border-color: #00a6da;
+    background: #00a6da;
+    color: #fff;
+}
+
+@media (max-width: 640px) {
+    .oad-swal-builder .oad-future-picker {
+        width: min(100%, 330px);
+        padding: 8px;
+    }
+
+    .oad-swal-builder .oad-future-picker__blank,
+    .oad-swal-builder .oad-future-picker__day {
+        min-height: 28px;
+    }
+}
+
+
+/* ========================================================================== 
+   OWNER ADS — UX POLICY FIX V3
+   red back buttons / separate refund wallet fields
+   ========================================================================== */
+
+/* كل زر «تراجع» داخل تأكيدات المالك أحمر وواضح. */
+.oad-confirm-popup .oad-confirm-cancel,
+.oad-confirm-cancel,
+.oad-wizard-confirm__actions .is-back,
+.oad-payment-confirm__actions .is-back {
+    border: 1px solid #ff5a5f !important;
+    color: #ffffff !important;
+    background: #ff5a5f !important;
+    box-shadow: 0 8px 18px rgba(255,90,95,.18) !important;
+}
+
+.oad-confirm-popup .oad-confirm-cancel:hover,
+.oad-confirm-cancel:hover,
+.oad-wizard-confirm__actions .is-back:hover,
+.oad-payment-confirm__actions .is-back:hover {
+    background: #ed454b !important;
+    border-color: #ed454b !important;
+}
+
+/* بيانات محفظة الاسترداد تظهر كحقول منفصلة عموديًا، وليس كسطر واحد داخل القائمة. */
+.oad-refund-wallet-details {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.oad-refund-wallet-details[hidden] {
+    display: none !important;
+}
+
+.oad-refund-wallet-details > div {
+    min-width: 0;
+    padding: 10px 12px;
+    border: 1px solid #dce9ee;
+    border-radius: 11px;
+    background: #f9fcfd;
+    text-align: right;
+}
+
+.oad-refund-wallet-details span {
+    display: block;
+    margin-bottom: 4px;
+    color: #7a8e99;
+    font-size: 10px;
+    font-weight: 800;
+}
+
+.oad-refund-wallet-details strong {
+    display: block;
+    color: #16354c;
+    font-size: 13px;
+    font-weight: 900;
+    overflow-wrap: anywhere;
+}
+
+
+/* ==========================================================================
+   OWNER ADS — PERFORMANCE CHART + SPLIT REFUND DATETIME
+   ========================================================================== */
+
+.oad-performance-card .oad-card__head {
+    margin-bottom: 14px;
+}
+
+.oad-performance-chart {
+    display: grid;
+    gap: 13px;
+    padding: 4px 0 2px;
+}
+
+.oad-performance-row {
+    min-width: 0;
+}
+
+.oad-performance-row__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 6px;
+    color: #607784;
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.oad-performance-row__head strong {
+    color: #05203c;
+    font-size: 13px;
+    font-weight: 900;
+}
+
+.oad-performance-track {
+    position: relative;
+    height: 11px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: #edf4f7;
+}
+
+.oad-performance-track > span {
+    display: block;
+    width: 0;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #00a6da, #53c6e6);
+    transition: width .35s ease;
+}
+
+.oad-performance-row.is-zero .oad-performance-track > span {
+    width: 0 !important;
+}
+
+.oad-performance-card .oad-rates {
+    margin-top: 15px;
+}
+
+@media (max-width: 620px) {
+    .oad-performance-chart {
+        gap: 11px;
+    }
+
+    .oad-performance-row__head {
+        font-size: 11px;
+    }
+
+    .oad-performance-row__head strong {
+        font-size: 12px;
+    }
+}
+
+
+/* ========================================================================== 
+   OWNER ADS — V6 CLEAN OVERVIEW + PLAIN RED X
+   - إبقاء المشاهدات والنقرات في البطاقات العلوية فقط.
+   - إعادة نتائج الحجز: بدء الحجز والحجوزات المكتملة.
+   - زر الإغلاق: X أحمر فقط بدون دائرة أو خلفية.
+   ========================================================================== */
+
+.oad-overview-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+
+@media (max-width: 900px) {
+    .oad-overview-grid {
+        grid-template-columns: minmax(0, 1fr) !important;
+    }
+}
+
+.oad-swal-shell .swal2-close,
+.oad-swal-builder .swal2-close,
+.oad-swal-payclean .swal2-close,
+.oad-confirm-popup .swal2-close {
+    width: 34px !important;
+    height: 34px !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    color: #dc2626 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    font-size: 34px !important;
+    font-weight: 500 !important;
+    line-height: 1 !important;
+    transition: color .16s ease, transform .16s ease !important;
+}
+
+.oad-swal-shell .swal2-close:hover,
+.oad-swal-builder .swal2-close:hover,
+.oad-swal-payclean .swal2-close:hover,
+.oad-confirm-popup .swal2-close:hover {
+    color: #b91c1c !important;
+    background: transparent !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+    transform: scale(1.08) !important;
+}
+
+.oad-swal-shell .swal2-close:active,
+.oad-swal-builder .swal2-close:active,
+.oad-swal-payclean .swal2-close:active,
+.oad-confirm-popup .swal2-close:active {
+    transform: scale(.94) !important;
+}
+
+.oad-swal-shell .swal2-close:focus-visible,
+.oad-swal-builder .swal2-close:focus-visible,
+.oad-swal-payclean .swal2-close:focus-visible,
+.oad-confirm-popup .swal2-close:focus-visible {
+    outline: 2px solid rgba(220, 38, 38, .22) !important;
+    outline-offset: 2px !important;
+}
+
+@media (max-width: 768px) {
+    .oad-swal-shell .swal2-close,
+    .oad-swal-builder .swal2-close,
+    .oad-swal-payclean .swal2-close,
+    .oad-confirm-popup .swal2-close {
+        width: 32px !important;
+        height: 32px !important;
+        font-size: 31px !important;
+    }
+}
+
+
+/* ==========================================================================
+   OWNER ADS — BOOKING RESULTS CARD: FORCE VISIBLE
+   يبقى ظاهراً حتى عندما تكون القيم 0.
+   ========================================================================== */
+
+.oad-overview-grid > .oad-performance-card {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    min-height: 170px;
+}
+
+.oad-overview-grid > .oad-performance-card .oad-card__head,
+.oad-overview-grid > .oad-performance-card .oad-performance-chart,
+.oad-overview-grid > .oad-performance-card .oad-performance-row {
+    display: block;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+.oad-overview-grid > .oad-performance-card .oad-card__head {
+    display: flex !important;
+}
+
+.oad-overview-grid > .oad-performance-card .oad-performance-row + .oad-performance-row {
+    margin-top: 13px;
+}
+
+.oad-overview-grid > .oad-performance-card .oad-performance-row__head {
+    display: flex !important;
+}
+
