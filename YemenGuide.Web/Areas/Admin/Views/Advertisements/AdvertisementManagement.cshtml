@@ -1,0 +1,543 @@
+@using System.Linq
+@model YemenGuide.Core.DTOs.Admin.AdminAdvertisementManagementPageDto
+
+@{
+    ViewData["Title"] = "إدارة الإعلانات";
+    Layout = "_AdminLayout";
+
+    var pricingOptions = Model.Plans.Placements
+        .SelectMany(x => x.PricingOptions)
+        .OrderByDescending(x => x.IsActive)
+        .ThenByDescending(x => x.DisplayWeight)
+        .ThenBy(x => x.PlanName)
+        .ToList();
+
+    var report = Model.Reports;
+}
+
+@section Styles {
+        <link rel="stylesheet" href="~/css/shared/fonts.css" asp-append-version="true" />
+        <link rel="stylesheet" href="~/lib/sweetalert2/sweetalert2.min.css" />
+        <link rel="stylesheet" href="~/css/admin/advertisements.css" asp-append-version="true" />
+}
+
+        <main class="admx-page admx-onepage"
+      dir="rtl"
+      id="adminAdvertisementsApp"
+      data-default-tab="@Model.DefaultTab"
+      data-overview-url="@Url.Action("OverviewTab", "Advertisements", new { area = "Admin" })"
+      data-ads-url="@Url.Action("AdvertisementsTab", "Advertisements", new { area = "Admin" })"
+      data-plans-url="@Url.Action("PlansTab", "Advertisements", new { area = "Admin" })"
+      data-reports-url="@Url.Action("ReportsTab", "Advertisements", new { area = "Admin" })"
+      data-details-url="@Url.Action("AdvertisementDetails", "Advertisements", new { area = "Admin" })"
+      data-plan-form-url="@Url.Action("PlanForm", "Advertisements", new { area = "Admin" })"
+      data-save-plan-url="@Url.Action("SavePlan", "Advertisements", new { area = "Admin" })"
+      data-plan-status-url="@Url.Action("ChangePlanStatus", "Advertisements", new { area = "Admin" })"
+      data-delete-plan-url="@Url.Action("DeletePlan", "Advertisements", new { area = "Admin" })"
+      data-review-payment-url="@Url.Action("ReviewPayment", "Advertisements", new { area = "Admin" })"
+      data-review-ad-url="@Url.Action("ReviewAdvertisement", "Advertisements", new { area = "Admin" })"
+      data-control-ad-url="@Url.Action("ChangeAdvertisementStatus", "Advertisements", new { area = "Admin" })"
+      data-refund-ad-url="@Url.Action("ProcessRefund", "Advertisements", new { area = "Admin" })"
+      data-print-url="@Url.Action("AdvertisementReportPrint", "Advertisements", new { area = "Admin" })"
+      data-pdf-url="@Url.Action("AdvertisementReportPdf", "Advertisements", new { area = "Admin" })">
+
+        @Html.AntiForgeryToken()
+
+            <header class="admx-pagebar admx-onepage-hero" aria-labelledby="admxPageTitle">
+                <div class="admx-pagebar__identity">
+                    <span class="admx-pagebar__icon"><i class="bi bi-megaphone-fill"></i></span>
+                    <div class="admx-pagebar__copy">
+                        <small>مركز الإعلانات الموحد</small>
+                        <h1 id="admxPageTitle">إدارة الإعلانات</h1>
+                        <p>مراجعة الإعلانات، إدارة الباقات، ومتابعة الأداء من شاشة واحدة.</p>
+                    </div>
+                </div>
+
+        @if (Model.CanViewReports)
+        {
+                <div class="admx-pagebar__report-actions" data-report-toolbar hidden aria-label="إجراءات التقرير">
+                    <button type="button" class="admx-soft-action admx-report-top-action" data-report-print>
+                        <i class="bi bi-printer"></i>
+                        <span>طباعة التقرير</span>
+                    </button>
+                    <button type="button" class="admx-coral-action admx-report-top-action" data-report-pdf>
+                        <i class="bi bi-file-earmark-pdf-fill"></i>
+                        <span>حفظ التقرير كملف</span>
+                    </button>
+                </div>
+        }
+            </header>
+
+            <nav class="admx-main-tabs admx-sticky-tabs" aria-label="أقسام إدارة الإعلانات" role="tablist">
+                <button type="button" class="admx-tab is-active" data-admx-tab="overview" role="tab" aria-selected="true">
+                    <span class="admx-tab__icon"><i class="bi bi-grid-1x2-fill"></i></span>
+                    <span class="admx-tab__copy"><strong>نظرة عامة</strong><small>المتابعة اليومية</small></span>
+                </button>
+
+                <button type="button" class="admx-tab" data-admx-tab="ads" role="tab" aria-selected="false">
+                    <span class="admx-tab__icon"><i class="bi bi-megaphone-fill"></i></span>
+                    <span class="admx-tab__copy"><strong>الإعلانات</strong><small>المراجعة والتحكم</small></span>
+            @if (Model.Overview.NeedsActionCount > 0)
+            {
+                    <b class="admx-tab__badge">@Model.Overview.NeedsActionCount</b>
+            }
+        </button>
+
+        @if (Model.CanManagePlans)
+        {
+                <button type="button" class="admx-tab" data-admx-tab="plans" role="tab" aria-selected="false">
+                    <span class="admx-tab__icon"><i class="bi bi-wallet2"></i></span>
+                    <span class="admx-tab__copy"><strong>الباقات والتسعير</strong><small>وزن الظهور وسعر اليوم</small></span>
+                </button>
+        }
+
+        @if (Model.CanViewReports)
+        {
+                <button type="button" class="admx-tab" data-admx-tab="reports" role="tab" aria-selected="false">
+                    <span class="admx-tab__icon"><i class="bi bi-file-earmark-bar-graph-fill"></i></span>
+                    <span class="admx-tab__copy"><strong>التقارير</strong><small>الأداء والمالية</small></span>
+                </button>
+        }
+    </nav>
+
+    <section class="admx-onepage-section is-active" data-admx-section="overview">
+        <div class="admx-section-head">
+            <div>
+                <span class="admx-section-kicker"><i class="bi bi-activity"></i> حالة المنصة الآن</span>
+                <h2>ملخص سريع وواضح</h2>
+                <p>أهم ما يحتاج قرارك اليوم بدون الدخول في تفاصيل غير ضرورية.</p>
+            </div>
+            <button type="button" class="admx-soft-action" data-admx-refresh-overview>
+                <i class="bi bi-arrow-clockwise"></i> تحديث
+            </button>
+        </div>
+        <div class="admx-overview-grid">
+            <article class="admx-premium-panel">
+                <div class="admx-panel-title">
+                    <span><i class="bi bi-lightning-charge-fill"></i></span>
+                    <div><h3>يحتاج انتباهك</h3><p>طلبات الدفع والمحتوى التي تحتاج قرارًا.</p></div>
+                </div>
+                <div class="admx-action-queue">
+                    @if (Model.Overview.NeedsAttention.Count == 0)
+                    {
+                            <div class="admx-empty-state">
+                                <i class="bi bi-patch-check-fill"></i>
+                                <strong>كل شيء تحت السيطرة</strong>
+                                <small>لا توجد إعلانات تنتظر إجراءً حاليًا.</small>
+                            </div>
+                    }
+                    else
+                    {
+                        @foreach (var item in Model.Overview.NeedsAttention.Take(6))
+                        {
+                                    <button type="button" class="admx-queue-item" data-admx-details="@item.AdvertisementId">
+                                        <img src="@(string.IsNullOrWhiteSpace(item.ImagePath) ? "/images/default-category.jpg" : item.ImagePath)" alt="" />
+                                        <span class="admx-queue-item__copy">
+                                            <strong>@item.Title</strong>
+                                            <small>@item.PlaceName · @item.AttentionText</small>
+                                        </span>
+                                        <i class="bi bi-chevron-left"></i>
+                                    </button>
+                        }
+                    }
+                </div>
+            </article>
+
+            <article class="admx-premium-panel admx-today-panel">
+                <div class="admx-panel-title">
+                    <span><i class="bi bi-sun-fill"></i></span>
+                    <div>
+                        <h3>أداء اليوم</h3>
+                        <p>لقطة سريعة للحركة خلال اليوم الحالي.</p>
+                    </div>
+                </div>
+
+                <div class="admx-today-metrics">
+                    <div>
+                        <i class="bi bi-eye"></i>
+                        <small>مشاهدات فريدة اليوم</small>
+                        <strong data-overview-today-impressions>@Model.Overview.TodayImpressions.ToString("N0")</strong>
+                    </div>
+                    <div>
+                        <i class="bi bi-cursor"></i>
+                        <small>نقرات فريدة اليوم</small>
+                        <strong data-overview-today-clicks>@Model.Overview.TodayClicks.ToString("N0")</strong>
+                    </div>
+                    <div>
+                        <i class="bi bi-broadcast"></i>
+                        <small>إعلانات نشطة</small>
+                        <strong data-overview-active>@Model.Overview.ActiveCount.ToString("N0")</strong>
+                    </div>
+                    <div>
+                        <i class="bi bi-exclamation-circle"></i>
+                        <small>طلبات تحتاج مراجعة</small>
+                        <strong data-overview-needs-review>@Model.Overview.NeedsActionCount.ToString("N0")</strong>
+                    </div>
+                </div>
+            </article>
+
+        </div>
+    </section>
+
+    <section class="admx-onepage-section" data-admx-section="ads" hidden>
+        <div class="admx-section-head">
+            <div>
+                <span class="admx-section-kicker"><i class="bi bi-megaphone"></i> الإعلانات</span>
+                <h2>إدارة الإعلانات</h2>
+                <p>تابع الحالة وراجع الطلبات من قائمة منظمة بدون بطاقات كبيرة أو تشتت.</p>
+            </div>
+        </div>
+
+        <div class="admx-subtabs" role="tablist" aria-label="حالات الإعلانات">
+            <button type="button" class="admx-subtab is-active" data-ad-group="All">
+                <span>الكل</span><b>@Model.Advertisements.AllCount</b>
+            </button>
+            <button type="button" class="admx-subtab" data-ad-group="Running">
+                <span>تعمل</span><b>@Model.Advertisements.RunningCount</b>
+            </button>
+            <button type="button" class="admx-subtab" data-ad-group="NeedsAction">
+                <span>تحتاج إجراء</span><b>@Model.Advertisements.NeedsActionCount</b>
+            </button>
+            <button type="button" class="admx-subtab" data-ad-group="Paused">
+                <span>متوقفة</span><b>@Model.Advertisements.PausedCount</b>
+            </button>
+            <button type="button" class="admx-subtab" data-ad-group="Closed">
+                <span>منتهية وملغاة</span><b>@Model.Advertisements.ClosedCount</b>
+            </button>
+        </div>
+
+        <form class="admx-filter-bar admx-filter-bar--smart" id="admxAdsFilter" autocomplete="off">
+            <div class="admx-mobile-filter-main">
+                <label class="admx-search-field">
+                    <i class="bi bi-search"></i>
+                    <input type="search" name="Search" value="@Model.Advertisements.Filter.Search" placeholder="بحث باسم الإعلان أو المنشأة..." />
+                </label>
+
+                <button type="button"
+                        class="admx-filter-toggle"
+                        data-admx-filter-toggle
+                        aria-expanded="false"
+                        aria-controls="admxAdsAdvancedFilter"
+                        title="خيارات الفلترة">
+                    <i class="bi bi-sliders"></i>
+                </button>
+            </div>
+
+            <div class="admx-filter-options" id="admxAdsAdvancedFilter">
+                <select name="PaymentStatus" aria-label="حالة الدفع">
+                    <option value="All">كل حالات الدفع</option>
+                    <option value="PendingReview">بانتظار مراجعة الدفع</option>
+                    <option value="Paid">مدفوع</option>
+                    <option value="Rejected">دفع مرفوض</option>
+                    <option value="Unpaid">غير مدفوع</option>
+                </select>
+
+                <select name="SortBy" aria-label="الترتيب">
+                    <option value="Newest">الأحدث</option>
+                    <option value="NeedsAction">الأهم أولًا</option>
+                    <option value="MostViewed">الأكثر ظهورًا</option>
+                </select>
+
+                <button type="submit" class="admx-primary-action">
+                    <i class="bi bi-funnel-fill"></i>
+                    <span>تطبيق</span>
+                </button>
+
+                <button type="button" class="admx-soft-action" data-admx-reset-ads>
+                    <i class="bi bi-arrow-counterclockwise"></i>
+                    <span>مسح</span>
+                </button>
+            </div>
+
+            <input type="hidden" name="BillingModel" value="All" />
+            <input type="hidden" name="Status" value="All" />
+            <input type="hidden" name="ExactStatus" value="All" />
+            <input type="hidden" name="Page" value="1" />
+            <input type="hidden" name="PageSize" value="12" />
+        </form>
+
+        <div class="admx-results-strip admx-results-strip--exact">
+            <span><i class="bi bi-collection"></i> <strong data-ads-count>@Model.Advertisements.TotalCount</strong> إعلان</span>
+        </div>
+
+        <div class="admx-ad-list" id="admxAdsGrid">
+            @foreach (var item in Model.Advertisements.Items)
+            {
+                    <article class="admx-ad-row">
+                        <button type="button" class="admx-ad-row__media" data-admx-details="@item.AdvertisementId">
+                            <img src="@(string.IsNullOrWhiteSpace(item.ImagePath) ? "/images/default-category.jpg" : item.ImagePath)" alt="" />
+                        @if (item.NeedsAttention)
+                        {
+                                    <span class="admx-attention-dot" title="يحتاج إجراء"></span>
+                        }
+                        </button>
+
+                        <div class="admx-ad-row__main">
+                            <div class="admx-ad-row__title">
+                                <h3>@item.Title</h3>
+                                <span class="admx-status-pill" data-status="@item.Status">@item.StatusLabel</span>
+                                <span class="admx-payment-pill">@item.PaymentStatusLabel</span>
+                            </div>
+                            <p>@item.PlaceName <span>•</span> @item.OwnerName</p>
+                        </div>
+
+                        <div class="admx-ad-row__metrics">
+                            <span><small>الباقة</small><strong>@item.PlanName</strong></span>
+                            <span><small>وزن الظهور</small><strong>@item.DisplayWeight</strong></span>
+                            <span><small>الظهور</small><strong>@item.Impressions.ToString("N0")</strong></span>
+                            <span><small>النقرات</small><strong>@item.Clicks.ToString("N0")</strong></span>
+                        </div>
+
+                        <button type="button" class="admx-row-open" data-admx-details="@item.AdvertisementId" title="عرض التفاصيل">
+                            <i class="bi bi-chevron-left"></i>
+                        </button>
+                    </article>
+            }
+        </div>
+
+        <div class="admx-pagination" id="admxAdsPagination"></div>
+    </section>
+
+    @if (Model.CanManagePlans)
+    {
+            <section class="admx-onepage-section" data-admx-section="plans" hidden>
+                <div class="admx-section-head">
+                    <div>
+                        <span class="admx-section-kicker"><i class="bi bi-wallet2"></i> الباقات</span>
+                        <h2>الباقات والتسعير</h2>
+                        <p>إدارة سعر اليوم ووزن الظهور لكل باقة.</p>
+                    </div>
+                    <div class="admx-section-actions">
+                        <button type="button" class="admx-primary-action admx-plan-open" data-plan-id="">
+                            <i class="bi bi-plus-lg"></i>
+                            <span>إنشاء باقة</span>
+                        </button>
+                    </div>
+                </div>
+@if (pricingOptions.Count == 0)
+            {
+                        <div class="admx-empty-state admx-pricing-empty">
+                            <i class="bi bi-box-seam"></i>
+                            <strong>لا توجد باقات مضافة بعد</strong>
+                            <small>أنشئ أول باقة وحدد اسمها ووزن ظهورها وسعر اليوم.</small>
+                            <button type="button" class="admx-primary-action admx-plan-open" data-plan-id="">
+                                <i class="bi bi-plus-lg"></i> إنشاء أول باقة
+                            </button>
+                        </div>
+            }
+            else
+            {
+                        <div class="admx-pricing-grid" id="admxPricingGrid">
+                    @for (var planIndex = 0; planIndex < pricingOptions.Count; planIndex++)
+                    {
+                        var plan = pricingOptions[planIndex];
+                        var isExtraPlan = planIndex >= 6;
+
+                                    <article class="admx-pricing-card @(plan.IsActive ? "is-active" : "")" data-extra-plan="@(isExtraPlan ? "true" : "false")" style="@(isExtraPlan ? "display:none;" : "")">
+                                        <div class="admx-pricing-card__head">
+                                            <span class="admx-pricing-card__icon"><i class="bi bi-tag-fill"></i></span>
+                                            <div>
+                                                <small>باقة إعلانية</small>
+                                                <h3>@plan.PlanName</h3>
+                                            </div>
+                                            <span class="admx-plan-state">@(plan.IsActive ? "مفعلة" : "موقفة")</span>
+                                        </div>
+
+                                        <div class="admx-pricing-value">
+                                            <small>سعر اليوم</small>
+                                            <strong>@plan.DailyPrice.ToString("N0") <em>ر.ي / يوم</em></strong>
+                                        </div>
+
+                                        <div class="admx-pricing-stats">
+                                            <span>
+                                                <small>وزن الظهور</small>
+                                                <strong>@plan.DisplayWeight</strong>
+                                            </span>
+                                            <span>
+                                                <small>إعلانات مرتبطة</small>
+                                                <strong>@plan.AdvertisementCount</strong>
+                                            </span>
+                                            <span>
+                                                <small>نشطة / مجدولة</small>
+                                                <strong>@plan.ActiveAdvertisementCount</strong>
+                                            </span>
+                                        </div>
+
+                            @if (!string.IsNullOrWhiteSpace(plan.Description))
+                            {
+                                                <p class="admx-plan-description">@plan.Description</p>
+                            }
+
+                                        <div class="admx-pricing-actions">
+                                            <button type="button"
+                                        class="admx-primary-action admx-plan-open"
+                                        data-plan-id="@plan.AdvertisementPlanId">
+                                                <i class="bi bi-pencil-square"></i> تعديل
+                                            </button>
+
+                                            <button type="button"
+                                        class="admx-soft-action"
+                                        data-plan-toggle="@plan.AdvertisementPlanId"
+                                        data-next-active="@(!plan.IsActive)">
+                                                <i class="bi @(plan.IsActive ? "bi-pause-circle" : "bi-play-circle")"></i>
+                                    @(plan.IsActive ? "إيقاف" : "تفعيل")
+                                            </button>
+
+                                            <button type="button"
+                                        class="admx-coral-action"
+                                        data-plan-delete="@plan.AdvertisementPlanId"
+                                        data-plan-name="@plan.PlanName"
+                                        data-plan-ad-count="@plan.AdvertisementCount">
+                                                <i class="bi bi-trash3"></i>
+                                                حذف
+                                            </button>
+                                        </div>
+                                    </article>
+                    }
+                        </div>
+
+                @if (pricingOptions.Count > 6)
+                {
+                                <div style="display:flex;justify-content:center;margin-top:12px;">
+                                    <button type="button"
+                                class="admx-soft-action"
+                                data-plan-show-more
+                                data-hidden-count="@(pricingOptions.Count - 6)"
+                                aria-expanded="false">
+                                        <span data-plan-more-label>عرض المزيد (@(pricingOptions.Count - 6))</span>
+                                        <i class="bi bi-chevron-down" data-plan-more-icon></i>
+                                    </button>
+                                </div>
+                }
+            }
+            </section>
+    }
+
+    @if (Model.CanViewReports)
+    {
+            <section class="admx-onepage-section" data-admx-section="reports" hidden>
+                <form class="admx-report-filter admx-report-filter--exact" id="admxReportsFilter">
+                    <label><span>من تاريخ</span><input type="date" name="From" value="@report.From.ToString("yyyy-MM-dd")" /></label>
+                    <label><span>إلى تاريخ</span><input type="date" name="To" value="@report.To.ToString("yyyy-MM-dd")" /></label>
+                    <label>
+                        <span>الباقة</span>
+                        <select name="AdvertisementPlanId" data-report-plan>
+                            <option value="">كل الباقات</option>
+                        @foreach (var plan in report.PlanOptions)
+                        {
+                                    <option value="@plan.Id">@plan.Label</option>
+                        }
+                        </select>
+                    </label>
+                    <label>
+                        <span>المنشأة</span>
+                        <select name="PlaceId" data-report-place>
+                            <option value="">كل المنشآت</option>
+                        @foreach (var place in report.PlaceOptions)
+                        {
+                                    <option value="@place.Id">@place.Label</option>
+                        }
+                        </select>
+                    </label>
+                    <label>
+                        <span>الإعلان</span>
+                        <select name="AdvertisementId" data-report-ad>
+                            <option value="">كل الإعلانات</option>
+                        @foreach (var ad in report.AdvertisementOptions)
+                        {
+                                    <option value="@ad.Id" data-parent="@ad.ParentId">@ad.Label</option>
+                        }
+                        </select>
+                    </label>
+                    <button type="submit" class="admx-primary-action admx-report-filter-btn"><i class="bi bi-funnel-fill"></i> تطبيق</button>
+                    <button type="button" class="admx-soft-action admx-report-filter-btn" data-report-reset><i class="bi bi-arrow-counterclockwise"></i> مسح</button>
+
+                    <input type="hidden" name="BillingModel" value="All" />
+                    <input type="hidden" name="Status" value="All" />
+                </form>
+
+                <div class="admx-report-kpis admx-report-kpis--essential" id="admxReportKpis">
+                    <article><span><i class="bi bi-megaphone"></i></span><div><small>إجمالي الإعلانات</small><strong>@report.TotalAdvertisements.ToString("N0")</strong><em>ضمن الفترة المحددة</em></div></article>
+                    <article><span><i class="bi bi-eye"></i></span><div><small>المشاهدات الفريدة</small><strong>@report.Impressions.ToString("N0")</strong><em>مستخدمون أو زوار مختلفون</em></div></article>
+                    <article><span><i class="bi bi-cursor"></i></span><div><small>النقرات الفريدة</small><strong>@report.Clicks.ToString("N0")</strong><em>مستخدمون أو زوار مختلفون</em></div></article>
+                    <article><span><i class="bi bi-check2-circle"></i></span><div><small>الحجوزات المكتملة</small><strong>@report.Conversions.ToString("N0")</strong></div></article>
+                    <article class="is-coral"><span><i class="bi bi-cash-stack"></i></span><div><small>إيرادات الإعلانات</small><strong>@report.PaidRevenue.ToString("N0")</strong><em>مبالغ دفع معتمدة · ر.ي</em></div></article>
+                </div>
+
+                <div class="admx-report-dashboard">
+                    <article class="admx-report-chart-card is-wide">
+                        <div class="admx-report-card-head">
+                            <div>
+                                <h3>المشاهدات والنقرات الفريدة خلال الفترة</h3>
+                                <p>اتجاه الأداء يومًا بيوم حسب الفلاتر المحددة أعلاه.</p>
+                            </div>
+                            <span><i class="bi bi-graph-up-arrow"></i></span>
+                        </div>
+                        <div id="admxPerformanceChart" class="admx-apex-chart"></div>
+                    </article>
+
+                    <article class="admx-report-chart-card">
+                        <div class="admx-report-card-head">
+                            <div><h3>ملخص حالات الدفع</h3><p>أعداد الإعلانات حسب حالة الدفع ضمن الفترة المحددة.</p></div>
+                            <span><i class="bi bi-credit-card-2-front"></i></span>
+                        </div>
+                        <div class="admx-finance-summary">
+                            <div><small>مدفوعة</small><strong data-report-paid-count>@report.PaidAdvertisements.ToString("N0")</strong></div>
+                            <div><small>دفع قيد المراجعة</small><strong data-report-pending-count>@report.PendingPayments.ToString("N0")</strong></div>
+                            <div><small>مستردة</small><strong data-report-refunded-count>@report.RefundedAdvertisements.ToString("N0")</strong></div>
+                        </div>
+                    </article>
+                </div>
+
+                <article class="admx-premium-panel admx-top-ads-panel">
+                    <div class="admx-panel-title">
+                        <span><i class="bi bi-trophy"></i></span>
+                        <div>
+                            <h3>تفاصيل الإعلانات</h3>
+                            <p>الباقة والمدة والسعر والأداء الفعلي لكل إعلان.</p>
+                        </div>
+                    </div>
+                    <div class="admx-report-table-wrap">
+                        <table class="admx-report-table" id="admxTopAdsTable">
+                            <thead>
+                                <tr>
+                                    <th>الإعلان</th>
+                                    <th>الباقة</th>
+                                    <th>الحالة</th>
+                                    <th>المدة</th>
+                                    <th>سعر اليوم</th>
+                                    <th>إجمالي الإعلان</th>
+                                    <th>مشاهدات فريدة</th>
+                                    <th>نقرات فريدة</th>
+                                    <th>حجوزات مكتملة</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            @foreach (var item in report.TopAdvertisements.Take(30))
+                            {
+                                        <tr>
+                                            <td><strong>@item.Title</strong><small>@item.PlaceName</small></td>
+                                            <td><strong>@item.PlanName</strong><small>نسبة الظهور @($"{item.DisplayWeight}%")</small></td>
+                                            <td><strong>@item.StatusLabel</strong><small>@item.PaymentStatusLabel</small></td>
+                                            <td>@item.DurationDays يوم</td>
+                                            <td>@item.DailyPrice.ToString("N0") ر.ي</td>
+                                            <td>@item.TotalAmount.ToString("N0") ر.ي</td>
+                                            <td>@item.Impressions.ToString("N0")</td>
+                                            <td>@item.Clicks.ToString("N0")</td>
+                                            <td>@item.Conversions.ToString("N0")</td>
+                                        </tr>
+                            }
+                            </tbody>
+                        </table>
+                    </div>
+                </article>
+            </section>
+    }
+
+</main>
+
+@section Scripts {
+        <script src="~/lib/sweetalert2/sweetalert2.js"></script>
+        <script src="~/lib/apexcharts/apexcharts.min.js"></script>
+        <script src="~/js/admin/advertisements.js" asp-append-version="true"></script>
+}

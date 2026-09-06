@@ -1,0 +1,663 @@
+@using System.Linq
+@model YemenGuide.Core.DTOs.Admin.AdminAdvertisementReportsDto
+@{
+    Layout = null;
+    var autoPrint = ViewData["AutoPrint"] is bool autoPrintValue && autoPrintValue;
+    var pdfMode = ViewData["PdfMode"] is bool pdfModeValue && pdfModeValue;
+}
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8" />
+    <title>تقرير الإعلانات - دليلك اليمني</title>
+    <style>
+
+        @@font-face {
+            font-family: "Tajawal";
+            src: url("/lib/fonts/Tajawal/Tajawal-Regular.ttf") format("truetype");
+            font-weight: 400;
+            font-style: normal;
+            font-display: swap;
+        }
+
+        @@font-face {
+            font-family: "Tajawal";
+            src: url("/lib/fonts/Tajawal/Tajawal-Medium.ttf") format("truetype");
+            font-weight: 500;
+            font-style: normal;
+            font-display: swap;
+        }
+
+        @@font-face {
+            font-family: "Tajawal";
+            src: url("/lib/fonts/Tajawal/Tajawal-Bold.ttf") format("truetype");
+            font-weight: 700;
+            font-style: normal;
+            font-display: swap;
+        }
+
+        @@font-face {
+            font-family: "Tajawal";
+            src: url("/lib/fonts/Tajawal/Tajawal-ExtraBold.ttf") format("truetype");
+            font-weight: 800;
+            font-style: normal;
+            font-display: swap;
+        }
+
+        @@font-face {
+            font-family: "Tajawal";
+            src: url("/lib/fonts/Tajawal/Tajawal-Black.ttf") format("truetype");
+            font-weight: 900;
+            font-style: normal;
+            font-display: swap;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            color: #05203c;
+            background: #f5fafc;
+            font-family: "Tajawal", sans-serif;
+        }
+
+        .print-actions {
+            width: min(1180px, calc(100% - 28px));
+            margin: 14px auto 0;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+
+            .print-actions button {
+                border: 0;
+                border-radius: 10px;
+                padding: 9px 16px;
+                color: #fff;
+                background: #00a6da;
+                font-weight: 800;
+                cursor: pointer;
+            }
+
+        .report-sheet {
+            width: min(1180px, calc(100% - 28px));
+            margin: 12px auto 28px;
+            overflow: hidden;
+            border: 1px solid #dcebf1;
+            border-radius: 22px;
+            background: #fff;
+            box-shadow: 0 18px 60px rgba(5,32,60,.09);
+        }
+
+        .report-header {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+            padding: 24px 28px 20px;
+            border-bottom: 1px solid #dfeef3;
+            background: radial-gradient(circle at 12% 0%, rgba(0,166,218,.11), transparent 30%), linear-gradient(135deg,#fff 0%,#f5fcff 75%,#fff 100%);
+        }
+
+            .report-header::before {
+                content: "";
+                position: absolute;
+                top: 0;
+                right: 0;
+                left: 0;
+                height: 5px;
+                background: linear-gradient(90deg,#00a6da 0 88%,#ff5a5f 88% 100%);
+            }
+
+        .report-brand {
+            display: flex;
+            align-items: center;
+            gap: 13px;
+        }
+
+        .report-brand__icon {
+            display: grid;
+            width: 50px;
+            height: 50px;
+            place-items: center;
+            border-radius: 15px;
+            color: #fff;
+            background: #00a6da;
+            font-size: 22px;
+            font-weight: 900;
+        }
+
+        .report-brand small {
+            display: block;
+            color: #0786ad;
+            font-size: 12px;
+            font-weight: 800;
+        }
+
+        .report-brand h1 {
+            margin: 4px 0 1px;
+            color: #05203c;
+            font-size: 28px;
+            font-weight: 900;
+        }
+
+        .report-brand p {
+            margin: 0;
+            color: #738797;
+            font-size: 11px;
+        }
+
+        .report-period {
+            min-width: 250px;
+            padding: 11px 13px;
+            border: 1px solid #dcebf1;
+            border-radius: 13px;
+            background: #fff;
+        }
+
+            .report-period small,
+            .report-period strong {
+                display: block;
+            }
+
+            .report-period small {
+                color: #7b8f9e;
+                font-size: 9px;
+            }
+
+            .report-period strong {
+                margin-top: 3px;
+                color: #05203c;
+                font-size: 12px;
+            }
+
+        .report-body {
+            padding: 20px 24px 24px;
+        }
+
+        .report-kpis {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0,1fr));
+            gap: 8px;
+        }
+
+        .report-kpi {
+            padding: 11px;
+            border: 1px solid #e2edf2;
+            border-radius: 13px;
+            background: #fff;
+        }
+
+            .report-kpi small,
+            .report-kpi strong,
+            .report-kpi em {
+                display: block;
+            }
+
+            .report-kpi small {
+                color: #738797;
+                font-size: 8.5px;
+                font-weight: 700;
+            }
+
+            .report-kpi strong {
+                margin-top: 3px;
+                color: #05203c;
+                font-size: 17px;
+                font-weight: 900;
+            }
+
+            .report-kpi em {
+                margin-top: 2px;
+                color: #8aa0ae;
+                font-size: 8px;
+                font-style: normal;
+            }
+
+            .report-kpi.is-coral {
+                border-color: rgba(255,90,95,.18);
+                background: rgba(255,90,95,.045);
+            }
+
+                .report-kpi.is-coral strong {
+                    color: #df474c;
+                }
+
+        .report-section {
+            margin-top: 18px;
+        }
+
+        .report-section__title {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+
+            .report-section__title h2 {
+                margin: 0;
+                color: #05203c;
+                font-size: 15px;
+                font-weight: 900;
+            }
+
+            .report-section__title small {
+                color: #7b8f9e;
+                font-size: 9px;
+            }
+
+        .billing-grid {
+            display: grid;
+            grid-template-columns: repeat(3,1fr);
+            gap: 8px;
+        }
+
+            .billing-grid article {
+                padding: 11px 12px;
+                border: 1px solid #e2edf2;
+                border-radius: 12px;
+                background: #fafdfe;
+            }
+
+            .billing-grid strong,
+            .billing-grid small {
+                display: block;
+            }
+
+            .billing-grid strong {
+                color: #05203c;
+                font-size: 11px;
+            }
+
+            .billing-grid small {
+                margin-top: 3px;
+                color: #738797;
+                font-size: 8.5px;
+            }
+
+        .daily-chart {
+            display: flex;
+            align-items: flex-end;
+            gap: 5px;
+            height: 175px;
+            padding: 14px 10px 8px;
+            border: 1px solid #e2edf2;
+            border-radius: 13px;
+            background: linear-gradient(180deg,#fff,#fbfeff);
+        }
+
+        .daily-bar {
+            display: flex;
+            flex: 1 0 18px;
+            height: 100%;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 4px;
+        }
+
+            .daily-bar i {
+                display: block;
+                width: 70%;
+                max-width: 18px;
+                min-height: 4px;
+                border-radius: 5px 5px 2px 2px;
+                background: #00a6da;
+            }
+
+            .daily-bar small {
+                color: #8195a3;
+                font-size: 7px;
+                white-space: nowrap;
+            }
+
+        .report-table-wrap {
+            overflow: hidden;
+            border: 1px solid #e2edf2;
+            border-radius: 13px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+        }
+
+        th {
+            padding: 11px;
+            color: #05203c;
+            background: #eefaff;
+            text-align: right;
+            font-weight: 900;
+        }
+
+        td {
+            padding: 11px;
+            border-top: 1px solid #e8f1f4;
+            color: #587080;
+            vertical-align: middle;
+        }
+
+            td strong {
+                display: block;
+                color: #05203c;
+                font-size: 11px;
+            }
+
+            td small {
+                display: block;
+                margin-top: 2px;
+                color: #7d919f;
+                font-size: 9px;
+            }
+
+        .report-footer {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 13px 24px;
+            border-top: 1px solid #e2edf2;
+            color: #8093a0;
+            background: #fbfdfe;
+            font-size: 8px;
+        }
+
+
+        @@media screen and (max-width: 767px) {
+            .report-sheet {
+                width: calc(100% - 12px);
+                margin: 8px auto 18px;
+                border-radius: 16px;
+            }
+
+            .report-header {
+                padding: 16px 14px 13px;
+                gap: 10px;
+            }
+
+            .report-brand {
+                gap: 8px;
+                min-width: 0;
+            }
+
+            .report-brand__icon {
+                width: 40px;
+                height: 40px;
+                flex: 0 0 40px;
+                border-radius: 12px;
+            }
+
+            .report-brand h1 {
+                font-size: 17px;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            .report-brand p {
+                font-size: 8px;
+            }
+
+            .report-period {
+                min-width: 150px;
+                padding: 8px;
+            }
+
+                .report-period strong {
+                    font-size: 9px;
+                }
+
+            .report-body {
+                padding: 12px 10px 14px;
+            }
+
+            .report-kpis {
+                grid-template-columns: repeat(3,minmax(0,1fr));
+                gap: 5px;
+            }
+
+            .report-kpi {
+                padding: 7px;
+            }
+
+                .report-kpi small {
+                    font-size: 6.8px;
+                }
+
+                .report-kpi strong {
+                    font-size: 12px;
+                }
+
+            .billing-grid {
+                grid-template-columns: repeat(3,minmax(0,1fr));
+                gap: 5px;
+            }
+
+                .billing-grid article {
+                    padding: 7px;
+                }
+
+                .billing-grid strong {
+                    font-size: 8px;
+                }
+
+                .billing-grid small {
+                    font-size: 6.5px;
+                }
+
+            .daily-chart {
+                height: 140px;
+                padding: 10px 6px 6px;
+                overflow-x: auto;
+            }
+
+            .daily-bar {
+                flex: 0 0 24px;
+            }
+
+            .report-table-wrap {
+                overflow-x: auto;
+            }
+
+            table {
+                min-width: 1080px;
+            }
+
+            .print-actions {
+                width: calc(100% - 12px);
+                margin-top: 8px;
+            }
+        }
+
+        @@media print {
+            body {
+                background: #fff;
+            }
+
+            .print-actions {
+                display: none !important;
+            }
+
+            .report-sheet {
+                width: 100%;
+                margin: 0;
+                border: 0;
+                border-radius: 0;
+                box-shadow: none;
+            }
+
+            .report-header,
+            .report-kpi.is-coral,
+            .daily-bar i,
+            th {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .report-body {
+                padding: 16px 18px;
+            }
+
+            .report-kpis {
+                grid-template-columns: repeat(3,1fr);
+                gap: 6px;
+            }
+
+            .billing-grid {
+                grid-template-columns: repeat(3,1fr);
+            }
+
+            .report-kpi {
+                padding: 9px;
+            }
+
+            table {
+                font-size: 8px;
+            }
+
+            .report-section {
+                break-inside: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="print-actions">
+        <button type="button" onclick="window.print()">طباعة التقرير</button>
+        @if (!pdfMode)
+        {
+            <small>لحفظ نسخة إلكترونية استخدم زر حفظ التقرير من صفحة التقارير.</small>
+        }
+    </div>
+
+    <section class="report-sheet">
+        <header class="report-header">
+            <div class="report-brand">
+                <span class="report-brand__icon">ي</span>
+                <div>
+                    <small>دليلك اليمني · إدارة الإعلانات</small>
+                    <h1>@Model.ScopeLabel</h1>
+                    <p>تقرير أداء الإعلانات وفق الباقات المرنة ذات السعر اليومي.</p>
+                </div>
+            </div>
+
+            <div class="report-period">
+                <small>الفترة المحددة</small>
+                <strong>@Model.From.ToString("dd/MM/yyyy") — @Model.To.ToString("dd/MM/yyyy")</strong>
+                <small style="margin-top:6px">تم الإنشاء: @Model.GeneratedAt.ToString("dd/MM/yyyy HH:mm")</small>
+            </div>
+        </header>
+
+        <div class="report-body">
+            <div class="report-kpis">
+                <article class="report-kpi"><small>إجمالي الإعلانات</small><strong>@Model.TotalAdvertisements.ToString("N0")</strong><em>ضمن الفترة المحددة</em></article>
+                <article class="report-kpi"><small>المشاهدات الفريدة</small><strong>@Model.Impressions.ToString("N0")</strong><em>مستخدمون أو زوار مختلفون</em></article>
+                <article class="report-kpi"><small>النقرات الفريدة</small><strong>@Model.Clicks.ToString("N0")</strong><em>مستخدمون أو زوار مختلفون</em></article>
+                <article class="report-kpi"><small>الحجوزات المكتملة</small><strong>@Model.Conversions.ToString("N0")</strong></article>
+                <article class="report-kpi is-coral"><small>إيرادات الإعلانات</small><strong>@Model.PaidRevenue.ToString("N0")</strong><em>مبالغ دفع معتمدة · ر.ي</em></article>
+            </div>
+
+            <section class="report-section">
+                <div class="report-section__title">
+                    <h2>اتجاه المشاهدات الفريدة يوميًا</h2>
+                    <small>حسب الفترة والفلاتر المحددة في التقرير</small>
+                </div>
+                <div class="daily-chart">
+                    @{
+                        var maxDaily = Model.DailyMetrics.Count > 0
+                        ? Math.Max(1L, Model.DailyMetrics.Max(x => x.Impressions))
+                        : 1L;
+                    }
+                    @foreach (var day in Model.DailyMetrics)
+                    {
+                        var height = Math.Max(5, (int)Math.Round(day.Impressions * 100d / maxDaily));
+                        <div class="daily-bar">
+                            <i style="height:@height%"></i>
+                            <small>@day.Date.ToString("dd/MM")</small>
+                        </div>
+                    }
+                </div>
+            </section>
+
+            <section class="report-section">
+                <div class="report-section__title">
+                    <h2>ملخص حالات الدفع</h2>
+                    <small>أعداد الإعلانات حسب حالة الدفع ضمن الفترة المحددة.</small>
+                </div>
+                <div class="billing-grid">
+                    <article>
+                        <strong>@Model.PaidAdvertisements</strong>
+                        <small>مدفوعة</small>
+                    </article>
+                    <article>
+                        <strong>@Model.PendingPayments</strong>
+                        <small>دفع قيد المراجعة</small>
+                    </article>
+                    <article>
+                        <strong>@Model.RefundedAdvertisements</strong>
+                        <small>إعلانات مستردة</small>
+                    </article>
+                </div>
+            </section>
+
+            <section class="report-section">
+                <div class="report-section__title">
+                    <h2>تفاصيل الإعلانات</h2>
+                    <small>الباقة والمدة والسعر والأداء الفعلي لكل إعلان</small>
+                </div>
+                <div class="report-table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>الإعلان</th>
+                                <th>الباقة</th>
+                                <th>الحالة</th>
+                                <th>المدة</th>
+                                <th>سعر اليوم</th>
+                                <th>إجمالي الإعلان</th>
+                                <th>مشاهدات فريدة</th>
+                                <th>نقرات فريدة</th>
+                                <th>حجوزات مكتملة</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in Model.TopAdvertisements)
+                            {
+                                <tr>
+                                    <td><strong>@item.Title</strong><small>@item.PlaceName</small></td>
+                                    <td><strong>@item.PlanName</strong><small>نسبة الظهور @($"{item.DisplayWeight}%")</small></td>
+                                    <td><strong>@item.StatusLabel</strong><small>@item.PaymentStatusLabel</small></td>
+                                    <td>@item.DurationDays يوم</td>
+                                    <td>@item.DailyPrice.ToString("N0") ر.ي</td>
+                                    <td>@item.TotalAmount.ToString("N0") ر.ي</td>
+                                    <td>@item.Impressions.ToString("N0")</td>
+                                    <td>@item.Clicks.ToString("N0")</td>
+                                    <td>@item.Conversions.ToString("N0")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+
+        <footer class="report-footer">
+            <span>دليلك اليمني · تقرير داخلي لإدارة المنصة</span>
+            <span>مكان ظهور الإعلان: صفحة البحث - أعلى الفئات</span>
+        </footer>
+    </section>
+    @if (autoPrint)
+    {
+        <script>
+            window.addEventListener("load", function () {
+                window.setTimeout(function () { window.print(); }, 250);
+            });
+        </script>
+    }
+</body>
+</html>
