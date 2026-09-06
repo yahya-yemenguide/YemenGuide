@@ -105,11 +105,11 @@
                     </article>
                     <article class="is-attention">
                         <i class="bi bi-lightning-charge-fill"></i>
-                        <div><small>تحتاج إجراء</small><strong data-overview-action>@(overview.DraftAdvertisements + overview.AwaitingPaymentAdvertisements + overview.RejectedAdvertisements + overview.PaymentRejectedAdvertisements)</strong></div>
+                        <div><small>تحتاج إجراء</small><strong data-overview-action>@(overview.DraftAdvertisements + overview.AwaitingPaymentAdvertisements + overview.PendingAdvertisements + overview.RejectedAdvertisements)</strong></div>
                     </article>
                     <article>
                         <i class="bi bi-eye-fill"></i>
-                        <div><small>الظهور</small><strong data-overview-impressions>@overview.ImpressionsCount.ToString("N0")</strong></div>
+                        <div><small>المشاهدات</small><strong data-overview-impressions>@overview.ImpressionsCount.ToString("N0")</strong></div>
                     </article>
                     <article>
                         <i class="bi bi-cursor-fill"></i>
@@ -155,28 +155,44 @@
                         </div>
                     </article>
 
-                    <article class="oad-card">
+                    <article class="oad-card oad-performance-card">
                         <header class="oad-card__head">
                             <div>
-                                <span class="oad-kicker">الأداء</span>
-                                <h3>من الظهور إلى الحجز</h3>
+                                <span class="oad-kicker">نتائج الحجز</span>
+                                <h3>الحجوزات الناتجة عن الإعلان</h3>
                             </div>
-                            <i class="bi bi-graph-up-arrow"></i>
+                            <i class="bi bi-bar-chart-line-fill"></i>
                         </header>
-                        <div class="oad-flow">
-                            <div><small>ظهور</small><strong>@overview.ImpressionsCount.ToString("N0")</strong></div>
-                            <i class="bi bi-chevron-left"></i>
-                            <div><small>نقرات</small><strong>@overview.ClicksCount.ToString("N0")</strong></div>
-                            <i class="bi bi-chevron-left"></i>
-                            <div><small>بدء حجز</small><strong>@overview.BookingStartsCount.ToString("N0")</strong></div>
-                            <i class="bi bi-chevron-left"></i>
-                            <div><small>حجز مكتمل</small><strong>@overview.ConversionsCount.ToString("N0")</strong></div>
-                        </div>
-                        <div class="oad-rates">
-                            <span>نسبة النقر <b>@overview.ClickThroughRate%</b></span>
-                            <span>نسبة التحويل <b>@overview.ConversionRate%</b></span>
+
+                        <div class="oad-performance-chart" data-booking-performance-chart>
+                            <div class="oad-performance-row"
+                                 data-booking-performance-row
+                                 data-metric="starts"
+                                 data-value="@overview.BookingStartsCount">
+                                <div class="oad-performance-row__head">
+                                    <span>بدء الحجز من الإعلان</span>
+                                    <strong data-booking-performance-value="starts">@overview.BookingStartsCount.ToString("N0")</strong>
+                                </div>
+                                <div class="oad-performance-track">
+                                    <span data-booking-performance-bar></span>
+                                </div>
+                            </div>
+
+                            <div class="oad-performance-row"
+                                 data-booking-performance-row
+                                 data-metric="conversions"
+                                 data-value="@overview.ConversionsCount">
+                                <div class="oad-performance-row__head">
+                                    <span>الحجوزات المكتملة من الإعلان</span>
+                                    <strong data-booking-performance-value="conversions">@overview.ConversionsCount.ToString("N0")</strong>
+                                </div>
+                                <div class="oad-performance-track">
+                                    <span data-booking-performance-bar></span>
+                                </div>
+                            </div>
                         </div>
                     </article>
+
                 </div>
 
                 <article class="oad-card oad-how">
@@ -210,7 +226,8 @@
 
                 <div class="oad-groups" data-groups>
                     <button type="button" class="active" data-group="All"><span>الكل</span><b>@ads.AllCount</b></button>
-                    <button type="button" data-group="Running"><span>تعمل</span><b>@ads.RunningCount</b></button>
+                    <button type="button" data-group="Running"><span>نشطة</span><b>@ads.RunningCount</b></button>
+                    <button type="button" data-group="Scheduled"><span>مجدولة</span><b>@ads.ScheduledCount</b></button>
                     <button type="button" data-group="NeedsAction"><span>تحتاج إجراء</span><b>@ads.NeedsActionCount</b></button>
                     <button type="button" data-group="Paused"><span>متوقفة</span><b>@ads.PausedCount</b></button>
                     <button type="button" data-group="Expired"><span>منتهية</span><b>@ads.ExpiredCount</b></button>
@@ -232,7 +249,7 @@
                     <select name="SortBy" aria-label="الترتيب">
                         <option value="Newest">الأحدث</option>
                         <option value="Oldest">الأقدم</option>
-                        <option value="MostViewed">الأكثر ظهورًا</option>
+                        <option value="MostViewed">الأكثر مشاهدة</option>
                         <option value="NeedsAction">الأهم أولًا</option>
                     </select>
                     <button type="submit" class="oad-btn oad-btn--primary"><i class="bi bi-funnel-fill"></i><span>تطبيق</span></button>
@@ -272,14 +289,14 @@
                             }
                                     <div class="oad-ad-metrics">
                                         <div class="is-strength">
-                                            <small>نسبة الظهور</small>
+                                            <small>أولوية العرض</small>
                                             <strong>@item.DisplayWeight%</strong>
                                         </div>
                                         <div><small>نقرات</small><strong>@item.ClicksCount.ToString("N0")</strong></div>
                                         <div><small>حجوزات</small><strong>@item.ConversionsCount.ToString("N0")</strong></div>
                                         <div class="is-unique-views">
                                             <small>عدد المشاهدات</small>
-                                            <strong>@item.UniqueImpressionsCount.ToString("N0")</strong>
+                                            <strong>@item.ImpressionsCount.ToString("N0")</strong>
                                         </div>
                                     </div>
                                     <div class="oad-ad-card__foot">
@@ -347,7 +364,7 @@
                         <div class="oad-cb-channel">
                             <i class="bi bi-search-heart-fill"></i>
                             <div>
-                                <strong>مكان الظهور ثابت</strong>
+                                <strong>مكان العرض ثابت</strong>
                                 <p>الإعلان يظهر في مساحة الإعلانات داخل صفحة البحث. لا يحتاج المالك لاختيار مكان ظهور.</p>
                             </div>
                         </div>
@@ -373,15 +390,15 @@
                                 var isExtraPlan = planIndex >= 6;
 
                                     <label class="oad-cb-plan oad-cb-plan--owner @(isExtraPlan ? "oad-cb-plan--extra" : "")"
-                                   data-plan
-                                   data-plan-id="@plan.AdvertisementPlanId"
-                                   data-plan-name="@plan.PlanName"
-                                   data-price="@plan.Price.ToString(System.Globalization.CultureInfo.InvariantCulture)"
-                                   data-price-text="@plan.PriceText"
-                                   data-weight="@plan.DisplayWeight">
+                                       data-plan
+                                       data-plan-id="@plan.AdvertisementPlanId"
+                                       data-plan-name="@plan.PlanName"
+                                       data-price="@plan.Price.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                                       data-price-text="@plan.PriceText"
+                                       data-weight="@plan.DisplayWeight">
                                         <input type="radio"
-                                       name="AdvertisementPlanId"
-                                       value="@plan.AdvertisementPlanId" />
+                                           name="AdvertisementPlanId"
+                                           value="@plan.AdvertisementPlanId" />
 
                                         <span class="oad-cb-plan__check oad-cb-plan__check--corner">
                                             <i class="bi bi-check-lg"></i>
@@ -401,7 +418,7 @@
 
                                         <div class="oad-plan-meta">
                                             <span>
-                                                <small>نسبة الظهور</small>
+                                                <small>أولوية العرض</small>
                                                 <b>@plan.DisplayWeight%</b>
                                             </span>
                                             <span>
@@ -417,10 +434,10 @@
                         {
                                 <div class="oad-plan-more-wrap">
                                     <button type="button"
-                                    class="oad-plan-more"
-                                    data-plan-toggle
-                                    data-expanded="false"
-                                    data-hidden-count="@(availableWizardPlans.Count - 6)">
+                                        class="oad-plan-more"
+                                        data-plan-toggle
+                                        data-expanded="false"
+                                        data-hidden-count="@(availableWizardPlans.Count - 6)">
                                         <span>عرض المزيد (@(availableWizardPlans.Count - 6))</span>
                                         <i class="bi bi-chevron-down"></i>
                                     </button>
@@ -459,7 +476,7 @@
                                     </div>
 
                                     <div class="oad-cb-value">
-                                        <small>نسبة الظهور</small>
+                                        <small>أولوية العرض</small>
                                         <strong data-flat-weight>—</strong>
                                     </div>
 
@@ -498,23 +515,33 @@
                                         <small>اطلب تاريخًا محددًا إذا أردت البدء لاحقًا.</small>
                                     </span>
                                 </label>
+                            </div>
 
-                                <div class="oad-cb-datewrap" data-start-date aria-hidden="true">
-                                    <label class="oad-cb-date">
-                                        <span>التاريخ والوقت المطلوب</span>
-                                        <input type="datetime-local"
-                                               name="RequestedStartAt"
-                                               autocomplete="off"
-                                               step="60" />
-                                        <small>اختر تاريخًا ووقتًا في المستقبل لبدء الإعلان.</small>
-                                    </label>
+                            <div class="oad-cb-datewrap" data-start-date hidden>
+                                <div class="oad-cb-date">
+                                    <span>التاريخ والوقت المطلوب</span>
+                                    <input type="hidden" name="RequestedStartAt" />
+                                    <button type="button"
+                                            class="oad-datetime-trigger"
+                                            data-future-datetime-trigger
+                                            lang="en-US"
+                                            dir="ltr">
+                                        <span data-future-datetime-text>Select date, hour &amp; minute</span>
+                                        <i class="bi bi-calendar3"></i>
+                                    </button>
+                                    <div class="oad-future-picker"
+                                         data-future-datetime-picker
+                                         lang="en-US"
+                                         dir="ltr"
+                                         hidden></div>
+                                    <small>إذا تم الاعتماد بعد هذا الموعد، يبدأ الإعلان عند الاعتماد الفعلي.</small>
                                 </div>
                             </div>
                         </section>
 
                         <div class="oad-cb-summary is-step1-summary" data-quote>
                             <div><small>الباقة</small><strong data-quote-plan>اختر باقة</strong></div>
-                            <div><small>نسبة الظهور</small><strong data-quote-weight>—</strong></div>
+                            <div><small>أولوية العرض</small><strong data-quote-weight>—</strong></div>
                             <div><small>سعر اليوم</small><strong data-quote-daily>—</strong></div>
                             <div><small>عدد الأيام</small><strong data-quote-days>1 يوم</strong></div>
                             <div><small>الإجمالي</small><strong data-quote-total>—</strong></div>
@@ -706,7 +733,7 @@
 
                                 <dl>
                                     <div><dt>الباقة</dt><dd data-review-plan>—</dd></div>
-                                    <div><dt>نسبة الظهور</dt><dd data-review-weight>—</dd></div>
+                                    <div><dt>أولوية العرض</dt><dd data-review-weight>—</dd></div>
                                     <div><dt>سعر اليوم</dt><dd data-review-daily>—</dd></div>
                                     <div><dt>عدد الأيام</dt><dd data-review-days>—</dd></div>
                                     <div><dt>الإجمالي</dt><dd data-review-total>—</dd></div>
@@ -726,7 +753,7 @@
                             <i class="bi bi-arrow-left"></i>
                             <div><b>3</b><span>مراجعة الإدارة</span></div>
                             <i class="bi bi-arrow-left"></i>
-                            <div><b>4</b><span>بدء الظهور</span></div>
+                            <div><b>4</b><span>بدء العرض</span></div>
                         </div>
                     </section>
                 </div>
@@ -735,7 +762,7 @@
                     <div class="oad-wizard-confirm__card">
                         <span class="oad-wizard-confirm__icon"><i class="bi bi-credit-card-2-front-fill"></i></span>
                         <h3>تأكيد الإعلان والانتقال للدفع</h3>
-                        <p>سيتم تثبيت الباقة ونسبة الظهور والسعر وعدد الأيام، ثم تنتقل لإدخال بيانات الدفع.</p>
+                        <p>سيتم تثبيت الباقة وأولوية العرض والسعر وعدد الأيام، ثم تنتقل لإدخال بيانات الدفع.</p>
                         <div class="oad-wizard-confirm__actions">
                             <button type="button" class="is-back" data-wizard-confirm-back>
                                 <i class="bi bi-arrow-right"></i>
@@ -791,7 +818,7 @@
                 </section>
 
                 <section class="oad-detail-metrics">
-                    <article><i class="bi bi-eye"></i><span><small>الظهور</small><strong data-d-impressions>0</strong></span></article>
+                    <article><i class="bi bi-eye"></i><span><small>المشاهدات</small><strong data-d-impressions>0</strong></span></article>
                     <article><i class="bi bi-cursor"></i><span><small>النقرات</small><strong data-d-clicks>0</strong></span></article>
                     <article><i class="bi bi-door-open"></i><span><small>بدء الحجز</small><strong data-d-starts>0</strong></span></article>
                     <article><i class="bi bi-check2-circle"></i><span><small>حجوزات مكتملة</small><strong data-d-conversions>0</strong></span></article>
@@ -811,10 +838,36 @@
                         <header><span><i class="bi bi-bullseye"></i></span><div><small>الجمهور والوقت</small><h3>الاستهداف والمواعيد</h3></div></header>
                         <dl>
                             <div><dt>الأجهزة</dt><dd data-d-device>—</dd></div>
-                            <div><dt>البداية</dt><dd data-d-start>—</dd></div>
-                            <div><dt>النهاية</dt><dd data-d-end>—</dd></div>
+                            <div><dt>تاريخ البداية</dt><dd data-d-start-date>—</dd></div>
+                            <div><dt>وقت البداية</dt><dd data-d-start-time>—</dd></div>
+                            <div><dt>تاريخ النهاية</dt><dd data-d-end-date>—</dd></div>
+                            <div><dt>وقت النهاية</dt><dd data-d-end-time>—</dd></div>
                         </dl>
                     </article>
+                </section>
+
+                <section class="oad-detail-refund" data-d-refund hidden>
+                    <header>
+                        <span class="oad-detail-refund__icon"><i class="bi bi-arrow-counterclockwise"></i></span>
+                        <div>
+                            <small>استرداد الإعلان</small>
+                            <h3 data-d-refund-status>بانتظار الاسترداد</h3>
+                            <p>الوجهة التي اختارها المالك محفوظة مع طلب الإلغاء، وبعد التنفيذ يظهر مرجع وإثبات التحويل هنا.</p>
+                        </div>
+                    </header>
+                    <dl>
+                        <div><dt>المبلغ</dt><dd data-d-refund-amount>—</dd></div>
+                        <div><dt>المحفظة</dt><dd data-d-refund-wallet>—</dd></div>
+                        <div><dt>رقم الحساب</dt><dd data-d-refund-account>—</dd></div>
+                        <div><dt>المستفيد</dt><dd data-d-refund-beneficiary>—</dd></div>
+                        <div><dt>تاريخ طلب الاسترداد</dt><dd data-d-refund-requested-date>—</dd></div>
+                        <div><dt>وقت طلب الاسترداد</dt><dd data-d-refund-requested-time>—</dd></div>
+                        <div><dt>تاريخ التنفيذ</dt><dd data-d-refund-at-date>—</dd></div>
+                        <div><dt>وقت التنفيذ</dt><dd data-d-refund-at-time>—</dd></div>
+                        <div><dt>رقم المرجع</dt><dd data-d-refund-reference>—</dd></div>
+                        <div><dt>ملاحظة الإدارة</dt><dd data-d-refund-note>—</dd></div>
+                    </dl>
+                    <div class="oad-detail-refund__proof" data-d-refund-proof></div>
                 </section>
 
                 <div class="oad-detail-notice" data-d-notice hidden></div>
@@ -916,7 +969,7 @@
                         <i class="bi bi-shield-check"></i>
                         <div>
                             <strong>ماذا يحدث بعد الإرسال؟</strong>
-                            <span>تراجع الإدارة إثبات الدفع، وبعد اعتماده يبدأ الإعلان حسب الموعد المحدد.</span>
+                            <span data-pay-policy-text>تراجع الإدارة إثبات الدفع، وتختلف سياسة الاسترداد حسب موعد بداية الإعلان.</span>
                         </div>
                     </div>
                 </div>
@@ -925,7 +978,7 @@
                     <div class="oad-payment-confirm__card">
                         <span class="oad-payment-confirm__icon"><i class="bi bi-shield-check"></i></span>
                         <h3>تأكيد إرسال الدفع</h3>
-                        <p>بعد التأكيد سيتم إرسال إثبات الدفع والإعلان إلى الإدارة للمراجعة.</p>
+                        <p data-payment-confirm-text>بعد التأكيد سيتم إرسال إثبات الدفع والإعلان إلى الإدارة للمراجعة.</p>
                         <div class="oad-payment-confirm__actions">
                             <button type="button" class="is-back" data-payment-confirm-back>تراجع</button>
                             <button type="button" class="is-confirm" data-payment-confirm-send>تأكيد وإرسال للإدارة</button>
@@ -954,46 +1007,4 @@
 @section Scripts {
         <script src="~/lib/sweetalert2/sweetalert2.js"></script>
         <script src="~/js/owner/advertisements.js" asp-append-version="true"></script>
-
-        <script>
-            // Fallback مباشر داخل الـ View حتى لا يعتمد ظهور التاريخ على نسخة JS مخزنة في المتصفح.
-            document.addEventListener("change", function (event) {
-                if (!event.target.matches('.oad-swal-builder input[name="StartImmediately"]')) return;
-
-                const root = event.target.closest(".oad-swal-builder");
-                if (!root) return;
-
-                const box = root.querySelector("[data-start-date]");
-                const field = root.querySelector('input[name="RequestedStartAt"]');
-                const future = event.target.value === "false";
-
-                if (box) {
-                    box.classList.toggle("is-visible", future);
-                    box.setAttribute("aria-hidden", future ? "false" : "true");
-                }
-
-                if (!field) return;
-
-                field.disabled = !future;
-                field.required = future;
-
-                if (future) {
-                    const now = new Date();
-                    now.setSeconds(0, 0);
-                    const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
-                        .toISOString()
-                        .slice(0, 16);
-                    field.min = local;
-
-                    requestAnimationFrame(function () {
-                        try { field.focus({ preventScroll: true }); }
-                        catch { field.focus(); }
-
-                        if (typeof field.showPicker === "function") {
-                            try { field.showPicker(); } catch { }
-                        }
-                    });
-                }
-            });
-        </script>
 }

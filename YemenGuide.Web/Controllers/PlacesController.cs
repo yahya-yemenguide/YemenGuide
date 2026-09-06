@@ -7158,18 +7158,20 @@ namespace YemenGuide.Web.Controllers
             // ================================================================
             // 12. إعلان الاستكشاف — Slot واحد فقط أعلى النتائج
             // ----------------------------------------------------------------
-            // لا يظهر في الصفحات 2+، ولا يظهر إذا لم تكن منشأته ضمن نتائج
-            // البحث الحقيقية بعد تطبيق كل الفلاتر الحالية.
+            // يظهر في الصفحة الأولى كمساحة ممولة مستقلة تحل محل Hero البحث.
+            // لا نشترط أن تكون منشأة الإعلان ضمن النتائج العضوية الحالية؛
+            // الفلاتر الحالية تمر للخدمة فقط لاستخدامها في الاستهداف.
             // ================================================================
-            CustomerAdvertisementDto? discoveryAdvertisement = null;
+            IReadOnlyList<CustomerAdvertisementDto> discoveryAdvertisements =
+                Array.Empty<CustomerAdvertisementDto>();
 
-            if (page == 1 && candidates.Count > 0)
+            if (page == 1)
             {
                 try
                 {
-                    discoveryAdvertisement =
+                    discoveryAdvertisements =
                         await _customerAdvertisementService
-                            .GetDiscoveryAdvertisementAsync(
+                            .GetDiscoveryAdvertisementsAsync(
                                 new CustomerAdvertisementDiscoveryRequestDto
                                 {
                                     SearchQuery = q,
@@ -7186,7 +7188,10 @@ namespace YemenGuide.Web.Controllers
                 {
                     // أي خلل في الإعلان لا يسمح له بإيقاف صفحة البحث.
                     Console.WriteLine(
-                        $"Search advertisement warning: {ex.Message}");
+                        $"Search advertisements warning: {ex.Message}");
+
+                    discoveryAdvertisements =
+                        Array.Empty<CustomerAdvertisementDto>();
                 }
             }
 
@@ -7199,7 +7204,13 @@ namespace YemenGuide.Web.Controllers
                 OnlyWithOffers = onlyWithOffers,
                 OnlyBookable = onlyBookable,
                 Results = results,
-                Advertisement = discoveryAdvertisement,
+
+                // صفحة Search الحالية تعرض القائمة داخل السلايدر.
+                Advertisements = discoveryAdvertisements.ToList(),
+
+                // توافق مع أي جزء قديم ما زال يتوقع إعلانًا واحدًا فقط.
+                Advertisement = discoveryAdvertisements.FirstOrDefault(),
+
                 Categories = categoriesList,
                 Cities = citiesList,
                 CurrentPage = page,

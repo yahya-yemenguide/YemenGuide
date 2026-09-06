@@ -1,149 +1,69 @@
-﻿@using System.Globalization
+@using System.Globalization
 @using System.Linq
 @using Microsoft.EntityFrameworkCore
 @inject YemenGuide.Data.AppDbContext _context
 @inject Microsoft.Extensions.Configuration.IConfiguration Configuration
 
 @{
-    // =========================================================
-    // 1. جلب إعدادات الموقع من قاعدة البيانات
-    // =========================================================
     var settings = _context.SystemSettings
         .AsNoTracking()
         .OrderBy(s => s.Id)
         .FirstOrDefault();
 
-    string siteName =
-        settings?.SiteName ?? "YemenGuide";
-
-    string siteDesc =
-        settings?.SiteDescription
+    string siteName = settings?.SiteName ?? "YemenGuide";
+    string siteDesc = settings?.SiteDescription
         ?? "الدليل السياحي والتجاري الأول في اليمن";
+    string favicon = settings?.FaviconPath ?? "/favicon.ico";
 
-    string favicon =
-        settings?.FaviconPath ?? "/favicon.ico";
-
-    // نمرر القيم المحملة للـHeader حتى لا يعيد استعلام SystemSettings.
     ViewData["AdminLayoutSettingsLoaded"] = true;
     ViewData["AdminSiteName"] = siteName;
     ViewData["AdminLogoPath"] = settings?.LogoPath ?? "/images/logo1.png";
 
+    var isRtl = CultureInfo.CurrentCulture.TextInfo.IsRightToLeft;
+    var direction = isRtl ? "rtl" : "ltr";
+    var langCode = CultureInfo.CurrentCulture.Name;
+    var bootstrapCss = isRtl ? "bootstrap.rtl.min.css" : "bootstrap.min.css";
 
-    // =========================================================
-    // 2. تحديد اللغة والاتجاه الحالي
-    // =========================================================
-    var isRtl =
-        CultureInfo.CurrentCulture.TextInfo.IsRightToLeft;
+    var uId = User.Identity?.IsAuthenticated == true
+        ? User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "0"
+        : "0";
 
-    var direction =
-        isRtl ? "rtl" : "ltr";
+    var darkModeEnabled = Context.Request.Cookies["darkMode"] == "enabled";
 
-    var langCode =
-        CultureInfo.CurrentCulture.Name;
-
-
-    // =========================================================
-    // 3. اختيار ملف Bootstrap حسب اتجاه اللغة
-    // =========================================================
-    var bootstrapCss =
-        isRtl
-            ? "bootstrap.rtl.min.css"
-            : "bootstrap.min.css";
-
-
-    // =========================================================
-    // 4. رقم المستخدم الحالي
-    // يستخدمه JavaScript لحفظ حالة القائمة لكل مستخدم
-    // =========================================================
-    var uId =
-        User.Identity?.IsAuthenticated == true
-            ? User.FindFirst(
-                System.Security.Claims.ClaimTypes.NameIdentifier
-              )?.Value ?? "0"
-            : "0";
-
-    // الوضع الليلي يُطبّق من السيرفر على body لمنع الوميض،
-    // بينما يبقى منطق التبديل والحفظ في ملف JavaScript الخارجي.
-    var darkModeEnabled =
-        Context.Request.Cookies["darkMode"] == "enabled";
-
-    // =========================================================
-    // 5. بوابة تغيير كلمة المرور لموظف الإدارة
-    // لا ننشئ صفحة جديدة: المودل يظهر فوق أي صفحة إدارية موجودة.
-    // =========================================================
     bool showEmployeePasswordGate = false;
-
     if (
         User.Identity?.IsAuthenticated == true &&
         User.IsInRole("Admin") &&
         int.TryParse(uId, out var currentAdminUserId)
     )
     {
-        showEmployeePasswordGate =
-            _context.Users
-                .Where(user =>
-                    user.UserId == currentAdminUserId &&
-                    user.Role == "Admin")
-                .Select(user => user.MustChangePassword)
-                .FirstOrDefault();
+        showEmployeePasswordGate = _context.Users
+            .Where(user =>
+                user.UserId == currentAdminUserId &&
+                user.Role == "Admin")
+            .Select(user => user.MustChangePassword)
+            .FirstOrDefault();
     }
 }
 
 <!DOCTYPE html>
-
-<html lang="@langCode"
-      dir="@direction">
-
+<html lang="@langCode" dir="@direction">
 <head>
-
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-    <meta name="viewport"
-          content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - لوحة التحكم | @siteName</title>
+    <meta name="description" content="@siteDesc" />
 
+    <link rel="icon" type="image/x-icon" href="@favicon" />
+    <link rel="shortcut icon" type="image/x-icon" href="@favicon" />
 
-    <title>
-        @ViewData["Title"] - لوحة التحكم | @siteName
-    </title>
+    <link rel="stylesheet" href="~/lib/bootstrap/css/@bootstrapCss" />
+    <link rel="stylesheet" href="~/lib/bootstrap-icons/bootstrap-icons.css" />
 
-
-    <meta name="description"
-          content="@siteDesc" />
-
-
-    <!-- =====================================================
-         أيقونة الموقع
-    ====================================================== -->
-
-    <link rel="icon"
-          type="image/x-icon"
-          href="@favicon" />
-
-    <link rel="shortcut icon"
-          type="image/x-icon"
-          href="@favicon" />
-
-
-    <!-- =====================================================
-         Bootstrap وBootstrap Icons
-    ====================================================== -->
-
-    <link rel="stylesheet"
-          href="~/lib/bootstrap/css/@bootstrapCss" />
-
-    <link rel="stylesheet"
-          href="~/lib/bootstrap-icons/bootstrap-icons.css" />
-
-
-    <!-- خط Tajawal المحلي الموحد لكل لوحة الإدارة -->
     <link rel="stylesheet"
           href="~/lib/fonts/fonts.css"
           asp-append-version="true" />
-
-
-    <!-- =====================================================
-         ملفات التنسيق العامة وتنسيقات الأدمن
-    ====================================================== -->
 
     <link rel="stylesheet"
           href="~/css/shared/site.css"
@@ -160,80 +80,37 @@
     @if (showEmployeePasswordGate)
     {
         <link rel="stylesheet"
-          href="~/css/admin/admin-employee-password-modal.css"
-          asp-append-version="true" />
+              href="~/css/admin/admin-employee-password-modal.css"
+              asp-append-version="true" />
     }
 
-
-    <!-- =====================================================
-         تنسيق LTR عند استخدام اللغة الإنجليزية
-    ====================================================== -->
     @if (!isRtl)
     {
         <link rel="stylesheet"
-          href="~/css/shared/_Admin_OwnerLayout.ltr.css"
-          asp-append-version="true" />
+              href="~/css/shared/_Admin_OwnerLayout.ltr.css"
+              asp-append-version="true" />
     }
 
+    @await RenderSectionAsync("Styles", required: false)
 
-    <!-- =====================================================
-         تنسيقات الصفحات الفرعية
-    ====================================================== -->
-    @await RenderSectionAsync(
-    "Styles",
-    required: false
-    )
-
+    <!-- آخر ملف في الهيدر ليضمن توحيد الوضع الليلي للـLayout والهيدر والقائمة -->
+    <link rel="stylesheet"
+          href="~/css/admin/admin-dark-unified.css"
+          asp-append-version="true" />
 </head>
-
 
 <body class="dashboard-body yg-living-luxe-v4 yg-performance-mode @(darkModeEnabled ? "dark-mode" : "")"
       data-current-user-id="@uId">
-    <!-- =====================================================
-             الهيكل الرئيسي للوحة الأدمن
-        ====================================================== -->
-
     <div class="dashboard-wrapper">
-
-
-        <!-- =================================================
-             الهيدر والقائمة الجانبية
-        ================================================== -->
-
         <partial name="~/Areas/Admin/Views/Shared/_HeaderAdmin.cshtml" />
 
-
-        <!-- =================================================
-             المحتوى الرئيسي
-
-             مهم:
-             لا توجد هنا قيم width أو margin مضمنة.
-             CSS هو المسؤول عن:
-             - عرض القائمة المفتوحة.
-             - عرض القائمة المطوية.
-             - العرض الكامل على الهاتف.
-        ================================================== -->
-
         <div class="dashboard-main">
-
-
-            <!-- =============================================
-                 محتوى الصفحة الحالية
-            ============================================== -->
-
             <main class="dashboard-content">
-
                 <div class="container-fluid">
-
                     @RenderBody()
-
                 </div>
-
             </main>
-
-
         </div>
-
     </div>
 
     @if (showEmployeePasswordGate)
@@ -241,45 +118,21 @@
         <partial name="~/Areas/Admin/Views/Shared/_EmployeePasswordModal.cshtml" />
     }
 
-
-    <!-- =====================================================
-         JavaScript الأساسي
-    ====================================================== -->
-
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
-
     <script src="~/lib/bootstrap/js/bootstrap.bundle.min.js"></script>
-
-    <script src="~/js/admin/_AdminLayout.js"
-            asp-append-version="true"></script>
+    <script src="~/js/admin/_AdminLayout.js" asp-append-version="true"></script>
 
     @if (showEmployeePasswordGate)
     {
         <script src="~/js/admin/admin-employee-password-modal.js"
-            asp-append-version="true"></script>
+                asp-append-version="true"></script>
     }
 
+    @await RenderSectionAsync("Scripts", required: false)
 
-    <!-- =====================================================
-         JavaScript الخاص بالصفحات الفرعية
-    ====================================================== -->
-    @await RenderSectionAsync(
-    "Scripts",
-    required: false
-    )
-
-
-    <!-- =====================================================
-         Google Maps
-         لا نحملها في الصفحات التي لا تحتاجها لتقليل زمن التحميل.
-         أي صفحة تعتمد على الخريطة تبقى تعمل افتراضيًا.
-    ====================================================== -->
     @if (!(ViewData["DisableGoogleMaps"] as bool? ?? false))
     {
         <script src="https://maps.googleapis.com/maps/api/js?key=@Configuration["GoogleMaps:ApiKey"]"></script>
     }
-
-
 </body>
-
 </html>

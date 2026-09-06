@@ -273,6 +273,18 @@ namespace YemenGuide.Data
 
                 entity.Property(e => e.ReceiptImage).HasMaxLength(255);
 
+                // إعداد يدوي: بيانات استرداد الإعلان المضافة بعد Scaffold.
+                entity.Property(e => e.RefundRequestedAt).HasColumnType("datetime2");
+                entity.Property(e => e.RefundAmount).HasColumnType("decimal(18, 2)");
+                entity.Property(e => e.RefundWalletId).HasColumnName("RefundWalletID");
+                entity.Property(e => e.RefundAccountNumber).HasMaxLength(100);
+                entity.Property(e => e.RefundBeneficiaryName).HasMaxLength(150);
+                entity.Property(e => e.RefundReferenceNumber).HasMaxLength(100);
+                entity.Property(e => e.RefundProofImage).HasMaxLength(255);
+                entity.Property(e => e.RefundedAt).HasColumnType("datetime2");
+                entity.Property(e => e.RefundedByUserId).HasColumnName("RefundedByUserID");
+                entity.Property(e => e.RefundNote).HasMaxLength(500);
+
                 entity.Property(e => e.ReferenceNumber).HasMaxLength(100);
 
                 entity.Property(e => e.RejectionReason).HasMaxLength(500);

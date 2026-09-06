@@ -1,0 +1,644 @@
+/* ========================================================================== 
+   YemenGuide — Admin Financials Phase 4
+   Final dark-mode normalization + management cleanup.
+   Loaded after phase3.
+   ========================================================================== */
+
+/* Reason field is no longer required from the admin. */
+.afm-field--reason {
+    display: none !important;
+}
+
+.afm-settings-footer {
+    justify-content: flex-end !important;
+    grid-template-columns: 1fr !important;
+}
+
+.afm-settings-footer .afm-form-actions {
+    width: 100% !important;
+    justify-content: flex-end !important;
+}
+
+/* Keep finance typography readable. */
+.af-shell,
+.af-management-drawer,
+.afm,
+.acg-modal,
+.atr-modal,
+.aft-modal,
+.afm-modal {
+    --af4-font: var(--yg-font-family, "Tajawal", system-ui, sans-serif);
+    font-family: var(--af4-font) !important;
+}
+
+.af-shell :is(p, span, small, label, button, input, select, textarea, th, td),
+.afm :is(p, span, small, label, button, input, select, textarea, th, td) {
+    font-family: var(--af4-font) !important;
+}
+
+.af-shell small,
+.afm small,
+.acg-modal small,
+.atr-modal small,
+.aft-modal small,
+.afm-modal small {
+    font-size: 13.5px !important;
+    line-height: 1.6 !important;
+}
+
+.af-shell :is(input, select, textarea, button),
+.afm :is(input, select, textarea, button) {
+    font-size: 14.5px !important;
+}
+
+/* ==========================================================================
+   FINANCE DARK MODE — every visible surface
+   ========================================================================== */
+body.dark-mode .af-shell,
+body.dark-mode .af-management-drawer,
+body.dark-mode .afm,
+body.dark-mode .acg-modal,
+body.dark-mode .atr-modal,
+body.dark-mode .aft-modal,
+body.dark-mode .afm-modal {
+    --af4-bg: #0b121c;
+    --af4-surface: #111b29;
+    --af4-surface-2: #162235;
+    --af4-surface-3: #1c2b40;
+    --af4-border: rgba(148,163,184,.18);
+    --af4-border-strong: rgba(148,163,184,.28);
+    --af4-text: #f4f8fc;
+    --af4-muted: #a6b5c6;
+    --af4-soft: #8193a8;
+    --af4-primary: #00a6da;
+    --af4-primary-soft: rgba(0,166,218,.12);
+    color: var(--af4-text) !important;
+    color-scheme: dark;
+}
+
+body.dark-mode .af-shell,
+body.dark-mode .af-shell .af-workspace,
+body.dark-mode .af-shell .af-tab-panel,
+body.dark-mode .af-shell .afo,
+body.dark-mode .af-shell .acg,
+body.dark-mode .af-shell .atr,
+body.dark-mode .af-shell .aft,
+body.dark-mode .af-shell .afr {
+    background: transparent !important;
+    background-image: none !important;
+}
+
+/* Hero */
+body.dark-mode .af-shell .af-hero,
+body.dark-mode .af-shell .af-hero__content {
+    background: var(--af4-surface) !important;
+    background-image: none !important;
+    border-color: var(--af4-border) !important;
+    color: var(--af4-text) !important;
+    box-shadow: 0 10px 30px rgba(0,0,0,.20) !important;
+}
+
+body.dark-mode .af-shell .af-hero::before,
+body.dark-mode .af-shell .af-hero::after,
+body.dark-mode .af-shell .af-hero__content::before,
+body.dark-mode .af-shell .af-hero__content::after {
+    opacity: 0 !important;
+    background: none !important;
+}
+
+body.dark-mode .af-shell .af-hero__title,
+body.dark-mode .af-shell .af-hero strong {
+    color: var(--af4-text) !important;
+}
+
+body.dark-mode .af-shell .af-meta-pill {
+    background: var(--af4-surface-2) !important;
+    color: var(--af4-muted) !important;
+    border-color: var(--af4-border) !important;
+}
+
+body.dark-mode .af-shell .af-meta-pill strong {
+    color: #ffffff !important;
+}
+
+body.dark-mode .af-shell .af-btn--ghost {
+    background: var(--af4-surface-2) !important;
+    color: #dce8f3 !important;
+    border-color: var(--af4-border-strong) !important;
+}
+body.dark-mode .af-shell .af-btn--ghost:hover {
+    background: var(--af4-surface-3) !important;
+    color: #ffffff !important;
+}
+
+/* Tabs */
+body.dark-mode .af-shell .af-tabs {
+    background: #0f1a29 !important;
+    border-color: var(--af4-border) !important;
+    box-shadow: 0 8px 24px rgba(0,0,0,.18) !important;
+}
+
+body.dark-mode .af-shell .af-tab {
+    background: transparent !important;
+    color: #b7c6d6 !important;
+    border-color: transparent !important;
+}
+
+body.dark-mode .af-shell .af-tab__icon,
+body.dark-mode .af-shell .af-tab__count {
+    background: var(--af4-surface-2) !important;
+    color: #bfeeff !important;
+    border-color: var(--af4-border) !important;
+}
+
+body.dark-mode .af-shell .af-tab:hover {
+    background: rgba(255,255,255,.045) !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .af-shell .af-tab.is-active {
+    background: linear-gradient(135deg, #00a6da, #087da8) !important;
+    color: #ffffff !important;
+    border-color: rgba(95,217,255,.32) !important;
+    box-shadow: 0 8px 24px rgba(0,166,218,.22) !important;
+}
+body.dark-mode .af-shell .af-tab.is-active .af-tab__icon,
+body.dark-mode .af-shell .af-tab.is-active .af-tab__count {
+    background: rgba(255,255,255,.14) !important;
+    color: #ffffff !important;
+    border-color: rgba(255,255,255,.24) !important;
+}
+
+/* Filters */
+body.dark-mode .af-shell :is(
+    .afo-filterbar,
+    .acg-toolbar,
+    .atr-filterbar,
+    .atr-status-nav,
+    .aft-filterbar,
+    .afr-filter-card,
+    .afr-report-selector
+) {
+    background: var(--af4-surface) !important;
+    border-color: var(--af4-border) !important;
+    box-shadow: none !important;
+}
+
+body.dark-mode .af-shell :is(
+    input,
+    select,
+    textarea,
+    .afo-search,
+    .acg-search,
+    .atr-search,
+    .aft-search,
+    .afr-search-field
+) {
+    background: var(--af4-surface-2) !important;
+    color: var(--af4-text) !important;
+    border-color: var(--af4-border-strong) !important;
+    box-shadow: none !important;
+}
+
+body.dark-mode .af-shell :is(input,textarea)::placeholder {
+    color: #8193a7 !important;
+    opacity: 1 !important;
+}
+
+body.dark-mode .af-shell :is(input,select,textarea):focus {
+    background: var(--af4-surface-2) !important;
+    color: #ffffff !important;
+    border-color: rgba(0,166,218,.78) !important;
+    box-shadow: 0 0 0 3px rgba(0,166,218,.13) !important;
+}
+
+body.dark-mode .af-shell select option,
+body.dark-mode .afm select option {
+    background: var(--af4-surface-2) !important;
+    color: var(--af4-text) !important;
+}
+
+body.dark-mode .af-shell :is(label, .afr-field label, .afo-filterbar__field label) {
+    color: #d9e4ee !important;
+}
+
+/* KPI and summary cards */
+body.dark-mode .af-shell :is(
+    .afo-kpi-card,
+    .acg-balance-card,
+    .acg-summary-mini,
+    .atr-kpi,
+    .atr-pending-callout,
+    .aft-kpi,
+    .afr-metric,
+    .afr-report-header-card,
+    .afr-document-card
+) {
+    background: var(--af4-surface-2) !important;
+    background-image: none !important;
+    color: var(--af4-text) !important;
+    border-color: var(--af4-border) !important;
+    box-shadow: none !important;
+}
+
+body.dark-mode .af-shell :is(
+    .afo-kpi-card,
+    .acg-balance-card,
+    .atr-kpi,
+    .aft-kpi,
+    .afr-metric
+)::before,
+body.dark-mode .af-shell :is(
+    .afo-kpi-card,
+    .acg-balance-card,
+    .atr-kpi,
+    .aft-kpi,
+    .afr-metric
+)::after {
+    opacity: .06 !important;
+}
+
+body.dark-mode .af-shell :is(.afo-kpi-card, .acg-balance-card, .atr-kpi, .aft-kpi, .afr-metric) small {
+    color: var(--af4-muted) !important;
+}
+body.dark-mode .af-shell :is(.afo-kpi-card, .acg-balance-card, .atr-kpi, .aft-kpi, .afr-metric) strong {
+    color: #ffffff !important;
+}
+
+/* White panel headers/footers seen in screenshots */
+body.dark-mode .af-shell :is(
+    .afo-panel,
+    .afo-panel__head,
+    .afo-table-wrap,
+    .acg-table-card,
+    .acg-table-card__head,
+    .acg-table-wrap,
+    .atr-table-card,
+    .atr-table-card__head,
+    .atr-table-wrap,
+    .aft-ledger-card,
+    .aft-ledger-card__head,
+    .aft-table-wrap,
+    .afr-data-card,
+    .afr-data-card__head,
+    .afr-table-wrap,
+    .afr-report-header-card,
+    .afr-documents,
+    .afr-documents__head,
+    .afo-empty,
+    .acg-empty,
+    .atr-empty,
+    .aft-empty,
+    .afr-empty,
+    .afo-pagination,
+    .acg-pagination,
+    .atr-pagination,
+    .aft-pagination,
+    .afr-pagination
+) {
+    background: var(--af4-surface) !important;
+    background-image: none !important;
+    color: var(--af4-text) !important;
+    border-color: var(--af4-border) !important;
+}
+
+body.dark-mode .af-shell :is(
+    .afo-panel__head,
+    .acg-table-card__head,
+    .atr-table-card__head,
+    .aft-ledger-card__head,
+    .afr-data-card__head,
+    .afr-documents__head
+) {
+    background: var(--af4-surface-2) !important;
+}
+
+body.dark-mode .af-shell :is(
+    .afo-panel__head,
+    .acg-table-card__head,
+    .atr-table-card__head,
+    .aft-ledger-card__head,
+    .afr-data-card__head
+) :is(h2,h3,h4,strong) {
+    color: #f4f8fc !important;
+}
+
+body.dark-mode .af-shell :is(
+    .afo-panel__head,
+    .acg-table-card__head,
+    .atr-table-card__head,
+    .aft-ledger-card__head,
+    .afr-data-card__head
+) :is(p,small,span) {
+    color: var(--af4-muted) !important;
+}
+
+/* Tables */
+body.dark-mode .af-shell :is(.afo-table,.acg-table,.atr-table,.aft-table,.afr-table) {
+    background: transparent !important;
+    color: var(--af4-text) !important;
+    border-color: var(--af4-border) !important;
+}
+
+body.dark-mode .af-shell :is(.afo-table,.acg-table,.atr-table,.aft-table,.afr-table) thead th {
+    background: #172235 !important;
+    color: #eaf2f9 !important;
+    border-color: var(--af4-border) !important;
+}
+
+body.dark-mode .af-shell :is(.afo-table,.acg-table,.atr-table,.aft-table,.afr-table) tbody td {
+    background: #111b29 !important;
+    color: #dde7f1 !important;
+    border-color: var(--af4-border) !important;
+}
+
+body.dark-mode .af-shell :is(.afo-table,.acg-table,.atr-table,.aft-table,.afr-table) tbody tr:nth-child(even) td {
+    background: #132031 !important;
+}
+
+body.dark-mode .af-shell :is(.afo-table,.acg-table,.atr-table,.aft-table,.afr-table) tbody tr:hover td {
+    background: #1a293d !important;
+}
+
+body.dark-mode .af-shell :is(.afo-table,.acg-table,.atr-table,.aft-table,.afr-table) :is(strong,a) {
+    color: #eef6fc !important;
+}
+body.dark-mode .af-shell :is(.afo-table,.acg-table,.atr-table,.aft-table,.afr-table) small {
+    color: var(--af4-muted) !important;
+}
+
+body.dark-mode .af-shell :is(
+    .afo-page-btn,
+    .acg-page-btn,
+    .atr-pagination button,
+    .aft-pagination button,
+    .afr-pagination button,
+    .afo-icon-btn,
+    .aft-details-btn
+) {
+    background: var(--af4-surface-2) !important;
+    color: #bfeeff !important;
+    border-color: var(--af4-border) !important;
+}
+
+body.dark-mode .af-shell :is(
+    .afo-page-btn,
+    .acg-page-btn,
+    .atr-pagination button,
+    .aft-pagination button,
+    .afr-pagination button,
+    .afo-icon-btn,
+    .aft-details-btn
+):hover:not(:disabled) {
+    background: var(--af4-surface-3) !important;
+    color: #ffffff !important;
+}
+
+/* Report selector + collapsible filter */
+body.dark-mode .af-shell .afr-report-option {
+    background: var(--af4-surface-2) !important;
+    color: #d9e4ee !important;
+    border-color: var(--af4-border) !important;
+}
+body.dark-mode .af-shell .afr-report-option:hover {
+    background: var(--af4-surface-3) !important;
+    border-color: rgba(0,166,218,.35) !important;
+}
+body.dark-mode .af-shell .afr-report-option.is-active {
+    background: rgba(0,166,218,.15) !important;
+    border-color: rgba(0,166,218,.55) !important;
+    color: #ffffff !important;
+}
+body.dark-mode .af-shell .afr-report-option small {
+    color: var(--af4-muted) !important;
+}
+body.dark-mode .af-shell .afr-filter-toggle,
+body.dark-mode .af-shell .afr-clear-filters {
+    background: var(--af4-surface-2) !important;
+    color: #d7e5f0 !important;
+    border-color: var(--af4-border-strong) !important;
+}
+
+/* ==========================================================================
+   FINANCE MANAGEMENT DRAWER + MODALS
+   ========================================================================== */
+body.dark-mode .af-drawer-backdrop,
+body.dark-mode .afm-modal__backdrop,
+body.dark-mode .acg-modal__backdrop,
+body.dark-mode .atr-modal__backdrop,
+body.dark-mode .aft-modal__backdrop {
+    background: rgba(2,7,13,.80) !important;
+    backdrop-filter: blur(3px) !important;
+}
+
+body.dark-mode .af-management-drawer,
+body.dark-mode .af-management-drawer__host,
+body.dark-mode .afm,
+body.dark-mode .afm-header,
+body.dark-mode .afm-body,
+body.dark-mode .afm-settings-form,
+body.dark-mode .afm-tab-panel,
+body.dark-mode .afm-section,
+body.dark-mode .afm-modal__dialog,
+body.dark-mode .acg-modal__dialog,
+body.dark-mode .atr-modal__dialog,
+body.dark-mode .aft-modal__dialog {
+    background: #0f1724 !important;
+    background-image: none !important;
+    color: var(--af4-text) !important;
+    border-color: var(--af4-border) !important;
+}
+
+body.dark-mode .afm-header {
+    background: #101b2a !important;
+    border-bottom: 1px solid var(--af4-border) !important;
+}
+
+body.dark-mode .afm-header :is(h2,strong),
+body.dark-mode .afm-panel-title :is(h3,h4),
+body.dark-mode .afm-subsection-head :is(h3,h4),
+body.dark-mode .afm-wallets-head h3,
+body.dark-mode .afm-modal__header h3 {
+    color: #f4f8fc !important;
+}
+
+body.dark-mode .afm :is(p,small),
+body.dark-mode .afm-modal__header p {
+    color: var(--af4-muted) !important;
+}
+
+body.dark-mode .afm-tabs {
+    background: #0d1622 !important;
+    border-color: var(--af4-border) !important;
+}
+body.dark-mode .afm-tab {
+    background: transparent !important;
+    color: #a9b8c8 !important;
+    border-color: transparent !important;
+}
+body.dark-mode .afm-tab:hover {
+    background: rgba(255,255,255,.045) !important;
+    color: #ffffff !important;
+}
+body.dark-mode .afm-tab.is-active {
+    background: rgba(0,166,218,.16) !important;
+    color: #79ddff !important;
+    border-color: rgba(0,166,218,.32) !important;
+}
+
+body.dark-mode .afm :is(
+    .afm-field,
+    .afm-toggle-card,
+    .afm-trial-policy,
+    .afm-trial-policy__head,
+    .afm-trial-policy__body,
+    .afm-trial-switch,
+    .afm-trial-field,
+    .afm-trial-policy__flow,
+    .afm-trial-flow-step,
+    .afm-trial-policy__note,
+    .afm-category-commissions,
+    .afm-category-card,
+    .afm-wallet-summary > div,
+    .afm-wallet-card,
+    .afm-wallet-card__number,
+    .afm-wallet-card__usage,
+    .afm-empty,
+    .afm-settings-footer
+) {
+    background: var(--af4-surface) !important;
+    background-image: none !important;
+    color: var(--af4-text) !important;
+    border-color: var(--af4-border) !important;
+    box-shadow: none !important;
+}
+
+body.dark-mode .afm :is(
+    .afm-trial-policy__head,
+    .afm-wallet-card__usage,
+    .afm-wallet-summary > div,
+    .afm-category-card,
+    .afm-trial-field,
+    .afm-toggle-card,
+    .afm-trial-flow-step
+) {
+    background: var(--af4-surface-2) !important;
+}
+
+body.dark-mode .afm-trial-policy__glow {
+    display: none !important;
+}
+
+body.dark-mode .afm :is(
+    input,
+    select,
+    textarea,
+    .afm-input-suffix,
+    .afm-trial-field__input
+) {
+    background: var(--af4-surface-2) !important;
+    color: var(--af4-text) !important;
+    border-color: var(--af4-border-strong) !important;
+}
+
+body.dark-mode .afm .afm-input-suffix > span,
+body.dark-mode .afm .afm-trial-field__input > span,
+body.dark-mode .afm-category-card__rate > span {
+    background: #1c293c !important;
+    color: #d7e4ef !important;
+    border-color: var(--af4-border) !important;
+}
+
+body.dark-mode .afm input[readonly],
+body.dark-mode .afm input:disabled,
+body.dark-mode .afm select:disabled,
+body.dark-mode .afm textarea:disabled {
+    background: #192333 !important;
+    color: #9baabd !important;
+    opacity: .82 !important;
+}
+
+body.dark-mode .afm :is(input,select,textarea):focus {
+    border-color: rgba(0,166,218,.78) !important;
+    box-shadow: 0 0 0 3px rgba(0,166,218,.13) !important;
+}
+
+body.dark-mode .afm :is(label,strong,h4,h5) {
+    color: #eef5fb !important;
+}
+
+body.dark-mode .afm .afm-close,
+body.dark-mode .afm .afm-modal__close {
+    background: var(--af4-surface-2) !important;
+    color: #e6f0f8 !important;
+    border-color: var(--af4-border) !important;
+}
+
+body.dark-mode .afm .afm-primary-badge,
+body.dark-mode .afm .afm-wallet-status.is-active,
+body.dark-mode .afm .afm-trial-policy__status {
+    border-color: rgba(0,166,218,.26) !important;
+}
+
+/* Generic modal details from finance */
+body.dark-mode :is(.acg-modal,.atr-modal,.aft-modal) :is(
+    .acg-modal__header,.acg-modal__body,.acg-modal__footer,
+    .atr-modal__header,.atr-modal__body,.atr-modal__footer,
+    .aft-modal__header,.aft-modal__body,.aft-modal__footer,
+    .acg-detail-section,.acg-details__balances article,
+    .atr-review-card,.atr-allocation-card,.atr-proof-card,.atr-history-card,
+    .aft-details__hero,.aft-detail-section,.aft-info-grid > div,.aft-snapshot-grid > article
+) {
+    background: var(--af4-surface) !important;
+    background-image: none !important;
+    color: var(--af4-text) !important;
+    border-color: var(--af4-border) !important;
+}
+
+body.dark-mode :is(.acg-modal,.atr-modal,.aft-modal) :is(
+    .acg-details__balances article,
+    .atr-review-card,
+    .atr-allocation-card,
+    .atr-proof-card,
+    .atr-history-card,
+    .aft-details__hero,
+    .aft-info-grid > div,
+    .aft-snapshot-grid > article
+) {
+    background: var(--af4-surface-2) !important;
+}
+
+body.dark-mode :is(.acg-modal,.atr-modal,.aft-modal) :is(h3,h4,strong) {
+    color: #f4f8fc !important;
+}
+body.dark-mode :is(.acg-modal,.atr-modal,.aft-modal) :is(p,small,span) {
+    color: var(--af4-muted) !important;
+}
+
+/* Toasts must stay above drawer/modals */
+body.dark-mode .af-toast,
+body.dark-mode #adminFinanceToastStack .af-toast,
+body.dark-mode #adminFinanceGlobalToastStack .af-toast {
+    background: #172438 !important;
+    color: #f4f8fc !important;
+    border-color: var(--af4-border) !important;
+    box-shadow: 0 18px 48px rgba(0,0,0,.45) !important;
+}
+
+#adminFinanceToastStack,
+#adminFinanceGlobalToastStack,
+.af-toast-stack--global {
+    z-index: 2147483000 !important;
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+    .afm-settings-footer .afm-form-actions,
+    .afm-settings-footer .afm-btn {
+        width: 100% !important;
+    }
+
+    body.dark-mode .af-management-drawer {
+        background: #0f1724 !important;
+    }
+}

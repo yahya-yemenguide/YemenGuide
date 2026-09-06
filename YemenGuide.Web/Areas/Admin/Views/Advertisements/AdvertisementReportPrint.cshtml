@@ -181,7 +181,7 @@
 
         .report-kpis {
             display: grid;
-            grid-template-columns: repeat(4, minmax(0,1fr));
+            grid-template-columns: repeat(5, minmax(0,1fr));
             gap: 8px;
         }
 
@@ -465,7 +465,7 @@
             }
 
             table {
-                min-width: 760px;
+                min-width: 1080px;
             }
 
             .print-actions {
@@ -542,7 +542,7 @@
                 <div>
                     <small>دليلك اليمني · إدارة الإعلانات</small>
                     <h1>@Model.ScopeLabel</h1>
-                    <p>تقرير الأداء التسويقي والمالي للإعلانات.</p>
+                    <p>تقرير أداء الإعلانات وفق الباقات المرنة ذات السعر اليومي.</p>
                 </div>
             </div>
 
@@ -555,16 +555,17 @@
 
         <div class="report-body">
             <div class="report-kpis">
-                <article class="report-kpi"><small>عدد الإعلانات</small><strong>@Model.TotalAdvertisements.ToString("N0")</strong><em>إعلان</em></article>
-                <article class="report-kpi"><small>مرات الظهور</small><strong>@Model.Impressions.ToString("N0")</strong></article>
-                <article class="report-kpi"><small>النقرات</small><strong>@Model.Clicks.ToString("N0")</strong><em>CTR @Model.ClickThroughRate%</em></article>
-                <article class="report-kpi is-coral"><small>الإيراد المعتمد</small><strong>@Model.PaidRevenue.ToString("N0")</strong><em>ر.ي</em></article>
+                <article class="report-kpi"><small>إجمالي الإعلانات</small><strong>@Model.TotalAdvertisements.ToString("N0")</strong><em>ضمن الفترة المحددة</em></article>
+                <article class="report-kpi"><small>المشاهدات الفريدة</small><strong>@Model.Impressions.ToString("N0")</strong><em>مستخدمون أو زوار مختلفون</em></article>
+                <article class="report-kpi"><small>النقرات الفريدة</small><strong>@Model.Clicks.ToString("N0")</strong><em>مستخدمون أو زوار مختلفون</em></article>
+                <article class="report-kpi"><small>الحجوزات المكتملة</small><strong>@Model.Conversions.ToString("N0")</strong></article>
+                <article class="report-kpi is-coral"><small>إيرادات الإعلانات</small><strong>@Model.PaidRevenue.ToString("N0")</strong><em>مبالغ دفع معتمدة · ر.ي</em></article>
             </div>
 
             <section class="report-section">
                 <div class="report-section__title">
-                    <h2>اتجاه الظهور اليومي</h2>
-                    <small>قراءة سريعة للحركة خلال الفترة</small>
+                    <h2>اتجاه المشاهدات الفريدة يوميًا</h2>
+                    <small>حسب الفترة والفلاتر المحددة في التقرير</small>
                 </div>
                 <div class="daily-chart">
                     @{
@@ -585,13 +586,13 @@
 
             <section class="report-section">
                 <div class="report-section__title">
-                    <h2>ملخص الدفع</h2>
-                    <small>جميع الباقات الجديدة تعمل بسعر يومي، ويختلف سعر اليوم ووزن الظهور حسب الباقة.</small>
+                    <h2>ملخص حالات الدفع</h2>
+                    <small>أعداد الإعلانات حسب حالة الدفع ضمن الفترة المحددة.</small>
                 </div>
                 <div class="billing-grid">
                     <article>
                         <strong>@Model.PaidAdvertisements</strong>
-                        <small>إعلانات مدفوعة</small>
+                        <small>مدفوعة</small>
                     </article>
                     <article>
                         <strong>@Model.PendingPayments</strong>
@@ -606,19 +607,22 @@
 
             <section class="report-section">
                 <div class="report-section__title">
-                    <h2>تفاصيل أفضل الإعلانات</h2>
-                    <small>@Model.TotalAdvertisements إعلان ضمن نطاق التقرير</small>
+                    <h2>تفاصيل الإعلانات</h2>
+                    <small>الباقة والمدة والسعر والأداء الفعلي لكل إعلان</small>
                 </div>
                 <div class="report-table-wrap">
                     <table>
                         <thead>
                             <tr>
                                 <th>الإعلان</th>
-                                
+                                <th>الباقة</th>
                                 <th>الحالة</th>
-                                <th>الظهور</th>
-                                <th>النقرات</th>
-                                <th>نسبة النقر</th>
+                                <th>المدة</th>
+                                <th>سعر اليوم</th>
+                                <th>إجمالي الإعلان</th>
+                                <th>مشاهدات فريدة</th>
+                                <th>نقرات فريدة</th>
+                                <th>حجوزات مكتملة</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -626,11 +630,14 @@
                             {
                                 <tr>
                                     <td><strong>@item.Title</strong><small>@item.PlaceName</small></td>
-                                    
-                                    <td>@item.StatusLabel</td>
+                                    <td><strong>@item.PlanName</strong><small>نسبة الظهور @($"{item.DisplayWeight}%")</small></td>
+                                    <td><strong>@item.StatusLabel</strong><small>@item.PaymentStatusLabel</small></td>
+                                    <td>@item.DurationDays يوم</td>
+                                    <td>@item.DailyPrice.ToString("N0") ر.ي</td>
+                                    <td>@item.TotalAmount.ToString("N0") ر.ي</td>
                                     <td>@item.Impressions.ToString("N0")</td>
                                     <td>@item.Clicks.ToString("N0")</td>
-                                    <td>@item.ClickThroughRate%</td>
+                                    <td>@item.Conversions.ToString("N0")</td>
                                 </tr>
                             }
                         </tbody>

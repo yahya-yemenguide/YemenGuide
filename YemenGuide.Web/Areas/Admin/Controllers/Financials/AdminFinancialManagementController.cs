@@ -1,7 +1,8 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -80,8 +81,6 @@ namespace YemenGuide.Web.Areas.Admin.Controllers.Financials
                     LoadedAt = DateTime.Now
                 };
 
-                // تحميل كل قسم حسب صلاحية الموظف فقط حتى لا تُرسل بيانات
-                // قسم غير مسموح به إلى المتصفح.
                 if (canManageSettings)
                 {
                     model.Settings =
@@ -167,8 +166,12 @@ namespace YemenGuide.Web.Areas.Admin.Controllers.Financials
 
             request.DefaultCurrency =
                 request.DefaultCurrency?.Trim() ?? string.Empty;
-            request.ChangeReason =
-                request.ChangeReason?.Trim() ?? string.Empty;
+
+            // لا نطلب من الأدمن كتابة سبب في كل تعديل.
+            // نحافظ على سجل التدقيق بسبب تلقائي واضح بدل تعطيل التوثيق.
+            request.ChangeReason = "تحديث إعدادات المالية من لوحة الإدارة";
+            ModelState.Remove(nameof(request.ChangeReason));
+
             request.CategoryCommissions ??=
                 new List<AdminCategoryCommissionUpdateDto>();
 
@@ -257,8 +260,18 @@ namespace YemenGuide.Web.Areas.Admin.Controllers.Financials
                 });
             }
 
-            request.AccountNumber =
-                request.AccountNumber?.Trim() ?? string.Empty;
+            var rawAccountNumber = request.AccountNumber?.Trim() ?? string.Empty;
+            if (!TryNormalizeAccountNumber(rawAccountNumber, out var normalizedAccountNumber))
+            {
+                ModelState.AddModelError(
+                    nameof(request.AccountNumber),
+                    "رقم الحساب يجب أن يحتوي على أرقام فقط بدون حروف أو رموز أو مسافات.");
+            }
+            else
+            {
+                request.AccountNumber = normalizedAccountNumber;
+            }
+
             request.BeneficiaryName =
                 request.BeneficiaryName?.Trim() ?? string.Empty;
             request.Instructions = string.IsNullOrWhiteSpace(request.Instructions)
@@ -492,6 +505,47 @@ namespace YemenGuide.Web.Areas.Admin.Controllers.Financials
                     message = "تعذر تعيين الحساب الرئيسي. لم يتم تنفيذ التغيير."
                 });
             }
+        }
+
+        private static bool TryNormalizeAccountNumber(
+            string? value,
+            out string normalized)
+        {
+            normalized = string.Empty;
+
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return false;
+            }
+
+            var input = value.Trim();
+            var builder = new StringBuilder(input.Length);
+
+            foreach (var character in input)
+            {
+                if (character >= '0' && character <= '9')
+                {
+                    builder.Append(character);
+                    continue;
+                }
+
+                if (character >= '٠' && character <= '٩')
+                {
+                    builder.Append((char)('0' + (character - '٠')));
+                    continue;
+                }
+
+                if (character >= '۰' && character <= '۹')
+                {
+                    builder.Append((char)('0' + (character - '۰')));
+                    continue;
+                }
+
+                return false;
+            }
+
+            normalized = builder.ToString();
+            return normalized.Length > 0 && normalized.Length <= 120;
         }
 
         private bool TryGetCurrentAdminUserId(out int adminUserId)

@@ -114,8 +114,11 @@ namespace YemenGuide.Core.DTOs.Owner
         public int ExpiredCount { get; set; }
         public int CancelledCount { get; set; }
         public int RejectedCount { get; set; }
-        public int NeedsActionCount => DraftCount + AwaitingPaymentCount + RejectedCount;
-        public int RunningCount => ActiveCount + ScheduledCount;
+
+        // عداد مستقل يُحسب في الخدمة كفئة متبقية حصرية حتى تتطابق الأرقام دائمًا.
+        // الإعلانات النشطة منفصلة عن الإعلانات المجدولة لأن المجدول لم يبدأ بعد.
+        public int NeedsActionCount { get; set; }
+        public int RunningCount => ActiveCount;
 
         // Single-view page payload: the page no longer depends on partial views.
         public OwnerAdvertisementOverviewDto Overview { get; set; } = new();
@@ -190,6 +193,7 @@ namespace YemenGuide.Core.DTOs.Owner
         public int AllCount { get; set; }
         public int NeedsActionCount { get; set; }
         public int RunningCount { get; set; }
+        public int ScheduledCount { get; set; }
         public int PausedCount { get; set; }
         public int ExpiredCount { get; set; }
         public int CancelledCount { get; set; }
@@ -246,6 +250,9 @@ namespace YemenGuide.Core.DTOs.Owner
         public string PrimaryAction { get; set; } = "details";
         public string PrimaryActionLabel { get; set; } = "عرض التفاصيل";
         public string? AttentionText { get; set; }
+        public DateTime? RefundRequestedAt { get; set; }
+        public DateTime? RefundedAt { get; set; }
+        public string? RefundStatusLabel { get; set; }
     }
 
     public class OwnerAdvertisementPlanCardDto
@@ -382,6 +389,11 @@ namespace YemenGuide.Core.DTOs.Owner
     {
         [StringLength(500)]
         public string? Reason { get; set; }
+
+        // يستخدم فقط عند إلغاء إعلان مدفوع أو إثبات دفعه قيد المراجعة.
+        // القيمة هي OwnerWalletID وليس WalletID؛ الخدمة تتحقق أن المحفظة تخص المالك.
+        [Range(1, int.MaxValue)]
+        public int? RefundOwnerWalletId { get; set; }
     }
 
     public class OwnerAdvertisementRenewDto : OwnerAdvertisementSubmitDto
@@ -443,6 +455,16 @@ namespace YemenGuide.Core.DTOs.Owner
         public string BeneficiaryName { get; set; } = string.Empty;
         public string? Instructions { get; set; }
         public bool IsPrimary { get; set; }
+    }
+
+    public class OwnerAdvertisementRefundWalletDto
+    {
+        public int OwnerWalletId { get; set; }
+        public int WalletId { get; set; }
+        public string WalletName { get; set; } = string.Empty;
+        public string? LogoPath { get; set; }
+        public string AccountNumber { get; set; } = string.Empty;
+        public string BeneficiaryName { get; set; } = string.Empty;
     }
 
     public class OwnerAdvertisementTargetDto
@@ -515,6 +537,23 @@ namespace YemenGuide.Core.DTOs.Owner
         public string? ReferenceNumber { get; set; }
         public DateTime? TransferDate { get; set; }
         public string? ReceiptImage { get; set; }
+
+        // بيانات الاسترداد مستقلة عن بيانات الدفع الأصلية.
+        public DateTime? RefundRequestedAt { get; set; }
+        public decimal? RefundAmount { get; set; }
+        public string? RefundAmountText { get; set; }
+        public int? RefundWalletId { get; set; }
+        public string? RefundWalletName { get; set; }
+        public string? RefundAccountNumber { get; set; }
+        public string? RefundBeneficiaryName { get; set; }
+        public string? RefundReferenceNumber { get; set; }
+        public string? RefundProofImage { get; set; }
+        public DateTime? RefundedAt { get; set; }
+        public string? RefundedByName { get; set; }
+        public string? RefundNote { get; set; }
+        public string? RefundStatusLabel { get; set; }
+        public List<OwnerAdvertisementRefundWalletDto> RefundWallets { get; set; } = new();
+
         public DateTime? SubmittedAt { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }

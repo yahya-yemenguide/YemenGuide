@@ -23,6 +23,7 @@ namespace YemenGuide.Core.DTOs.Admin
         public int AwaitingPaymentCount { get; set; }
         public int PendingPaymentReviewCount { get; set; }
         public int PendingReviewCount { get; set; }
+        public int RefundPendingCount { get; set; }
         public int ScheduledCount { get; set; }
         public int ActiveCount { get; set; }
         public int PausedCount { get; set; }
@@ -45,7 +46,7 @@ namespace YemenGuide.Core.DTOs.Admin
         public decimal ConversionRate => Clicks <= 0 ? 0 : Math.Round((decimal)Conversions * 100m / Clicks, 2);
         public decimal TodayClickThroughRate => TodayImpressions <= 0 ? 0 : Math.Round((decimal)TodayClicks * 100m / TodayImpressions, 2);
         public decimal TodayConversionRate => TodayClicks <= 0 ? 0 : Math.Round((decimal)TodayConversions * 100m / TodayClicks, 2);
-        public int NeedsActionCount => PendingPaymentReviewCount + PendingReviewCount;
+        public int NeedsActionCount => PendingPaymentReviewCount + PendingReviewCount + RefundPendingCount;
         public int RunningCount => ActiveCount + ScheduledCount;
         public int OperationalAlertsCount => EndingSoonCount + BudgetRiskCount + PausedCount;
         public List<AdminAdvertisementCardDto> NeedsAttention { get; set; } = new();
@@ -172,8 +173,26 @@ namespace YemenGuide.Core.DTOs.Admin
         public string? ReferenceNumber { get; set; }
         public DateTime? TransferDate { get; set; }
         public string? ReceiptImage { get; set; }
+
+        // بيانات الاسترداد الموثقة.
+        public DateTime? RefundRequestedAt { get; set; }
+        public decimal? RefundAmount { get; set; }
+        public int? RefundWalletId { get; set; }
+        public string? RefundWalletName { get; set; }
+        public string? RefundAccountNumber { get; set; }
+        public string? RefundBeneficiaryName { get; set; }
+        public string? RefundReferenceNumber { get; set; }
+        public string? RefundProofImage { get; set; }
+        public DateTime? RefundedAt { get; set; }
+        public string? RefundedByName { get; set; }
+        public string? RefundNote { get; set; }
+
+        public List<AdminAdvertisementRefundDestinationDto> RefundDestinations { get; set; } = new();
+        public List<AdminAdvertisementRefundWalletDto> RefundWallets { get; set; } = new();
+
         public string? RejectionReason { get; set; }
         public string? PauseReason { get; set; }
+        public string? CancellationReason { get; set; }
         public long Impressions { get; set; }
         public long UniqueImpressions { get; set; }
         public long Clicks { get; set; }
@@ -187,6 +206,7 @@ namespace YemenGuide.Core.DTOs.Admin
         public List<string> Categories { get; set; } = new();
         public bool CanReview { get; set; }
         public bool CanControl { get; set; }
+        public bool CanRefund { get; set; }
     }
 
     public sealed class AdminPlacementPlansTabDto
@@ -277,6 +297,7 @@ namespace YemenGuide.Core.DTOs.Admin
         public DateTime? To { get; set; }
         public int? PlaceId { get; set; }
         public int? AdvertisementId { get; set; }
+        public int? AdvertisementPlanId { get; set; }
 
         [StringLength(30)]
         public string PlacementType { get; set; } = "All";
@@ -318,6 +339,7 @@ namespace YemenGuide.Core.DTOs.Admin
         public List<string> AppliedFilters { get; set; } = new();
         public List<AdminAdvertisementReportOptionDto> PlaceOptions { get; set; } = new();
         public List<AdminAdvertisementReportOptionDto> AdvertisementOptions { get; set; } = new();
+        public List<AdminAdvertisementReportOptionDto> PlanOptions { get; set; } = new();
         public int TotalAdvertisements { get; set; }
         public decimal PaidRevenue { get; set; }
         public decimal SpentAmount { get; set; }
@@ -372,11 +394,18 @@ namespace YemenGuide.Core.DTOs.Admin
     {
         public int AdvertisementId { get; set; }
         public int PlaceId { get; set; }
+        public int AdvertisementPlanId { get; set; }
         public string Title { get; set; } = string.Empty;
         public string PlaceName { get; set; } = string.Empty;
+        public string PlanName { get; set; } = string.Empty;
+        public int DisplayWeight { get; set; }
+        public int DurationDays { get; set; }
+        public decimal DailyPrice { get; set; }
+        public decimal TotalAmount { get; set; }
         public string PlacementLabel { get; set; } = string.Empty;
         public string BillingLabel { get; set; } = string.Empty;
         public string StatusLabel { get; set; } = string.Empty;
+        public string PaymentStatusLabel { get; set; } = string.Empty;
         public DateTime CreatedAt { get; set; }
         public decimal PaidAmount { get; set; }
         public decimal SpentAmount { get; set; }
@@ -421,6 +450,50 @@ namespace YemenGuide.Core.DTOs.Admin
         public string Action { get; set; } = string.Empty;
         [StringLength(500)]
         public string? Reason { get; set; }
+    }
+
+    public sealed class AdminAdvertisementRefundDto
+    {
+        [Range(1, int.MaxValue)]
+        public int AdvertisementId { get; set; }
+
+        [Range(1, int.MaxValue, ErrorMessage = "اختر وسيلة الاسترداد.")]
+        public int RefundWalletId { get; set; }
+
+        public int? OwnerWalletId { get; set; }
+
+        [Required(ErrorMessage = "رقم الحساب أو المحفظة مطلوب.")]
+        [StringLength(100)]
+        public string RefundAccountNumber { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "اسم المستفيد مطلوب.")]
+        [StringLength(150)]
+        public string RefundBeneficiaryName { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "رقم مرجع الاسترداد مطلوب.")]
+        [StringLength(100, MinimumLength = 3)]
+        public string RefundReferenceNumber { get; set; } = string.Empty;
+
+        [StringLength(500)]
+        public string? RefundNote { get; set; }
+
+        [StringLength(255)]
+        public string? RefundProofImage { get; set; }
+    }
+
+    public sealed class AdminAdvertisementRefundDestinationDto
+    {
+        public int OwnerWalletId { get; set; }
+        public int WalletId { get; set; }
+        public string WalletName { get; set; } = string.Empty;
+        public string AccountNumber { get; set; } = string.Empty;
+        public string BeneficiaryName { get; set; } = string.Empty;
+    }
+
+    public sealed class AdminAdvertisementRefundWalletDto
+    {
+        public int WalletId { get; set; }
+        public string WalletName { get; set; } = string.Empty;
     }
 
     public sealed class AdminAdvertisementPlanStatusDto

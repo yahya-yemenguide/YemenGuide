@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace YemenGuide.Core.Entities
@@ -36,6 +36,19 @@ namespace YemenGuide.Core.Entities
         public string? ReferenceNumber { get; set; }
         public DateTime? TransferDate { get; set; }
         public string? ReceiptImage { get; set; }
+
+        // بيانات استرداد الإعلان - مستقلة عن بيانات الدفع الأصلية.
+        public DateTime? RefundRequestedAt { get; set; }
+        public decimal? RefundAmount { get; set; }
+        public int? RefundWalletId { get; set; }
+        public string? RefundAccountNumber { get; set; }
+        public string? RefundBeneficiaryName { get; set; }
+        public string? RefundReferenceNumber { get; set; }
+        public string? RefundProofImage { get; set; }
+        public DateTime? RefundedAt { get; set; }
+        public int? RefundedByUserId { get; set; }
+        public string? RefundNote { get; set; }
+
         public string PaymentStatus { get; set; } = null!;
         public string Status { get; set; } = null!;
         public DateTime? SubmittedAt { get; set; }

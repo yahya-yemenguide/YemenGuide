@@ -37,6 +37,7 @@
       data-review-payment-url="@Url.Action("ReviewPayment", "Advertisements", new { area = "Admin" })"
       data-review-ad-url="@Url.Action("ReviewAdvertisement", "Advertisements", new { area = "Admin" })"
       data-control-ad-url="@Url.Action("ChangeAdvertisementStatus", "Advertisements", new { area = "Admin" })"
+      data-refund-ad-url="@Url.Action("ProcessRefund", "Advertisements", new { area = "Admin" })"
       data-print-url="@Url.Action("AdvertisementReportPrint", "Advertisements", new { area = "Admin" })"
       data-pdf-url="@Url.Action("AdvertisementReportPdf", "Advertisements", new { area = "Admin" })">
 
@@ -46,11 +47,25 @@
                 <div class="admx-pagebar__identity">
                     <span class="admx-pagebar__icon"><i class="bi bi-megaphone-fill"></i></span>
                     <div class="admx-pagebar__copy">
-                        <small><i class="bi bi-stars"></i> مركز الإعلانات الموحد</small>
+                        <small>مركز الإعلانات الموحد</small>
                         <h1 id="admxPageTitle">إدارة الإعلانات</h1>
                         <p>مراجعة الإعلانات، إدارة الباقات، ومتابعة الأداء من شاشة واحدة.</p>
                     </div>
                 </div>
+
+        @if (Model.CanViewReports)
+        {
+                <div class="admx-pagebar__report-actions" data-report-toolbar hidden aria-label="إجراءات التقرير">
+                    <button type="button" class="admx-soft-action admx-report-top-action" data-report-print>
+                        <i class="bi bi-printer"></i>
+                        <span>طباعة التقرير</span>
+                    </button>
+                    <button type="button" class="admx-coral-action admx-report-top-action" data-report-pdf>
+                        <i class="bi bi-file-earmark-pdf-fill"></i>
+                        <span>حفظ التقرير كملف</span>
+                    </button>
+                </div>
+        }
             </header>
 
             <nav class="admx-main-tabs admx-sticky-tabs" aria-label="أقسام إدارة الإعلانات" role="tablist">
@@ -140,23 +155,23 @@
                 <div class="admx-today-metrics">
                     <div>
                         <i class="bi bi-eye"></i>
-                        <small>مرات الظهور اليوم</small>
-                        <strong>@Model.Overview.TodayImpressions.ToString("N0")</strong>
+                        <small>مشاهدات فريدة اليوم</small>
+                        <strong data-overview-today-impressions>@Model.Overview.TodayImpressions.ToString("N0")</strong>
                     </div>
                     <div>
                         <i class="bi bi-cursor"></i>
-                        <small>النقرات اليوم</small>
-                        <strong>@Model.Overview.TodayClicks.ToString("N0")</strong>
+                        <small>نقرات فريدة اليوم</small>
+                        <strong data-overview-today-clicks>@Model.Overview.TodayClicks.ToString("N0")</strong>
                     </div>
                     <div>
                         <i class="bi bi-broadcast"></i>
-                        <small>إعلانات تعمل</small>
-                        <strong>@Model.Overview.RunningCount.ToString("N0")</strong>
+                        <small>إعلانات نشطة</small>
+                        <strong data-overview-active>@Model.Overview.ActiveCount.ToString("N0")</strong>
                     </div>
                     <div>
                         <i class="bi bi-exclamation-circle"></i>
-                        <small>تحتاج إجراء</small>
-                        <strong>@Model.Overview.NeedsActionCount.ToString("N0")</strong>
+                        <small>طلبات تحتاج مراجعة</small>
+                        <strong data-overview-needs-review>@Model.Overview.NeedsActionCount.ToString("N0")</strong>
                     </div>
                 </div>
             </article>
@@ -187,7 +202,7 @@
                 <span>متوقفة</span><b>@Model.Advertisements.PausedCount</b>
             </button>
             <button type="button" class="admx-subtab" data-ad-group="Closed">
-                <span>مغلقة</span><b>@Model.Advertisements.ClosedCount</b>
+                <span>منتهية وملغاة</span><b>@Model.Advertisements.ClosedCount</b>
             </button>
         </div>
 
@@ -288,9 +303,9 @@
             <section class="admx-onepage-section" data-admx-section="plans" hidden>
                 <div class="admx-section-head">
                     <div>
-                        <span class="admx-section-kicker"><i class="bi bi-stars"></i> الباقات</span>
+                        <span class="admx-section-kicker"><i class="bi bi-wallet2"></i> الباقات</span>
                         <h2>الباقات والتسعير</h2>
-                        <p>أنشئ أي عدد من الباقات. كل باقة تحدد سعر اليوم ووزن الظهور فقط، بينما المالك يختار مدة الإعلان.</p>
+                        <p>إدارة سعر اليوم ووزن الظهور لكل باقة.</p>
                     </div>
                     <div class="admx-section-actions">
                         <button type="button" class="admx-primary-action admx-plan-open" data-plan-id="">
@@ -299,20 +314,10 @@
                         </button>
                     </div>
                 </div>
-
-                <div class="admx-unified-channel">
-                    <span class="admx-unified-channel__icon"><i class="bi bi-search-heart-fill"></i></span>
-                    <div>
-                        <strong>مكان ظهور موحّد</strong>
-                        <p>جميع الإعلانات المعتمدة تظهر في مساحة الإعلانات داخل صفحة البحث أعلى الفئات. لا يختار الأدمن أو المالك مكان ظهور آخر.</p>
-                    </div>
-                    <span class="admx-unified-channel__badge"><i class="bi bi-pin-angle-fill"></i> صفحة البحث فقط</span>
-                </div>
-
-            @if (pricingOptions.Count == 0)
+@if (pricingOptions.Count == 0)
             {
                         <div class="admx-empty-state admx-pricing-empty">
-                            <i class="bi bi-stars"></i>
+                            <i class="bi bi-box-seam"></i>
                             <strong>لا توجد باقات مضافة بعد</strong>
                             <small>أنشئ أول باقة وحدد اسمها ووزن ظهورها وسعر اليوم.</small>
                             <button type="button" class="admx-primary-action admx-plan-open" data-plan-id="">
@@ -330,7 +335,7 @@
 
                                     <article class="admx-pricing-card @(plan.IsActive ? "is-active" : "")" data-extra-plan="@(isExtraPlan ? "true" : "false")" style="@(isExtraPlan ? "display:none;" : "")">
                                         <div class="admx-pricing-card__head">
-                                            <span class="admx-pricing-card__icon"><i class="bi bi-stars"></i></span>
+                                            <span class="admx-pricing-card__icon"><i class="bi bi-tag-fill"></i></span>
                                             <div>
                                                 <small>باقة إعلانية</small>
                                                 <h3>@plan.PlanName</h3>
@@ -411,21 +416,19 @@
     @if (Model.CanViewReports)
     {
             <section class="admx-onepage-section" data-admx-section="reports" hidden>
-                <div class="admx-report-head-premium">
-                    <div>
-                        <span class="admx-section-kicker"><i class="bi bi-bar-chart-line-fill"></i> التقارير والتحليلات</span>
-                        <h2>أداء الإعلانات</h2>
-                        <p>تابع عدد مرات الظهور والنقرات ونسبة النقر والإيرادات المعتمدة خلال الفترة المحددة.</p>
-                    </div>
-                    <div class="admx-section-actions">
-                        <button type="button" class="admx-soft-action" data-report-print><i class="bi bi-printer"></i> طباعة التقرير</button>
-                        <button type="button" class="admx-coral-action" data-report-pdf><i class="bi bi-file-earmark-pdf-fill"></i> حفظ التقرير كملف</button>
-                    </div>
-                </div>
-
                 <form class="admx-report-filter admx-report-filter--exact" id="admxReportsFilter">
-                    <label><span>من</span><input type="date" name="From" value="@report.From.ToString("yyyy-MM-dd")" /></label>
-                    <label><span>إلى</span><input type="date" name="To" value="@report.To.ToString("yyyy-MM-dd")" /></label>
+                    <label><span>من تاريخ</span><input type="date" name="From" value="@report.From.ToString("yyyy-MM-dd")" /></label>
+                    <label><span>إلى تاريخ</span><input type="date" name="To" value="@report.To.ToString("yyyy-MM-dd")" /></label>
+                    <label>
+                        <span>الباقة</span>
+                        <select name="AdvertisementPlanId" data-report-plan>
+                            <option value="">كل الباقات</option>
+                        @foreach (var plan in report.PlanOptions)
+                        {
+                                    <option value="@plan.Id">@plan.Label</option>
+                        }
+                        </select>
+                    </label>
                     <label>
                         <span>المنشأة</span>
                         <select name="PlaceId" data-report-place>
@@ -454,18 +457,19 @@
                 </form>
 
                 <div class="admx-report-kpis admx-report-kpis--essential" id="admxReportKpis">
-                    <article><span><i class="bi bi-megaphone"></i></span><div><small>الإعلانات</small><strong>@report.TotalAdvertisements.ToString("N0")</strong></div></article>
-                    <article><span><i class="bi bi-eye"></i></span><div><small>مرات الظهور</small><strong>@report.Impressions.ToString("N0")</strong></div></article>
-                    <article><span><i class="bi bi-cursor"></i></span><div><small>النقرات</small><strong>@report.Clicks.ToString("N0")</strong><em>CTR @report.ClickThroughRate%</em></div></article>
-                    <article class="is-coral"><span><i class="bi bi-cash-stack"></i></span><div><small>الإيراد المعتمد</small><strong>@report.PaidRevenue.ToString("N0")</strong><em>ر.ي</em></div></article>
+                    <article><span><i class="bi bi-megaphone"></i></span><div><small>إجمالي الإعلانات</small><strong>@report.TotalAdvertisements.ToString("N0")</strong><em>ضمن الفترة المحددة</em></div></article>
+                    <article><span><i class="bi bi-eye"></i></span><div><small>المشاهدات الفريدة</small><strong>@report.Impressions.ToString("N0")</strong><em>مستخدمون أو زوار مختلفون</em></div></article>
+                    <article><span><i class="bi bi-cursor"></i></span><div><small>النقرات الفريدة</small><strong>@report.Clicks.ToString("N0")</strong><em>مستخدمون أو زوار مختلفون</em></div></article>
+                    <article><span><i class="bi bi-check2-circle"></i></span><div><small>الحجوزات المكتملة</small><strong>@report.Conversions.ToString("N0")</strong></div></article>
+                    <article class="is-coral"><span><i class="bi bi-cash-stack"></i></span><div><small>إيرادات الإعلانات</small><strong>@report.PaidRevenue.ToString("N0")</strong><em>مبالغ دفع معتمدة · ر.ي</em></div></article>
                 </div>
 
                 <div class="admx-report-dashboard">
                     <article class="admx-report-chart-card is-wide">
                         <div class="admx-report-card-head">
                             <div>
-                                <h3>الظهور والنقرات خلال الفترة</h3>
-                                <p>اتجاه أداء الإعلانات يومًا بيوم.</p>
+                                <h3>المشاهدات والنقرات الفريدة خلال الفترة</h3>
+                                <p>اتجاه الأداء يومًا بيوم حسب الفلاتر المحددة أعلاه.</p>
                             </div>
                             <span><i class="bi bi-graph-up-arrow"></i></span>
                         </div>
@@ -474,13 +478,13 @@
 
                     <article class="admx-report-chart-card">
                         <div class="admx-report-card-head">
-                            <div><h3>حالة الدفع</h3><p>ملخص سريع للمدفوع والمعلّق والمسترد.</p></div>
+                            <div><h3>ملخص حالات الدفع</h3><p>أعداد الإعلانات حسب حالة الدفع ضمن الفترة المحددة.</p></div>
                             <span><i class="bi bi-credit-card-2-front"></i></span>
                         </div>
                         <div class="admx-finance-summary">
-                            <div><small>إعلانات مدفوعة</small><strong>@report.PaidAdvertisements.ToString("N0")</strong></div>
-                            <div><small>دفع قيد المراجعة</small><strong>@report.PendingPayments.ToString("N0")</strong></div>
-                            <div><small>مستردة</small><strong>@report.RefundedAdvertisements.ToString("N0")</strong></div>
+                            <div><small>مدفوعة</small><strong data-report-paid-count>@report.PaidAdvertisements.ToString("N0")</strong></div>
+                            <div><small>دفع قيد المراجعة</small><strong data-report-pending-count>@report.PendingPayments.ToString("N0")</strong></div>
+                            <div><small>مستردة</small><strong data-report-refunded-count>@report.RefundedAdvertisements.ToString("N0")</strong></div>
                         </div>
                     </article>
                 </div>
@@ -488,30 +492,39 @@
                 <article class="admx-premium-panel admx-top-ads-panel">
                     <div class="admx-panel-title">
                         <span><i class="bi bi-trophy"></i></span>
-                        <div><h3>أفضل الإعلانات أداءً</h3><p>مقارنة واضحة بين الظهور والنقرات ونسبة النقر.</p></div>
+                        <div>
+                            <h3>تفاصيل الإعلانات</h3>
+                            <p>الباقة والمدة والسعر والأداء الفعلي لكل إعلان.</p>
+                        </div>
                     </div>
                     <div class="admx-report-table-wrap">
                         <table class="admx-report-table" id="admxTopAdsTable">
                             <thead>
                                 <tr>
                                     <th>الإعلان</th>
+                                    <th>الباقة</th>
                                     <th>الحالة</th>
-                                    <th>الظهور</th>
-                                    <th>النقرات</th>
-                                    <th>CTR</th>
-                                    <th>المبلغ المدفوع</th>
+                                    <th>المدة</th>
+                                    <th>سعر اليوم</th>
+                                    <th>إجمالي الإعلان</th>
+                                    <th>مشاهدات فريدة</th>
+                                    <th>نقرات فريدة</th>
+                                    <th>حجوزات مكتملة</th>
                                 </tr>
                             </thead>
                             <tbody>
-                            @foreach (var item in report.TopAdvertisements.Take(20))
+                            @foreach (var item in report.TopAdvertisements.Take(30))
                             {
                                         <tr>
                                             <td><strong>@item.Title</strong><small>@item.PlaceName</small></td>
-                                            <td>@item.StatusLabel</td>
+                                            <td><strong>@item.PlanName</strong><small>نسبة الظهور @($"{item.DisplayWeight}%")</small></td>
+                                            <td><strong>@item.StatusLabel</strong><small>@item.PaymentStatusLabel</small></td>
+                                            <td>@item.DurationDays يوم</td>
+                                            <td>@item.DailyPrice.ToString("N0") ر.ي</td>
+                                            <td>@item.TotalAmount.ToString("N0") ر.ي</td>
                                             <td>@item.Impressions.ToString("N0")</td>
                                             <td>@item.Clicks.ToString("N0")</td>
-                                            <td>@item.ClickThroughRate%</td>
-                                            <td>@item.PaidAmount.ToString("N0") ر.ي</td>
+                                            <td>@item.Conversions.ToString("N0")</td>
                                         </tr>
                             }
                             </tbody>

@@ -1,9 +1,12 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using YemenGuide.Core.Constants;
 using YemenGuide.Core.DTOs.Admin;
@@ -16,15 +19,19 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
     [Authorize(Roles = "Admin")]
     public sealed class AdvertisementsController : Controller
     {
+        private const long MaximumRefundProofBytes = 8L * 1024L * 1024L;
         private readonly IAdminAdvertisementService _service;
         private readonly IAdminPermissionService _permissions;
+        private readonly IWebHostEnvironment _environment;
 
         public AdvertisementsController(
             IAdminAdvertisementService service,
-            IAdminPermissionService permissions)
+            IAdminPermissionService permissions,
+            IWebHostEnvironment environment)
         {
             _service = service;
             _permissions = permissions;
+            _environment = environment;
         }
 
         [HttpGet]
@@ -210,6 +217,40 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [RequestSizeLimit(10L * 1024L * 1024L)]
+        public async Task<IActionResult> ProcessRefund(
+            [FromForm] AdminAdvertisementRefundDto request,
+            IFormFile? refundProof,
+            CancellationToken cancellationToken = default)
+        {
+            var userId = CurrentUserId();
+            if (!await CanAsync(userId, AdminPermissionKeys.Advertisements.Control, cancellationToken))
+                return ForbiddenJson();
+
+            if (!ModelState.IsValid)
+                return BadRequestJson(FirstModelError());
+
+            var proofResult = await SaveRefundProofAsync(
+                request.AdvertisementId,
+                refundProof,
+                cancellationToken);
+
+            if (!proofResult.Success)
+                return BadRequestJson(proofResult.Message);
+
+            request.RefundProofImage = proofResult.RelativePath;
+
+            var result = await _service.ProcessRefundAsync(request, userId, cancellationToken);
+            if (!result.Success)
+            {
+                DeleteRefundProof(proofResult.RelativePath);
+            }
+
+            return Operation(result);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> ChangeAdvertisementStatus(
             AdminAdvertisementControlDto request,
             CancellationToken cancellationToken = default)
@@ -222,6 +263,121 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                 return BadRequestJson(FirstModelError());
 
             return Operation(await _service.ChangeAdvertisementStatusAsync(request, userId, cancellationToken));
+        }
+
+        private async Task<RefundProofSaveResult> SaveRefundProofAsync(
+            int advertisementId,
+            IFormFile? file,
+            CancellationToken cancellationToken)
+        {
+            if (advertisementId <= 0)
+                return RefundProofSaveResult.Fail("الإعلان غير صالح.");
+
+            if (file == null || file.Length <= 0)
+                return RefundProofSaveResult.Fail("ارفع صورة إثبات تحويل مبلغ الاسترداد.");
+
+            if (file.Length > MaximumRefundProofBytes)
+                return RefundProofSaveResult.Fail("حجم إثبات الاسترداد يجب ألا يتجاوز 8 ميجابايت.");
+
+            var extension = Path.GetExtension(file.FileName)?.ToLowerInvariant();
+            if (extension is not (".jpg" or ".jpeg" or ".png" or ".webp"))
+                return RefundProofSaveResult.Fail("صيغة إثبات الاسترداد يجب أن تكون JPG أو PNG أو WEBP.");
+
+            if (!await HasValidImageSignatureAsync(file, cancellationToken))
+                return RefundProofSaveResult.Fail("ملف إثبات الاسترداد ليس صورة صالحة.");
+
+            var webRoot = string.IsNullOrWhiteSpace(_environment.WebRootPath)
+                ? Path.Combine(_environment.ContentRootPath, "wwwroot")
+                : _environment.WebRootPath;
+
+            var relativeDirectory = Path.Combine(
+                "uploads",
+                "advertisements",
+                "refunds",
+                advertisementId.ToString());
+            var physicalDirectory = Path.Combine(webRoot, relativeDirectory);
+            Directory.CreateDirectory(physicalDirectory);
+
+            var fileName = $"{Guid.NewGuid():N}{extension}";
+            var physicalPath = Path.Combine(physicalDirectory, fileName);
+
+            try
+            {
+                await using var stream = new FileStream(
+                    physicalPath,
+                    FileMode.CreateNew,
+                    FileAccess.Write,
+                    FileShare.None,
+                    81920,
+                    useAsync: true);
+                await file.CopyToAsync(stream, cancellationToken);
+            }
+            catch
+            {
+                return RefundProofSaveResult.Fail("تعذر حفظ إثبات الاسترداد. حاول مرة أخرى.");
+            }
+
+            var relativePath = "/" + Path.Combine(relativeDirectory, fileName).Replace('\\', '/');
+            return RefundProofSaveResult.Ok(relativePath);
+        }
+
+        private static async Task<bool> HasValidImageSignatureAsync(
+            IFormFile file,
+            CancellationToken cancellationToken)
+        {
+            var header = new byte[12];
+            await using var stream = file.OpenReadStream();
+            var read = await stream.ReadAsync(header.AsMemory(0, header.Length), cancellationToken);
+            if (read < 4) return false;
+
+            var jpeg = header[0] == 0xFF && header[1] == 0xD8 && header[2] == 0xFF;
+            var png = read >= 8 && header[0] == 0x89 && header[1] == 0x50 && header[2] == 0x4E && header[3] == 0x47;
+            var webp = read >= 12 && header[0] == 0x52 && header[1] == 0x49 && header[2] == 0x46 && header[3] == 0x46 &&
+                       header[8] == 0x57 && header[9] == 0x45 && header[10] == 0x42 && header[11] == 0x50;
+            return jpeg || png || webp;
+        }
+
+        private void DeleteRefundProof(string? relativePath)
+        {
+            if (string.IsNullOrWhiteSpace(relativePath) ||
+                !relativePath.StartsWith("/uploads/advertisements/refunds/", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            try
+            {
+                var webRoot = string.IsNullOrWhiteSpace(_environment.WebRootPath)
+                    ? Path.Combine(_environment.ContentRootPath, "wwwroot")
+                    : _environment.WebRootPath;
+                var uploadRoot = Path.GetFullPath(Path.Combine(webRoot, "uploads", "advertisements", "refunds"));
+                var candidate = Path.GetFullPath(Path.Combine(
+                    webRoot,
+                    relativePath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar)));
+
+                if (candidate.StartsWith(uploadRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) &&
+                    System.IO.File.Exists(candidate))
+                {
+                    System.IO.File.Delete(candidate);
+                }
+            }
+            catch
+            {
+                // لا نفشل طلب المستخدم فقط لأن تنظيف ملف غير مستخدم تعذر.
+            }
+        }
+
+        private sealed class RefundProofSaveResult
+        {
+            public bool Success { get; private init; }
+            public string Message { get; private init; } = string.Empty;
+            public string? RelativePath { get; private init; }
+
+            public static RefundProofSaveResult Ok(string relativePath) =>
+                new() { Success = true, RelativePath = relativePath };
+
+            public static RefundProofSaveResult Fail(string message) =>
+                new() { Success = false, Message = message };
         }
 
         private IActionResult Operation(AdminAdvertisementOperationResult result) =>

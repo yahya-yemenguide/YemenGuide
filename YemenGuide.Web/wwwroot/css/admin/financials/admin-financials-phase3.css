@@ -1,0 +1,785 @@
+/* ========================================================================== 
+   YemenGuide — Admin Financials Phase 3
+   UI polish only: main tabs, compact tab content, collapsible report filters,
+   readable Tajawal typography, complete finance dark mode, mobile polish.
+   Loaded LAST after phase1 + phase2.
+   ========================================================================== */
+
+:root {
+    --af3-font: var(--yg-font-family, "Tajawal", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+    --af3-text-size: 15px;
+    --af3-small-size: 13px;
+    --af3-label-size: 14px;
+}
+
+/* ---------- Font/readability ---------- */
+.af-shell,
+.af-management-drawer,
+.afm,
+.acg-modal,
+.atr-modal,
+.aft-modal,
+.afm-modal,
+.af-toast-stack {
+    font-family: var(--af3-font) !important;
+    font-size: var(--af3-text-size) !important;
+}
+
+:is(.af-shell, .af-management-drawer, .afm, .acg-modal, .atr-modal, .aft-modal, .afm-modal, .af-toast-stack)
+:is(button, input, select, textarea) {
+    font-family: var(--af3-font) !important;
+    font-size: 14.5px !important;
+}
+
+:is(.af-shell, .af-management-drawer, .afm, .acg-modal, .atr-modal, .aft-modal, .afm-modal, .af-toast-stack)
+.bi::before {
+    font-family: "bootstrap-icons" !important;
+}
+
+.af-shell small,
+.afm small,
+.acg-modal small,
+.atr-modal small,
+.aft-modal small,
+.afm-modal small {
+    font-size: var(--af3-small-size) !important;
+    line-height: 1.55 !important;
+}
+
+.af-shell label,
+.afm label,
+.acg-modal label,
+.atr-modal label,
+.aft-modal label,
+.afm-modal label {
+    font-size: var(--af3-label-size) !important;
+    font-weight: 750 !important;
+}
+
+.af-shell :is(th, td) {
+    font-size: 14px !important;
+    line-height: 1.55 !important;
+}
+
+/* ---------- Main tabs: restore full primary-tab sizing ---------- */
+.af-shell .af-tabs {
+    min-height: 74px !important;
+    padding: 8px !important;
+    gap: 8px !important;
+    align-items: stretch !important;
+}
+
+.af-shell .af-tab {
+    min-height: 58px !important;
+    padding: .62rem .85rem !important;
+    border-radius: 15px !important;
+    font-size: .93rem !important;
+    font-weight: 850 !important;
+    gap: 10px !important;
+}
+
+.af-shell .af-tab__icon {
+    width: 38px !important;
+    height: 38px !important;
+    min-width: 38px !important;
+    border-radius: 11px !important;
+    font-size: 1.04rem !important;
+}
+
+.af-shell .af-tab__count {
+    min-width: 31px !important;
+    height: 31px !important;
+    padding-inline: .45rem !important;
+    font-size: .76rem !important;
+}
+
+/* ---------- Remove duplicated headings directly under main tabs ---------- */
+.afo > .afo-section-head,
+.acg > .acg-section-head,
+.atr > .atr-section-head,
+.aft > .aft-section-head {
+    display: none !important;
+}
+
+/* Reports: remove duplicated title/description, retain print action. */
+.afr > .afr-section-head {
+    min-height: 0 !important;
+    margin: 0 0 10px !important;
+    padding: 0 !important;
+    border: 0 !important;
+    justify-content: flex-end !important;
+}
+
+.afr > .afr-section-head > div:first-child {
+    display: none !important;
+}
+
+.afr > .afr-section-head .afr-section-head__actions {
+    margin: 0 !important;
+}
+
+/* After removing headers, pull content up cleanly. */
+.afo,
+.acg,
+.atr,
+.aft,
+.afr {
+    padding-top: 0 !important;
+}
+
+.afo > .afo-filterbar,
+.acg > .acg-toolbar,
+.atr > .atr-status-nav,
+.aft > .aft-filterbar,
+.afr > .afr-report-selector {
+    margin-top: 0 !important;
+}
+
+/* ---------- Report filter becomes a compact collapsible bar ---------- */
+.afr-filter-card {
+    overflow: hidden !important;
+    transition: border-color .16s ease, box-shadow .16s ease !important;
+}
+
+.afr-filter-card__head {
+    min-height: 54px !important;
+    padding: 10px 14px !important;
+    margin: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 10px !important;
+}
+
+.afr-filter-card__head > div:first-child {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+}
+
+.afr-filter-card__head > div:first-child > h3,
+.afr-filter-card__head > div:first-child > p {
+    display: none !important;
+}
+
+.afr-filter-card__head > div:first-child > span {
+    margin: 0 !important;
+    font-size: 14px !important;
+    font-weight: 850 !important;
+}
+
+.afr-filter-toggle {
+    min-height: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 7px 11px;
+    border: 1px solid #d6e4ed;
+    border-radius: 10px;
+    background: #fff;
+    color: #315066;
+    cursor: pointer;
+    font-family: var(--af3-font) !important;
+    font-size: 13px !important;
+    font-weight: 800;
+    transition: background-color .16s ease, color .16s ease, border-color .16s ease;
+}
+
+.afr-filter-toggle:hover {
+    color: #0089b7;
+    border-color: rgba(0, 166, 218, .34);
+    background: rgba(0, 166, 218, .06);
+}
+
+.afr-filter-toggle i {
+    transition: transform .18s ease;
+}
+
+.afr-filter-card:not(.is-collapsed) .afr-filter-toggle i {
+    transform: rotate(180deg);
+}
+
+.afr-filter-card.is-collapsed > .afr-filter-grid,
+.afr-filter-card.is-collapsed > .afr-boolean-filters,
+.afr-filter-card.is-collapsed > .afr-filter-card__actions {
+    display: none !important;
+}
+
+.afr-filter-card.is-collapsed .afr-filter-card__head {
+    border-bottom: 0 !important;
+}
+
+.afr-clear-filters {
+    min-height: 36px !important;
+    font-size: 13px !important;
+}
+
+.afr-filter-grid {
+    padding-top: 12px !important;
+}
+
+/* Trim report repetition/vertical space. */
+.afr-report-selector {
+    margin-bottom: 12px !important;
+}
+
+.afr-report-option {
+    min-height: 82px !important;
+    padding: 12px !important;
+}
+
+.afr-report-option__text strong {
+    font-size: 13.5px !important;
+}
+
+.afr-report-option__text small {
+    font-size: 11.5px !important;
+    line-height: 1.45 !important;
+}
+
+.afr-report-header-card {
+    margin-top: 12px !important;
+}
+
+/* ---------- Account number field ---------- */
+[data-platform-wallet-number] {
+    direction: ltr !important;
+    text-align: left !important;
+    letter-spacing: .45px;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Shared control readability ---------- */
+.af-shell :is(input, select, textarea),
+.afm :is(input, select, textarea),
+.acg-modal :is(input, select, textarea),
+.atr-modal :is(input, select, textarea),
+.aft-modal :is(input, select, textarea) {
+    min-height: 44px;
+    line-height: 1.4;
+}
+
+.af-shell textarea,
+.afm textarea {
+    min-height: 74px;
+}
+
+.af-shell :is(.afo-btn, .acg-btn, .atr-btn, .aft-btn, .afr-btn),
+.afm .afm-btn {
+    min-height: 42px !important;
+    font-size: 14px !important;
+    font-weight: 800 !important;
+}
+
+/* ========================================================================== 
+   COMPLETE DARK MODE
+   Matches the cleaner profile/settings/users dark surfaces.
+   ========================================================================== */
+body.dark-mode,
+html.dark-mode body,
+body[data-theme="dark"] {
+    --af3-bg: #0b0c10;
+    --af3-surface: #14141e;
+    --af3-surface-2: #1e1e2d;
+    --af3-surface-3: #2a2a3c;
+    --af3-border: rgba(255, 255, 255, .055);
+    --af3-border-strong: rgba(255, 255, 255, .10);
+    --af3-text: #f8fafc;
+    --af3-text-2: #e2e8f0;
+    --af3-muted: #94a3b8;
+    --af3-muted-2: #758196;
+    --af3-cyan: #38c1ea;
+    --af3-cyan-soft: rgba(0, 166, 218, .14);
+}
+
+body.dark-mode .af-shell,
+html.dark-mode body .af-shell,
+body[data-theme="dark"] .af-shell {
+    color: var(--af3-text) !important;
+    color-scheme: dark;
+}
+
+/* Global finance surfaces */
+body.dark-mode :is(
+    .af-hero__content,
+    .af-workspace,
+    .af-tabs,
+    .af-tab-panel,
+    .afo-filterbar,
+    .afo-panel,
+    .afo-kpi-card,
+    .acg-toolbar,
+    .acg-table-card,
+    .atr-status-nav,
+    .atr-filterbar,
+    .atr-table-card,
+    .aft-filterbar,
+    .aft-ledger-card,
+    .afr-report-selector,
+    .afr-filter-card,
+    .afr-report-header-card,
+    .afr-data-card,
+    .afr-documents,
+    .afr-document-card,
+    .afr-metric
+),
+html.dark-mode body :is(
+    .af-hero__content,
+    .af-workspace,
+    .af-tabs,
+    .af-tab-panel,
+    .afo-filterbar,
+    .afo-panel,
+    .afo-kpi-card,
+    .acg-toolbar,
+    .acg-table-card,
+    .atr-status-nav,
+    .atr-filterbar,
+    .atr-table-card,
+    .aft-filterbar,
+    .aft-ledger-card,
+    .afr-report-selector,
+    .afr-filter-card,
+    .afr-report-header-card,
+    .afr-data-card,
+    .afr-documents,
+    .afr-document-card,
+    .afr-metric
+) {
+    background: var(--af3-surface) !important;
+    border-color: var(--af3-border) !important;
+    color: var(--af3-text) !important;
+    box-shadow: 0 10px 32px rgba(0, 0, 0, .20) !important;
+}
+
+/* Second-level cards */
+body.dark-mode :is(
+    .afo-alert,
+    .afo-empty,
+    .afo-table-wrap,
+    .acg-filter-chip,
+    .acg-table-wrap,
+    .atr-status-tab,
+    .atr-table-wrap,
+    .aft-table-wrap,
+    .afr-report-option,
+    .afr-check-pill,
+    .afr-table-wrap,
+    .afr-empty,
+    .afr-data-card__count
+),
+html.dark-mode body :is(
+    .afo-alert,
+    .afo-empty,
+    .afo-table-wrap,
+    .acg-filter-chip,
+    .acg-table-wrap,
+    .atr-status-tab,
+    .atr-table-wrap,
+    .aft-table-wrap,
+    .afr-report-option,
+    .afr-check-pill,
+    .afr-table-wrap,
+    .afr-empty,
+    .afr-data-card__count
+) {
+    background: var(--af3-surface-2) !important;
+    border-color: var(--af3-border) !important;
+    color: var(--af3-text-2) !important;
+}
+
+body.dark-mode :is(
+    .af-hero__title,
+    .afo-panel h3,
+    .afo-kpi-card__value,
+    .acg-table-card h3,
+    .atr-table-card h3,
+    .aft-ledger-card h3,
+    .afr-report-header-card h3,
+    .afr-data-card h3,
+    .afr-document-card h4,
+    .afr-metric strong
+),
+html.dark-mode body :is(
+    .af-hero__title,
+    .afo-panel h3,
+    .afo-kpi-card__value,
+    .acg-table-card h3,
+    .atr-table-card h3,
+    .aft-ledger-card h3,
+    .afr-report-header-card h3,
+    .afr-data-card h3,
+    .afr-document-card h4,
+    .afr-metric strong
+) {
+    color: var(--af3-text) !important;
+}
+
+body.dark-mode :is(
+    .af-meta-pill,
+    .afo-panel__eyebrow,
+    .afo-panel p,
+    .acg-muted,
+    .atr-muted,
+    .afr-data-card p,
+    .afr-report-header-card p,
+    .afr-document-card p
+),
+html.dark-mode body :is(
+    .af-meta-pill,
+    .afo-panel__eyebrow,
+    .afo-panel p,
+    .acg-muted,
+    .atr-muted,
+    .afr-data-card p,
+    .afr-report-header-card p,
+    .afr-document-card p
+) {
+    color: var(--af3-muted) !important;
+}
+
+/* Main tabs in dark */
+body.dark-mode .af-tab,
+html.dark-mode body .af-tab {
+    background: transparent !important;
+    border-color: transparent !important;
+    color: #b5c5d5 !important;
+}
+
+body.dark-mode .af-tab:hover,
+html.dark-mode body .af-tab:hover {
+    background: var(--af3-cyan-soft) !important;
+    color: #dff7ff !important;
+}
+
+body.dark-mode .af-tab.is-active,
+body.dark-mode .af-tab[aria-selected="true"],
+html.dark-mode body .af-tab.is-active,
+html.dark-mode body .af-tab[aria-selected="true"] {
+    background: linear-gradient(135deg, #008fbf, #00a6da) !important;
+    border-color: rgba(92, 219, 255, .28) !important;
+    color: #fff !important;
+    box-shadow: 0 8px 22px rgba(0, 166, 218, .22) !important;
+}
+
+body.dark-mode .af-tab.is-active :is(.af-tab__icon, .af-tab__count),
+html.dark-mode body .af-tab.is-active :is(.af-tab__icon, .af-tab__count) {
+    color: #fff !important;
+}
+
+/* Inputs / selects / date fields */
+body.dark-mode :is(.af-shell, .afm, .acg-modal, .atr-modal, .aft-modal, .afm-modal)
+:is(input, select, textarea),
+html.dark-mode body :is(.af-shell, .afm, .acg-modal, .atr-modal, .aft-modal, .afm-modal)
+:is(input, select, textarea) {
+    background: rgba(30, 30, 45, .72) !important;
+    border-color: var(--af3-border-strong) !important;
+    color: var(--af3-text) !important;
+    caret-color: #73ddff;
+    color-scheme: dark;
+    box-shadow: none !important;
+}
+
+body.dark-mode :is(.af-shell, .afm, .acg-modal, .atr-modal, .aft-modal, .afm-modal)
+:is(input, textarea)::placeholder,
+html.dark-mode body :is(.af-shell, .afm, .acg-modal, .atr-modal, .aft-modal, .afm-modal)
+:is(input, textarea)::placeholder {
+    color: #75899f !important;
+    opacity: 1;
+}
+
+body.dark-mode :is(.af-shell, .afm, .acg-modal, .atr-modal, .aft-modal, .afm-modal)
+:is(input, select, textarea):focus,
+html.dark-mode body :is(.af-shell, .afm, .acg-modal, .atr-modal, .aft-modal, .afm-modal)
+:is(input, select, textarea):focus {
+    border-color: #20b8e5 !important;
+    box-shadow: 0 0 0 3px rgba(0, 166, 218, .15) !important;
+    outline: 0 !important;
+}
+
+body.dark-mode select option,
+html.dark-mode body select option {
+    background: var(--af3-surface) !important;
+    color: var(--af3-text) !important;
+}
+
+body.dark-mode input[type="date"]::-webkit-calendar-picker-indicator,
+html.dark-mode body input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(1) opacity(.8);
+}
+
+body.dark-mode :is(.af-shell, .afm) input:-webkit-autofill,
+body.dark-mode :is(.af-shell, .afm) input:-webkit-autofill:hover,
+body.dark-mode :is(.af-shell, .afm) input:-webkit-autofill:focus,
+html.dark-mode body :is(.af-shell, .afm) input:-webkit-autofill,
+html.dark-mode body :is(.af-shell, .afm) input:-webkit-autofill:hover,
+html.dark-mode body :is(.af-shell, .afm) input:-webkit-autofill:focus {
+    -webkit-text-fill-color: var(--af3-text) !important;
+    -webkit-box-shadow: 0 0 0 1000px #1e1e2d inset !important;
+}
+
+/* Tables */
+body.dark-mode :is(.afo-table, .acg-table, .atr-table, .aft-table, .afr-table),
+html.dark-mode body :is(.afo-table, .acg-table, .atr-table, .aft-table, .afr-table) {
+    background: transparent !important;
+    color: var(--af3-text-2) !important;
+}
+
+body.dark-mode :is(.afo-table, .acg-table, .atr-table, .aft-table, .afr-table) thead th,
+html.dark-mode body :is(.afo-table, .acg-table, .atr-table, .aft-table, .afr-table) thead th {
+    background: var(--af3-surface-2) !important;
+    border-color: var(--af3-border) !important;
+    color: #dce9f5 !important;
+}
+
+body.dark-mode :is(.afo-table, .acg-table, .atr-table, .aft-table, .afr-table) tbody td,
+html.dark-mode body :is(.afo-table, .acg-table, .atr-table, .aft-table, .afr-table) tbody td {
+    background: var(--af3-surface) !important;
+    border-color: var(--af3-border) !important;
+    color: var(--af3-text-2) !important;
+}
+
+body.dark-mode :is(.afo-table, .acg-table, .atr-table, .aft-table, .afr-table) tbody tr:hover td,
+html.dark-mode body :is(.afo-table, .acg-table, .atr-table, .aft-table, .afr-table) tbody tr:hover td {
+    background: var(--af3-surface-3) !important;
+}
+
+/* Status/filter controls */
+body.dark-mode :is(.acg-filter-chip, .atr-status-tab, .afr-report-option, .afr-check-pill, .afr-filter-toggle, .afr-clear-filters),
+html.dark-mode body :is(.acg-filter-chip, .atr-status-tab, .afr-report-option, .afr-check-pill, .afr-filter-toggle, .afr-clear-filters) {
+    background: var(--af3-surface-2) !important;
+    border-color: var(--af3-border) !important;
+    color: var(--af3-muted) !important;
+}
+
+body.dark-mode :is(.acg-filter-chip.is-active, .atr-status-tab.is-active, .afr-report-option.is-active),
+html.dark-mode body :is(.acg-filter-chip.is-active, .atr-status-tab.is-active, .afr-report-option.is-active) {
+    background: rgba(0, 166, 218, .15) !important;
+    border-color: rgba(61, 203, 246, .34) !important;
+    color: #bcefff !important;
+}
+
+/* Drawer + management modal */
+body.dark-mode :is(
+    .af-management-drawer,
+    .af-management-drawer__host,
+    .afm,
+    .afm-header,
+    .afm-body,
+    .afm-tabs,
+    .afm-tab-panel,
+    .afm-section,
+    .afm-settings-form,
+    .afm-settings-footer,
+    .afm-wallet-card,
+    .afm-category-card,
+    .afm-trial-policy,
+    .afm-toggle-card,
+    .afm-trial-field,
+    .afm-trial-flow-step,
+    .afm-trial-policy__note,
+    .afm-wallet-summary > div,
+    .afm-modal__dialog,
+    .afm-modal__header,
+    .afm-modal__body,
+    .afm-modal__footer
+),
+html.dark-mode body :is(
+    .af-management-drawer,
+    .af-management-drawer__host,
+    .afm,
+    .afm-header,
+    .afm-body,
+    .afm-tabs,
+    .afm-tab-panel,
+    .afm-section,
+    .afm-settings-form,
+    .afm-settings-footer,
+    .afm-wallet-card,
+    .afm-category-card,
+    .afm-trial-policy,
+    .afm-toggle-card,
+    .afm-trial-field,
+    .afm-trial-flow-step,
+    .afm-trial-policy__note,
+    .afm-wallet-summary > div,
+    .afm-modal__dialog,
+    .afm-modal__header,
+    .afm-modal__body,
+    .afm-modal__footer
+) {
+    background: var(--af3-surface) !important;
+    border-color: var(--af3-border) !important;
+    color: var(--af3-text) !important;
+}
+
+body.dark-mode :is(.afm-wallet-card__usage, .afm-category-card, .afm-toggle-card, .afm-trial-field, .afm-trial-flow-step),
+html.dark-mode body :is(.afm-wallet-card__usage, .afm-category-card, .afm-toggle-card, .afm-trial-field, .afm-trial-flow-step) {
+    background: var(--af3-surface-2) !important;
+}
+
+body.dark-mode .afm-tab,
+html.dark-mode body .afm-tab {
+    background: transparent !important;
+    color: #adbdcd !important;
+}
+
+body.dark-mode .afm-tab.is-active,
+html.dark-mode body .afm-tab.is-active {
+    background: rgba(0, 166, 218, .16) !important;
+    border-color: rgba(61, 203, 246, .28) !important;
+    color: #77ddff !important;
+}
+
+/* Detail/review modals outside root */
+body.dark-mode :is(
+    .acg-modal__dialog, .acg-modal__header, .acg-modal__body, .acg-modal__footer,
+    .atr-modal__dialog, .atr-modal__header, .atr-modal__body, .atr-modal__footer,
+    .aft-modal__dialog, .aft-modal__header, .aft-modal__body, .aft-modal__footer,
+    .acg-details, .acg-detail-section,
+    .atr-review-card, .atr-allocation-card, .atr-history-card, .atr-proof-card,
+    .aft-details__hero, .aft-detail-section, .aft-info-grid > div, .aft-snapshot-grid > article
+),
+html.dark-mode body :is(
+    .acg-modal__dialog, .acg-modal__header, .acg-modal__body, .acg-modal__footer,
+    .atr-modal__dialog, .atr-modal__header, .atr-modal__body, .atr-modal__footer,
+    .aft-modal__dialog, .aft-modal__header, .aft-modal__body, .aft-modal__footer,
+    .acg-details, .acg-detail-section,
+    .atr-review-card, .atr-allocation-card, .atr-history-card, .atr-proof-card,
+    .aft-details__hero, .aft-detail-section, .aft-info-grid > div, .aft-snapshot-grid > article
+) {
+    background: var(--af3-surface) !important;
+    border-color: var(--af3-border) !important;
+    color: var(--af3-text) !important;
+}
+
+body.dark-mode :is(.acg-modal__backdrop, .atr-modal__backdrop, .aft-modal__backdrop, .afm-modal__backdrop, .af-drawer-backdrop),
+html.dark-mode body :is(.acg-modal__backdrop, .atr-modal__backdrop, .aft-modal__backdrop, .afm-modal__backdrop, .af-drawer-backdrop) {
+    background: rgba(2, 8, 17, .76) !important;
+}
+
+body.dark-mode :is(.afm-close, .afm-modal__close, .acg-modal__close, .atr-modal__close, .aft-modal__close),
+html.dark-mode body :is(.afm-close, .afm-modal__close, .acg-modal__close, .atr-modal__close, .aft-modal__close) {
+    background: var(--af3-surface-2) !important;
+    border-color: var(--af3-border) !important;
+    color: var(--af3-text-2) !important;
+}
+
+/* Toast above all overlays */
+#adminFinanceToastStack,
+#adminFinanceGlobalToastStack,
+.af-toast-stack--global {
+    z-index: 2147483000 !important;
+}
+
+body.dark-mode .af-toast,
+html.dark-mode body .af-toast {
+    background: #242432 !important;
+    border-color: var(--af3-border-strong) !important;
+    color: var(--af3-text) !important;
+    box-shadow: 0 18px 52px rgba(0, 0, 0, .42) !important;
+}
+
+body.dark-mode .af-toast p,
+html.dark-mode body .af-toast p {
+    color: var(--af3-muted) !important;
+}
+
+/* ---------- Mobile ---------- */
+@media (max-width: 768px) {
+    .af-shell .af-tabs {
+        min-height: 64px !important;
+        padding: 7px !important;
+        overflow-x: auto !important;
+        flex-wrap: nowrap !important;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .af-shell .af-tabs::-webkit-scrollbar { display: none; }
+
+    .af-shell .af-tab {
+        min-height: 50px !important;
+        min-width: max-content !important;
+        flex: 0 0 auto !important;
+        padding: 8px 14px !important;
+        font-size: 14px !important;
+    }
+
+    .af-shell .af-tab__icon {
+        width: 33px !important;
+        height: 33px !important;
+        min-width: 33px !important;
+    }
+
+    .afr-report-selector {
+        grid-template-columns: 1fr !important;
+    }
+
+    .afr-filter-card__head {
+        align-items: stretch !important;
+        flex-wrap: wrap !important;
+    }
+
+    .afr-filter-toggle,
+    .afr-clear-filters {
+        flex: 1 1 auto;
+    }
+
+    .afr-filter-grid,
+    .afo-filterbar,
+    .atr-filterbar,
+    .aft-filterbar,
+    .afm-settings-grid,
+    .afm-trial-policy__fields,
+    .afm-category-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    .afm-tabs {
+        overflow-x: auto !important;
+        flex-wrap: nowrap !important;
+        scrollbar-width: none;
+    }
+
+    .afm-tabs::-webkit-scrollbar { display: none; }
+    .afm-tab { flex: 0 0 auto !important; min-width: max-content !important; }
+
+    :is(.afo-table-wrap, .acg-table-wrap, .atr-table-wrap, .aft-table-wrap, .afr-table-wrap) {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    :is(.afo-table, .acg-table, .atr-table, .aft-table, .afr-table) {
+        min-width: 720px;
+    }
+
+    .af-management-drawer {
+        width: 100vw !important;
+        max-width: 100vw !important;
+    }
+}
+
+@media (max-width: 430px) {
+    .af-shell,
+    .afm { font-size: 14.5px !important; }
+
+    .af-shell small,
+    .afm small { font-size: 12.5px !important; }
+
+    .af-shell .af-tab { font-size: 13.5px !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .af-shell *,
+    .afm *,
+    .acg-modal *,
+    .atr-modal *,
+    .aft-modal * {
+        transition-duration: .01ms !important;
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+    }
+}
