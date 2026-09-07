@@ -157,7 +157,34 @@
             toInteger(children, 0)
         );
 
-        return safeAdults + (safeChildren / 2);
+        /*
+         * قاعدة الفندق:
+         * - أول أربعة أطفال فقط يمكنهم الاستفادة من الاستبدال.
+         * - كل طفلين من أول أربعة يستهلكان مكان بالغ واحد.
+         * - أي مجموعة غير مكتملة (طفل واحد أو ثلاثة) تحجز المقعد التالي كاملًا.
+         * - من الطفل الخامس فصاعدًا يُحتسب كل طفل كشخص كامل.
+         */
+        const convertibleChildren =
+            Math.min(
+                safeChildren,
+                4
+            );
+
+        const convertedSlots =
+            Math.ceil(
+                convertibleChildren /
+                2
+            );
+
+        const extraChildren =
+            Math.max(
+                0,
+                safeChildren - 4
+            );
+
+        return safeAdults +
+            convertedSlots +
+            extraChildren;
     }
 
     function hasRequiredAdult(adults) {
@@ -1306,7 +1333,7 @@
         ) {
             showWarning(
                 "تجاوز سعة الوحدة",
-                `الحد الأقصى للوحدات المختارة يعادل ${maximum} أشخاص، وكل طفلين يُحتسبان كشخص بالغ واحد.`
+                `الحد الأقصى للوحدات المختارة يعادل ${maximum} مقاعد. أول 4 أطفال فقط يُحتسب كل طفلين منهم مكان بالغ واحد، ومن الطفل الخامس يُحتسب كل طفل كشخص كامل.`
             );
 
             if (changedField === "adults") {
@@ -1887,7 +1914,7 @@
         ) {
             showWarning(
                 "تجاوز سعة الوحدة",
-                `الحد الأقصى هو ${state.maximumGuests} من السعة المكافئة، وكل طفلين يُحتسبان كشخص بالغ واحد.`
+                `الحد الأقصى للوحدات المختارة يعادل ${state.maximumGuests} مقاعد. أول 4 أطفال فقط يُحتسب كل طفلين منهم مكان بالغ واحد، ومن الطفل الخامس يُحتسب كل طفل كشخص كامل.`
             );
             return;
         }

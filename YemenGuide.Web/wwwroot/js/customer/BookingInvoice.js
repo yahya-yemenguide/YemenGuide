@@ -148,7 +148,6 @@
         initializeShareButton();
         initializeKeyboardEvents();
         initializeOverlayEvents();
-        initializePrintEvents();
 
         overlay.hidden = true;
 
@@ -444,7 +443,7 @@
         );
     }
 
-    function printBookingInvoice() {
+    async function printBookingInvoice() {
         const invoiceDocument =
             getInvoiceDocument();
 
@@ -460,126 +459,405 @@
             return;
         }
 
-        const printWindow =
-            window.open(
-                "",
-                "_blank",
-                "width=1000,height=800"
-            );
-
-        if (!printWindow) {
-            showMessage({
-                icon: "warning",
-                title: "تعذر فتح نافذة الطباعة",
-                text: "اسمحي بالنوافذ المنبثقة لهذا الموقع ثم حاولي مرة أخرى.",
-                confirmButtonColor: "#00A6DA",
-                confirmButtonText: "حسنًا"
-            });
-
+        if (state.isPrinting) {
             return;
         }
 
         state.isPrinting = true;
 
-        const styles =
-            Array.from(
-                document.querySelectorAll(
-                    'link[rel="stylesheet"], style'
-                )
-            )
-                .map(element =>
-                    element.outerHTML
-                )
-                .join("\n");
+        let printFrame = null;
+        let cleanupTimer = null;
 
-        const invoiceTitle =
-            getInvoiceNumber() ||
-            "فاتورة الحجز";
+        const cleanup = () => {
+            if (cleanupTimer) {
+                window.clearTimeout(cleanupTimer);
+                cleanupTimer = null;
+            }
 
-        printWindow.document.open();
-
-        printWindow.document.write(`
-        <!DOCTYPE html>
-
-        <html lang="ar" dir="rtl">
-
-        <head>
-
-            <meta charset="utf-8">
-
-            <meta name="viewport"
-                  content="width=device-width, initial-scale=1">
-
-            <base href="${document.baseURI}">
-
-            <title>${invoiceTitle}</title>
-
-            ${styles}
-
-            <style>
-
-                html,
-                body {
-                    margin: 0 !important;
-                    padding: 0 !important;
-                    background: #ffffff !important;
-                }
-
-                body {
-                    direction: rtl;
-                }
-
-                #bookingInvoicePrintable {
-                    visibility: visible !important;
-                    display: block !important;
-                    width: 100% !important;
-                    margin: 0 !important;
-                }
-
-                #bookingInvoicePrintable * {
-                    visibility: visible !important;
-                }
-
-            </style>
-
-        </head>
-
-        <body>
-
-            ${invoiceDocument.outerHTML}
-
-        </body>
-
-        </html>
-    `);
-
-        printWindow.document.close();
-
-        printWindow.addEventListener(
-            "load",
-            () => {
-                window.setTimeout(
-                    () => {
-                        printWindow.focus();
-                        printWindow.print();
-                    },
-                    500
+            if (printFrame?.parentNode) {
+                printFrame.parentNode.removeChild(
+                    printFrame
                 );
-            },
-            {
-                once: true
             }
-        );
 
-        printWindow.addEventListener(
-            "afterprint",
-            () => {
-                state.isPrinting = false;
-                printWindow.close();
-            },
-            {
-                once: true
+            printFrame = null;
+            state.isPrinting = false;
+        };
+
+        try {
+            /*
+             * نستخدم iframe خارج الشاشة بدل طباعة الصفحة الحالية.
+             * بهذه الطريقة لا تتغير مواضع الصفحة، ولا تنزل الفاتورة
+             * إلى أسفل الشاشة عند بدء معاينة الطباعة.
+             */
+            printFrame =
+                document.createElement(
+                    "iframe"
+                );
+
+            printFrame.setAttribute(
+                "aria-hidden",
+                "true"
+            );
+
+            printFrame.tabIndex = -1;
+
+            Object.assign(
+                printFrame.style,
+                {
+                    position: "fixed",
+                    top: "0",
+                    left: "-10000px",
+                    width: "210mm",
+                    height: "297mm",
+                    border: "0",
+                    margin: "0",
+                    padding: "0",
+                    opacity: "0",
+                    pointerEvents: "none",
+                    background: "#ffffff"
+                }
+            );
+
+            document.body.appendChild(
+                printFrame
+            );
+
+            const frameWindow =
+                printFrame.contentWindow;
+
+            const frameDocument =
+                printFrame.contentDocument ||
+                frameWindow?.document;
+
+            if (
+                !frameWindow ||
+                !frameDocument
+            ) {
+                throw new Error(
+                    "تعذر إنشاء مستند الطباعة."
+                );
             }
+
+            /*
+             * ننقل فقط التنسيقات التي تحتاجها الفاتورة،
+             * حتى لا تدخل تنسيقات صفحة تفاصيل الحجز في الطباعة.
+             */
+            const requiredStyles =
+                Array.from(
+                    document.querySelectorAll(
+                        'link[rel="stylesheet"]'
+                    )
+                )
+                    .filter(link => {
+                        const href =
+                            String(
+                                link.getAttribute(
+                                    "href"
+                                ) ||
+                                ""
+                            ).toLowerCase();
+
+                        return (
+                            href.includes(
+                                "bootstrap-icons"
+                            ) ||
+                            href.includes(
+                                "/css/shared/fonts.css"
+                            ) ||
+                            href.includes(
+                                "/css/customer/bookinginvoice.css"
+                            )
+                        );
+                    })
+                    .map(link =>
+                        link.outerHTML
+                    )
+                    .join("\n");
+
+            const inlineStyles =
+                Array.from(
+                    document.querySelectorAll(
+                        "style"
+                    )
+                )
+                    .map(style =>
+                        style.outerHTML
+                    )
+                    .join("\n");
+
+            const invoiceTitle =
+                escapeHtml(
+                    getInvoiceNumber() ||
+                    "فاتورة الحجز"
+                );
+
+            frameDocument.open();
+
+            frameDocument.write(`
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <base href="${document.baseURI}">
+    <title>${invoiceTitle}</title>
+
+    ${requiredStyles}
+    ${inlineStyles}
+
+    <style>
+        html,
+        body {
+            width: 100% !important;
+            min-height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: visible !important;
+            background: #ffffff !important;
+            direction: rtl !important;
+        }
+
+        body {
+            font-family: "Tajawal", Arial, sans-serif !important;
+        }
+
+        #bookingInvoicePrintable,
+        #bookingInvoicePrintable * {
+            visibility: visible !important;
+        }
+
+        #bookingInvoicePrintable {
+            position: static !important;
+            display: block !important;
+            width: 100% !important;
+            max-width: none !important;
+            height: auto !important;
+            min-height: 0 !important;
+            max-height: none !important;
+            margin: 0 !important;
+            overflow: visible !important;
+            transform: none !important;
+        }
+
+        @media print {
+            @page {
+                size: A4 portrait;
+                margin: 7mm;
+            }
+
+            html,
+            body {
+                width: 100% !important;
+                height: auto !important;
+                min-height: 0 !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                overflow: visible !important;
+                background: #ffffff !important;
+            }
+
+            body * {
+                visibility: visible !important;
+            }
+
+            #bookingInvoicePrintable {
+                position: static !important;
+                display: block !important;
+                width: 100% !important;
+                max-width: none !important;
+                height: auto !important;
+                min-height: 0 !important;
+                max-height: none !important;
+                margin: 0 !important;
+                overflow: visible !important;
+                transform: none !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    ${invoiceDocument.outerHTML}
+</body>
+</html>
+            `);
+
+            frameDocument.close();
+
+            await waitForPrintFrame(
+                printFrame
+            );
+
+            await waitForPrintAssets(
+                frameDocument
+            );
+
+            frameWindow.addEventListener(
+                "afterprint",
+                cleanup,
+                {
+                    once: true
+                }
+            );
+
+            /*
+             * حماية احتياطية إذا لم يطلق المتصفح afterprint.
+             */
+            cleanupTimer =
+                window.setTimeout(
+                    cleanup,
+                    60000
+                );
+
+            frameWindow.focus();
+
+            window.setTimeout(
+                () => {
+                    try {
+                        frameWindow.print();
+                    } catch (error) {
+                        console.error(
+                            "تعذر بدء طباعة الفاتورة:",
+                            error
+                        );
+
+                        cleanup();
+
+                        showMessage({
+                            icon: "error",
+                            title: "تعذر فتح الطباعة",
+                            text: "تعذر تشغيل معاينة الطباعة. حاولي مرة أخرى.",
+                            confirmButtonColor: "#00A6DA",
+                            confirmButtonText: "حسنًا"
+                        });
+                    }
+                },
+                100
+            );
+        } catch (error) {
+            console.error(
+                "تعذر تجهيز فاتورة الحجز للطباعة:",
+                error
+            );
+
+            cleanup();
+
+            await showMessage({
+                icon: "error",
+                title: "تعذر طباعة الفاتورة",
+                text: "حدث خطأ أثناء تجهيز الفاتورة للطباعة. حاولي مرة أخرى.",
+                confirmButtonColor: "#00A6DA",
+                confirmButtonText: "حسنًا"
+            });
+        }
+    }
+
+    function waitForPrintFrame(frame) {
+        return new Promise(resolve => {
+            const frameDocument =
+                frame.contentDocument;
+
+            if (
+                frameDocument?.readyState ===
+                "complete"
+            ) {
+                resolve();
+                return;
+            }
+
+            let resolved = false;
+
+            const finish = () => {
+                if (resolved) {
+                    return;
+                }
+
+                resolved = true;
+                resolve();
+            };
+
+            frame.addEventListener(
+                "load",
+                finish,
+                {
+                    once: true
+                }
+            );
+
+            window.setTimeout(
+                finish,
+                1500
+            );
+        });
+    }
+
+    async function waitForPrintAssets(
+        frameDocument
+    ) {
+        if (
+            frameDocument.fonts?.ready
+        ) {
+            try {
+                await Promise.race([
+                    frameDocument.fonts.ready,
+                    new Promise(resolve =>
+                        window.setTimeout(
+                            resolve,
+                            1800
+                        )
+                    )
+                ]);
+            } catch {
+                /* لا نوقف الطباعة بسبب خط فقط. */
+            }
+        }
+
+        const images =
+            Array.from(
+                frameDocument.images ||
+                []
+            );
+
+        await Promise.all(
+            images.map(image => {
+                if (image.complete) {
+                    return Promise.resolve();
+                }
+
+                return new Promise(resolve => {
+                    let resolved = false;
+
+                    const finish = () => {
+                        if (resolved) {
+                            return;
+                        }
+
+                        resolved = true;
+                        resolve();
+                    };
+
+                    image.addEventListener(
+                        "load",
+                        finish,
+                        {
+                            once: true
+                        }
+                    );
+
+                    image.addEventListener(
+                        "error",
+                        finish,
+                        {
+                            once: true
+                        }
+                    );
+
+                    window.setTimeout(
+                        finish,
+                        1500
+                    );
+                });
+            })
         );
     }
 

@@ -5712,6 +5712,183 @@ font-weight:700;
        14. عدادات الأشخاص والسعة
        ====================================================================== */
 
+    function getPackageChildAllowance(
+        baseCapacity
+    ) {
+        const capacity =
+            Math.max(
+                0,
+                Number.parseInt(
+                    String(
+                        baseCapacity ||
+                        "0"
+                    ),
+                    10
+                ) || 0
+            );
+
+        if (capacity <= 0) {
+            return 0;
+        }
+
+        if (capacity < 10) {
+            return 2;
+        }
+
+        if (capacity === 10) {
+            return 3;
+        }
+
+        if (capacity <= 50) {
+            return 5;
+        }
+
+        return Math.min(
+            10,
+            Math.floor(
+                capacity * 0.10
+            )
+        );
+    }
+
+    function getCurrentPackageBaseCapacity() {
+        let baseCapacity =
+            window
+                .currentPackageMaxCapacity ||
+            state
+                .currentPackage
+                .maxCapacity ||
+            0;
+
+        baseCapacity =
+            Math.max(
+                0,
+                Number.parseInt(
+                    String(
+                        baseCapacity ||
+                        "0"
+                    ),
+                    10
+                ) || 0
+            );
+
+        if (baseCapacity > 0) {
+            return baseCapacity;
+        }
+
+        const capacityText =
+            getElement(
+                "modalPkgCap"
+            )?.textContent ||
+            "";
+
+        const match =
+            capacityText.match(
+                /\d+/
+            );
+
+        return match
+            ? Math.max(
+                0,
+                Number.parseInt(
+                    match[0],
+                    10
+                ) || 0
+            )
+            : 0;
+    }
+
+    function validatePackageGuestSelection(
+        adults,
+        children,
+        baseCapacity
+    ) {
+        const safeAdults =
+            Math.max(
+                0,
+                Number.parseInt(
+                    String(
+                        adults ||
+                        "0"
+                    ),
+                    10
+                ) || 0
+            );
+
+        const safeChildren =
+            Math.max(
+                0,
+                Number.parseInt(
+                    String(
+                        children ||
+                        "0"
+                    ),
+                    10
+                ) || 0
+            );
+
+        const capacity =
+            Math.max(
+                0,
+                Number.parseInt(
+                    String(
+                        baseCapacity ||
+                        "0"
+                    ),
+                    10
+                ) || 0
+            );
+
+        const childAllowance =
+            getPackageChildAllowance(
+                capacity
+            );
+
+        const absoluteMaximum =
+            capacity > 0
+                ? capacity +
+                  childAllowance
+                : 0;
+
+        if (
+            capacity > 0 &&
+            safeAdults > capacity
+        ) {
+            return {
+                valid: false,
+                childAllowance,
+                absoluteMaximum,
+                message:
+                    `عدد البالغين لا يمكن أن يتجاوز ` +
+                    `السعة الأساسية (${capacity}).`
+            };
+        }
+
+        if (
+            absoluteMaximum > 0 &&
+            safeAdults +
+            safeChildren >
+            absoluteMaximum
+        ) {
+            return {
+                valid: false,
+                childAllowance,
+                absoluteMaximum,
+                message:
+                    `السعة الأساسية ${capacity} أشخاص، ` +
+                    `ويسمح بتجاوزها بـ ${childAllowance} ` +
+                    `أطفال فقط كحد أقصى.`
+            };
+        }
+
+        return {
+            valid: true,
+            childAllowance,
+            absoluteMaximum,
+            message: ""
+        };
+    }
+
     window.smartUpdateCount =
         function smartUpdateCount(
             inputId,
@@ -5804,52 +5981,23 @@ font-weight:700;
                     ) || 0
                 );
 
-            let baseCapacity =
-                window
-                    .currentPackageMaxCapacity ||
-                state
-                    .currentPackage
-                    .maxCapacity ||
-                0;
+            const baseCapacity =
+                getCurrentPackageBaseCapacity();
 
-            if (!baseCapacity) {
-                const capacityText =
-                    getElement(
-                        "modalPkgCap"
-                    )?.textContent ||
-                    "";
+            const validation =
+                validatePackageGuestSelection(
+                    adults,
+                    children,
+                    baseCapacity
+                );
 
-                const match =
-                    capacityText.match(
-                        /\d+/
-                    );
-
-                baseCapacity =
-                    match
-                        ? Number.parseInt(
-                            match[0],
-                            10
-                        )
-                        : 0;
-            }
-
-            const absoluteMaximum =
-                baseCapacity > 0
-                    ? baseCapacity + 2
-                    : 0;
-
-            if (
-                absoluteMaximum > 0 &&
-                adults + children >
-                absoluteMaximum
-            ) {
+            if (!validation.valid) {
                 notify({
                     icon: "error",
                     title:
                         "تجاوز الحد الأقصى",
                     text:
-                        `لا يمكن أن يتجاوز العدد ` +
-                        `${absoluteMaximum} أشخاص.`
+                        validation.message
                 });
 
                 if (
@@ -5859,7 +6007,18 @@ font-weight:700;
                     adults =
                         window
                             .lastValidAdults;
+                } else if (
+                    changedField ===
+                    "children"
+                ) {
+                    children =
+                        window
+                            .lastValidChildren;
                 } else {
+                    adults =
+                        window
+                            .lastValidAdults;
+
                     children =
                         window
                             .lastValidChildren;
@@ -5898,14 +6057,18 @@ font-weight:700;
                 window
                     .lastValidChildren,
                 baseCapacity,
-                absoluteMaximum
+                validation
+                    .absoluteMaximum,
+                validation
+                    .childAllowance
             );
         };
 
     function updateCapacityWarning(
         total,
         baseCapacity,
-        absoluteMaximum
+        absoluteMaximum,
+        childAllowance
     ) {
         const alert =
             getElement(
@@ -5953,14 +6116,12 @@ font-weight:700;
         if (
             total ===
             baseCapacity &&
-            baseCapacity <
-            absoluteMaximum
+            childAllowance > 0
         ) {
             text.innerHTML =
-                "اكتمل العدد الأساسي للباقة، " +
-                "ويمكن إضافة " +
-                "<strong>شخصين إضافيين</strong> " +
-                "كحد أقصى.";
+                "اكتملت السعة الأساسية للباقة، " +
+                "ويسمح بعد ذلك بـ " +
+                `<strong>${childAllowance} أطفال إضافيين فقط</strong>.`;
 
             alert.classList.add(
                 "alert-info",
@@ -5968,13 +6129,19 @@ font-weight:700;
                 "border-info",
                 "is-info"
             );
-        } else if (
+
+            return;
+        }
+
+        if (
+            absoluteMaximum > 0 &&
             total >=
             absoluteMaximum
         ) {
             text.innerHTML =
                 `وصلت إلى الحد الأقصى ` +
-                `<strong>(${absoluteMaximum} أشخاص)</strong>.`;
+                `<strong>(${absoluteMaximum} أشخاص)</strong>، ` +
+                `بما فيه سماحية ${childAllowance} أطفال فوق السعة.`;
 
             alert.classList.add(
                 "alert-danger",
@@ -5982,19 +6149,28 @@ font-weight:700;
                 "border-danger",
                 "is-danger"
             );
-        } else {
-            text.innerHTML =
-                "تمت إضافة شخص إضافي، " +
-                "ويتبقى <strong>شخص واحد</strong> " +
-                "للوصول إلى الحد الأقصى.";
 
-            alert.classList.add(
-                "alert-info",
-                "text-info",
-                "border-info",
-                "is-info"
-            );
+            return;
         }
+
+        const remaining =
+            Math.max(
+                0,
+                absoluteMaximum -
+                total
+            );
+
+        text.innerHTML =
+            "أنت الآن ضمن سماحية الأطفال فوق السعة، " +
+            `ويتبقى <strong>${remaining}</strong> ` +
+            "من الزيادة المسموحة.";
+
+        alert.classList.add(
+            "alert-info",
+            "text-info",
+            "border-info",
+            "is-info"
+        );
     }
 
     /* ======================================================================
@@ -6540,16 +6716,35 @@ font-weight:700;
                 return;
             }
 
-            if (
-                adults +
-                children < 1
-            ) {
+            if (adults < 1) {
                 notify({
                     icon: "warning",
                     title:
-                        "حدد عدد الأشخاص",
+                        "يجب إضافة شخص بالغ",
                     text:
-                        "يجب اختيار شخص واحد على الأقل للمتابعة."
+                        "لا يمكن إكمال الحجز بأطفال فقط. يجب وجود شخص بالغ واحد على الأقل."
+                });
+
+                return;
+            }
+
+            const baseCapacity =
+                getCurrentPackageBaseCapacity();
+
+            const guestValidation =
+                validatePackageGuestSelection(
+                    adults,
+                    children,
+                    baseCapacity
+                );
+
+            if (!guestValidation.valid) {
+                notify({
+                    icon: "warning",
+                    title:
+                        "تجاوز سعة الباقة",
+                    text:
+                        guestValidation.message
                 });
 
                 return;

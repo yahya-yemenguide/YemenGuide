@@ -2442,3 +2442,139 @@ body.booking-invoice-open {
         animation: none !important
     }
 }
+
+/* ============================================================================
+   FINAL PRINT LAYOUT FIX — 2026-09
+   تطبع الفاتورة وحدها من أعلى ورقة A4 بدون هيدر الموقع أو فراغات الصفحة.
+   ============================================================================ */
+@media print {
+    @page {
+        size: A4 portrait;
+        margin: 7mm;
+    }
+
+    html,
+    body {
+        width: 100% !important;
+        height: auto !important;
+        min-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: visible !important;
+        background: #ffffff !important;
+    }
+
+    body {
+        print-color-adjust: exact !important;
+        -webkit-print-color-adjust: exact !important;
+    }
+
+    /* عناصر التخطيط العام خارج محتوى الصفحة لا تدخل الطباعة إطلاقًا. */
+    .site-wrapper > :not(.site-main-content),
+    .customer-back-to-top,
+    #btn-back-to-top,
+    .customer-bottom-nav,
+    .toast-container,
+    .swal2-container {
+        display: none !important;
+    }
+
+    .site-wrapper,
+    .site-main-content,
+    .bd2-page,
+    .bd2-shell {
+        position: static !important;
+        width: 100% !important;
+        max-width: none !important;
+        height: auto !important;
+        min-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: visible !important;
+        background: #ffffff !important;
+        box-shadow: none !important;
+        transform: none !important;
+        perspective: none !important;
+    }
+
+        /* داخل صفحة تفاصيل الحجز نحتفظ بالفاتورة فقط. */
+        .bd2-shell > :not(#bookingInvoiceOverlay) {
+            display: none !important;
+        }
+
+    #bookingInvoiceOverlay {
+        position: static !important;
+        inset: auto !important;
+        display: block !important;
+        visibility: visible !important;
+        width: 100% !important;
+        max-width: none !important;
+        height: auto !important;
+        min-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: visible !important;
+        background: #ffffff !important;
+    }
+
+        #bookingInvoiceOverlay[hidden] {
+            display: block !important;
+        }
+
+    .booking-invoice-backdrop,
+    .booking-invoice-toolbar,
+    .booking-invoice-drag-handle {
+        display: none !important;
+    }
+
+    .booking-invoice-sheet {
+        position: static !important;
+        display: block !important;
+        visibility: visible !important;
+        width: 100% !important;
+        max-width: none !important;
+        height: auto !important;
+        min-height: 0 !important;
+        max-height: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: visible !important;
+        border: 0 !important;
+        border-radius: 0 !important;
+        background: #ffffff !important;
+        box-shadow: none !important;
+        animation: none !important;
+        transform: none !important;
+    }
+
+        .booking-invoice-sheet::before {
+            display: none !important;
+        }
+
+    #bookingInvoicePrintable,
+    .booking-invoice-document {
+        position: static !important;
+        display: block !important;
+        visibility: visible !important;
+        width: 100% !important;
+        max-width: none !important;
+        height: auto !important;
+        min-height: 0 !important;
+        max-height: none !important;
+        margin: 0 !important;
+        padding: 5mm !important;
+        overflow: visible !important;
+        border: 1px solid #ced8df !important;
+        border-radius: 4mm !important;
+        background: #ffffff !important;
+        box-shadow: none !important;
+        transform: none !important;
+    }
+
+        #bookingInvoicePrintable,
+        #bookingInvoicePrintable * {
+            visibility: visible !important;
+            print-color-adjust: exact !important;
+            -webkit-print-color-adjust: exact !important;
+        }
+}

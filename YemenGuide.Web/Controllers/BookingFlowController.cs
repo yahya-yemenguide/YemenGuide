@@ -170,7 +170,7 @@ namespace YemenGuide.Web.Controllers
            أدوات عامة
            ================================================================ */
 
-        private static decimal CalculateEquivalentGuestCapacity(
+        private static int CalculateHotelEquivalentGuestCapacity(
             int adults,
             int children)
         {
@@ -180,11 +180,33 @@ namespace YemenGuide.Web.Controllers
             var safeChildren =
                 Math.Max(0, children);
 
+            /*
+             * الفنادق:
+             * أول 4 أطفال فقط يستفيدون من قاعدة طفلين مقابل مكان بالغ.
+             * الطفل الخامس وما بعده يُحتسب كل واحد منهم كشخص كامل.
+             * ونستخدم Ceiling حتى لا ينتج نصف مقعد عند وجود عدد فردي من الأطفال.
+             */
+            var convertibleChildren =
+                Math.Min(
+                    safeChildren,
+                    4);
+
+            var convertedSlots =
+                (int)Math.Ceiling(
+                    convertibleChildren /
+                    2m);
+
+            var extraChildren =
+                Math.Max(
+                    0,
+                    safeChildren - 4);
+
             return safeAdults +
-                   (safeChildren / 2m);
+                   convertedSlots +
+                   extraChildren;
         }
 
-        private static (bool Valid, string Message) ValidateGuestCapacity(
+        private static (bool Valid, string Message) ValidateRoomGuestCapacity(
             int adults,
             int children,
             int maximumCapacity,
@@ -206,14 +228,118 @@ namespace YemenGuide.Web.Controllers
 
             if (
                 maximumCapacity > 0 &&
-                CalculateEquivalentGuestCapacity(
+                CalculateHotelEquivalentGuestCapacity(
                     adults,
                     children) > maximumCapacity
             )
             {
                 return (
                     false,
-                    $"عدد الأشخاص أكبر من سعة {itemLabel} ({maximumCapacity}) عند احتساب كل طفلين كشخص بالغ واحد.");
+                    $"عدد الأشخاص أكبر من سعة {itemLabel} ({maximumCapacity}). أول 4 أطفال فقط يُحتسب كل طفلين منهم مكان بالغ واحد، ومن الطفل الخامس يُحتسب كل طفل كشخص كامل.");
+            }
+
+            return (
+                true,
+                string.Empty);
+        }
+
+        private static int GetPackageExtraChildrenAllowance(
+            int maximumCapacity)
+        {
+            var capacity =
+                Math.Max(
+                    0,
+                    maximumCapacity);
+
+            if (capacity <= 0)
+            {
+                return 0;
+            }
+
+            if (capacity < 10)
+            {
+                return 2;
+            }
+
+            if (capacity == 10)
+            {
+                return 3;
+            }
+
+            if (capacity <= 50)
+            {
+                return 5;
+            }
+
+            return Math.Min(
+                10,
+                (int)Math.Floor(
+                    capacity *
+                    0.10m));
+        }
+
+        private static (bool Valid, string Message) ValidatePackageGuestCapacity(
+            int adults,
+            int children,
+            int maximumCapacity,
+            string itemLabel)
+        {
+            if (adults < 1)
+            {
+                return (
+                    false,
+                    $"لا يمكن إكمال حجز {itemLabel} بأطفال فقط. يجب وجود شخص بالغ واحد على الأقل.");
+            }
+
+            if (children < 0)
+            {
+                return (
+                    false,
+                    "عدد الأطفال غير صحيح.");
+            }
+
+            var capacity =
+                Math.Max(
+                    0,
+                    maximumCapacity);
+
+            if (capacity <= 0)
+            {
+                return (
+                    true,
+                    string.Empty);
+            }
+
+            /*
+             * الشاليهات/الباقات ذات عداد الأشخاص:
+             * البالغون لا يتجاوزون السعة الأساسية نهائيًا.
+             * الأطفال يُحسبون كأشخاص عاديين داخل السعة، ثم نسمح لهم فقط
+             * بتجاوزها حسب الشريحة المتفق عليها.
+             */
+            if (adults > capacity)
+            {
+                return (
+                    false,
+                    $"عدد البالغين لا يمكن أن يتجاوز سعة {itemLabel} الأساسية ({capacity}).");
+            }
+
+            var extraChildrenAllowance =
+                GetPackageExtraChildrenAllowance(
+                    capacity);
+
+            var absoluteMaximum =
+                capacity +
+                extraChildrenAllowance;
+
+            if (
+                adults +
+                children >
+                absoluteMaximum
+            )
+            {
+                return (
+                    false,
+                    $"السعة الأساسية لـ {itemLabel} هي {capacity} أشخاص، ويسمح بتجاوزها بـ {extraChildrenAllowance} أطفال فقط كحد أقصى.");
             }
 
             return (
@@ -3537,7 +3663,7 @@ namespace YemenGuide.Web.Controllers
                         : 0;
 
                 var roomGuestValidation =
-                    ValidateGuestCapacity(
+                    ValidateRoomGuestCapacity(
                         request.AdultsCount,
                         request.ChildrenCount,
                         effectiveRoomCapacity,
@@ -3680,7 +3806,7 @@ namespace YemenGuide.Web.Controllers
                 if (!isHallBooking)
                 {
                     var packageGuestValidation =
-                        ValidateGuestCapacity(
+                        ValidatePackageGuestCapacity(
                             request.AdultsCount,
                             request.ChildrenCount,
                             Math.Max(
@@ -5043,7 +5169,7 @@ namespace YemenGuide.Web.Controllers
                         : 0;
 
                 var roomGuestValidation =
-                    ValidateGuestCapacity(
+                    ValidateRoomGuestCapacity(
                         request.AdultsCount,
                         request.ChildrenCount,
                         effectiveRoomCapacity,
@@ -5177,7 +5303,7 @@ namespace YemenGuide.Web.Controllers
                 if (!isHallCreateBooking)
                 {
                     var packageGuestValidation =
-                        ValidateGuestCapacity(
+                        ValidatePackageGuestCapacity(
                             request.AdultsCount,
                             request.ChildrenCount,
                             Math.Max(
