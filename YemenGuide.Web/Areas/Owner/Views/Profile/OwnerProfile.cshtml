@@ -14,15 +14,6 @@
     {
         activeCurrency = await CurrencyDisplay.GetPreferredCurrencyAsync();
     }
-
-    var walletConvertedAmount =
-        await CurrencyDisplay.ConvertAmountByCityNameAsync(
-            Model.WalletBalance,
-            Model.City);
-
-    var walletCurrencySymbol =
-        YemenGuide.Web.Services.ExchangeRates.CurrencyDisplayService.GetCurrencySymbol(
-            activeCurrency);
 }
 
 @section Styles {
@@ -35,7 +26,7 @@
       href="https://cdn.jsdelivr.net/npm/intl-tel-input@23.0.4/build/css/intlTelInput.css">
 }
 
-    <div class="profile-container container-fluid px-4 px-lg-5"
+    <div class="profile-container container-fluid px-4 px-lg-5 owner-profile-page"
      style="margin-bottom: 80px;">
 
         <!-- ==========================================
@@ -45,7 +36,7 @@
 
             <div class="row align-items-center g-4">
 
-                <div class="col-xl-8 col-lg-7 d-flex flex-column flex-md-row align-items-center align-items-md-start gap-4 text-center text-md-start">
+                <div class="col-12 d-flex flex-column flex-md-row align-items-center align-items-md-start gap-4 text-center text-md-start profile-identity-wrapper">
 
                     <div class="avatar-wrapper position-relative">
 
@@ -128,114 +119,98 @@
 
             </div>
 
-            <!-- المحفظة المالية للمالك -->
-            <div class="col-xl-4 col-lg-5">
-
-                <div class="wallet-mini-card shadow-sm p-4 d-flex flex-column justify-content-center position-relative overflow-hidden">
-
-                    <div class="wallet-decorator"></div>
-
-                    <div class="d-flex justify-content-between align-items-center mb-1 relative-z">
-
-                        <span class="text-white text-opacity-75 small fw-semibold">
-                            رصيد الأرباح المتاح
-                        </span>
-
-                        <i class="bi bi-wallet2 text-white fs-4 opacity-50"></i>
-
-                    </div>
-
-                    <div class="relative-z d-flex align-items-baseline gap-2">
-
-                        <h3 class="text-white fw-bold mb-0 wallet-amount">
-                            @YemenGuide.Web.Services.ExchangeRates.CurrencyDisplayService.FormatNumber(walletConvertedAmount, activeCurrency)
-                        </h3>
-
-                        <span class="text-white text-opacity-75 small">
-                            @walletCurrencySymbol
-                        </span>
-
-                    </div>
-
-                </div>
-
-            </div>
 
         </div>
 
     </div>
 
     <!-- ==========================================
-         2. شريط التبويبات الفاخر
+         2. شريط التبويبات — نفس تصميم الأدمن
          ========================================== -->
-    <div class="tabs-floating-wrapper mb-4">
+    <div class="profile-tabs-scroll mb-4"
+         role="region"
+         aria-label="تبويبات الملف الشخصي">
 
-        <ul class="nav nav-pills custom-segmented-tabs"
-            id="profileTab"
-            role="tablist">
+        <div class="profile-premium-tabs"
+             id="profileTab"
+             role="tablist"
+             aria-orientation="horizontal">
 
-            <li class="nav-item"
-                role="presentation">
+            <button class="profile-tab-btn active"
+                    id="personal-tab"
+                    data-bs-toggle="pill"
+                    data-bs-target="#personal"
+                    type="button"
+                    role="tab"
+                    aria-controls="personal"
+                    aria-selected="true"
+                    tabindex="0">
 
-                <button class="nav-link active"
-                        id="personal-tab"
-                        data-bs-toggle="pill"
-                        data-bs-target="#personal"
-                        type="button"
-                        role="tab">
+                <span class="profile-tab-icon">
+                    <i class="bi bi-person-lines-fill" aria-hidden="true"></i>
+                </span>
 
-                    <i class="bi bi-person-lines-fill me-2"></i>
-                    البيانات الشخصية
-                </button>
+                <span class="profile-tab-copy">
+                    <strong>البيانات الشخصية</strong>
+                    <small>الهوية والتواصل</small>
+                </span>
+            </button>
 
-            </li>
+            <button class="profile-tab-btn"
+                    id="settings-tab"
+                    data-bs-toggle="pill"
+                    data-bs-target="#settings"
+                    type="button"
+                    role="tab"
+                    aria-controls="settings"
+                    aria-selected="false"
+                    tabindex="-1">
 
-            <li class="nav-item"
-                role="presentation">
+                <span class="profile-tab-icon">
+                    <i class="bi bi-sliders2" aria-hidden="true"></i>
+                </span>
 
-                <button class="nav-link"
-                        id="settings-tab"
-                        data-bs-toggle="pill"
-                        data-bs-target="#settings"
-                        type="button"
-                        role="tab">
+                <span class="profile-tab-copy">
+                    <strong>إعدادات العرض</strong>
+                    <small>الواجهة والعملة واللغة</small>
+                </span>
+            </button>
 
-                    <i class="bi bi-sliders me-2"></i>
-                    الإعدادات
-                </button>
+            <button class="profile-tab-btn profile-tab-btn--security"
+                    id="security-tab"
+                    data-bs-toggle="pill"
+                    data-bs-target="#security"
+                    type="button"
+                    role="tab"
+                    aria-controls="security"
+                    aria-selected="false"
+                    tabindex="-1">
 
-            </li>
+                <span class="profile-tab-icon">
+                    <i class="bi bi-shield-lock" aria-hidden="true"></i>
+                </span>
 
-            <li class="nav-item"
-                role="presentation">
+                <span class="profile-tab-copy">
+                    <strong>الأمان</strong>
+                    <small>كلمة المرور والحماية</small>
+                </span>
+            </button>
 
-                <button class="nav-link text-danger-hover"
-                        id="security-tab"
-                        data-bs-toggle="pill"
-                        data-bs-target="#security"
-                        type="button"
-                        role="tab">
-
-                    <i class="bi bi-shield-lock me-2"></i>
-                    الأمان
-                </button>
-
-            </li>
-
-        </ul>
-
+        </div>
     </div>
 
     <!-- ==========================================
          3. محتوى التبويبات
          ========================================== -->
-    <div class="tab-content"
+    <div class="tab-content profile-tab-content"
          id="profileTabContent">
 
         <!-- تبويبة البيانات الشخصية -->
-        <div class="tab-pane fade show active"
+        <div class="tab-pane show active"
              id="personal"
-             role="tabpanel">
+             role="tabpanel"
+             aria-labelledby="personal-tab"
+             tabindex="0">
 
             <div class="premium-glass-card p-4 p-lg-5">
 
@@ -613,9 +588,11 @@
         </div>
 
         <!-- تبويبة الإعدادات -->
-        <div class="tab-pane fade"
+        <div class="tab-pane"
              id="settings"
-             role="tabpanel">
+             role="tabpanel"
+             aria-labelledby="settings-tab"
+             tabindex="0">
 
             <div class="premium-glass-card p-4 p-lg-5">
 
@@ -757,51 +734,96 @@
 
                     </div>
 
-                    <!-- العملة -->
-                    <div class="col-md-6">
+                    <!-- عملة العرض — نفس تصميم الأدمن -->
+                    <div class="col-12">
 
-                        <div class="premium-toggle-card">
+                        <div class="premium-toggle-card profile-currency-card">
 
-                            <div class="d-flex justify-content-between align-items-center">
+                            <div class="profile-currency-head">
 
-                                <div class="d-flex align-items-center gap-3">
+                                <div class="profile-toggle-label d-flex align-items-center gap-3">
 
                                     <div class="icon-box-glass text-success">
-                                        <i class="bi bi-cash-stack"></i>
+                                        <i class="bi bi-currency-exchange"
+                                           aria-hidden="true"></i>
                                     </div>
 
-                                    <span class="fw-bold text-dark">
-                                        عملة الأرباح المفضلة
-                                    </span>
+                                    <div class="profile-currency-copy">
+                                        <span class="fw-bold text-dark d-block">
+                                            عملة عرض الأسعار
+                                        </span>
+
+                                        <small class="text-muted">
+                                            اختر العملة التي تريد مشاهدة أسعار المنصة بها.
+                                            التحويل يعتمد على أسعار الصرف المعتمدة في النظام.
+                                        </small>
+                                    </div>
 
                                 </div>
 
-                                <select class="premium-select-inline"
-                                        id="currencySelect">
+                                <span class="profile-currency-status"
+                                      id="preferredCurrencyStatus"
+                                      aria-live="polite">
+                                    العملة الحالية:
+                                    <strong>@activeCurrency</strong>
+                                </span>
 
-                                    <option value="ريال يمني"
-                                            selected="@(activeCurrency == "ريال يمني" ? "selected" : null)">
-                                        🇾🇪 ريال يمني (YER)
-                                    </option>
+                            </div>
 
-                                    <option value="ريال سعودي"
-                                            selected="@(activeCurrency == "ريال سعودي" ? "selected" : null)">
-                                        🇸🇦 ريال سعودي (SAR)
-                                    </option>
+                            <div class="profile-currency-options"
+                                 role="radiogroup"
+                                 aria-label="اختيار عملة عرض الأسعار">
 
-                                    <option value="دولار أمريكي"
-                                            selected="@(activeCurrency == "دولار أمريكي" ? "selected" : null)">
-                                        💵 دولار أمريكي (USD)
-                                    </option>
+                                <label class="profile-currency-option">
+                                    <input type="radio"
+                                           name="preferredCurrency"
+                                           value="ريال يمني"
+                                           @(activeCurrency == "ريال يمني" ? "checked" : null)>
 
-                                </select>
+                                    <span class="profile-currency-option__symbol">ر.ي</span>
+                                    <span class="profile-currency-option__copy">
+                                        <strong>الريال اليمني</strong>
+                                        <small>YER</small>
+                                    </span>
+                                    <i class="bi bi-check-circle-fill profile-currency-option__check"
+                                       aria-hidden="true"></i>
+                                </label>
+
+                                <label class="profile-currency-option">
+                                    <input type="radio"
+                                           name="preferredCurrency"
+                                           value="ريال سعودي"
+                                           @(activeCurrency == "ريال سعودي" ? "checked" : null)>
+
+                                    <span class="profile-currency-option__symbol">ر.س</span>
+                                    <span class="profile-currency-option__copy">
+                                        <strong>الريال السعودي</strong>
+                                        <small>SAR</small>
+                                    </span>
+                                    <i class="bi bi-check-circle-fill profile-currency-option__check"
+                                       aria-hidden="true"></i>
+                                </label>
+
+                                <label class="profile-currency-option">
+                                    <input type="radio"
+                                           name="preferredCurrency"
+                                           value="دولار أمريكي"
+                                           @(activeCurrency == "دولار أمريكي" ? "checked" : null)>
+
+                                    <span class="profile-currency-option__symbol">$</span>
+                                    <span class="profile-currency-option__copy">
+                                        <strong>الدولار الأمريكي</strong>
+                                        <small>USD</small>
+                                    </span>
+                                    <i class="bi bi-check-circle-fill profile-currency-option__check"
+                                       aria-hidden="true"></i>
+                                </label>
 
                             </div>
 
                         </div>
 
                     </div>
-
                 </div>
 
                 <div class="premium-section-title mb-4">
@@ -938,9 +960,11 @@
         </div>
 
         <!-- تبويبة الأمان -->
-        <div class="tab-pane fade"
+        <div class="tab-pane"
              id="security"
-             role="tabpanel">
+             role="tabpanel"
+             aria-labelledby="security-tab"
+             tabindex="0">
 
             <div class="premium-glass-card p-4 p-lg-5">
 

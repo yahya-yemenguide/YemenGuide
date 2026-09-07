@@ -1124,88 +1124,226 @@ document.addEventListener('DOMContentLoaded', function () {
         );
     }
 
-    const currencySelect =
-        document.getElementById('currencySelect');
+    // =============================================================
+    // 7.1 عملة عرض الأسعار — نفس تجربة الأدمن
+    // =============================================================
 
-    if (currencySelect) {
-        const supportedCurrencies =
-            new Set([
-                'ريال يمني',
-                'ريال سعودي',
-                'دولار أمريكي'
-            ]);
+    const currencyInputs =
+        Array.from(
+            document.querySelectorAll(
+                'input[name="preferredCurrency"]'
+            )
+        );
 
-        currencySelect.addEventListener(
+    const currencyStatus =
+        document.getElementById(
+            'preferredCurrencyStatus'
+        );
+
+    let lastSavedCurrency =
+        currencyInputs
+            .find(input => input.checked)
+            ?.value ||
+        'ريال يمني';
+
+    let currencySaveSequence = 0;
+    let currencySaveController = null;
+
+
+    function setCurrencyStatusText(
+        currency,
+        state = 'saved'
+    ) {
+        if (!currencyStatus) return;
+
+        currencyStatus.classList.remove(
+            'is-saving',
+            'is-saved',
+            'is-error'
+        );
+
+        if (state === 'saving') {
+            currencyStatus.classList.add('is-saving');
+            currencyStatus.innerHTML =
+                `<i class="bi bi-arrow-repeat"></i>
+                 <span>جاري تثبيت <strong>${currency}</strong>...</span>`;
+            return;
+        }
+
+        if (state === 'error') {
+            currencyStatus.classList.add('is-error');
+            currencyStatus.innerHTML =
+                '<i class="bi bi-exclamation-circle"></i><span>تعذر حفظ العملة</span>';
+            return;
+        }
+
+        currencyStatus.classList.add('is-saved');
+        currencyStatus.innerHTML =
+            `<i class="bi bi-check2-circle"></i>
+             <span>العملة الحالية: <strong>${currency}</strong></span>`;
+    }
+
+
+    function saveOwnerCurrencyFast(selectedCurrency) {
+        currencySaveController?.abort();
+
+        const controller =
+            new AbortController();
+
+        currencySaveController =
+            controller;
+
+        return fetch(
+            '/Owner/Profile/SetPreference',
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type':
+                        'application/json',
+                    'X-Requested-With':
+                        'XMLHttpRequest'
+                },
+                body: JSON.stringify({
+                    Key: 'Currency',
+                    Value: selectedCurrency
+                }),
+                signal:
+                    controller.signal
+            }
+        )
+            .then(async response => {
+                const data =
+                    await response
+                        .json()
+                        .catch(() => ({}));
+
+                if (
+                    !response.ok ||
+                    data.success === false
+                ) {
+                    throw new Error(
+                        data.message ||
+                        'تعذر حفظ العملة المفضلة.'
+                    );
+                }
+
+                return data;
+            })
+            .finally(() => {
+                if (
+                    currencySaveController ===
+                    controller
+                ) {
+                    currencySaveController = null;
+                }
+            });
+    }
+
+
+    currencyInputs.forEach(input => {
+        input.addEventListener(
             'change',
-            async function () {
+            function () {
+                if (!this.checked) return;
+
                 const selectedCurrency =
                     this.value;
 
-                if (!supportedCurrencies.has(
-                    selectedCurrency)) {
-                    await Swal.fire(
-                        'عملة غير مدعومة',
-                        'اختر الريال اليمني أو الريال السعودي أو الدولار الأمريكي.',
-                        'error'
-                    );
-                    return;
-                }
+                const previousCurrency =
+                    lastSavedCurrency;
 
-                Swal.fire({
-                    title: 'جاري تحديث عملة العرض...',
-                    text: 'سيتم اعتماد العملة في حسابك وإعادة تحميل الصفحة.',
-                    allowOutsideClick: false,
-                    showConfirmButton: false,
-                    didOpen: () => {
-                        Swal.showLoading();
-                    }
-                });
+                const currentSequence =
+                    ++currencySaveSequence;
 
-                try {
-                    const response =
-                        await fetch('/Owner/Profile/SetPreference', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify({
-                                Key: 'Currency',
-                                Value: selectedCurrency
-                            })
-                        });
+                setCurrencyStatusText(
+                    selectedCurrency,
+                    'saving'
+                );
 
-                    const data =
-                        await response.json();
+                window.dispatchEvent(
+                    new CustomEvent(
+                        'yemenguide:currency-changing',
+                        {
+                            detail: {
+                                currency:
+                                    selectedCurrency
+                            }
+                        }
+                    )
+                );
 
-                    if (!response.ok ||
-                        !data.success) {
-                        throw new Error(
-                            data.message ||
-                            'تعذر حفظ العملة المفضلة.'
+                void saveOwnerCurrencyFast(
+                    selectedCurrency
+                )
+                    .then(() => {
+                        if (
+                            currentSequence !==
+                            currencySaveSequence
+                        ) {
+                            return;
+                        }
+
+                        lastSavedCurrency =
+                            selectedCurrency;
+
+                        setCurrencyStatusText(
+                            lastSavedCurrency,
+                            'saved'
                         );
-                    }
 
-                    await Swal.fire({
-                        icon: 'success',
-                        title: 'تم تحديث العملة',
-                        text: 'تم حفظ عملة العرض المفضلة في حسابك.',
-                        timer: 1000,
-                        showConfirmButton: false
+                        window.dispatchEvent(
+                            new CustomEvent(
+                                'yemenguide:currency-changed',
+                                {
+                                    detail: {
+                                        currency:
+                                            lastSavedCurrency
+                                    }
+                                }
+                            )
+                        );
+                    })
+                    .catch(error => {
+                        if (
+                            error.name === 'AbortError' ||
+                            currentSequence !==
+                            currencySaveSequence
+                        ) {
+                            return;
+                        }
+
+                        const previousInput =
+                            currencyInputs.find(
+                                item =>
+                                    item.value ===
+                                    previousCurrency
+                            );
+
+                        if (previousInput) {
+                            previousInput.checked = true;
+                        }
+
+                        setCurrencyStatusText(
+                            previousCurrency,
+                            'error'
+                        );
+
+                        Swal.fire({
+                            toast: true,
+                            position: 'top-end',
+                            icon: 'error',
+                            title: 'تعذر حفظ العملة',
+                            text:
+                                error.message ||
+                                'حاول مرة أخرى.',
+                            showConfirmButton: false,
+                            timer: 2200
+                        });
                     });
-
-                    window.location.reload();
-                }
-                catch (error) {
-                    await Swal.fire(
-                        'تعذر تحديث العملة',
-                        error?.message ||
-                        'فشل الاتصال بالخادم.',
-                        'error'
-                    );
-                }
             }
         );
-    }
+    });
+
 
     const languageSelect =
         document.getElementById('languageSelect');
@@ -1312,24 +1450,176 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
     // =============================================================
-    // الانتقال المباشر إلى التبويبات بواسطة الرابط
+    // تبويبات الملف الشخصي — نفس سلوك الأدمن
     // =============================================================
 
+    const profileTabRoot =
+        document.getElementById('profileTab');
+
+    const profileTabButtons =
+        profileTabRoot
+            ? Array.from(
+                profileTabRoot.querySelectorAll(
+                    '.profile-tab-btn'
+                )
+            )
+            : [];
+
+
+    function showProfileTab(
+        button,
+        focus = false
+    ) {
+        if (!button) return;
+
+        if (window.bootstrap?.Tab) {
+            bootstrap.Tab
+                .getOrCreateInstance(button)
+                .show();
+        } else {
+            button.click();
+        }
+
+        profileTabButtons.forEach(item => {
+            const isCurrent =
+                item === button;
+
+            item.setAttribute(
+                'tabindex',
+                isCurrent ? '0' : '-1'
+            );
+        });
+
+        if (focus) {
+            button.focus({
+                preventScroll: true
+            });
+        }
+
+        button.scrollIntoView({
+            behavior: 'auto',
+            block: 'nearest',
+            inline: 'nearest'
+        });
+    }
+
+
+    profileTabButtons.forEach(
+        (button, index) => {
+
+            button.addEventListener(
+                'keydown',
+                function (event) {
+                    const isRtl =
+                        getComputedStyle(
+                            profileTabRoot
+                        ).direction === 'rtl';
+
+                    let nextIndex = null;
+
+                    if (event.key === 'ArrowLeft') {
+                        nextIndex =
+                            isRtl
+                                ? index + 1
+                                : index - 1;
+                    }
+                    else if (event.key === 'ArrowRight') {
+                        nextIndex =
+                            isRtl
+                                ? index - 1
+                                : index + 1;
+                    }
+                    else if (event.key === 'Home') {
+                        nextIndex = 0;
+                    }
+                    else if (event.key === 'End') {
+                        nextIndex =
+                            profileTabButtons.length - 1;
+                    }
+
+                    if (nextIndex === null) {
+                        return;
+                    }
+
+                    event.preventDefault();
+
+                    const normalizedIndex =
+                        (
+                            nextIndex +
+                            profileTabButtons.length
+                        ) %
+                        profileTabButtons.length;
+
+                    showProfileTab(
+                        profileTabButtons[
+                        normalizedIndex
+                        ],
+                        true
+                    );
+                }
+            );
+
+            button.addEventListener(
+                'shown.bs.tab',
+                function () {
+                    profileTabButtons.forEach(
+                        item => {
+                            item.setAttribute(
+                                'tabindex',
+                                item === button
+                                    ? '0'
+                                    : '-1'
+                            );
+                        }
+                    );
+
+                    const target =
+                        button.getAttribute(
+                            'data-bs-target'
+                        );
+
+                    if (
+                        target &&
+                        window.history?.replaceState
+                    ) {
+                        window.history.replaceState(
+                            null,
+                            '',
+                            target
+                        );
+                    }
+                }
+            );
+        }
+    );
+
+
     function activateTabFromHash() {
-        const hash =
+        const requestedTarget =
             window.location.hash;
 
-        if (hash) {
-            const tabButton =
-                document.getElementById(
-                    hash.replace('#', '') + '-tab'
-                );
-
-            if (tabButton) {
-                tabButton.click();
-            }
+        if (!requestedTarget) {
+            return;
         }
+
+        const tabButton =
+            profileTabButtons.find(
+                button =>
+                    button.getAttribute(
+                        'data-bs-target'
+                    ) === requestedTarget
+            );
+
+        if (!tabButton) {
+            return;
+        }
+
+        showProfileTab(
+            tabButton,
+            false
+        );
     }
+
 
     activateTabFromHash();
 
