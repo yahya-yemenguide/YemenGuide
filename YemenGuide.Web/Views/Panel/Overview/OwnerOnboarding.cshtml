@@ -1,0 +1,250 @@
+﻿@using System.Globalization
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+@{
+    ViewData["Title"] = "الانضمام كشريك";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+
+    string googleMapsApiKey =
+        Configuration["GoogleMaps:ApiKey"] ?? string.Empty;
+
+    string siteName =
+        ViewBag.SiteName as string ?? "دليلك اليمني";
+}
+
+@section Styles {
+    <link rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/intl-tel-input@23.0.4/build/css/intlTelInput.css" />
+
+    <!-- نفس تصميم شاشة اختيار المسار الموجودة في رحلة المالك -->
+    <link rel="stylesheet"
+      href="~/css/shared/verify-account.css"
+      asp-append-version="true" />
+
+    <link rel="stylesheet"
+      href="~/css/owner/places/add-place.css"
+      asp-append-version="true" />
+
+    <style>
+        .customer-owner-onboarding-page {
+            width: 100%;
+            min-height: 100vh;
+            padding: 118px 0 72px;
+            direction: rtl;
+        }
+
+        .customer-owner-onboarding-shell {
+            width: min(1240px, calc(100% - 28px));
+            margin: 0 auto;
+        }
+
+            .customer-owner-onboarding-shell .verification-workspace {
+                width: min(100%, 900px);
+                margin: 0 auto;
+            }
+
+            .customer-owner-onboarding-shell .track-card {
+                border: 0;
+            }
+
+            .customer-owner-onboarding-shell form.owner-fast-track-form {
+                height: 100%;
+                margin: 0;
+            }
+
+                .customer-owner-onboarding-shell form.owner-fast-track-form .track-card {
+                    width: 100%;
+                }
+
+        #customerFullPlaceJourney.d-none {
+            display: none !important;
+        }
+
+        @@media (max-width: 991.98px) {
+            .customer-owner-onboarding-page {
+                padding-top: 104px;
+            }
+        }
+
+        @@media (max-width: 575.98px) {
+            .customer-owner-onboarding-page {
+                padding: 92px 0 54px;
+            }
+
+            .customer-owner-onboarding-shell {
+                width: min(100% - 16px, 1240px);
+            }
+        }
+    </style>
+}
+
+    <div class="customer-owner-onboarding-page">
+        <div class="customer-owner-onboarding-shell verification-stage">
+
+            <!-- =========================================================
+                 أول شاشة: نفس اختيار المسار الموجود عند تسجيل المالك
+                 ========================================================= -->
+            <main class="glass-card verification-workspace w-100 position-relative"
+              id="customerOwnerTrackGateway">
+
+                <div class="wizard-step active-step">
+                    <header class="verification-intro text-center">
+                        <span class="verification-intro__badge">
+                            <i class="bi bi-stars"></i> رحلة شريك جديدة
+                        </span>
+
+                        <h1>
+                            أهلًا بك في شركاء <span>@siteName</span>
+                        </h1>
+
+                        <p>
+                            اختر الطريقة الأنسب لك. تستطيع توثيق حسابك بسرعة
+                            وإضافة منشأتك بعد الدخول، أو تجهيز المنشأة من البداية.
+                        </p>
+                    </header>
+
+                    <div class="row g-4 justify-content-center px-md-3">
+                        <div class="col-md-6">
+                            <form asp-controller="Overview"
+                              asp-action="StartOwnerFastTrack"
+                              method="post"
+                              class="owner-fast-track-form">
+                                @Html.AntiForgeryToken()
+
+                                <button type="submit"
+                                    class="track-card track-card--fast h-100 text-center">
+                                    <div class="icon-wrap mb-4">
+                                        <i class="bi bi-lightning-charge-fill display-5 text-warning"
+                                       style="filter: drop-shadow(0 4px 6px rgba(255,193,7,0.4));"></i>
+                                    </div>
+
+                                    <span class="track-card__eyebrow">الأسرع</span>
+                                    <h4>التسجيل السريع</h4>
+                                    <p>
+                                        وثّق حسابك الآن، اختر فئة منشأتك لتظهر لك
+                                        نسبة العمولة الصحيحة في العقد، ثم أضف المنشأة بعد الدخول.
+                                    </p>
+
+                                    <span class="track-card__action">
+                                        ابدأ التسجيل السريع
+                                        <i class="bi bi-arrow-left"></i>
+                                    </span>
+                                </button>
+                            </form>
+                        </div>
+
+                        <div class="col-md-6">
+                            <button type="button"
+                                class="track-card track-card--full h-100 text-center"
+                                onclick="startCustomerFullPlaceJourney()">
+                                <div class="icon-wrap mb-4">
+                                    <i class="bi bi-building-fill-add display-5 text-primary"
+                                   style="filter: drop-shadow(0 4px 6px rgba(0,166,218,0.4));"></i>
+                                </div>
+
+                                <span class="track-card__eyebrow">تجهيز كامل</span>
+                                <h4>إنشاء المنشأة الآن</h4>
+                                <p>
+                                    جهّز منشأتك قبل الدخول بنفس خطوات إضافة المنشأة
+                                    الموجودة في لوحة المالك، ثم أكمل السياسات والعقد والتوثيق.
+                                </p>
+
+                                <span class="track-card__action">
+                                    ابدأ إنشاء المنشأة
+                                    <i class="bi bi-arrow-left"></i>
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </main>
+
+            <!-- =========================================================
+                 لا يظهر هذا الجزء إلا إذا اختار المستخدم "إنشاء المنشأة الآن"
+                 ويبقى الحساب Customer حتى نجاح الحفظ الفعلي.
+                 ========================================================= -->
+            <div id="customerFullPlaceJourney" class="d-none">
+                @await Html.PartialAsync(
+            "~/Areas/Owner/Views/Place/_AddPlaceWizard.cshtml")
+            </div>
+        </div>
+    </div>
+
+    @section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/intl-tel-input@23.0.4/build/js/intlTelInput.min.js"></script>
+    <script src="~/lib/sweetalert2/sweetalert2.js"></script>
+
+    @if (!string.IsNullOrWhiteSpace(googleMapsApiKey))
+    {
+        <script src="https://maps.googleapis.com/maps/api/js?key=@googleMapsApiKey&libraries=places&language=ar"></script>
+    }
+
+    <script>
+        (function configureCustomerOwnerOnboardingFetch() {
+            const originalFetch = window.fetch.bind(window);
+
+            window.fetch = function (input, init) {
+                const rawUrl = typeof input === 'string'
+                    ? input
+                    : (input && input.url ? input.url : '');
+
+                let rewrittenUrl = rawUrl;
+
+                if (rawUrl.startsWith('/Owner/Place/LoadPlaceForm')) {
+                    rewrittenUrl = rawUrl.replace(
+                        '/Owner/Place/LoadPlaceForm',
+                        '/Overview/OwnerOnboardingLoadPlaceForm');
+                }
+                else if (rawUrl === '/Owner/Place/AddFullPlace') {
+                    rewrittenUrl =
+                        '/Overview/OwnerOnboardingAddFullPlace';
+                }
+
+                if (typeof input === 'string') {
+                    return originalFetch(rewrittenUrl, init);
+                }
+
+                if (rewrittenUrl !== rawUrl && input instanceof Request) {
+                    return originalFetch(
+                        new Request(rewrittenUrl, input),
+                        init);
+                }
+
+                return originalFetch(input, init);
+            };
+        })();
+    </script>
+
+    <script src="~/js/owner/places/add-place.js"
+        asp-append-version="true"></script>
+
+    <script>
+        window.startCustomerFullPlaceJourney = function () {
+            const gateway =
+                document.getElementById('customerOwnerTrackGateway');
+
+            const journey =
+                document.getElementById('customerFullPlaceJourney');
+
+            gateway?.classList.add('d-none');
+            journey?.classList.remove('d-none');
+
+            if (typeof window.initAddPlace === 'function') {
+                window.initAddPlace({ mode: 'verification' });
+            }
+
+            window.scrollTo({ top: 0, behavior: 'auto' });
+        };
+
+        window.addEventListener(
+            'yemenGuide:verificationPlaceCreated',
+            function () {
+                /*
+                 * عند هذه اللحظة فقط يكون OverviewController قد تأكد
+                 * من حفظ المنشأة ثم حوّل Customer إلى Owner/Pending.
+                 * ندخل مباشرة إلى استكمال المسار الشامل بدون إعادة شاشة الاختيار.
+                 */
+                window.location.replace(
+                    '/Account/VerifyAccount?track=full');
+            });
+    </script>
+}

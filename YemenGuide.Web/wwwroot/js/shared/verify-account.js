@@ -880,11 +880,6 @@ document.addEventListener("DOMContentLoaded", function () {
         verificationPoliciesReady = false;
         document.body.dataset.verificationOwnerJobTitle =
             detail.jobTitle || document.body.dataset.verificationOwnerJobTitle || '';
-        existingVerificationOwnerPhone =
-            String(detail.ownerPhone || existingVerificationOwnerPhone || '').trim();
-        if (existingVerificationOwnerPhone) {
-            document.body.dataset.verificationOwnerPhone = existingVerificationOwnerPhone;
-        }
 
         if (document.body.dataset.verificationOwnerJobTitle) {
             handleAuthRequirement(document.body.dataset.verificationOwnerJobTitle);
@@ -1206,26 +1201,25 @@ document.addEventListener("DOMContentLoaded", function () {
         updateContractCategory(0);
     }
     if (existingVerificationPlaceId > 0) {
-        // توجد منشأة محفوظة ضمن رحلة التوثيق: المسار أصبح محسومًا (شامل).
-        // لا نعيد المستخدم إلى شاشة اختيار المسار بعد الحفظ أو بعد Refresh.
-        setCurrentTrack('full');
-
-        const gateway = document.getElementById('step0_Gateway');
-        if (gateway) {
-            gateway.classList.remove('active-step');
-            gateway.classList.add('d-none');
-            gateway.style.display = 'none';
-        }
-
         showFullPlaceCheckpoint();
         setVerificationPoliciesReady(verificationPoliciesReady);
+    }
 
-        const resumeStep = requiresFacilityPolicies()
-            ? (verificationPoliciesReady ? 3 : 2)
-            : 4;
+    // =============================================================
+    // القادم من زر "سجل منشأتك الآن" في لوحة العميل:
+    // افتح المسار الذي اختاره مباشرة ولا تعرض بوابة الاختيار مرة ثانية.
+    // تسجيل المالك العادي بدون ?track= يبقى كما هو تماماً.
+    // =============================================================
+    const requestedTrack =
+        new URLSearchParams(window.location.search).get('track');
 
-        // اذهب مباشرة إلى أول خطوة غير مكتملة.
-        window.goToGatewayStep(resumeStep);
+    if (requestedTrack === 'fast' &&
+        !hasSavedVerificationPlace()) {
+        window.selectTrack('fast');
+    }
+    else if (requestedTrack === 'full' &&
+        hasSavedVerificationPlace()) {
+        window.selectTrack('full');
     }
 
     // =============================================================

@@ -2,6 +2,11 @@
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
+using System.Collections.Generic;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
+using YemenGuide.Core.DTOs.Owner;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
@@ -230,8 +235,8 @@ namespace YemenGuide.Web.Controllers
         }
 
         // =============================================================
-        // بدء رحلة المالك من لوحة العميل
-        // Customer -> Owner Pending -> VerifyAccount
+        // بدء رحلة إضافة المنشأة من لوحة العميل
+        // مهم: العميل يظل Customer حتى تنجح إضافة منشأة فعلية.
         // =============================================================
         [HttpPost]
         [Authorize(Roles = "Customer,Owner")]
@@ -246,22 +251,17 @@ namespace YemenGuide.Web.Controllers
                 return RedirectToAction("Login", "Account");
             }
 
-            var authentication =
-                await HttpContext.AuthenticateAsync(
-                    CookieAuthenticationDefaults.AuthenticationScheme);
-
-            var user =
-                await _context.Users
-                    .FirstOrDefaultAsync(
-                        item => item.UserId == userId,
-                        HttpContext.RequestAborted);
+            var user = await _context.Users
+                .AsNoTracking()
+                .FirstOrDefaultAsync(
+                    item => item.UserId == userId,
+                    HttpContext.RequestAborted);
 
             if (user == null)
             {
                 return RedirectToAction("Login", "Account");
             }
 
-            // الحسابات المحظورة أو المعلقة لا يمكنها بدء رحلة مالك.
             if (string.Equals(
                     user.AccountState,
                     "Blocked",
@@ -274,30 +274,435 @@ namespace YemenGuide.Web.Controllers
                 return Forbid();
             }
 
-            // إذا كان الحساب ما يزال Customer نبدأ رحلة المالك فعلياً.
-            // Pending مهمة حتى تظهر رحلة التوثيق ولا يتم تجاوزها إلى لوحة المالك.
+            // المالك الموجود مسبقاً لا يحتاج رحلة عميل جديدة.
             if (string.Equals(
+                    user.Role,
+                    SystemRoles.Owner,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                if (string.Equals(
+                        user.AccountState,
+                        "Active",
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    return Redirect(
+                        "/Owner/OwnerDashboard/DashboardOwner");
+                }
+
+                return RedirectToAction(
+                    "VerifyAccount",
+                    "Account");
+            }
+
+            if (!string.Equals(
                     user.Role,
                     SystemRoles.Customer,
                     StringComparison.OrdinalIgnoreCase))
             {
-                user.Role = SystemRoles.Owner;
-                user.AccountState = "Pending";
-
-                await _context.SaveChangesAsync(
-                    HttpContext.RequestAborted);
+                return Forbid();
             }
-            else if (!string.Equals(
-                         user.Role,
-                         SystemRoles.Owner,
-                         StringComparison.OrdinalIgnoreCase))
+
+            // لا نغيّر Role ولا AccountState هنا.
+            // هذه Cookie فقط لفتح شاشة إنشاء المنشأة الخاصة بالعميل.
+            Response.Cookies.Append(
+                "YemenGuide.OwnerOnboarding",
+                "1",
+                new CookieOptions
+                {
+                    HttpOnly = true,
+                    IsEssential = true,
+                    SameSite = SameSiteMode.Lax,
+                    Secure = Request.IsHttps,
+                    MaxAge = TimeSpan.FromMinutes(60),
+                    Path = "/"
+                });
+
+            return RedirectToAction(nameof(OwnerOnboarding));
+        }
+
+        // =============================================================
+        // اختيار العميل للمسار السريع.
+        // هنا فقط يتحول إلى Owner/Pending لأنه اختار صراحةً
+        // التسجيل السريع الذي يبدأ توثيق حساب المالك مباشرة.
+        // =============================================================
+        [HttpPost]
+        [Authorize(Roles = "Customer,Owner")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> StartOwnerFastTrack()
+        {
+            var userIdText =
+                User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            if (!int.TryParse(userIdText, out var userId) || userId <= 0)
+            {
+                return RedirectToAction("Login", "Account");
+            }
+
+            var user = await _context.Users
+                .FirstOrDefaultAsync(
+                    item => item.UserId == userId,
+                    HttpContext.RequestAborted);
+
+            if (user == null)
+            {
+                return RedirectToAction("Login", "Account");
+            }
+
+            if (string.Equals(
+                    user.AccountState,
+                    "Blocked",
+                    StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(
+                    user.AccountState,
+                    "Suspended",
+                    StringComparison.OrdinalIgnoreCase))
             {
                 return Forbid();
             }
 
-            // قاعدة البيانات وحدها لا تكفي:
-            // Cookie الحالية ما زالت تحمل Role القديم، لذلك نجدد الـClaims فوراً.
-            string lang =
+            if (string.Equals(
+                    user.Role,
+                    SystemRoles.Owner,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                if (string.Equals(
+                        user.AccountState,
+                        "Active",
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    return Redirect(
+                        "/Owner/OwnerDashboard/DashboardOwner");
+                }
+
+                Response.Cookies.Delete(
+                    "YemenGuide.OwnerOnboarding",
+                    new CookieOptions { Path = "/" });
+
+                return Redirect(
+                    "/Account/VerifyAccount?track=fast");
+            }
+
+            if (!string.Equals(
+                    user.Role,
+                    SystemRoles.Customer,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return Forbid();
+            }
+
+            user.Role = SystemRoles.Owner;
+            user.AccountState = "Pending";
+
+            await _context.SaveChangesAsync(
+                HttpContext.RequestAborted);
+
+            await RefreshOwnerAuthenticationAsync(user);
+
+            Response.Cookies.Delete(
+                "YemenGuide.OwnerOnboarding",
+                new CookieOptions { Path = "/" });
+
+            return Redirect(
+                "/Account/VerifyAccount?track=fast");
+        }
+
+        // =============================================================
+        // شاشة اختيار المسار ثم إضافة المنشأة للعميل قبل أن يصبح Owner.
+        // تستخدم نفس _AddPlaceWizard + add-place.js بدون نسخ منطق الإضافة.
+        // =============================================================
+        [HttpGet]
+        [Authorize(Roles = "Customer,Owner")]
+        public async Task<IActionResult> OwnerOnboarding()
+        {
+            var userIdText =
+                User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            if (!int.TryParse(userIdText, out var userId) || userId <= 0)
+            {
+                return RedirectToAction("Login", "Account");
+            }
+
+            var user = await _context.Users
+                .AsNoTracking()
+                .FirstOrDefaultAsync(
+                    item => item.UserId == userId,
+                    HttpContext.RequestAborted);
+
+            if (user == null)
+            {
+                return RedirectToAction("Login", "Account");
+            }
+
+            if (string.Equals(
+                    user.Role,
+                    SystemRoles.Owner,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                if (string.Equals(
+                        user.AccountState,
+                        "Active",
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    return Redirect(
+                        "/Owner/OwnerDashboard/DashboardOwner");
+                }
+
+                return RedirectToAction(
+                    "VerifyAccount",
+                    "Account");
+            }
+
+            if (!string.Equals(
+                    user.Role,
+                    SystemRoles.Customer,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return Forbid();
+            }
+
+            if (!HasOwnerOnboardingCookie())
+            {
+                return RedirectToAction(nameof(Overview));
+            }
+
+            ViewBag.Categories = await _context.Categories
+                .AsNoTracking()
+                .Where(category => category.OwnerCanAddPlaces == true)
+                .OrderByDescending(category => category.HasBookingSystem)
+                .ThenBy(category => category.CategoryName)
+                .ToListAsync(HttpContext.RequestAborted);
+
+            ViewBag.SiteName = await _context.SystemSettings
+                .AsNoTracking()
+                .OrderBy(setting => setting.Id)
+                .Select(setting => setting.SiteName)
+                .FirstOrDefaultAsync(HttpContext.RequestAborted)
+                ?? "دليلك اليمني";
+
+            return View(
+                "~/Views/Panel/Overview/OwnerOnboarding.cshtml");
+        }
+
+        // =============================================================
+        // Proxy آمن لتحميل نفس نموذج AddPlace الحالي.
+        // استدعاء مباشر للكنترولر الحالي يحافظ على مصدر واحد للمنطق.
+        // =============================================================
+        [HttpGet]
+        [Authorize(Roles = "Customer")]
+        public async Task<IActionResult> OwnerOnboardingLoadPlaceForm(
+            int categoryId)
+        {
+            if (!HasOwnerOnboardingCookie())
+            {
+                return Forbid();
+            }
+
+            var placeController =
+                CreateOwnerPlaceControllerProxy();
+
+            return await placeController.LoadPlaceForm(categoryId);
+        }
+
+        // =============================================================
+        // حفظ المنشأة من رحلة العميل.
+        // التحويل Customer -> Owner/Pending يحدث فقط بعد نجاح AddFullPlace.
+        // =============================================================
+        [HttpPost]
+        [Authorize(Roles = "Customer")]
+        [RequestFormLimits(
+            ValueCountLimit = 10000,
+            MultipartBodyLengthLimit = 104857600)]
+        [RequestSizeLimit(104857600)]
+        public async Task<IActionResult> OwnerOnboardingAddFullPlace(
+            [FromForm] FullPlaceWizardDto model,
+            IFormFile CoverImageUpload,
+            List<IFormFile> GalleryImages)
+        {
+            if (!HasOwnerOnboardingCookie())
+            {
+                return StatusCode(
+                    StatusCodes.Status403Forbidden,
+                    new
+                    {
+                        success = false,
+                        message = "انتهت جلسة إضافة المنشأة. ارجع للوحة العميل واضغط «سجل منشأتك الآن» مرة أخرى."
+                    });
+            }
+
+            var userIdText =
+                User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            if (!int.TryParse(userIdText, out var userId) || userId <= 0)
+            {
+                return Unauthorized(
+                    new
+                    {
+                        success = false,
+                        message = "انتهت جلسة الدخول. سجّل الدخول ثم حاول مرة أخرى."
+                    });
+            }
+
+            var placeController =
+                CreateOwnerPlaceControllerProxy();
+
+            // هذا هو AddFullPlace الأصلي نفسه؛ لا نكرر منطق المنشأة.
+            var result = await placeController.AddFullPlace(
+                model,
+                CoverImageUpload,
+                GalleryImages);
+
+            if (!TryGetCreatedPlaceId(result, out var placeId))
+            {
+                // فشل الحفظ: العميل يظل Customer كما هو.
+                return result;
+            }
+
+            // حماية إضافية: لا نغيّر الدور إلا إذا كانت المنشأة المحفوظة
+            // موجودة فعلياً ومربوطة بنفس الحساب الحالي.
+            bool savedPlaceBelongsToCustomer =
+                await _context.Places
+                    .AsNoTracking()
+                    .AnyAsync(
+                        place =>
+                            place.PlaceId == placeId &&
+                            place.OwnerId == userId,
+                        HttpContext.RequestAborted);
+
+            if (!savedPlaceBelongsToCustomer)
+            {
+                return StatusCode(
+                    StatusCodes.Status500InternalServerError,
+                    new
+                    {
+                        success = false,
+                        message = "تم حفظ البيانات لكن تعذر تأكيد ربط المنشأة بحسابك. لا تغلق الصفحة وتواصل مع الإدارة."
+                    });
+            }
+
+            var customer = await _context.Users
+                .FirstOrDefaultAsync(
+                    item => item.UserId == userId,
+                    HttpContext.RequestAborted);
+
+            if (customer == null)
+            {
+                return StatusCode(
+                    StatusCodes.Status500InternalServerError,
+                    new
+                    {
+                        success = false,
+                        message = "تم حفظ المنشأة لكن تعذر قراءة الحساب الحالي. سجّل الدخول من جديد."
+                    });
+            }
+
+            if (string.Equals(
+                    customer.Role,
+                    SystemRoles.Customer,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                customer.Role = SystemRoles.Owner;
+                customer.AccountState = "Pending";
+
+                await _context.SaveChangesAsync(
+                    HttpContext.RequestAborted);
+            }
+
+            // بعد نجاح حفظ المنشأة وتغيير قاعدة البيانات فقط، نحدّث Claims.
+            await RefreshOwnerAuthenticationAsync(customer);
+
+            Response.Cookies.Delete(
+                "YemenGuide.OwnerOnboarding",
+                new CookieOptions { Path = "/" });
+
+            return result;
+        }
+
+        private bool HasOwnerOnboardingCookie()
+        {
+            return Request.Cookies.TryGetValue(
+                       "YemenGuide.OwnerOnboarding",
+                       out var value) &&
+                   string.Equals(
+                       value,
+                       "1",
+                       StringComparison.Ordinal);
+        }
+
+        private YemenGuide.Web.Areas.Owner.Controllers.PlaceController
+            CreateOwnerPlaceControllerProxy()
+        {
+            var environment = HttpContext.RequestServices
+                .GetRequiredService<IWebHostEnvironment>();
+
+            var controller =
+                new YemenGuide.Web.Areas.Owner.Controllers.PlaceController(
+                    _context,
+                    environment)
+                {
+                    ControllerContext = new ControllerContext
+                    {
+                        HttpContext = HttpContext,
+                        RouteData = RouteData
+                    }
+                };
+
+            return controller;
+        }
+
+        private static bool TryGetCreatedPlaceId(
+            IActionResult result,
+            out int placeId)
+        {
+            placeId = 0;
+
+            if (result is not JsonResult jsonResult ||
+                jsonResult.Value == null)
+            {
+                return false;
+            }
+
+            var valueType = jsonResult.Value.GetType();
+
+            var successProperty =
+                valueType.GetProperty("success");
+
+            var placeIdProperty =
+                valueType.GetProperty("placeId");
+
+            bool success =
+                successProperty?.GetValue(jsonResult.Value) is bool saved &&
+                saved;
+
+            if (!success || placeIdProperty == null)
+            {
+                return false;
+            }
+
+            object? rawPlaceId =
+                placeIdProperty.GetValue(jsonResult.Value);
+
+            if (rawPlaceId is int intPlaceId)
+            {
+                placeId = intPlaceId;
+            }
+            else if (!int.TryParse(
+                         Convert.ToString(rawPlaceId),
+                         out placeId))
+            {
+                placeId = 0;
+            }
+
+            return placeId > 0;
+        }
+
+        private async Task RefreshOwnerAuthenticationAsync(
+            YemenGuide.Core.Entities.User user)
+        {
+            var authentication =
+                await HttpContext.AuthenticateAsync(
+                    CookieAuthenticationDefaults.AuthenticationScheme);
+
+            string language =
                 string.IsNullOrWhiteSpace(user.PreferredLanguage)
                     ? "ar"
                     : user.PreferredLanguage;
@@ -314,7 +719,7 @@ namespace YemenGuide.Web.Controllers
 
                 new Claim(
                     ClaimTypes.Role,
-                    user.Role ?? SystemRoles.Owner),
+                    SystemRoles.Owner),
 
                 new Claim(
                     "IsDarkMode",
@@ -322,7 +727,7 @@ namespace YemenGuide.Web.Controllers
 
                 new Claim(
                     "PreferredLanguage",
-                    lang),
+                    language),
 
                 new Claim(
                     "AccountState",
@@ -337,7 +742,7 @@ namespace YemenGuide.Web.Controllers
             bool isPersistent =
                 authentication.Properties?.IsPersistent ?? false;
 
-            var authProperties =
+            var authenticationProperties =
                 new AuthenticationProperties
                 {
                     IsPersistent = isPersistent,
@@ -354,22 +759,7 @@ namespace YemenGuide.Web.Controllers
             await HttpContext.SignInAsync(
                 CookieAuthenticationDefaults.AuthenticationScheme,
                 new ClaimsPrincipal(identity),
-                authProperties);
-
-            // Owner نشط مسبقاً لا يحتاج إعادة رحلة التوثيق.
-            if (string.Equals(
-                    user.AccountState,
-                    "Active",
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                return Redirect(
-                    "/Owner/OwnerDashboard/DashboardOwner");
-            }
-
-            // Pending / Rejected / Accepted تذهب لمسار المالك الموجود أصلاً.
-            return RedirectToAction(
-                "VerifyAccount",
-                "Account");
+                authenticationProperties);
         }
     }
 }
