@@ -6475,13 +6475,13 @@ namespace YemenGuide.Web.Services.Finance
                     OriginalTotalPrice = booking.OriginalTotalPrice > 0m
                     ? booking.OriginalTotalPrice
                     : booking.TotalPrice + booking.DiscountAmount,
-                DiscountAmount = Math.Max(0m, booking.DiscountAmount),
-                PromotionId = booking.PromotionId,
-                PromotionTitleSnapshot = booking.PromotionTitleSnapshot?.Trim(),
-                PromotionCodeSnapshot = booking.PromotionCodeSnapshot?.Trim(),
-                DiscountTypeSnapshot = booking.DiscountTypeSnapshot?.Trim(),
-                DiscountValueSnapshot = booking.DiscountValueSnapshot,
-                TotalPrice = Math.Max(0m, booking.TotalPrice),
+                    DiscountAmount = Math.Max(0m, booking.DiscountAmount),
+                    PromotionId = booking.PromotionId,
+                    PromotionTitleSnapshot = booking.PromotionTitleSnapshot?.Trim(),
+                    PromotionCodeSnapshot = booking.PromotionCodeSnapshot?.Trim(),
+                    DiscountTypeSnapshot = booking.DiscountTypeSnapshot?.Trim(),
+                    DiscountValueSnapshot = booking.DiscountValueSnapshot,
+                    TotalPrice = Math.Max(0m, booking.TotalPrice),
                     DepositAmount = Math.Max(0m, financial.DepositAmount),
                     AmountPaidOnline = rawOnline,
                     AmountCollectedAtProperty = rawProperty,
@@ -6608,13 +6608,13 @@ namespace YemenGuide.Web.Services.Finance
                     OriginalTotalPrice = booking.OriginalTotalPrice > 0m
                     ? booking.OriginalTotalPrice
                     : booking.TotalPrice + booking.DiscountAmount,
-                DiscountAmount = Math.Max(0m, booking.DiscountAmount),
-                PromotionId = booking.PromotionId,
-                PromotionTitleSnapshot = booking.PromotionTitleSnapshot?.Trim(),
-                PromotionCodeSnapshot = booking.PromotionCodeSnapshot?.Trim(),
-                DiscountTypeSnapshot = booking.DiscountTypeSnapshot?.Trim(),
-                DiscountValueSnapshot = booking.DiscountValueSnapshot,
-                TotalPrice = Math.Max(0m, booking.TotalPrice),
+                    DiscountAmount = Math.Max(0m, booking.DiscountAmount),
+                    PromotionId = booking.PromotionId,
+                    PromotionTitleSnapshot = booking.PromotionTitleSnapshot?.Trim(),
+                    PromotionCodeSnapshot = booking.PromotionCodeSnapshot?.Trim(),
+                    DiscountTypeSnapshot = booking.DiscountTypeSnapshot?.Trim(),
+                    DiscountValueSnapshot = booking.DiscountValueSnapshot,
+                    TotalPrice = Math.Max(0m, booking.TotalPrice),
                     PlatformCommission = calculated,
                     CommissionHeld = held,
                     CommissionCharged = charged,
@@ -6708,13 +6708,13 @@ namespace YemenGuide.Web.Services.Finance
                             : refund.Booking.OriginalTotalPrice > 0m
                                 ? refund.Booking.OriginalTotalPrice
                                 : refund.Booking.TotalPrice + refund.Booking.DiscountAmount,
-                        DiscountAmount = Math.Max(0m, refund.Booking?.DiscountAmount ?? 0m),
-                        PromotionId = refund.Booking?.PromotionId,
-                        PromotionTitleSnapshot = refund.Booking?.PromotionTitleSnapshot?.Trim(),
-                        PromotionCodeSnapshot = refund.Booking?.PromotionCodeSnapshot?.Trim(),
-                        DiscountTypeSnapshot = refund.Booking?.DiscountTypeSnapshot?.Trim(),
-                        DiscountValueSnapshot = refund.Booking?.DiscountValueSnapshot,
-                        TotalPrice = Math.Max(0m, refund.Booking?.TotalPrice ?? 0m),
+                    DiscountAmount = Math.Max(0m, refund.Booking?.DiscountAmount ?? 0m),
+                    PromotionId = refund.Booking?.PromotionId,
+                    PromotionTitleSnapshot = refund.Booking?.PromotionTitleSnapshot?.Trim(),
+                    PromotionCodeSnapshot = refund.Booking?.PromotionCodeSnapshot?.Trim(),
+                    DiscountTypeSnapshot = refund.Booking?.DiscountTypeSnapshot?.Trim(),
+                    DiscountValueSnapshot = refund.Booking?.DiscountValueSnapshot,
+                    TotalPrice = Math.Max(0m, refund.Booking?.TotalPrice ?? 0m),
                     DepositAmount = Math.Max(0m, refund.DepositPaid),
                     AmountPaidOnline = Math.Max(
                         0m,
@@ -6936,13 +6936,13 @@ namespace YemenGuide.Web.Services.Finance
                         OriginalTotalPrice = booking.OriginalTotalPrice > 0m
                     ? booking.OriginalTotalPrice
                     : booking.TotalPrice + booking.DiscountAmount,
-                DiscountAmount = Math.Max(0m, booking.DiscountAmount),
-                PromotionId = booking.PromotionId,
-                PromotionTitleSnapshot = booking.PromotionTitleSnapshot?.Trim(),
-                PromotionCodeSnapshot = booking.PromotionCodeSnapshot?.Trim(),
-                DiscountTypeSnapshot = booking.DiscountTypeSnapshot?.Trim(),
-                DiscountValueSnapshot = booking.DiscountValueSnapshot,
-                TotalPrice = Math.Max(0m, booking.TotalPrice),
+                        DiscountAmount = Math.Max(0m, booking.DiscountAmount),
+                        PromotionId = booking.PromotionId,
+                        PromotionTitleSnapshot = booking.PromotionTitleSnapshot?.Trim(),
+                        PromotionCodeSnapshot = booking.PromotionCodeSnapshot?.Trim(),
+                        DiscountTypeSnapshot = booking.DiscountTypeSnapshot?.Trim(),
+                        DiscountValueSnapshot = booking.DiscountValueSnapshot,
+                        TotalPrice = Math.Max(0m, booking.TotalPrice),
                         DepositAmount = Math.Max(0m, financial?.DepositAmount ?? 0m),
                         AmountPaidOnline = Math.Max(0m, financial?.AmountPaidOnline ?? 0m),
                         AmountCollectedAtProperty = Math.Max(0m, financial?.AmountCollectedAtProperty ?? 0m),
@@ -8647,7 +8647,8 @@ namespace YemenGuide.Web.Services.Finance
                 case "PromotionTitleSnapshot": return TextCell(row.PromotionTitleSnapshot);
                 case "PromotionCodeSnapshot": return TextCell(row.PromotionCodeSnapshot);
                 case "DiscountTypeSnapshot": return TextCell(row.DiscountTypeSnapshot);
-                case "DiscountValueSnapshot": return row.DiscountValueSnapshot.HasValue
+                case "DiscountValueSnapshot":
+                    return row.DiscountValueSnapshot.HasValue
                     ? MoneyCell(row.DiscountValueSnapshot.Value)
                     : TextCell(string.Empty);
                 case "TotalPrice": return MoneyCell(row.TotalPrice);
@@ -9840,8 +9841,69 @@ namespace YemenGuide.Web.Services.Finance
                         "تم تحرير عمولة هذا الحجز. أعد احتسابها قبل محاولة الحجز من جديد.");
                 }
 
-                var amount = Math.Round(Math.Max(0m, financial.PlatformCommission), 2);
                 var now = DateTime.Now;
+
+                /*
+                 * الحجز الذي أُنشئ أثناء الفترة التجريبية المجانية يكون
+                 * معفى نهائيًا من عمولة المنصة. شحن رصيد الضمان خلال
+                 * التجربة لا ينهيها ولا يفعّل الخصم مبكرًا؛ الرصيد يبقى
+                 * متاحًا لاستخدامه بعد انتهاء FreeTrialEndsAt.
+                 *
+                 * نعتمد وقت إنشاء الحجز كمرجع حتى يظل الحجز الذي بدأ داخل
+                 * التجربة مجانيًا حتى لو تم قبوله أو إكماله بعد انتهائها.
+                 * كما نصفر Snapshot العمولة لمنع أي إعادة احتساب لاحقة من
+                 * إنشاء عمولة على حجز كان مشمولًا بالتجربة المجانية.
+                 */
+                if (booking.Place?.OwnerId.HasValue == true &&
+                    booking.Place.OwnerId.Value > 0)
+                {
+                    var ownerTrial = await _context.Users
+                        .AsNoTracking()
+                        .Where(user =>
+                            user.UserId == booking.Place.OwnerId.Value)
+                        .Select(user => new
+                        {
+                            user.FreeTrialStartedAt,
+                            user.FreeTrialEndsAt
+                        })
+                        .FirstOrDefaultAsync(cancellationToken);
+
+                    var commissionReferenceAt =
+                        booking.CreatedAt ?? now;
+
+                    var freeTrialApplies =
+                        ownerTrial != null &&
+                        ownerTrial.FreeTrialStartedAt.HasValue &&
+                        ownerTrial.FreeTrialEndsAt.HasValue &&
+                        commissionReferenceAt >= ownerTrial.FreeTrialStartedAt.Value &&
+                        commissionReferenceAt < ownerTrial.FreeTrialEndsAt.Value;
+
+                    if (freeTrialApplies)
+                    {
+                        financial.CommissionRateSnapshot = 0m;
+                        financial.CommissionBaseAmount = 0m;
+                        financial.PlatformCommission = 0m;
+                        financial.CommissionStatus =
+                            FinancialCommissionStatuses.NotApplicable;
+                        financial.CommissionHeldAt = null;
+                        financial.CommissionChargedAt = null;
+                        financial.CommissionReleasedAt = null;
+                        financial.UpdatedAt = now;
+
+                        await _context.SaveChangesAsync(cancellationToken);
+                        await CommitIfOwnedAsync(
+                            databaseTransaction,
+                            cancellationToken);
+
+                        return FinanceOperationResult.Succeeded(
+                            "الحجز ضمن الفترة التجريبية المجانية؛ لم تُحجز أو تُخصم أي عمولة.",
+                            financial.RecordId);
+                    }
+                }
+
+                var amount = Math.Round(
+                    Math.Max(0m, financial.PlatformCommission),
+                    2);
 
                 if (amount <= 0m)
                 {

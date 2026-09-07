@@ -9027,31 +9027,80 @@ font-weight:700;
 
         const syncEvent = focus => {
             if (!eventSelect || !eventWrap || !eventInput) return;
+
             const show = eventSelect.value === "other";
+
             eventWrap.hidden = !show;
             eventWrap.setAttribute("aria-hidden", show ? "false" : "true");
             eventWrap.classList.toggle("is-visible", show);
             eventInput.required = show;
-            if (show && focus) setTimeout(() => eventInput.focus({ preventScroll: true }), 80);
-            if (!show) eventInput.classList.remove("is-invalid");
-            if (eventCounter) eventCounter.textContent = `${eventInput.value.length} / 50`;
+
+            if (show) {
+                window.requestAnimationFrame(() => {
+                    eventWrap.classList.add("is-ready");
+                });
+
+                if (focus) {
+                    window.setTimeout(() => {
+                        eventInput.focus({ preventScroll: true });
+                    }, 100);
+                }
+            } else {
+                eventWrap.classList.remove("is-ready");
+                eventInput.classList.remove("is-invalid");
+            }
+
+            if (eventCounter) {
+                eventCounter.textContent = `${eventInput.value.length} / 50`;
+            }
         };
 
         const syncSeat = focus => {
             if (!seatingWrap || !seatingInput) return;
-            const show = String(state.selectedSeatingSetup || "").toLowerCase() === "other";
+
+            const selected = String(state.selectedSeatingSetup || "")
+                .trim()
+                .toLowerCase();
+
+            const show = selected === "other";
+
             seatingWrap.hidden = !show;
             seatingWrap.setAttribute("aria-hidden", show ? "false" : "true");
             seatingWrap.classList.toggle("is-visible", show);
             seatingInput.required = show;
-            if (show && focus) setTimeout(() => seatingInput.focus({ preventScroll: true }), 80);
-            if (!show) seatingInput.classList.remove("is-invalid");
-            if (seatingCounter) seatingCounter.textContent = `${seatingInput.value.length} / 80`;
+
+            if (show) {
+                window.requestAnimationFrame(() => {
+                    seatingWrap.classList.add("is-ready");
+                });
+
+                if (focus) {
+                    window.setTimeout(() => {
+                        seatingInput.focus({ preventScroll: true });
+                    }, 100);
+                }
+            } else {
+                seatingWrap.classList.remove("is-ready");
+                seatingInput.classList.remove("is-invalid");
+            }
+
+            if (seatingCounter) {
+                seatingCounter.textContent = `${seatingInput.value.length} / 80`;
+            }
         };
 
         eventSelect?.addEventListener("change", () => syncEvent(true));
-        eventInput?.addEventListener("input", () => syncEvent(false));
-        seatingInput?.addEventListener("input", () => syncSeat(false));
+
+        eventInput?.addEventListener("input", () => {
+            eventInput.classList.remove("is-invalid");
+            syncEvent(false);
+        });
+
+        seatingInput?.addEventListener("input", () => {
+            seatingInput.classList.remove("is-invalid");
+            syncSeat(false);
+        });
+
         document.addEventListener("yg:seating-changed", () => syncSeat(true));
 
         syncEvent(false);

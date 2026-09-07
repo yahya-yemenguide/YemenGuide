@@ -11,6 +11,8 @@ using Microsoft.EntityFrameworkCore;
 using YemenGuide.Core.DTOs.Owner;
 using YemenGuide.Core.Constants;
 using YemenGuide.Core.Entities;
+using YemenGuide.Web.Services;
+using YemenGuide.Web.Services.ExchangeRates;
 
 namespace YemenGuide.Web.Areas.Owner.Controllers
 {
@@ -38,6 +40,197 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             {
                 "Completed", "Cancelled", "Rejected", "NoShow", "Expired"
             };
+
+
+        // =====================================================================
+        // أدوات العملة الخاصة بالتقويم والحجز المباشر
+        //
+        // ملاحظة مهمة:
+        // هذا الملف Partial، لكن ReservationController.cs الحالي لا يحتوي
+        // على هذه الأدوات. لذلك نضعها هنا حتى يكون Calendar.cs مكتفيًا بذاته
+        // بدون تغيير Constructor أو أي ملف آخر.
+        // =====================================================================
+
+        private sealed class OwnerReservationCurrencyContext
+        {
+            public string Currency { get; init; } =
+                CurrencyDisplayService.YemeniRial;
+
+            public string CurrencyCode { get; init; } =
+                "YER";
+
+            public string CurrencySymbol { get; init; } =
+                "ر.ي";
+
+            public string ExchangeRateRegion { get; init; } =
+                ExchangeRateRegionResolver.SanaaMarket;
+        }
+
+
+        private CurrencyDisplayService GetCalendarCurrencyDisplayService()
+        {
+            var service =
+                HttpContext.RequestServices.GetService(
+                    typeof(CurrencyDisplayService))
+                as CurrencyDisplayService;
+
+            if (service == null)
+            {
+                throw new InvalidOperationException(
+                    "CurrencyDisplayService غير مسجلة في Dependency Injection.");
+            }
+
+            return service;
+        }
+
+
+        private CurrencyService GetCalendarCurrencyService()
+        {
+            var service =
+                HttpContext.RequestServices.GetService(
+                    typeof(CurrencyService))
+                as CurrencyService;
+
+            if (service == null)
+            {
+                throw new InvalidOperationException(
+                    "CurrencyService غير مسجلة في Dependency Injection.");
+            }
+
+            return service;
+        }
+
+
+        private async Task<OwnerReservationCurrencyContext>
+            GetOwnerCurrencyContextAsync(int placeId)
+        {
+            var currencyDisplayService =
+                GetCalendarCurrencyDisplayService();
+
+            var currency =
+                await currencyDisplayService
+                    .GetPreferredCurrencyAsync(
+                        HttpContext.RequestAborted);
+
+            currency =
+                CurrencyDisplayService.NormalizeCurrency(
+                    currency);
+
+            if (string.IsNullOrWhiteSpace(currency))
+            {
+                currency =
+                    CurrencyDisplayService.YemeniRial;
+            }
+
+            string? region = null;
+
+            if (placeId > 0)
+            {
+                region =
+                    await _context.Places
+                        .AsNoTracking()
+                        .Where(place =>
+                            place.PlaceId == placeId)
+                        .Select(place =>
+                            place.City != null
+                                ? place.City.ExchangeRateRegion
+                                : null)
+                        .FirstOrDefaultAsync(
+                            HttpContext.RequestAborted);
+            }
+
+            if (string.IsNullOrWhiteSpace(region))
+            {
+                region =
+                    ExchangeRateRegionResolver.SanaaMarket;
+            }
+
+            return new OwnerReservationCurrencyContext
+            {
+                Currency = currency,
+
+                CurrencyCode =
+                    CurrencyDisplayService.GetCurrencyCode(
+                        currency),
+
+                CurrencySymbol =
+                    CurrencyDisplayService.GetCurrencySymbol(
+                        currency),
+
+                ExchangeRateRegion =
+                    region.Trim()
+            };
+        }
+
+
+        private decimal ToDisplayCurrency(
+            decimal amountInYer,
+            OwnerReservationCurrencyContext currency)
+        {
+            return GetCalendarCurrencyService()
+                .ConvertAmount(
+                    amountInYer,
+                    currency.Currency,
+                    currency.ExchangeRateRegion);
+        }
+
+
+        private decimal ToYer(
+            decimal amountInDisplayCurrency,
+            OwnerReservationCurrencyContext currency)
+        {
+            return GetCalendarCurrencyService()
+                .ConvertToYer(
+                    amountInDisplayCurrency,
+                    currency.Currency,
+                    currency.ExchangeRateRegion);
+        }
+
+
+        private string DisplayMoney(
+            decimal amountInYer,
+            OwnerReservationCurrencyContext currency)
+        {
+            var converted =
+                ToDisplayCurrency(
+                    amountInYer,
+                    currency);
+
+            var number =
+                CurrencyDisplayService.FormatNumber(
+                    converted,
+                    currency.Currency);
+
+            return currency.CurrencyCode == "USD"
+                ? $"${number}"
+                : $"{number} {currency.CurrencySymbol}";
+        }
+
+
+        private static bool IsMonetaryDiscountType(
+            string? discountType)
+        {
+            return
+                string.Equals(
+                    discountType,
+                    "FixedAmount",
+                    StringComparison.OrdinalIgnoreCase) ||
+
+                string.Equals(
+                    discountType,
+                    "FixedDiscount",
+                    StringComparison.OrdinalIgnoreCase) ||
+
+                string.Equals(
+                    discountType,
+                    "SpecialPrice",
+                    StringComparison.OrdinalIgnoreCase) ||
+
+                string.Equals(
+                    discountType,
+                    "ServiceSpecialPrice",
+                    StringComparison.OrdinalIgnoreCase);
+        }
 
         private sealed class ManualPromotionResolution
         {
@@ -536,8 +729,12 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 .ThenByDescending(item => item.UserId)
                 .Select(item => new
                 {
-                    item.UserId, item.FullName, item.Username, item.PhoneNumber,
-                    item.ContactInfo, item.ProfileImage
+                    item.UserId,
+                    item.FullName,
+                    item.Username,
+                    item.PhoneNumber,
+                    item.ContactInfo,
+                    item.ProfileImage
                 }).FirstOrDefaultAsync();
 
             var result = customer == null
@@ -886,7 +1083,10 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                         ? Array.Empty<object>()
                         : quote.CandidateRoomUnits.Take(quote.Quantity).Select(item => new
                         {
-                            item.RoomUnitId, item.RoomNumber, item.FloorNumber, item.FloorLabel
+                            item.RoomUnitId,
+                            item.RoomNumber,
+                            item.FloorNumber,
+                            item.FloorLabel
                         }).ToArray(),
                     totalPrice = ToDisplayCurrency(quote.PublicQuote.TotalPrice, currency),
                     depositAmount = ToDisplayCurrency(quote.PublicQuote.DepositAmount, currency),
