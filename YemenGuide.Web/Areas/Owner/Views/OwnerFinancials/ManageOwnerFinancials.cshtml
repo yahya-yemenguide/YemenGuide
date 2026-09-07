@@ -1,4 +1,4 @@
-﻿@using System
+@using System
 @using System.Collections.Generic
 @using System.Linq
 @using YemenGuide.Core.DTOs.Owner
@@ -9,10 +9,10 @@
     ViewData["Title"] = "الإدارة المالية";
 
     var pageModel = Model ?? new OwnerFinancialPageDto();
+    // منشأة الأدمن فقط تعامل كمنشأة معفاة من نظام الضمان والعمولات.
+    // لا نربط الإخفاء بمجرد دور Admin حتى لا تتأثر منشآت المالكين العاديين.
     var isAdminAccount =
-        (ViewData["IsAdministrationOwnedPlace"] is bool isAdminOwned && isAdminOwned) ||
-        (ViewData["IsAdministrationAccount"] is bool isAdmin && isAdmin) ||
-        User.IsInRole("Admin");
+        (ViewData["IsAdministrationOwnedPlace"] is bool isAdminOwned && isAdminOwned);
 
     var requestedTab =
         Convert.ToString(ViewData["CanonicalFinancialTab"])
@@ -117,6 +117,13 @@
             BadgeCount = (int?)null
         }
     };
+
+    if (isAdminAccount)
+    {
+        tabs = tabs.Where(tab =>
+            !string.Equals(tab.Key, "balance", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+    }
 
     var activeTabInfo =
         tabs.First(tab =>

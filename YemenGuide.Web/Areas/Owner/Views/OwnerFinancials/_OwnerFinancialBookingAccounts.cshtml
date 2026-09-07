@@ -8,6 +8,7 @@
 @model BookingAccountsTabDto
 
 @{
+    var isAdminOwnedPlace = (bool?)ViewData["IsAdministrationOwnedPlace"] ?? false;
     var pageModel = Model ?? new BookingAccountsTabDto();
     var filter = pageModel.Filter ?? new BookingFinancialFilterDto();
     var summary = pageModel.Summary ?? new BookingAccountsSummaryDto();
@@ -210,7 +211,7 @@
       href="~/css/owner/financials/owner-financial-booking-accounts.css"
       asp-append-version="true" />
 
-<section class="owner-booking-accounts owner-booking-dossier"
+<section class="@(isAdminOwnedPlace ? "admin-owned-financial-view" : "")" class="owner-booking-accounts owner-booking-dossier"
          data-owner-financial-partial="bookings"
          data-booking-ui-version="dossier-v3-readable-modal-20260824"
          data-load-url="@Url.Content("~/Owner/Financials/BookingAccounts")"

@@ -8,6 +8,7 @@
 @model OwnerCommissionBalanceBackendDto
 
 @{
+    var isAdminAccount = ViewData["IsAdministrationOwnedPlace"] is bool value && value;
     var pageModel = Model ?? new OwnerCommissionBalanceBackendDto();
     var accountModel = pageModel.Account ?? new CommissionGuaranteeTabDto();
     var topUpModel = pageModel.TopUp ?? new TopUpBalanceTabDto();
@@ -278,7 +279,10 @@
       href="~/css/owner/financials/owner-financial-balance.css"
       asp-append-version="true" />
 
-<section class="owner-balance-center"
+@if (!isAdminAccount)
+{
+
+<section class="@(isAdminOwnedPlace ? "admin-owned-financial-view" : "")" class="owner-balance-center"
          dir="rtl"
          data-owner-financial-partial="balance"
          data-balance-ui-version="wallet-center-v1-20260824"
@@ -1604,3 +1608,5 @@
     </dialog>
 
 </section>
+
+}

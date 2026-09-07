@@ -2,9 +2,12 @@
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using YemenGuide.Core.Constants;
 using YemenGuide.Data;
 using YemenGuide.Web.Services.ExchangeRates;
 
@@ -224,6 +227,149 @@ namespace YemenGuide.Web.Controllers
             ViewBag.IsProfileComplete = isProfileComplete;
 
             return View("~/Views/Panel/Overview/Overview.cshtml");
+        }
+
+        // =============================================================
+        // بدء رحلة المالك من لوحة العميل
+        // Customer -> Owner Pending -> VerifyAccount
+        // =============================================================
+        [HttpPost]
+        [Authorize(Roles = "Customer,Owner")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> StartOwnerJourney()
+        {
+            var userIdText =
+                User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            if (!int.TryParse(userIdText, out var userId) || userId <= 0)
+            {
+                return RedirectToAction("Login", "Account");
+            }
+
+            var authentication =
+                await HttpContext.AuthenticateAsync(
+                    CookieAuthenticationDefaults.AuthenticationScheme);
+
+            var user =
+                await _context.Users
+                    .FirstOrDefaultAsync(
+                        item => item.UserId == userId,
+                        HttpContext.RequestAborted);
+
+            if (user == null)
+            {
+                return RedirectToAction("Login", "Account");
+            }
+
+            // الحسابات المحظورة أو المعلقة لا يمكنها بدء رحلة مالك.
+            if (string.Equals(
+                    user.AccountState,
+                    "Blocked",
+                    StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(
+                    user.AccountState,
+                    "Suspended",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return Forbid();
+            }
+
+            // إذا كان الحساب ما يزال Customer نبدأ رحلة المالك فعلياً.
+            // Pending مهمة حتى تظهر رحلة التوثيق ولا يتم تجاوزها إلى لوحة المالك.
+            if (string.Equals(
+                    user.Role,
+                    SystemRoles.Customer,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                user.Role = SystemRoles.Owner;
+                user.AccountState = "Pending";
+
+                await _context.SaveChangesAsync(
+                    HttpContext.RequestAborted);
+            }
+            else if (!string.Equals(
+                         user.Role,
+                         SystemRoles.Owner,
+                         StringComparison.OrdinalIgnoreCase))
+            {
+                return Forbid();
+            }
+
+            // قاعدة البيانات وحدها لا تكفي:
+            // Cookie الحالية ما زالت تحمل Role القديم، لذلك نجدد الـClaims فوراً.
+            string lang =
+                string.IsNullOrWhiteSpace(user.PreferredLanguage)
+                    ? "ar"
+                    : user.PreferredLanguage;
+
+            var claims = new List<Claim>
+            {
+                new Claim(
+                    ClaimTypes.NameIdentifier,
+                    user.UserId.ToString()),
+
+                new Claim(
+                    ClaimTypes.Name,
+                    user.Username ?? string.Empty),
+
+                new Claim(
+                    ClaimTypes.Role,
+                    user.Role ?? SystemRoles.Owner),
+
+                new Claim(
+                    "IsDarkMode",
+                    user.IsDarkMode.ToString()),
+
+                new Claim(
+                    "PreferredLanguage",
+                    lang),
+
+                new Claim(
+                    "AccountState",
+                    user.AccountState ?? "Pending")
+            };
+
+            var identity =
+                new ClaimsIdentity(
+                    claims,
+                    CookieAuthenticationDefaults.AuthenticationScheme);
+
+            bool isPersistent =
+                authentication.Properties?.IsPersistent ?? false;
+
+            var authProperties =
+                new AuthenticationProperties
+                {
+                    IsPersistent = isPersistent,
+                    AllowRefresh = true,
+                    ExpiresUtc =
+                        authentication.Properties?.ExpiresUtc ??
+                        (
+                            isPersistent
+                                ? DateTimeOffset.UtcNow.AddDays(30)
+                                : DateTimeOffset.UtcNow.AddHours(12)
+                        )
+                };
+
+            await HttpContext.SignInAsync(
+                CookieAuthenticationDefaults.AuthenticationScheme,
+                new ClaimsPrincipal(identity),
+                authProperties);
+
+            // Owner نشط مسبقاً لا يحتاج إعادة رحلة التوثيق.
+            if (string.Equals(
+                    user.AccountState,
+                    "Active",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return Redirect(
+                    "/Owner/OwnerDashboard/DashboardOwner");
+            }
+
+            // Pending / Rejected / Accepted تذهب لمسار المالك الموجود أصلاً.
+            return RedirectToAction(
+                "VerifyAccount",
+                "Account");
         }
     }
 }

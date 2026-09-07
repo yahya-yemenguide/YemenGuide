@@ -478,11 +478,14 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
                     if (currentUserIsAdmin)
                     {
+                        // منشأة الأدمن الخاصة به تعامل كمنشأة مالك كاملة.
+                        // إذا كانت قابلة للحجز تبقى غير متاحة حتى تكتمل السياسات،
+                        // وبعد حفظ السياسات يتم تفعيلها مباشرة بدون مراجعة إدارية.
                         bool isAdminOperation = string.Equals(ownerMode, "admin", StringComparison.OrdinalIgnoreCase);
                         status = isAdminOperation
                             ? (isBookable ? "Pending" : "Active")
                             : (isBookable ? "WaitOwner" : "Active");
-                        isAvailable = !isBookable;
+                        isAvailable = isAdminOperation ? !isBookable : !isBookable;
                     }
                     else
                     {

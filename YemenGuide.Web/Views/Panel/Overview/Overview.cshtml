@@ -113,17 +113,16 @@
                 </div>
 
                 <div class="overview-shell">
+                    <section class="overview-hero js-reveal js-tilt" data-tilt-strength="5">
+                        <div class="overview-hero-glow" aria-hidden="true"></div>
+                        <div class="overview-hero-shine" aria-hidden="true"></div>
 
-                <section class="overview-hero js-reveal js-tilt" data-tilt-strength="5">
-                    <div class="overview-hero-glow" aria-hidden="true"></div>
-                    <div class="overview-hero-shine" aria-hidden="true"></div>
+                        <div class="overview-identity-panel">
+                            <div class="overview-avatar-stage">
+                                <span class="overview-avatar-ring overview-avatar-ring--one" aria-hidden="true"></span>
+                                <span class="overview-avatar-ring overview-avatar-ring--two" aria-hidden="true"></span>
 
-                    <div class="overview-identity-panel">
-                        <div class="overview-avatar-stage">
-                            <span class="overview-avatar-ring overview-avatar-ring--one" aria-hidden="true"></span>
-                            <span class="overview-avatar-ring overview-avatar-ring--two" aria-hidden="true"></span>
-
-                            <div class="overview-avatar" style="@(string.IsNullOrWhiteSpace(profileImage) ? string.Empty : $"background-image:url('{profileImage}');")">
+                                <div class="overview-avatar" style="@(string.IsNullOrWhiteSpace(profileImage) ? string.Empty : $"background-image:url('{profileImage}');")">
                                 @if (string.IsNullOrWhiteSpace(profileImage))
                                 {
                                     <span>@initialLetter</span>
@@ -221,14 +220,14 @@
                         <i class="bi bi-arrow-up-left overview-stat-arrow"></i>
                     </a>
 
-                    <div class="overview-stat-card overview-stat-card--static js-reveal" aria-label="عدد التقييمات التي كتبتها">
+                    <a href="/Profile/CustomerProfile#reviews" class="overview-stat-card js-reveal js-tilt" data-tilt-strength="3">
                         <span class="overview-stat-orb is-gold"><i class="bi bi-star-fill"></i></span>
                         <span class="overview-stat-copy">
                             <strong class="js-count-up" data-count="@reviewsCount">0</strong>
                             <small>تقييماتي</small>
                         </span>
-                        <span class="overview-stat-static-mark" aria-hidden="true"><i class="bi bi-stars"></i></span>
-                    </div>
+                        <i class="bi bi-arrow-up-left overview-stat-arrow"></i>
+                    </a>
                 </section>
 
                 <section class="overview-smart-grid">
@@ -436,10 +435,17 @@
                         <h3>حوّل مكانك إلى فرصة جديدة</h3>
                         <p>اعرض شاليهك أو فندقك أو قاعتك وابدأ استقبال الحجوزات عبر دليلك اليمني.</p>
                     </div>
-                    <a href="/Account/VerifyAccount" class="overview-primary-button overview-primary-button--owner">
-                        سجل منشأتك الآن
-                        <i class="bi bi-arrow-left"></i>
-                    </a>
+                    <form asp-controller="Overview"
+                          asp-action="StartOwnerJourney"
+                          method="post"
+                          style="margin:0;">
+                        @Html.AntiForgeryToken()
+                        <button type="submit"
+                                class="overview-primary-button overview-primary-button--owner">
+                            سجل منشأتك الآن
+                            <i class="bi bi-arrow-left"></i>
+                        </button>
+                    </form>
                 </section>
             </div>
 

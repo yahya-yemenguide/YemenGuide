@@ -7,6 +7,7 @@
 @model OwnerWalletsTabDto
 
 @{
+    var isAdminOwnedPlace = (bool?)ViewData["IsAdministrationOwnedPlace"] ?? false;
     var pageModel = Model ?? new OwnerWalletsTabDto();
     var summary = pageModel.Summary ?? new OwnerWalletsSummaryDto();
     var walletItems = pageModel.Wallets ?? new List<OwnerWalletItemDto>();
@@ -67,7 +68,7 @@
       href="~/css/owner/financials/owner-financial-receiving-wallets.css"
       asp-append-version="true" />
 
-<section class="wallet-vault"
+<section class="@(isAdminOwnedPlace ? "admin-owned-financial-view" : "")" class="wallet-vault"
          dir="rtl"
          data-owner-financial-partial="wallets"
          data-load-url="@Url.Content("~/Owner/Financials/ReceivingWallets")"

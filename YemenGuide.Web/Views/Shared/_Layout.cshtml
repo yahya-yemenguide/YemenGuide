@@ -55,7 +55,7 @@
 
     var customerDashboardControllers =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-                                                                {
+                                                                        {
             "Overview",
             "Profile",
             "Messages",
@@ -64,18 +64,22 @@
             "Favorites",
             "Reports",
             "Notifications"
-                                                                };
+                                                                        };
 
     bool isCustomerDashboardPage =
         User.Identity?.IsAuthenticated == true &&
         User.IsInRole("Customer") &&
         customerDashboardControllers.Contains(currentController);
 
+    bool isAuthenticatedCustomer =
+        User.Identity?.IsAuthenticated == true &&
+        User.IsInRole("Customer");
+
     // المودل الإجباري لحسابات Google الجديدة يظهر في أي صفحة عميل،
     // حتى إذا وصل المستخدم لأول مرة إلى الصفحة الرئيسية العامة.
     bool showGooglePasswordSetup = false;
 
-    if (User.Identity?.IsAuthenticated == true && User.IsInRole("Customer"))
+    if (isAuthenticatedCustomer)
     {
         var userIdText = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
@@ -128,6 +132,19 @@
           href="~/css/customer/customer-layout.css"
           asp-append-version="true" />
 
+    @if (isAuthenticatedCustomer)
+    {
+        @*
+    مكتبة الهاتف تبقى على CDN كما هي.
+    هذا فقط يجهز DNS/TLS مبكراً ولا يحمل المكتبة.
+    *@
+        <link rel="preconnect"
+          href="https://cdn.jsdelivr.net"
+          crossorigin="anonymous" />
+        <link rel="dns-prefetch"
+          href="//cdn.jsdelivr.net" />
+    }
+
     @if (showGooglePasswordSetup)
     {
         <link rel="stylesheet"
@@ -152,6 +169,56 @@
     {
         <link rel="stylesheet" href="~/lib/leaflet/leaflet.css" />
         <script src="~/lib/leaflet/leaflet.js"></script>
+    }
+
+    @*
+    =============================================================
+    FAST CUSTOMER NAVIGATION — SPECULATION RULES
+    =============================================================
+
+    خارج لوحة العميل:
+    نجهز صفحة Overview واحدة فقط لأن دائرة الحساب تفتحها.
+    هذا يتم في الخلفية ولا يغيّر أي رابط.
+
+    داخل لوحة العميل:
+    المتصفح يجهز الصفحة المستهدفة عندما يظهر Intent حقيقي
+    مثل Hover/Focus على رابط جانبي (eagerness = moderate).
+
+    لا يوجد AJAX ولا SPA ولا تبديل DOM.
+    التنقل يبقى Navigation عادي وآمن من ASP.NET Core.
+    =============================================================
+    *@
+    @if (isAuthenticatedCustomer && !isCustomerDashboardPage)
+    {
+        <script type="speculationrules">
+            {
+                "prefetch": [
+                    {
+                        "source": "list",
+                        "urls": [
+                            "/Overview/Overview"
+                        ],
+                        "eagerness": "eager"
+                    }
+                ]
+            }
+        </script>
+    }
+    else if (isAuthenticatedCustomer && isCustomerDashboardPage)
+    {
+        <script type="speculationrules">
+            {
+                "prefetch": [
+                    {
+                        "source": "document",
+                        "where": {
+                            "selector_matches": ".custom-sidebar-nav a[data-customer-sidebar-link]"
+                        },
+                        "eagerness": "moderate"
+                    }
+                ]
+            }
+        </script>
     }
 
 </head>
