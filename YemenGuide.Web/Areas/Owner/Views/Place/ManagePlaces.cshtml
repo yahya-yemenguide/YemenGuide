@@ -1,6 +1,7 @@
 ﻿@{
     ViewData["Title"] = "إدارة منشآتي";
     Layout = "~/Areas/Owner/Views/Shared/_OwnerLayout.cshtml";
+    bool isAdmin = User.IsInRole("Admin");
 }
 
 @section Styles {
@@ -71,19 +72,22 @@
                 <span class="tab-label">قائمة منشآتي</span>
             </button>
 
-            <button type="button"
-                class="tab-btn"
-                id="addPlaceTabButton"
-                role="tab"
-                aria-selected="false"
-                aria-controls="addPlaceTabPanel"
-                data-target="add-place-tab"
-                data-url="/Owner/Place/AddPlace">
-                <span class="tab-icon" aria-hidden="true">
-                    <i class="bi bi-plus-circle"></i>
-                </span>
-                <span class="tab-label">إضافة منشأة جديدة</span>
-            </button>
+            @if (!isAdmin)
+            {
+                <button type="button"
+                    class="tab-btn"
+                    id="addPlaceTabButton"
+                    role="tab"
+                    aria-selected="false"
+                    aria-controls="addPlaceTabPanel"
+                    data-target="add-place-tab"
+                    data-url="/Owner/Place/AddPlace">
+                    <span class="tab-icon" aria-hidden="true">
+                        <i class="bi bi-plus-circle"></i>
+                    </span>
+                    <span class="tab-label">إضافة منشأة جديدة</span>
+                </button>
+            }
 
 
             <button type="button"
@@ -127,7 +131,10 @@
                 </div>
             </div>
 
-            <div class="tab-pane-content add-place-tab" id="addPlaceTabPanel" role="tabpanel" aria-labelledby="addPlaceTabButton" style="display: none;"></div>
+            @if (!isAdmin)
+            {
+                <div class="tab-pane-content add-place-tab" id="addPlaceTabPanel" role="tabpanel" aria-labelledby="addPlaceTabButton" style="display: none;"></div>
+            }
             <div class="tab-pane-content calendar-manager-tab" id="calendarManagerTabPanel" role="tabpanel" aria-labelledby="calendarManagerTabButton" style="display: none;"></div>
             <div class="tab-pane-content promotions-manager-tab" id="promotionsManagerTabPanel" role="tabpanel" aria-labelledby="promotionsManagerTabButton" style="display: none;"></div>
             <div class="tab-pane-content details-manager-tab" id="detailsManagerTabPanel" role="tabpanel" aria-labelledby="detailsManagerTabButton" style="display: none;"></div>
@@ -167,8 +174,9 @@
     <script>
         document.addEventListener("DOMContentLoaded", function () {
             var autoOpen = '@(ViewBag.AutoOpenWizard?.ToString().ToLower())';
+            var isAdmin = @(isAdmin ? "true" : "false");
 
-            if (autoOpen === 'true') {
+            if (!isAdmin && autoOpen === 'true') {
                 const addPlaceTabBtn = document.querySelector(
                     '.tab-btn[data-target="add-place-tab"]'
                 );

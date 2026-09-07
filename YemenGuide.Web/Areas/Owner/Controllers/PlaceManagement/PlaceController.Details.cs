@@ -27,7 +27,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
         // =========================================================================
 
         [HttpGet]
-        [Authorize(Roles = "Owner")]
+        [Authorize(Roles = "Owner,Admin")]
         public IActionResult DetailsManager()
         {
             var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -108,11 +108,30 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             policy.AllowQatInside = false;
 
             // =================================================================
-            // 🌟 التعديل الجديد: تفعيل المنشأة فوراً إذا كانت قادمة من الأدمن
+            // منشأة الأدمن الحالية لا تصبح نشطة عند الإنشاء.
+            // بعد حفظ السياسات فقط تتحول إلى Active ويُفتح الحجز.
             // =================================================================
-            if (await IsPlatformOwnerAsync(place.OwnerId) && place.Status == "Active")
+            bool isCurrentAdminOwnedPlace =
+                User.IsInRole("Admin") &&
+                TryGetCurrentUserId(out int currentAdminId) &&
+                place.OwnerId == currentAdminId;
+
+            if (isCurrentAdminOwnedPlace)
             {
-                // منشأة تشغيل الإدارة تبقى نشطة، ويُفتح الحجز فقط بعد اكتمال السياسات.
+                place.Status = "Active";
+                place.IsAvailable = true;
+                _context.Places.Update(place);
+                await _context.SaveChangesAsync();
+
+                return Json(new
+                {
+                    success = true,
+                    message = "تم حفظ السياسات وتفعيل منشأة الإدارة، وأصبحت جاهزة لاستقبال الحجوزات."
+                });
+            }
+            else if (await IsPlatformOwnerAsync(place.OwnerId) && place.Status == "Active")
+            {
+                // دعم مسار حساب تشغيل الإدارة القديم دون تغيير سلوكه.
                 place.IsAvailable = true;
                 _context.Places.Update(place);
                 await _context.SaveChangesAsync();

@@ -1,4 +1,4 @@
-@using System
+﻿@using System
 @using System.Collections.Generic
 @using System.Globalization
 @using System.Linq
@@ -7,6 +7,10 @@
 @model FinancialOverviewTabDto
 
 @{
+    var isAdminAccount =
+        (ViewData["IsAdministrationOwnedPlace"] is bool isAdminOwned && isAdminOwned) ||
+        (ViewData["IsAdministrationAccount"] is bool isAdmin && isAdmin) ||
+        User.IsInRole("Admin");
     var pageModel = Model ?? new FinancialOverviewTabDto();
     var summary = pageModel.Summary ?? new FinancialOverviewDto();
     var accounts = pageModel.Accounts ?? new List<PlaceCommissionAccountDto>();
@@ -42,12 +46,13 @@
     var suspendedCount = accounts.Count(account => account.IsSuspended);
     var debtAccountsCount = accounts.Count(account => account.IsInDebt);
 
-    var attentionCount =
-        Math.Max(0, summary.PendingRefundsCount) +
-        Math.Max(0, summary.PendingTopUpsCount) +
-        lowBalanceCount +
-        suspendedCount +
-        debtAccountsCount;
+    var attentionCount = isAdminAccount
+        ? Math.Max(0, summary.PendingRefundsCount)
+        : Math.Max(0, summary.PendingRefundsCount) +
+          Math.Max(0, summary.PendingTopUpsCount) +
+          lowBalanceCount +
+          suspendedCount +
+          debtAccountsCount;
 
     string Money(decimal value)
     {
@@ -169,7 +174,9 @@
                 </h2>
 
                 <p>
-                    تحصيلك، المتبقي، العمولة وما يحتاج إجراء فقط.
+                    @(isAdminAccount
+                        ? "تحصيل المنشأة، المتبقي، الاستردادات وما يحتاج إجراء فقط."
+                        : "تحصيلك، المتبقي، العمولة وما يحتاج إجراء فقط.")
                 </p>
             </div>
         </div>
@@ -346,12 +353,24 @@
             </strong>
 
             <div class="owner-financial-overview__kpi-footer">
-                <span>
-                    عمولة محتسبة @Money(commissionCalculated)
-                </span>
-                <em>
-                    مخصومة @Money(commissionCharged)
-                </em>
+                @if (isAdminAccount)
+                {
+                    <span>
+                        عمولة المنصة: معفاة
+                    </span>
+                    <em>
+                        لا يلزم رصيد ضمان
+                    </em>
+                }
+                else
+                {
+                    <span>
+                        عمولة محتسبة @Money(commissionCalculated)
+                    </span>
+                    <em>
+                        مخصومة @Money(commissionCharged)
+                    </em>
+                }
             </div>
 
             <span class="owner-financial-overview__kpi-accent"
@@ -443,6 +462,59 @@
 
         </section>
 
+        @if (isAdminAccount)
+        {
+            <section class="owner-financial-overview__panel owner-financial-overview__commission"
+                     aria-labelledby="ownerOverviewCommissionTitle"
+                     data-vip-tilt>
+
+                <header class="owner-financial-overview__panel-head">
+                    <div>
+                        <span class="owner-financial-overview__panel-icon is-orange">
+                            <i class="bi bi-shield-check"></i>
+                        </span>
+                        <div>
+                            <small>منشأة إدارية</small>
+                            <h3 id="ownerOverviewCommissionTitle">
+                                معفاة من ضمان وعمولة المنصة
+                            </h3>
+                        </div>
+                    </div>
+
+                    <span class="owner-financial-overview__account-status is-success">
+                        <i class="bi bi-circle-fill"></i>
+                        معفاة
+                    </span>
+                </header>
+
+                <div class="owner-financial-overview__commission-balance">
+                    <span>رصيد ضمان العمولة</span>
+                    <strong>غير مطلوب</strong>
+                    <small>المنشأة الإدارية لا تستخدم نظام ضمان العمولة ولا تحتاج إلى شحن رصيد.</small>
+                </div>
+
+                <div class="owner-financial-overview__commission-stats">
+                    <div>
+                        <span class="is-held">
+                            <i class="bi bi-percent"></i>
+                        </span>
+                        <small>عمولة المنصة</small>
+                        <strong>0%</strong>
+                    </div>
+
+                    <div>
+                        <span class="is-debt">
+                            <i class="bi bi-wallet2"></i>
+                        </span>
+                        <small>الشحن</small>
+                        <strong>غير مطلوب</strong>
+                    </div>
+                </div>
+
+            </section>
+        }
+        else
+        {
         <section class="owner-financial-overview__panel owner-financial-overview__commission"
                  aria-labelledby="ownerOverviewCommissionTitle"
                  data-vip-tilt>
@@ -498,6 +570,7 @@
             </button>
 
         </section>
+        }
 
     </div>
 
@@ -559,7 +632,7 @@
                         </button>
                     }
 
-                    @if (summary.PendingTopUpsCount > 0)
+                    @if (!isAdminAccount && summary.PendingTopUpsCount > 0)
                     {
                         <button type="button"
                         class="owner-financial-overview__attention-item is-topup"
@@ -575,7 +648,7 @@
                         </button>
                     }
 
-                    @if (lowBalanceCount > 0)
+                    @if (!isAdminAccount && lowBalanceCount > 0)
                     {
                         <button type="button"
                         class="owner-financial-overview__attention-item is-low"
@@ -591,7 +664,7 @@
                         </button>
                     }
 
-                    @if (debtAccountsCount > 0)
+                    @if (!isAdminAccount && debtAccountsCount > 0)
                     {
                         <button type="button"
                         class="owner-financial-overview__attention-item is-debt"
@@ -607,7 +680,7 @@
                         </button>
                     }
 
-                    @if (suspendedCount > 0)
+                    @if (!isAdminAccount && suspendedCount > 0)
                     {
                         <button type="button"
                         class="owner-financial-overview__attention-item is-danger"
@@ -628,6 +701,39 @@
 
         </section>
 
+        @if (isAdminAccount)
+        {
+            <section class="owner-financial-overview__panel owner-financial-overview__recent"
+                     aria-labelledby="ownerOverviewRecentTitle">
+
+                <header class="owner-financial-overview__panel-head">
+                    <div>
+                        <span class="owner-financial-overview__panel-icon is-mint">
+                            <i class="bi bi-patch-check-fill"></i>
+                        </span>
+                        <div>
+                            <small>سياسة المنصة</small>
+                            <h3 id="ownerOverviewRecentTitle">
+                                لا توجد حركات ضمان عمولة مطلوبة
+                            </h3>
+                        </div>
+                    </div>
+                </header>
+
+                <div class="owner-financial-overview__all-good">
+                    <span>
+                        <i class="bi bi-shield-check"></i>
+                    </span>
+                    <div>
+                        <strong>المنشأة الإدارية معفاة</strong>
+                        <p>لا يتم إنشاء طلبات شحن أو حجز أو خصم عمولة منصة لهذه المنشأة.</p>
+                    </div>
+                </div>
+
+            </section>
+        }
+        else
+        {
         <section class="owner-financial-overview__panel owner-financial-overview__recent"
                  aria-labelledby="ownerOverviewRecentTitle">
 
@@ -708,6 +814,7 @@
             }
 
         </section>
+        }
 
     </div>
 

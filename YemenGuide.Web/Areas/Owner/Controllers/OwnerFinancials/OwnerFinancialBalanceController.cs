@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -8,6 +8,9 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using YemenGuide.Data;
+using YemenGuide.Core.Constants;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using YemenGuide.Core.DTOs.Owner;
 using YemenGuide.Web.Filters;
@@ -16,7 +19,7 @@ using YemenGuide.Web.Services.Finance;
 namespace YemenGuide.Web.Areas.Owner.Controllers.OwnerFinancials
 {
     [Area("Owner")]
-    [Authorize]
+    [Authorize(Roles = "Owner,Admin")]
     [AuthorizeActiveOwner]
     [Route("Owner/Financials/Balance")]
     [ResponseCache(
@@ -32,12 +35,16 @@ namespace YemenGuide.Web.Areas.Owner.Controllers.OwnerFinancials
         private readonly IOwnerFinancialService
             _ownerFinancialService;
 
+        private readonly AppDbContext
+            _context;
+
         private readonly ILogger<
             OwnerFinancialBalanceController
         > _logger;
 
         public OwnerFinancialBalanceController(
             IOwnerFinancialService ownerFinancialService,
+            AppDbContext context,
             ILogger<
                 OwnerFinancialBalanceController
             > logger)
@@ -46,6 +53,11 @@ namespace YemenGuide.Web.Areas.Owner.Controllers.OwnerFinancials
                 ownerFinancialService ??
                 throw new ArgumentNullException(
                     nameof(ownerFinancialService));
+
+            _context =
+                context ??
+                throw new ArgumentNullException(
+                    nameof(context));
 
             _logger =
                 logger ??
@@ -66,6 +78,19 @@ namespace YemenGuide.Web.Areas.Owner.Controllers.OwnerFinancials
 
             NormalizeFilter(
                 filter);
+
+            if (await IsCurrentAdminAccountAsync(cancellationToken))
+            {
+                if (!IsAjaxRequest())
+                {
+                    return Redirect(
+                        "/Owner/Financials?financeTab=overview");
+                }
+
+                return StatusCode(
+                    StatusCodes.Status403Forbidden,
+                    "المنشآت الإدارية معفاة من ضمان وعمولة المنصة ولا تحتاج إلى قسم الرصيد.");
+            }
 
             if (!IsAjaxRequest())
             {
@@ -134,6 +159,17 @@ namespace YemenGuide.Web.Areas.Owner.Controllers.OwnerFinancials
             IFormFile? receiptFile,
             CancellationToken cancellationToken = default)
         {
+            if (await IsCurrentAdminAccountAsync(cancellationToken))
+            {
+                return BadRequest(
+                    new
+                    {
+                        success = false,
+                        message =
+                            "المنشآت الإدارية معفاة من ضمان وعمولة المنصة ولا تحتاج إلى شحن رصيد."
+                    });
+            }
+
             if (!TryGetCurrentOwnerId(
                     out var ownerId))
             {
@@ -268,6 +304,17 @@ namespace YemenGuide.Web.Areas.Owner.Controllers.OwnerFinancials
             int id,
             CancellationToken cancellationToken = default)
         {
+            if (await IsCurrentAdminAccountAsync(cancellationToken))
+            {
+                return BadRequest(
+                    new
+                    {
+                        success = false,
+                        message =
+                            "المنشآت الإدارية معفاة من ضمان وعمولة المنصة ولا تحتاج إلى شحن رصيد."
+                    });
+            }
+
             if (!TryGetCurrentOwnerId(
                     out var ownerId))
             {
@@ -567,6 +614,22 @@ namespace YemenGuide.Web.Areas.Owner.Controllers.OwnerFinancials
                 message = firstMessage,
                 errors
             };
+        }
+
+        private async Task<bool> IsCurrentAdminAccountAsync(
+            CancellationToken cancellationToken)
+        {
+            if (!TryGetCurrentOwnerId(out var userId))
+            {
+                return false;
+            }
+
+            return await _context.Users
+                .AsNoTracking()
+                .AnyAsync(user =>
+                    user.UserId == userId &&
+                    user.Role == SystemRoles.Admin,
+                    cancellationToken);
         }
 
         private Task<int?>

@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using YemenGuide.Core.DTOs.Owner;
+using YemenGuide.Core.Constants;
 using YemenGuide.Core.Entities;
 using YemenGuide.Data;
 using YemenGuide.Web.Filters;
@@ -38,6 +39,15 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                        User.FindFirstValue(ClaimTypes.NameIdentifier),
                        out ownerId) &&
                    ownerId > 0;
+        }
+
+        private Task<bool> IsCurrentAdminAccountAsync(int userId)
+        {
+            return _context.Users
+                .AsNoTracking()
+                .AnyAsync(user =>
+                    user.UserId == userId &&
+                    user.Role == SystemRoles.Admin);
         }
 
         private IQueryable<Place> BuildOwnedBookablePlacesQuery(int ownerId)
@@ -527,12 +537,28 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     .Select(setting => setting.PlatformOwnerUserId)
                     .FirstOrDefaultAsync();
 
-                if (string.Equals(ownedPlace.Status, "WaitOwner", StringComparison.OrdinalIgnoreCase))
+                // نعتمد الدور من قاعدة البيانات نفسها، وليس فقط من Cookie/Claims.
+                // إذا كانت المنشأة مملوكة مباشرة لحساب Admin الحالي، فحفظ السياسات
+                // هو آخر خطوة مطلوبة: تصبح Active ومتاحة للعميل فورًا دون موافقة إدارة ثانية.
+                bool isCurrentAdmin =
+                    await IsCurrentAdminAccountAsync(ownerId);
+
+                bool isAdministrationOwnedPlace =
+                    (isCurrentAdmin && ownedPlace.OwnerId == ownerId) ||
+                    platformOwnerId == ownerId;
+
+                if (isAdministrationOwnedPlace &&
+                    string.Equals(ownedPlace.Status, "Pending", StringComparison.OrdinalIgnoreCase))
                 {
                     ownedPlace.Status = "Active";
                     ownedPlace.IsAvailable = true;
                 }
-                else if ((User.IsInRole("Admin") || platformOwnerId == ownerId) &&
+                else if (string.Equals(ownedPlace.Status, "WaitOwner", StringComparison.OrdinalIgnoreCase))
+                {
+                    ownedPlace.Status = "Active";
+                    ownedPlace.IsAvailable = true;
+                }
+                else if (isAdministrationOwnedPlace &&
                          string.Equals(ownedPlace.Status, "Active", StringComparison.OrdinalIgnoreCase))
                 {
                     ownedPlace.IsAvailable = true;
@@ -691,12 +717,25 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 .Select(setting => setting.PlatformOwnerUserId)
                 .FirstOrDefaultAsync();
 
-            if (string.Equals(place.Status, "WaitOwner", StringComparison.OrdinalIgnoreCase))
+            bool isCurrentAdmin =
+                await IsCurrentAdminAccountAsync(ownerId);
+
+            bool isAdministrationOwnedPlace =
+                (isCurrentAdmin && place.OwnerId == ownerId) ||
+                platformOwnerId == ownerId;
+
+            if (isAdministrationOwnedPlace &&
+                string.Equals(place.Status, "Pending", StringComparison.OrdinalIgnoreCase))
             {
                 place.Status = "Active";
                 place.IsAvailable = true;
             }
-            else if ((User.IsInRole("Admin") || platformOwnerId == ownerId) &&
+            else if (string.Equals(place.Status, "WaitOwner", StringComparison.OrdinalIgnoreCase))
+            {
+                place.Status = "Active";
+                place.IsAvailable = true;
+            }
+            else if (isAdministrationOwnedPlace &&
                      string.Equals(place.Status, "Active", StringComparison.OrdinalIgnoreCase))
             {
                 place.IsAvailable = true;

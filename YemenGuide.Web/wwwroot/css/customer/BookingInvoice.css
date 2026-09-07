@@ -2578,3 +2578,1537 @@ body.booking-invoice-open {
             -webkit-print-color-adjust: exact !important;
         }
 }
+
+/* ============================================================================
+   26. FINAL COMPACT A4 REPORT
+   تقرير حجز A4 مضغوط ومنظم — يمنع الحقول الطويلة والتداخل
+   ============================================================================ */
+@media print {
+
+    @page {
+        size: A4 portrait;
+        margin: 6mm;
+    }
+
+    html,
+    body {
+        width: 100% !important;
+        height: auto !important;
+        min-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: visible !important;
+        background: #ffffff !important;
+    }
+
+    body {
+        color: #203445 !important;
+        font-family: "Tajawal", Arial, sans-serif !important;
+        font-size: 7.2px !important;
+        line-height: 1.28 !important;
+        print-color-adjust: exact !important;
+        -webkit-print-color-adjust: exact !important;
+    }
+
+    /*
+     * نحافظ على الفاتورة فقط في الطباعة، ونلغي أي تأثير
+     * من Responsive CSS الخاص بالشاشة أو الجوال.
+     */
+    #bookingInvoicePrintable,
+    .booking-invoice-document {
+        width: 100% !important;
+        max-width: none !important;
+        height: auto !important;
+        min-height: 0 !important;
+        max-height: none !important;
+        margin: 0 !important;
+        padding: 4mm !important;
+        overflow: visible !important;
+        border: 1px solid #d6e0e7 !important;
+        border-radius: 3mm !important;
+        background: #ffffff !important;
+        box-shadow: none !important;
+        transform: none !important;
+    }
+
+        .booking-invoice-document::before {
+            height: 2px !important;
+            border-radius: 3mm 3mm 0 0 !important;
+        }
+
+    /* ----------------------------------------------------------------------
+       رأس الفاتورة
+       ---------------------------------------------------------------------- */
+    .booking-invoice-document-header {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 8px !important;
+        padding-bottom: 5px !important;
+    }
+
+    .booking-invoice-brand {
+        gap: 7px !important;
+    }
+
+    .booking-invoice-brand-logo {
+        flex: 0 0 30px !important;
+        width: 30px !important;
+        height: 30px !important;
+        border-radius: 8px !important;
+        box-shadow: none !important;
+        font-size: 10px !important;
+    }
+
+    .booking-invoice-brand strong {
+        font-size: 11px !important;
+        line-height: 1.1 !important;
+    }
+
+    .booking-invoice-brand small {
+        margin-top: 1px !important;
+        font-size: 6px !important;
+    }
+
+    .booking-invoice-document-number {
+        width: auto !important;
+        min-width: 115px !important;
+        max-width: 175px !important;
+        padding: 4px 7px !important;
+        border-radius: 7px !important;
+        align-items: flex-end !important;
+    }
+
+        .booking-invoice-document-number small,
+        .booking-invoice-document-number span {
+            font-size: 5.7px !important;
+            line-height: 1.2 !important;
+        }
+
+        .booking-invoice-document-number strong {
+            margin: 1px 0 !important;
+            font-size: 7.5px !important;
+        }
+
+    /* ----------------------------------------------------------------------
+       حالة الحجز والدفع — دائمًا في صف واحد
+       ---------------------------------------------------------------------- */
+    .booking-invoice-status-strip {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) 1px minmax(0, 1fr) !important;
+        align-items: stretch !important;
+        gap: 5px !important;
+        margin-top: 5px !important;
+        padding: 4px !important;
+        border-radius: 7px !important;
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+    }
+
+    .booking-invoice-status-divider {
+        display: block !important;
+        width: 1px !important;
+        height: auto !important;
+    }
+
+    .booking-invoice-status-item {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 5px !important;
+        min-height: 28px !important;
+        padding: 3px 5px !important;
+        border-radius: 6px !important;
+    }
+
+        .booking-invoice-status-item > span {
+            flex: 0 0 22px !important;
+            width: 22px !important;
+            height: 22px !important;
+            border-radius: 6px !important;
+            font-size: 7px !important;
+        }
+
+        .booking-invoice-status-item small {
+            font-size: 5.5px !important;
+        }
+
+        .booking-invoice-status-item strong {
+            margin-top: 0 !important;
+            font-size: 6.7px !important;
+            line-height: 1.2 !important;
+        }
+
+    /* ----------------------------------------------------------------------
+       معلومات العميل والمنشأة — عمودان حقيقيان في A4
+       ---------------------------------------------------------------------- */
+    .booking-invoice-two-columns {
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 5px !important;
+        margin-top: 5px !important;
+        align-items: start !important;
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+    }
+
+    .booking-invoice-section-card {
+        margin-top: 5px !important;
+        padding: 5px !important;
+        border-radius: 7px !important;
+        box-shadow: none !important;
+        min-width: 0 !important;
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+    }
+
+    .booking-invoice-two-columns .booking-invoice-section-card {
+        margin-top: 0 !important;
+    }
+
+    .booking-invoice-section-heading {
+        display: flex !important;
+        align-items: center !important;
+        gap: 5px !important;
+        min-height: 24px !important;
+        margin-bottom: 4px !important;
+    }
+
+        .booking-invoice-section-heading > span:first-child {
+            flex: 0 0 23px !important;
+            width: 23px !important;
+            height: 23px !important;
+            border-radius: 6px !important;
+            font-size: 7px !important;
+        }
+
+        .booking-invoice-section-heading small {
+            font-size: 5.3px !important;
+            line-height: 1.1 !important;
+        }
+
+        .booking-invoice-section-heading h3 {
+            margin-top: 0 !important;
+            font-size: 7px !important;
+            line-height: 1.15 !important;
+        }
+
+    .booking-invoice-booking-number,
+    .booking-invoice-section-count {
+        max-width: none !important;
+        padding: 2px 5px !important;
+        font-size: 5.4px !important;
+        line-height: 1.2 !important;
+        white-space: nowrap !important;
+    }
+
+    /*
+     * بدل الأسطر الطويلة جدًا:
+     * كل بطاقة معلومات تصبح شبكة داخلية بعمودين.
+     */
+    .booking-invoice-definition-list {
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 3px !important;
+        margin: 0 !important;
+    }
+
+        .booking-invoice-definition-list > div {
+            display: grid !important;
+            grid-template-columns: 48px minmax(0, 1fr) !important;
+            align-items: center !important;
+            gap: 4px !important;
+            min-width: 0 !important;
+            min-height: 25px !important;
+            padding: 3px 5px !important;
+            border-radius: 5px !important;
+        }
+
+            /*
+     * إذا كان عدد الحقول فرديًا مثل معلومات العميل (3 حقول)،
+     * يمتد الحقل الأخير بعرض البطاقة بدل ترك نصف صف فارغ.
+     */
+            .booking-invoice-definition-list > div:last-child:nth-child(odd) {
+                grid-column: 1 / -1 !important;
+            }
+
+        .booking-invoice-definition-list dt {
+            min-width: 0 !important;
+            font-size: 5.6px !important;
+            line-height: 1.2 !important;
+            white-space: nowrap !important;
+        }
+
+        .booking-invoice-definition-list dd {
+            min-width: 0 !important;
+            margin: 0 !important;
+            overflow: visible !important;
+            color: #203445 !important;
+            font-size: 6.2px !important;
+            font-weight: 800 !important;
+            line-height: 1.25 !important;
+            text-overflow: clip !important;
+            white-space: normal !important;
+            overflow-wrap: anywhere !important;
+            word-break: break-word !important;
+        }
+
+    /* ----------------------------------------------------------------------
+       العنصر المحجوز
+       ---------------------------------------------------------------------- */
+    .booking-invoice-booked-item {
+        display: grid !important;
+        grid-template-columns: 28px minmax(0, 1fr) auto !important;
+        align-items: center !important;
+        gap: 6px !important;
+        padding: 5px !important;
+        border-radius: 6px !important;
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+    }
+
+    .booking-invoice-booked-item-icon {
+        width: 28px !important;
+        height: 28px !important;
+        border-radius: 7px !important;
+        box-shadow: none !important;
+        font-size: 8px !important;
+    }
+
+    .booking-invoice-booked-item-copy small,
+    .booking-invoice-booked-item-price small {
+        font-size: 5.2px !important;
+    }
+
+    .booking-invoice-booked-item-copy strong {
+        margin: 0 !important;
+        overflow: visible !important;
+        font-size: 6.8px !important;
+        line-height: 1.2 !important;
+        text-overflow: clip !important;
+        white-space: normal !important;
+        overflow-wrap: anywhere !important;
+    }
+
+    .booking-invoice-booked-item-copy p {
+        margin: 0 !important;
+        overflow: visible !important;
+        font-size: 5.7px !important;
+        line-height: 1.2 !important;
+        text-overflow: clip !important;
+        white-space: normal !important;
+        overflow-wrap: anywhere !important;
+    }
+
+    .booking-invoice-booked-item-price {
+        grid-column: auto !important;
+        min-width: 82px !important;
+        max-width: 115px !important;
+        align-items: flex-end !important;
+        padding: 4px 6px !important;
+        border-radius: 5px !important;
+    }
+
+        .booking-invoice-booked-item-price strong {
+            margin-top: 1px !important;
+            font-size: 6.4px !important;
+            white-space: nowrap !important;
+        }
+
+    .booking-invoice-room-units {
+        margin: 4px 0 !important;
+        padding: 4px 5px !important;
+        border-radius: 6px !important;
+    }
+
+    .booking-invoice-room-units-title {
+        font-size: 5.8px !important;
+    }
+
+    .booking-invoice-room-unit-list {
+        margin-top: 3px !important;
+        gap: 3px !important;
+    }
+
+    .booking-invoice-room-unit-chip {
+        padding: 2px 4px !important;
+        border-radius: 4px !important;
+        font-size: 5.4px !important;
+    }
+
+    /* ----------------------------------------------------------------------
+       بيانات الحجز — أربع بطاقات صغيرة في الصف
+       ---------------------------------------------------------------------- */
+    .booking-invoice-information-grid {
+        display: grid !important;
+        grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+        gap: 3px !important;
+        margin-top: 4px !important;
+    }
+
+    .booking-invoice-information-item {
+        display: flex !important;
+        align-items: center !important;
+        gap: 4px !important;
+        min-width: 0 !important;
+        min-height: 32px !important;
+        padding: 4px !important;
+        border-radius: 5px !important;
+    }
+
+        .booking-invoice-information-item > span {
+            flex: 0 0 20px !important;
+            width: 20px !important;
+            height: 20px !important;
+            border-radius: 5px !important;
+            font-size: 6.5px !important;
+        }
+
+        .booking-invoice-information-item small {
+            font-size: 4.9px !important;
+            line-height: 1.1 !important;
+        }
+
+        .booking-invoice-information-item strong {
+            margin-top: 0 !important;
+            overflow: visible !important;
+            font-size: 5.7px !important;
+            line-height: 1.2 !important;
+            text-overflow: clip !important;
+            white-space: normal !important;
+            overflow-wrap: anywhere !important;
+        }
+
+    /* ----------------------------------------------------------------------
+       الخدمات
+       ---------------------------------------------------------------------- */
+    .booking-invoice-services-table {
+        overflow: hidden !important;
+        border-radius: 6px !important;
+    }
+
+    .booking-invoice-table-header,
+    .booking-invoice-table-row {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1.5fr) 48px 84px 84px !important;
+        min-width: 0 !important;
+        gap: 4px !important;
+    }
+
+    .booking-invoice-table-header {
+        padding: 4px 6px !important;
+        font-size: 5.2px !important;
+    }
+
+    .booking-invoice-table-row {
+        min-height: 25px !important;
+        padding: 4px 6px !important;
+        font-size: 5.6px !important;
+    }
+
+        .booking-invoice-table-row strong,
+        .booking-invoice-table-row span,
+        .booking-invoice-table-row b {
+            min-width: 0 !important;
+            overflow-wrap: anywhere !important;
+        }
+
+    .booking-invoice-services-total {
+        padding: 4px 6px !important;
+    }
+
+        .booking-invoice-services-total span,
+        .booking-invoice-services-total strong {
+            font-size: 5.7px !important;
+        }
+
+    /* ----------------------------------------------------------------------
+       الدفع — ثلاثة حقول متساوية بجانب بعض
+       ---------------------------------------------------------------------- */
+    .booking-invoice-payment-details {
+        display: grid !important;
+        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+        gap: 4px !important;
+    }
+
+        .booking-invoice-payment-details > div {
+            min-width: 0 !important;
+            min-height: 31px !important;
+            padding: 4px 6px !important;
+            border-radius: 5px !important;
+        }
+
+        .booking-invoice-payment-details small {
+            font-size: 5.2px !important;
+        }
+
+        .booking-invoice-payment-details strong {
+            margin-top: 1px !important;
+            overflow: visible !important;
+            font-size: 5.9px !important;
+            line-height: 1.2 !important;
+            text-overflow: clip !important;
+            white-space: normal !important;
+            overflow-wrap: anywhere !important;
+        }
+
+    /* ----------------------------------------------------------------------
+       الملخص المالي — تصميم أفقي مضغوط بدون تداخل
+       ---------------------------------------------------------------------- */
+    .booking-invoice-financial-summary {
+        display: block !important;
+        margin-top: 5px !important;
+        padding: 6px !important;
+        border-radius: 7px !important;
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+    }
+
+    .booking-invoice-financial-heading {
+        display: flex !important;
+        align-items: center !important;
+        gap: 5px !important;
+        margin-bottom: 4px !important;
+    }
+
+        .booking-invoice-financial-heading > span {
+            flex: 0 0 24px !important;
+            width: 24px !important;
+            height: 24px !important;
+            border-radius: 6px !important;
+            box-shadow: none !important;
+            font-size: 7px !important;
+        }
+
+        .booking-invoice-financial-heading small {
+            font-size: 5px !important;
+        }
+
+        .booking-invoice-financial-heading h3 {
+            margin-top: 0 !important;
+            font-size: 6.8px !important;
+        }
+
+    .booking-invoice-promotion-spotlight {
+        display: grid !important;
+        grid-template-columns: 22px minmax(0, 1fr) auto !important;
+        gap: 5px !important;
+        margin: 0 0 4px !important;
+        padding: 4px 5px !important;
+        border-radius: 6px !important;
+    }
+
+    .booking-invoice-promotion-icon {
+        width: 22px !important;
+        height: 22px !important;
+        border-radius: 5px !important;
+        font-size: 7px !important;
+    }
+
+    .booking-invoice-promotion-copy small,
+    .booking-invoice-promotion-copy span,
+    .booking-invoice-promotion-saving small {
+        font-size: 5px !important;
+    }
+
+    .booking-invoice-promotion-copy strong,
+    .booking-invoice-promotion-saving strong {
+        font-size: 5.8px !important;
+    }
+
+    .booking-invoice-promotion-saving {
+        min-width: 72px !important;
+        padding: 3px 5px !important;
+        border-radius: 5px !important;
+        box-shadow: none !important;
+    }
+
+    .booking-invoice-financial-rows {
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 3px 5px !important;
+    }
+
+        .booking-invoice-financial-rows > div {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            gap: 6px !important;
+            min-width: 0 !important;
+            min-height: 25px !important;
+            padding: 3px 6px !important;
+            border-radius: 5px !important;
+        }
+
+        .booking-invoice-financial-rows span,
+        .booking-invoice-financial-rows strong {
+            min-width: 0 !important;
+            font-size: 5.7px !important;
+            line-height: 1.2 !important;
+        }
+
+        .booking-invoice-financial-rows span {
+            overflow-wrap: anywhere !important;
+        }
+
+        .booking-invoice-financial-rows strong {
+            flex: 0 0 auto !important;
+            white-space: nowrap !important;
+        }
+
+    .booking-invoice-discount-row {
+        padding: 3px 6px !important;
+        border-radius: 5px !important;
+    }
+
+    .booking-invoice-code-row {
+        padding: 3px 6px !important;
+        border-radius: 5px !important;
+    }
+
+    .booking-invoice-grand-total {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 8px !important;
+        margin-top: 4px !important;
+        padding: 6px 8px !important;
+        border-radius: 6px !important;
+        box-shadow: none !important;
+    }
+
+        .booking-invoice-grand-total > span small {
+            font-size: 5px !important;
+        }
+
+        .booking-invoice-grand-total > span strong {
+            margin-top: 0 !important;
+            font-size: 6px !important;
+        }
+
+        .booking-invoice-grand-total b {
+            font-size: 14px !important;
+            line-height: 1 !important;
+            white-space: nowrap !important;
+        }
+
+        .booking-invoice-grand-total > div small {
+            font-size: 5px !important;
+        }
+
+    /* ----------------------------------------------------------------------
+       التنبيه والتذييل
+       ---------------------------------------------------------------------- */
+    .booking-invoice-notice {
+        display: flex !important;
+        gap: 5px !important;
+        margin-top: 5px !important;
+        padding: 4px 6px !important;
+        border-radius: 6px !important;
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+    }
+
+        .booking-invoice-notice p {
+            margin: 0 !important;
+            font-size: 5.5px !important;
+            line-height: 1.35 !important;
+        }
+
+    .booking-invoice-document-footer {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 7px !important;
+        margin-top: 5px !important;
+        padding-top: 4px !important;
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+    }
+
+    .booking-invoice-footer-seal {
+        flex: 0 0 24px !important;
+        width: 24px !important;
+        height: 24px !important;
+        border-radius: 6px !important;
+        font-size: 7px !important;
+    }
+
+    .booking-invoice-document-footer p strong {
+        font-size: 5.8px !important;
+    }
+
+    .booking-invoice-document-footer p small,
+    .booking-invoice-footer-reference small,
+    .booking-invoice-footer-reference strong {
+        font-size: 5.2px !important;
+    }
+
+    .booking-invoice-footer-reference {
+        align-items: flex-end !important;
+    }
+
+    /* ----------------------------------------------------------------------
+       حماية عامة من التداخل والقص
+       ---------------------------------------------------------------------- */
+    #bookingInvoicePrintable *,
+    .booking-invoice-document * {
+        box-sizing: border-box !important;
+        max-width: 100%;
+        print-color-adjust: exact !important;
+        -webkit-print-color-adjust: exact !important;
+    }
+
+    #bookingInvoicePrintable strong,
+    #bookingInvoicePrintable dd,
+    #bookingInvoicePrintable p,
+    #bookingInvoicePrintable span {
+        overflow-wrap: anywhere;
+    }
+}
+
+/* ============================================================================
+   27. FINAL BALANCED A4 REPORT
+   نسخة نهائية متوازنة: خط واضح + بطاقات مريحة + منع خروج النص من الأطراف
+   ============================================================================ */
+@media print {
+
+    @page {
+        size: A4 portrait;
+        margin: 6mm;
+    }
+
+    html,
+    body {
+        width: 100% !important;
+        height: auto !important;
+        min-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: visible !important;
+        background: #ffffff !important;
+    }
+
+    body {
+        color: #243746 !important;
+        font-family: "Tajawal", Arial, sans-serif !important;
+        font-size: 10px !important;
+        line-height: 1.35 !important;
+        print-color-adjust: exact !important;
+        -webkit-print-color-adjust: exact !important;
+    }
+
+    #bookingInvoicePrintable,
+    .booking-invoice-document {
+        position: static !important;
+        display: flex !important;
+        flex-direction: column !important;
+        width: 100% !important;
+        max-width: none !important;
+        min-height: 270mm !important;
+        height: auto !important;
+        max-height: none !important;
+        margin: 0 !important;
+        padding: 5mm !important;
+        overflow: visible !important;
+        border: 1px solid #d7e1e8 !important;
+        border-radius: 3.5mm !important;
+        background: #ffffff !important;
+        box-shadow: none !important;
+        transform: none !important;
+        box-sizing: border-box !important;
+    }
+
+        .booking-invoice-document::before {
+            height: 3px !important;
+            border-radius: 3.5mm 3.5mm 0 0 !important;
+        }
+
+    /* ==========================================================
+       رأس الفاتورة
+       ========================================================== */
+    .booking-invoice-document-header {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 12px !important;
+        padding-bottom: 9px !important;
+    }
+
+    .booking-invoice-brand {
+        display: flex !important;
+        align-items: center !important;
+        gap: 9px !important;
+        min-width: 0 !important;
+    }
+
+    .booking-invoice-brand-logo {
+        flex: 0 0 38px !important;
+        width: 38px !important;
+        height: 38px !important;
+        border-radius: 10px !important;
+        box-shadow: none !important;
+        font-size: 14px !important;
+    }
+
+    .booking-invoice-brand strong {
+        font-size: 15px !important;
+        line-height: 1.15 !important;
+    }
+
+    .booking-invoice-brand small {
+        margin-top: 2px !important;
+        font-size: 8px !important;
+        line-height: 1.2 !important;
+    }
+
+    .booking-invoice-document-number {
+        flex: 0 0 auto !important;
+        width: 155px !important;
+        min-width: 155px !important;
+        max-width: 155px !important;
+        padding: 7px 9px !important;
+        border-radius: 9px !important;
+        align-items: flex-end !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
+    }
+
+        .booking-invoice-document-number small,
+        .booking-invoice-document-number span {
+            font-size: 7.4px !important;
+            line-height: 1.25 !important;
+        }
+
+        .booking-invoice-document-number strong {
+            width: 100% !important;
+            margin: 2px 0 !important;
+            overflow: hidden !important;
+            font-size: 10px !important;
+            line-height: 1.2 !important;
+            text-align: left !important;
+            text-overflow: ellipsis !important;
+            white-space: nowrap !important;
+        }
+
+    /* ==========================================================
+       حالة الحجز والدفع
+       ========================================================== */
+    .booking-invoice-status-strip {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) 1px minmax(0, 1fr) !important;
+        align-items: stretch !important;
+        gap: 8px !important;
+        margin-top: 8px !important;
+        padding: 7px !important;
+        border-radius: 10px !important;
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+    }
+
+    .booking-invoice-status-divider {
+        display: block !important;
+        width: 1px !important;
+        height: auto !important;
+    }
+
+    .booking-invoice-status-item {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 8px !important;
+        min-width: 0 !important;
+        min-height: 39px !important;
+        padding: 6px 8px !important;
+        border-radius: 8px !important;
+    }
+
+        .booking-invoice-status-item > span {
+            flex: 0 0 28px !important;
+            width: 28px !important;
+            height: 28px !important;
+            border-radius: 7px !important;
+            font-size: 10px !important;
+        }
+
+        .booking-invoice-status-item small {
+            font-size: 7px !important;
+            line-height: 1.1 !important;
+        }
+
+        .booking-invoice-status-item strong {
+            margin-top: 1px !important;
+            font-size: 9px !important;
+            line-height: 1.2 !important;
+        }
+
+    /* ==========================================================
+       العميل والمنشأة
+       ========================================================== */
+    .booking-invoice-two-columns {
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 8px !important;
+        margin-top: 8px !important;
+        align-items: stretch !important;
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+    }
+
+    .booking-invoice-section-card {
+        min-width: 0 !important;
+        margin-top: 8px !important;
+        padding: 9px !important;
+        border-radius: 10px !important;
+        box-shadow: none !important;
+        box-sizing: border-box !important;
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+    }
+
+    .booking-invoice-two-columns .booking-invoice-section-card {
+        margin-top: 0 !important;
+        height: 100% !important;
+    }
+
+    .booking-invoice-section-heading {
+        display: flex !important;
+        align-items: center !important;
+        gap: 7px !important;
+        min-width: 0 !important;
+        min-height: 31px !important;
+        margin-bottom: 7px !important;
+    }
+
+        .booking-invoice-section-heading > span:first-child {
+            flex: 0 0 30px !important;
+            width: 30px !important;
+            height: 30px !important;
+            border-radius: 8px !important;
+            font-size: 10px !important;
+        }
+
+        .booking-invoice-section-heading small {
+            font-size: 6.8px !important;
+            line-height: 1.1 !important;
+        }
+
+        .booking-invoice-section-heading h3 {
+            margin: 1px 0 0 !important;
+            font-size: 10px !important;
+            line-height: 1.15 !important;
+        }
+
+    .booking-invoice-booking-number,
+    .booking-invoice-section-count {
+        flex: 0 0 auto !important;
+        max-width: none !important;
+        padding: 4px 7px !important;
+        font-size: 7px !important;
+        line-height: 1.2 !important;
+        white-space: nowrap !important;
+    }
+
+    /*
+       داخل كل نصف من الصفحة نستخدم صفوفًا واضحة،
+       وليس حقولًا صغيرة جدًا بجانب بعض.
+    */
+    .booking-invoice-definition-list {
+        display: grid !important;
+        grid-template-columns: 1fr !important;
+        gap: 4px !important;
+        margin: 0 !important;
+    }
+
+        .booking-invoice-definition-list > div,
+        .booking-invoice-definition-list > div:last-child:nth-child(odd) {
+            grid-column: auto !important;
+            display: grid !important;
+            grid-template-columns: 76px minmax(0, 1fr) !important;
+            align-items: center !important;
+            gap: 7px !important;
+            width: 100% !important;
+            min-width: 0 !important;
+            min-height: 31px !important;
+            padding: 5px 7px !important;
+            border-radius: 7px !important;
+            box-sizing: border-box !important;
+            overflow: hidden !important;
+        }
+
+        .booking-invoice-definition-list dt {
+            min-width: 0 !important;
+            font-size: 7.6px !important;
+            line-height: 1.2 !important;
+            white-space: nowrap !important;
+        }
+
+        .booking-invoice-definition-list dd {
+            display: block !important;
+            width: 100% !important;
+            min-width: 0 !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            overflow: hidden !important;
+            color: #243746 !important;
+            font-size: 8.7px !important;
+            font-weight: 800 !important;
+            line-height: 1.25 !important;
+            text-overflow: clip !important;
+            white-space: normal !important;
+            overflow-wrap: anywhere !important;
+            word-break: normal !important;
+            box-sizing: border-box !important;
+        }
+
+            .booking-invoice-definition-list dd[dir="ltr"] {
+                direction: ltr !important;
+                unicode-bidi: plaintext !important;
+                text-align: left !important;
+                white-space: nowrap !important;
+                text-overflow: ellipsis !important;
+            }
+
+    /* ==========================================================
+       العنصر المحجوز
+       ========================================================== */
+    .booking-invoice-booked-item {
+        display: grid !important;
+        grid-template-columns: 36px minmax(0, 1fr) 118px !important;
+        align-items: center !important;
+        gap: 8px !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        padding: 8px !important;
+        border-radius: 9px !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+    }
+
+    .booking-invoice-booked-item-icon {
+        width: 36px !important;
+        height: 36px !important;
+        border-radius: 9px !important;
+        box-shadow: none !important;
+        font-size: 12px !important;
+    }
+
+    .booking-invoice-booked-item-copy {
+        min-width: 0 !important;
+        overflow: hidden !important;
+    }
+
+        .booking-invoice-booked-item-copy small,
+        .booking-invoice-booked-item-price small {
+            font-size: 7px !important;
+        }
+
+        .booking-invoice-booked-item-copy strong {
+            margin: 1px 0 !important;
+            overflow: hidden !important;
+            font-size: 9.5px !important;
+            line-height: 1.2 !important;
+            text-overflow: ellipsis !important;
+            white-space: nowrap !important;
+        }
+
+        .booking-invoice-booked-item-copy p {
+            margin: 0 !important;
+            overflow: hidden !important;
+            font-size: 7.7px !important;
+            line-height: 1.2 !important;
+            text-overflow: ellipsis !important;
+            white-space: nowrap !important;
+        }
+
+    .booking-invoice-booked-item-price {
+        grid-column: auto !important;
+        width: 118px !important;
+        min-width: 118px !important;
+        max-width: 118px !important;
+        align-items: flex-end !important;
+        padding: 6px 8px !important;
+        border-radius: 7px !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
+    }
+
+        .booking-invoice-booked-item-price strong {
+            margin-top: 2px !important;
+            overflow: hidden !important;
+            font-size: 8.5px !important;
+            white-space: nowrap !important;
+            text-overflow: ellipsis !important;
+        }
+
+    .booking-invoice-room-units {
+        margin: 6px 0 0 !important;
+        padding: 6px 7px !important;
+        border-radius: 7px !important;
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+    }
+
+    .booking-invoice-room-units-title {
+        font-size: 7.5px !important;
+    }
+
+    .booking-invoice-room-unit-list {
+        margin-top: 4px !important;
+        gap: 4px !important;
+    }
+
+    .booking-invoice-room-unit-chip {
+        padding: 3px 5px !important;
+        border-radius: 5px !important;
+        font-size: 7px !important;
+    }
+
+    /* ==========================================================
+       تفاصيل الحجز
+       ========================================================== */
+    .booking-invoice-information-grid {
+        display: grid !important;
+        grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+        gap: 5px !important;
+        margin-top: 6px !important;
+    }
+
+    .booking-invoice-information-item {
+        display: flex !important;
+        align-items: center !important;
+        gap: 6px !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        min-height: 42px !important;
+        padding: 6px !important;
+        border-radius: 7px !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+    }
+
+        .booking-invoice-information-item > span {
+            flex: 0 0 26px !important;
+            width: 26px !important;
+            height: 26px !important;
+            border-radius: 7px !important;
+            font-size: 8.5px !important;
+        }
+
+        .booking-invoice-information-item div {
+            min-width: 0 !important;
+            overflow: hidden !important;
+        }
+
+        .booking-invoice-information-item small {
+            font-size: 6.3px !important;
+            line-height: 1.1 !important;
+        }
+
+        .booking-invoice-information-item strong {
+            margin-top: 1px !important;
+            overflow: hidden !important;
+            font-size: 7.6px !important;
+            line-height: 1.2 !important;
+            text-overflow: ellipsis !important;
+            white-space: nowrap !important;
+        }
+
+    /* ==========================================================
+       الخدمات الإضافية
+       ========================================================== */
+    .booking-invoice-services-table {
+        width: 100% !important;
+        overflow: hidden !important;
+        border-radius: 8px !important;
+    }
+
+    .booking-invoice-table-header,
+    .booking-invoice-table-row {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1.6fr) 60px minmax(90px, .8fr) minmax(90px, .8fr) !important;
+        align-items: center !important;
+        min-width: 0 !important;
+        gap: 6px !important;
+    }
+
+    .booking-invoice-table-header {
+        padding: 6px 8px !important;
+        font-size: 6.7px !important;
+    }
+
+    .booking-invoice-table-row {
+        min-height: 34px !important;
+        padding: 6px 8px !important;
+        font-size: 7.4px !important;
+    }
+
+        .booking-invoice-table-row strong,
+        .booking-invoice-table-row span,
+        .booking-invoice-table-row b {
+            min-width: 0 !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            white-space: nowrap !important;
+        }
+
+    .booking-invoice-services-total {
+        padding: 6px 8px !important;
+    }
+
+        .booking-invoice-services-total span,
+        .booking-invoice-services-total strong {
+            font-size: 7.5px !important;
+        }
+
+    /* ==========================================================
+       الدفع
+       ========================================================== */
+    .booking-invoice-payment-details {
+        display: grid !important;
+        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+        gap: 6px !important;
+    }
+
+        .booking-invoice-payment-details > div {
+            width: 100% !important;
+            min-width: 0 !important;
+            min-height: 42px !important;
+            padding: 7px 8px !important;
+            border-radius: 7px !important;
+            box-sizing: border-box !important;
+            overflow: hidden !important;
+        }
+
+        .booking-invoice-payment-details small {
+            font-size: 6.7px !important;
+        }
+
+        .booking-invoice-payment-details strong {
+            width: 100% !important;
+            min-width: 0 !important;
+            margin-top: 2px !important;
+            overflow: hidden !important;
+            font-size: 8px !important;
+            line-height: 1.2 !important;
+            text-overflow: ellipsis !important;
+            white-space: nowrap !important;
+        }
+
+            .booking-invoice-payment-details strong[dir="ltr"] {
+                direction: ltr !important;
+                text-align: left !important;
+            }
+
+    /* ==========================================================
+       الملخص المالي
+       ========================================================== */
+    .booking-invoice-financial-summary {
+        display: block !important;
+        width: 100% !important;
+        margin-top: 8px !important;
+        padding: 9px !important;
+        border-radius: 10px !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+    }
+
+    .booking-invoice-financial-heading {
+        display: flex !important;
+        align-items: center !important;
+        gap: 7px !important;
+        margin-bottom: 6px !important;
+    }
+
+        .booking-invoice-financial-heading > span {
+            flex: 0 0 31px !important;
+            width: 31px !important;
+            height: 31px !important;
+            border-radius: 8px !important;
+            box-shadow: none !important;
+            font-size: 10px !important;
+        }
+
+        .booking-invoice-financial-heading small {
+            font-size: 6.6px !important;
+        }
+
+        .booking-invoice-financial-heading h3 {
+            margin-top: 1px !important;
+            font-size: 9.5px !important;
+        }
+
+    .booking-invoice-promotion-spotlight {
+        display: grid !important;
+        grid-template-columns: 30px minmax(0, 1fr) 105px !important;
+        align-items: center !important;
+        gap: 7px !important;
+        width: 100% !important;
+        margin: 0 0 6px !important;
+        padding: 7px 8px !important;
+        border-radius: 8px !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
+    }
+
+    .booking-invoice-promotion-icon {
+        width: 30px !important;
+        height: 30px !important;
+        border-radius: 7px !important;
+        font-size: 9px !important;
+    }
+
+    .booking-invoice-promotion-copy {
+        min-width: 0 !important;
+        overflow: hidden !important;
+    }
+
+        .booking-invoice-promotion-copy small,
+        .booking-invoice-promotion-copy span,
+        .booking-invoice-promotion-saving small {
+            font-size: 6.5px !important;
+        }
+
+        .booking-invoice-promotion-copy strong,
+        .booking-invoice-promotion-saving strong {
+            overflow: hidden !important;
+            font-size: 7.7px !important;
+            text-overflow: ellipsis !important;
+            white-space: nowrap !important;
+        }
+
+    .booking-invoice-promotion-saving {
+        width: 105px !important;
+        min-width: 105px !important;
+        max-width: 105px !important;
+        padding: 5px 7px !important;
+        border-radius: 7px !important;
+        box-shadow: none !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
+    }
+
+    .booking-invoice-financial-rows {
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 5px 7px !important;
+    }
+
+        .booking-invoice-financial-rows > div {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            gap: 8px !important;
+            width: 100% !important;
+            min-width: 0 !important;
+            min-height: 34px !important;
+            padding: 6px 8px !important;
+            border-radius: 7px !important;
+            box-sizing: border-box !important;
+            overflow: hidden !important;
+        }
+
+        .booking-invoice-financial-rows span {
+            min-width: 0 !important;
+            overflow: hidden !important;
+            font-size: 7.3px !important;
+            line-height: 1.2 !important;
+            text-overflow: ellipsis !important;
+            white-space: nowrap !important;
+        }
+
+        .booking-invoice-financial-rows strong {
+            flex: 0 0 auto !important;
+            max-width: 48% !important;
+            overflow: hidden !important;
+            font-size: 8px !important;
+            line-height: 1.2 !important;
+            text-overflow: ellipsis !important;
+            white-space: nowrap !important;
+        }
+
+    .booking-invoice-discount-row,
+    .booking-invoice-code-row {
+        padding: 6px 8px !important;
+        border-radius: 7px !important;
+    }
+
+    .booking-invoice-grand-total {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 12px !important;
+        width: 100% !important;
+        margin-top: 7px !important;
+        padding: 10px 12px !important;
+        border-radius: 9px !important;
+        box-shadow: none !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
+    }
+
+        .booking-invoice-grand-total > span {
+            min-width: 0 !important;
+        }
+
+            .booking-invoice-grand-total > span small {
+                font-size: 7px !important;
+            }
+
+            .booking-invoice-grand-total > span strong {
+                margin-top: 1px !important;
+                font-size: 8.5px !important;
+            }
+
+        .booking-invoice-grand-total > div {
+            flex: 0 0 auto !important;
+            min-width: 0 !important;
+            overflow: hidden !important;
+        }
+
+        .booking-invoice-grand-total b {
+            overflow: hidden !important;
+            font-size: 22px !important;
+            line-height: 1 !important;
+            text-overflow: ellipsis !important;
+            white-space: nowrap !important;
+        }
+
+    /* ==========================================================
+       التنبيه والتذييل
+       ========================================================== */
+    .booking-invoice-notice {
+        display: flex !important;
+        align-items: flex-start !important;
+        gap: 7px !important;
+        width: 100% !important;
+        margin-top: 8px !important;
+        padding: 7px 9px !important;
+        border-radius: 8px !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+    }
+
+        .booking-invoice-notice p {
+            min-width: 0 !important;
+            margin: 0 !important;
+            font-size: 7.2px !important;
+            line-height: 1.45 !important;
+            overflow-wrap: anywhere !important;
+        }
+
+    .booking-invoice-document-footer {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 10px !important;
+        width: 100% !important;
+        margin-top: auto !important;
+        padding-top: 8px !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+    }
+
+        .booking-invoice-document-footer > div:first-child {
+            display: flex !important;
+            align-items: center !important;
+            gap: 7px !important;
+            min-width: 0 !important;
+        }
+
+    .booking-invoice-footer-seal {
+        flex: 0 0 31px !important;
+        width: 31px !important;
+        height: 31px !important;
+        border-radius: 8px !important;
+        font-size: 10px !important;
+    }
+
+    .booking-invoice-document-footer p {
+        min-width: 0 !important;
+        overflow: hidden !important;
+    }
+
+        .booking-invoice-document-footer p strong {
+            overflow: hidden !important;
+            font-size: 8px !important;
+            text-overflow: ellipsis !important;
+            white-space: nowrap !important;
+        }
+
+        .booking-invoice-document-footer p small {
+            overflow: hidden !important;
+            font-size: 6.7px !important;
+            text-overflow: ellipsis !important;
+            white-space: nowrap !important;
+        }
+
+    .booking-invoice-footer-reference {
+        display: flex !important;
+        flex: 0 0 95px !important;
+        width: 95px !important;
+        min-width: 95px !important;
+        max-width: 95px !important;
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        overflow: hidden !important;
+        text-align: left !important;
+        box-sizing: border-box !important;
+    }
+
+        .booking-invoice-footer-reference small {
+            width: 100% !important;
+            overflow: hidden !important;
+            font-size: 6.5px !important;
+            text-align: left !important;
+            text-overflow: ellipsis !important;
+            white-space: nowrap !important;
+        }
+
+        .booking-invoice-footer-reference strong {
+            display: block !important;
+            width: 100% !important;
+            min-width: 0 !important;
+            max-width: 100% !important;
+            margin-top: 2px !important;
+            overflow: hidden !important;
+            direction: ltr !important;
+            unicode-bidi: plaintext !important;
+            font-size: 7.5px !important;
+            text-align: left !important;
+            text-overflow: ellipsis !important;
+            white-space: nowrap !important;
+        }
+
+    /* ==========================================================
+       حماية نهائية من خروج أي عنصر خارج A4
+       ========================================================== */
+    #bookingInvoicePrintable *,
+    .booking-invoice-document * {
+        box-sizing: border-box !important;
+        min-width: 0;
+        print-color-adjust: exact !important;
+        -webkit-print-color-adjust: exact !important;
+    }
+
+    #bookingInvoicePrintable img,
+    #bookingInvoicePrintable svg {
+        max-width: 100% !important;
+    }
+}

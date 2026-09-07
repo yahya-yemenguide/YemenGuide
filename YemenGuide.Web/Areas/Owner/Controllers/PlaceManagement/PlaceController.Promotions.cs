@@ -34,7 +34,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
         // تبويب العروض والخصومات
         // =====================================================================
         [HttpGet]
-        [Authorize(Roles = "Owner")]
+        [Authorize(Roles = "Owner,Admin")]
         public async Task<IActionResult> PromotionsManager()
         {
             if (!TryGetCurrentUserId(out int ownerId))
@@ -239,7 +239,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
         // إضافة عرض
         // =====================================================================
         [HttpPost]
-        [Authorize(Roles = "Owner")]
+        [Authorize(Roles = "Owner,Admin")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> AddPromotion(
             [FromForm] PromotionUpsertDto dto,
@@ -363,7 +363,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
         // تعديل عرض
         // =====================================================================
         [HttpPost]
-        [Authorize(Roles = "Owner")]
+        [Authorize(Roles = "Owner,Admin")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> EditPromotion(
             [FromForm] PromotionUpsertDto dto,
@@ -497,7 +497,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
         // تفعيل / إيقاف عرض
         // =====================================================================
         [HttpPost]
-        [Authorize(Roles = "Owner")]
+        [Authorize(Roles = "Owner,Admin")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> TogglePromotionStatus([FromBody] PromotionStatusRequestDto request)
         {
@@ -554,7 +554,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
         // حذف / إلغاء عرض
         // =====================================================================
         [HttpPost]
-        [Authorize(Roles = "Owner")]
+        [Authorize(Roles = "Owner,Admin")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeletePromotion([FromBody] PromotionDeleteRequestDto request)
         {

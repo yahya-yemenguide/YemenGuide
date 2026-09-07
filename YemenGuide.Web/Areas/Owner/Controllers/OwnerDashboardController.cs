@@ -75,6 +75,49 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     requestedPlaceId > 0 ? requestedPlaceId : null,
                     cancellationToken);
 
+            var currentAccountRole =
+                await _context.Users
+                    .AsNoTracking()
+                    .Where(user => user.UserId == ownerId)
+                    .Select(user => user.Role)
+                    .FirstOrDefaultAsync(cancellationToken);
+
+            bool isAdministrationAccount =
+                string.Equals(
+                    currentAccountRole,
+                    SystemRoles.Admin,
+                    StringComparison.OrdinalIgnoreCase);
+
+            ViewData["IsAdministrationOwnedPlace"] =
+                isAdministrationAccount;
+
+            // المنشآت المملوكة مباشرة لحساب Admin لا تدخل في دورة
+            // الفترة التجريبية أو ضمان/شحن عمولات الملاك.
+            if (isAdministrationAccount)
+            {
+                model.AttentionItems.RemoveAll(item =>
+                    string.Equals(
+                        item.Key,
+                        "commission-balance",
+                        StringComparison.OrdinalIgnoreCase));
+
+                model.TrialStatus = new OwnerTrialStatusDto
+                {
+                    CanAcceptNewBookings = true,
+                    Currency = string.IsNullOrWhiteSpace(model.Currency)
+                        ? "ريال يمني"
+                        : model.Currency,
+                    AlertLevel = "normal"
+                };
+
+                model.TrialWelcome = new OwnerTrialWelcomeDto
+                {
+                    ShouldShow = false
+                };
+
+                return View(model);
+            }
+
             // =========================================================
             // حالة الفترة التجريبية المستمرة داخل الداشبورد.
             // التجربة نفسها تخص حساب المالك، بينما الرصيد والتشغيل

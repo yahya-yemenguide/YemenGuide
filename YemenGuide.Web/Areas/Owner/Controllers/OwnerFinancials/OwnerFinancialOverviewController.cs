@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Security.Claims;
@@ -7,6 +7,9 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using YemenGuide.Data;
+using YemenGuide.Core.Constants;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using YemenGuide.Web.Filters;
 using YemenGuide.Web.Services.Finance;
@@ -30,12 +33,16 @@ namespace YemenGuide.Web.Areas.Owner.Controllers.OwnerFinancials
         private readonly IOwnerFinancialService
             _ownerFinancialService;
 
+        private readonly AppDbContext
+            _context;
+
         private readonly ILogger<
             OwnerFinancialOverviewController
         > _logger;
 
         public OwnerFinancialOverviewController(
             IOwnerFinancialService ownerFinancialService,
+            AppDbContext context,
             ILogger<
                 OwnerFinancialOverviewController
             > logger)
@@ -44,6 +51,11 @@ namespace YemenGuide.Web.Areas.Owner.Controllers.OwnerFinancials
                 ownerFinancialService ??
                 throw new ArgumentNullException(
                     nameof(ownerFinancialService));
+
+            _context =
+                context ??
+                throw new ArgumentNullException(
+                    nameof(context));
 
             _logger =
                 logger ??
@@ -109,6 +121,27 @@ namespace YemenGuide.Web.Areas.Owner.Controllers.OwnerFinancials
                     await ResolveActivePlaceIdAsync(
                         ownerId,
                         cancellationToken);
+
+                var isAdministrationAccount =
+                    await IsCurrentAdminAccountAsync(
+                        ownerId,
+                        cancellationToken);
+
+                var isAdministrationOwnedPlace =
+                    isAdministrationAccount &&
+                    activePlaceId.HasValue &&
+                    await _context.Places
+                        .AsNoTracking()
+                        .AnyAsync(place =>
+                            place.PlaceId == activePlaceId.Value &&
+                            place.OwnerId == ownerId,
+                            cancellationToken);
+
+                ViewData["IsAdministrationAccount"] =
+                    isAdministrationAccount;
+
+                ViewData["IsAdministrationOwnedPlace"] =
+                    isAdministrationOwnedPlace;
 
                 var model =
                     await _ownerFinancialService
@@ -212,6 +245,18 @@ namespace YemenGuide.Web.Areas.Owner.Controllers.OwnerFinancials
                    placeId > 0
                 ? placeId
                 : null;
+        }
+
+        private Task<bool> IsCurrentAdminAccountAsync(
+            int userId,
+            CancellationToken cancellationToken)
+        {
+            return _context.Users
+                .AsNoTracking()
+                .AnyAsync(user =>
+                    user.UserId == userId &&
+                    user.Role == SystemRoles.Admin,
+                    cancellationToken);
         }
 
         private bool TryGetCurrentOwnerId(

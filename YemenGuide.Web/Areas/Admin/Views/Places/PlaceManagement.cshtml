@@ -203,19 +203,49 @@
                                     <td data-label="@L("الحالة", "Status")">
                                         @if (adminPlaceNeedsPolicies)
                                         {
-                                            <span class="admin-place-status admin-place-status--pending" title="المنشأة نشطة، لكن استقبال الحجوزات متوقف حتى إكمال السياسات.">
-                                                <i class="bi bi-calendar2-x"></i>الحجز غير جاهز
+                                            <span class="admin-place-status admin-place-status--pending" title="لن تصبح المنشأة نشطة أو تستقبل حجوزات قبل إكمال السياسات.">
+                                                <i class="bi bi-sliders2"></i>بانتظار السياسات
                                             </span>
+                                        }
+                                        else if (string.Equals(item.Status, "Active", StringComparison.OrdinalIgnoreCase))
+                                        {
+                                            <span class="admin-place-status admin-place-status--admin"><i class="bi bi-shield-check"></i>إدارية وجاهزة</span>
                                         }
                                         else
                                         {
-                                            <span class="admin-place-status admin-place-status--admin"><i class="bi bi-shield-check"></i>إدارية وجاهزة</span>
+                                            <span class="admin-place-status admin-place-status--pending"><i class="bi bi-hourglass-split"></i>@item.Status</span>
                                         }
                                     </td>
                                     <td data-label="@L("الإجراءات", "Actions")">
                                         <div class="admin-place-actions" data-place-action-root>
 
                                             <button class="action-btn action-btn--view view-btn" type="button" data-id="@item.PlaceId" title="عرض التفاصيل"><i class="bi bi-eye"></i><span>@L("التفاصيل", "Details")</span></button>
+
+                                            @if (item.OwnerId == currentAdminUserId && canEditPlaces)
+                                            {
+                                                @if (adminPlaceNeedsPolicies)
+                                                {
+                                                    <a asp-area="Owner"
+                                       asp-controller="Settings"
+                                       asp-action="FacilitySettings"
+                                       asp-route-autoPlaceId="@item.PlaceId"
+                                       class="action-btn action-btn--edit"
+                                       title="@L("أكمل سياسات الحجز لتفعيل المنشأة", "Complete booking policies to activate the place")">
+                                                        <i class="bi bi-sliders2"></i>
+                                                        <span>@L("إكمال السياسات", "Complete policies")</span>
+                                                    </a>
+                                                }
+
+                                                <a asp-area="Admin"
+                                       asp-controller="Places"
+                                       asp-action="ManageOwnPlace"
+                                       asp-route-id="@item.PlaceId"
+                                       class="action-btn action-btn--view"
+                                       title="@L("إدارة المنشأة بجميع أدوات المالك", "Manage the place with all owner tools")">
+                                                    <i class="bi bi-speedometer2"></i>
+                                                    <span>@L("إدارة كاملة", "Full management")</span>
+                                                </a>
+                                            }
 
                                             @if (canEditPlaces || canDeletePlaces)
 
@@ -1044,6 +1074,6 @@
                 );
         });
 
-                                // محرر البيانات والصور موجود داخل places-actions.js نفسه؛ لا يعتمد على ملف أو مسار جديد.
+                                        // محرر البيانات والصور موجود داخل places-actions.js نفسه؛ لا يعتمد على ملف أو مسار جديد.
     </script>
 }

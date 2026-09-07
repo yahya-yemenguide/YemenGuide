@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading;
@@ -6,6 +6,9 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using YemenGuide.Data;
+using YemenGuide.Core.Constants;
+using Microsoft.EntityFrameworkCore;
 using YemenGuide.Core.DTOs.Owner;
 using YemenGuide.Web.Filters;
 using YemenGuide.Web.Services.Reports;
@@ -27,11 +30,17 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             "~/Areas/Owner/Views/Reports/CreateOwnerReport.cshtml";
 
         private readonly IOwnerReportsService _reportsService;
+        private readonly AppDbContext _context;
 
-        public ReportsController(IOwnerReportsService reportsService)
+        public ReportsController(
+            IOwnerReportsService reportsService,
+            AppDbContext context)
         {
             _reportsService = reportsService ??
                 throw new ArgumentNullException(nameof(reportsService));
+
+            _context = context ??
+                throw new ArgumentNullException(nameof(context));
         }
 
         [HttpGet("/Owner/Reports/OwnerReports")]
@@ -48,6 +57,11 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 ownerId,
                 filter ?? new OwnerReportsFilterDto(),
                 cancellationToken);
+
+            ViewData["IsAdministrationAccount"] =
+                await IsCurrentAdminAccountAsync(
+                    ownerId,
+                    cancellationToken);
 
             return View(OwnerReportsView, model);
         }
@@ -294,6 +308,18 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     date = item.Date?.ToString("yyyy/MM/dd")
                 })
             });
+        }
+
+        private Task<bool> IsCurrentAdminAccountAsync(
+            int userId,
+            CancellationToken cancellationToken)
+        {
+            return _context.Users
+                .AsNoTracking()
+                .AnyAsync(user =>
+                    user.UserId == userId &&
+                    user.Role == SystemRoles.Admin,
+                    cancellationToken);
         }
 
         private bool TryGetOwnerId(out int ownerId)

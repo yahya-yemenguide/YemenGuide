@@ -1,4 +1,4 @@
-@using YemenGuide.Core.DTOs.Owner
+﻿@using YemenGuide.Core.DTOs.Owner
 @model OwnerReportsPageDto
 @{
     ViewData["Title"] = "البلاغات والقضايا";
@@ -7,6 +7,9 @@
     var scope = OwnerReportValues.NormalizeScope(Model.Filter.Scope);
     var status = OwnerReportValues.NormalizeStatusGroup(Model.Filter.StatusGroup);
     var isIncoming = scope == OwnerReportValues.ScopeIncoming;
+    var isAdminAccount =
+        (ViewData["IsAdministrationAccount"] is bool isAdmin && isAdmin) ||
+        User.IsInRole("Admin");
 }
 
 @section Styles {
@@ -19,11 +22,13 @@
             <div class="or-hero__copy">
                 <span class="or-eyebrow"><i class="bi bi-shield-check"></i> مركز القضايا</span>
                 <h1>البلاغات والقضايا</h1>
-                <p>تابع القضايا التي أحالتها الإدارة إليك، وبلاغاتك المرسلة ضد العملاء من مكان واحد.</p>
+                <p>@(isAdminAccount
+                    ? "تابع مخالفات العملاء والقضايا المرتبطة بالمنشأة من مكان واحد."
+                    : "تابع القضايا التي أحالتها الإدارة إليك، وبلاغاتك المرسلة ضد العملاء من مكان واحد.")</p>
             </div>
             <div class="or-hero__actions">
                 <a asp-area="Owner" asp-controller="Reports" asp-action="CreateOwnerReport" class="or-primary-btn">
-                    <i class="bi bi-plus-lg"></i><span>بلاغ جديد ضد عميل</span>
+                    <i class="bi bi-plus-lg"></i><span>@(isAdminAccount ? "تسجيل مخالفة عميل" : "بلاغ جديد ضد عميل")</span>
                 </a>
             </div>
         </header>
@@ -33,7 +38,10 @@
                asp-route-scope="@OwnerReportValues.ScopeIncoming" asp-route-statusGroup="all"
                class="or-main-tab @(isIncoming ? "is-active" : "")">
                 <span class="or-main-tab__icon"><i class="bi bi-inbox-fill"></i></span>
-                <span class="or-main-tab__text"><strong>قضايا تحتاج متابعتي</strong><small>ما أحالته الإدارة إليك</small></span>
+                <span class="or-main-tab__text">
+                    <strong>@(isAdminAccount ? "قضايا تخص المنشأة" : "قضايا تحتاج متابعتي")</strong>
+                    <small>@(isAdminAccount ? "القضايا المرتبطة بالمنشأة ومخالفات العملاء المسجلة عليها" : "ما أحالته الإدارة إليك")</small>
+                </span>
                 <span class="or-main-tab__count">@Model.Summary.IncomingCount</span>
                 @if (Model.Summary.IncomingNeedsResponseCount > 0)
                 {
@@ -45,7 +53,10 @@
                asp-route-scope="@OwnerReportValues.ScopeMine" asp-route-statusGroup="all"
                class="or-main-tab @(!isIncoming ? "is-active is-mine" : "is-mine")">
                 <span class="or-main-tab__icon"><i class="bi bi-flag-fill"></i></span>
-                <span class="or-main-tab__text"><strong>بلاغاتي على العملاء</strong><small>البلاغات التي أرسلتها للإدارة</small></span>
+                <span class="or-main-tab__text">
+                    <strong>@(isAdminAccount ? "بلاغات المنشأة على العملاء" : "بلاغاتي على العملاء")</strong>
+                    <small>@(isAdminAccount ? "المخالفات التي سجلتها المنشأة" : "البلاغات التي أرسلتها للإدارة")</small>
+                </span>
                 <span class="or-main-tab__count">@Model.Summary.MineCount</span>
             </a>
         </nav>
@@ -81,7 +92,9 @@
 
         <div class="or-list-head">
             <div>
-                <strong>@(isIncoming ? "القضايا المحالة إليك" : "بلاغاتك المرسلة")</strong>
+                <strong>@(isIncoming
+                    ? (isAdminAccount ? "القضايا المرتبطة بالمنشأة" : "القضايا المحالة إليك")
+                    : (isAdminAccount ? "بلاغات المنشأة المرسلة" : "بلاغاتك المرسلة"))</strong>
                 <span>@Model.FilteredCount نتيجة</span>
             </div>
             @if (!isIncoming)
@@ -97,8 +110,16 @@
         {
             <section class="or-empty">
                 <span><i class="bi @(isIncoming ? "bi-inbox" : "bi-flag")"></i></span>
-                <h2>@(isIncoming ? "لا توجد قضايا محالة إليك" : "لا توجد بلاغات في هذا القسم")</h2>
-                <p>@(isIncoming ? "عندما تحتاج الإدارة ردك على قضية ستظهر هنا مباشرة." : "يمكنك إنشاء بلاغ جديد ضد عميل مرتبط بحجز أو تقييم حقيقي في منشآتك.")</p>
+                <h2>@(isIncoming
+                    ? (isAdminAccount ? "لا توجد قضايا مرتبطة بالمنشأة" : "لا توجد قضايا محالة إليك")
+                    : "لا توجد بلاغات في هذا القسم")</h2>
+                <p>@(isIncoming
+                    ? (isAdminAccount
+                        ? "عندما توجد قضية تتطلب رد المنشأة ستظهر هنا مباشرة."
+                        : "عندما تحتاج الإدارة ردك على قضية ستظهر هنا مباشرة.")
+                    : (isAdminAccount
+                        ? "يمكنك تسجيل مخالفة عميل مرتبطة بحجز أو تقييم حقيقي في المنشأة."
+                        : "يمكنك إنشاء بلاغ جديد ضد عميل مرتبط بحجز أو تقييم حقيقي في منشآتك."))</p>
                 @if (!isIncoming)
                 {
                     <a asp-action="CreateOwnerReport" class="or-primary-btn"><i class="bi bi-plus-lg"></i> إنشاء بلاغ</a>
@@ -150,7 +171,9 @@
                                 <div class="or-reply-callout @(item.IsOverdue ? "is-overdue" : "")">
                                     <i class="bi bi-reply-fill"></i>
                                     <div>
-                                        <strong>@(item.IsOverdue ? "انتهت مهلة الرد" : "الإدارة تنتظر ردك")</strong>
+                                        <strong>@(item.IsOverdue
+                                            ? "انتهت مهلة الرد"
+                                            : (isAdminAccount ? "القضية تتطلب رد المنشأة" : "الإدارة تنتظر ردك"))</strong>
                                         @if (item.ReplyDeadline.HasValue)
                                         {
                                             <small>حتى @item.ReplyDeadline.Value.ToString("yyyy/MM/dd - hh:mm tt")</small>

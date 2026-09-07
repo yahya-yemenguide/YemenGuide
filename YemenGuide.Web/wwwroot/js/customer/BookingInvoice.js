@@ -140,6 +140,18 @@
             return;
         }
 
+        /*
+         * مهم جدًا:
+         * الفاتورة تُرسم أصلًا داخل .bd2-page، وصفحة تفاصيل الحجز
+         * تستخدم perspective. هذا يجعل position: fixed يُحسب بالنسبة
+         * للصفحة الطويلة بدل نافذة المتصفح، لذلك كانت نافذة الفاتورة
+         * تظهر في أسفل الصفحة. ننقل الـ overlay مباشرة إلى body حتى
+         * يصبح Modal حقيقيًا ثابتًا على الـ viewport.
+         */
+        if (overlay.parentElement !== document.body) {
+            document.body.appendChild(overlay);
+        }
+
         state.initialized = true;
 
         initializeOpenButton();

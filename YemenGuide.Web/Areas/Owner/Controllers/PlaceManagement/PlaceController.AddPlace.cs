@@ -480,7 +480,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     {
                         bool isAdminOperation = string.Equals(ownerMode, "admin", StringComparison.OrdinalIgnoreCase);
                         status = isAdminOperation
-                            ? "Active"
+                            ? (isBookable ? "Pending" : "Active")
                             : (isBookable ? "WaitOwner" : "Active");
                         isAvailable = !isBookable;
                     }

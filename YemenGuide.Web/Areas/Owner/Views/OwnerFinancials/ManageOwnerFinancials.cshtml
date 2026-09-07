@@ -1,4 +1,4 @@
-@using System
+﻿@using System
 @using System.Collections.Generic
 @using System.Linq
 @using YemenGuide.Core.DTOs.Owner
@@ -9,6 +9,10 @@
     ViewData["Title"] = "الإدارة المالية";
 
     var pageModel = Model ?? new OwnerFinancialPageDto();
+    var isAdminAccount =
+        (ViewData["IsAdministrationOwnedPlace"] is bool isAdminOwned && isAdminOwned) ||
+        (ViewData["IsAdministrationAccount"] is bool isAdmin && isAdmin) ||
+        User.IsInRole("Admin");
 
     var requestedTab =
         Convert.ToString(ViewData["CanonicalFinancialTab"])
@@ -24,7 +28,6 @@
     {
         "overview",
         "bookings",
-        "balance",
         "refunds",
         "wallets",
         "reports"
@@ -164,10 +167,10 @@
          data-selected-place-id="@(pageModel.SelectedPlaceId?.ToString() ?? string.Empty)"
          data-selected-place-name="@selectedPlaceName"
          data-currency="@currency"
-         data-pending-topups="@pageModel.PendingTopUpsCount"
+         data-pending-topups="@(isAdminAccount ? 0 : pageModel.PendingTopUpsCount)"
          data-pending-refunds="@pageModel.PendingRefundsCount"
-         data-low-balance-count="@pageModel.LowBalanceAccountsCount"
-         data-suspended-count="@pageModel.SuspendedAccountsCount"
+         data-low-balance-count="@(isAdminAccount ? 0 : pageModel.LowBalanceAccountsCount)"
+         data-suspended-count="@(isAdminAccount ? 0 : pageModel.SuspendedAccountsCount)"
          data-manage-url="@Url.Content("~/Owner/Financials/Manage")">
 
     <form id="ownerFinancialAntiForgeryForm"
@@ -212,8 +215,14 @@
                 </div>
 
                 <p>
-                    أموال الحجوزات، التحصيل، العمولات والاستردادات
-                    بواجهة مالية واحدة واضحة وسريعة.
+                    @if (isAdminAccount)
+                    {
+                        <text>أموال الحجوزات، التحصيل والاستردادات بواجهة مالية واحدة. المنشأة الإدارية معفاة من ضمان وعمولة المنصة.</text>
+                    }
+                    else
+                    {
+                        <text>أموال الحجوزات، التحصيل، العمولات والاستردادات بواجهة مالية واحدة واضحة وسريعة.</text>
+                    }
                 </p>
 
                 <div class="owner-financials-commandbar__meta">
@@ -238,8 +247,8 @@
             @if (pageModel.PendingRefundsCount > 0)
             {
                 <button type="button"
-                    class="owner-financials-quick-action is-refund"
-                    data-financial-nav="refunds">
+                        class="owner-financials-quick-action is-refund"
+                        data-financial-nav="refunds">
                     <span>
                         <i class="bi bi-arrow-counterclockwise"></i>
                     </span>
@@ -251,11 +260,11 @@
                 </button>
             }
 
-            @if (balanceAlerts > 0)
+            @if (!isAdminAccount && balanceAlerts > 0)
             {
                 <button type="button"
-                    class="owner-financials-quick-action is-balance"
-                    data-financial-nav="balance">
+                        class="owner-financials-quick-action is-balance"
+                        data-financial-nav="balance">
                     <span>
                         <i class="bi bi-shield-exclamation"></i>
                     </span>
@@ -282,7 +291,9 @@
     <div class="owner-financials-scope-note">
         <i class="bi bi-info-circle"></i>
         <span>
-            يتم اعتماد المنشأة المختارة من الهيدر الرئيسي تلقائيًا.
+            @(isAdminAccount
+                ? "المنشأة الإدارية معفاة من ضمان وعمولة المنصة، ولا تحتاج إلى شحن رصيد."
+                : "يتم اعتماد المنشأة المختارة من الهيدر الرئيسي تلقائيًا.")
         </span>
     </div>
 
@@ -300,29 +311,31 @@
              aria-label="تبويبات الإدارة المالية"
              aria-orientation="horizontal">
 
-            @foreach (var tab in tabs)
+            @foreach (var tab in tabs.Where(tab =>
+                !isAdminAccount ||
+                !string.Equals(tab.Key, "balance", StringComparison.OrdinalIgnoreCase)))
             {
                 var isActive =
-                string.Equals(
-                tab.Key,
-                activeTab,
-                StringComparison.OrdinalIgnoreCase);
+                    string.Equals(
+                        tab.Key,
+                        activeTab,
+                        StringComparison.OrdinalIgnoreCase);
 
                 <button type="button"
-                    class="owner-financial-tab @(isActive ? "is-active" : string.Empty)"
-                    id="ownerFinancialTab-@tab.Key"
-                    role="tab"
-                    aria-selected="@(isActive ? "true" : "false")"
-                    aria-controls="ownerFinancialTabContent"
-                    tabindex="@(isActive ? "0" : "-1")"
-                    data-financial-tab="@tab.Key"
-                    data-endpoint="@tab.Endpoint"
-                    data-title="@tab.Title"
-                    data-description="@tab.Description"
-                    data-icon="@tab.Icon">
+                        class="owner-financial-tab @(isActive ? "is-active" : string.Empty)"
+                        id="ownerFinancialTab-@tab.Key"
+                        role="tab"
+                        aria-selected="@(isActive ? "true" : "false")"
+                        aria-controls="ownerFinancialTabContent"
+                        tabindex="@(isActive ? "0" : "-1")"
+                        data-financial-tab="@tab.Key"
+                        data-endpoint="@tab.Endpoint"
+                        data-title="@tab.Title"
+                        data-description="@tab.Description"
+                        data-icon="@tab.Icon">
 
                     <span class="owner-financial-tab__icon"
-                      aria-hidden="true">
+                          aria-hidden="true">
                         <i class="bi @tab.Icon"></i>
                     </span>
 
@@ -339,7 +352,7 @@
                     }
 
                     <span class="owner-financial-tab__active-dot"
-                      aria-hidden="true"></span>
+                          aria-hidden="true"></span>
                 </button>
             }
 

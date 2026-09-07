@@ -33,7 +33,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
         /// تحميل قائمة المنشآت الخاصة بالمالك (Partial View)
         /// </summary>
         [HttpGet]
-        [Authorize(Roles = "Owner")]
+        [Authorize(Roles = "Owner,Admin")]
         public IActionResult PlaceList()
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);

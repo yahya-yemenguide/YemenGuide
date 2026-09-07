@@ -73,6 +73,57 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                 .Select(s => s.PlatformOwnerUserId)
                 .FirstOrDefaultAsync(cancellationToken);
 
+            // تصحيح تلقائي للبيانات القديمة: منشأة الأدمن الحجزية لا تُعد نشطة
+            // قبل وجود السياسات. هذا يعالج المنشآت التي أُنشئت قبل هذا التعديل
+            // وكانت محفوظة Active مع IsAvailable=false.
+            if (currentAdminId > 0)
+            {
+                var incompleteAdminPlaces = await _db.Places
+                    .Where(p =>
+                        p.OwnerId == currentAdminId &&
+                        p.Status == "Active" &&
+                        p.Category != null &&
+                        p.Category.BookingSystemId >= 1 &&
+                        p.Category.BookingSystemId <= 4 &&
+                        !_db.PlacePolicies.Any(policy => policy.PlaceId == p.PlaceId))
+                    .ToListAsync(cancellationToken);
+
+                if (incompleteAdminPlaces.Count > 0)
+                {
+                    foreach (var place in incompleteAdminPlaces)
+                    {
+                        place.Status = "Pending";
+                        place.IsAvailable = false;
+                    }
+
+                    await _db.SaveChangesAsync(cancellationToken);
+                }
+
+                // إذا كانت السياسات قد حُفظت بالفعل لمنشأة يملكها حساب Admin
+                // فلا يوجد اعتماد إداري ثانٍ: تصبح نشطة ومتاحة للعميل مباشرة.
+                // هذا يصلح أيضًا أي منشأة بقيت Pending من تشغيل سابق قبل تركيب الإصلاح.
+                var readyAdminPlaces = await _db.Places
+                    .Where(p =>
+                        p.OwnerId == currentAdminId &&
+                        p.Status == "Pending" &&
+                        p.Category != null &&
+                        p.Category.BookingSystemId >= 1 &&
+                        p.Category.BookingSystemId <= 4 &&
+                        _db.PlacePolicies.Any(policy => policy.PlaceId == p.PlaceId))
+                    .ToListAsync(cancellationToken);
+
+                if (readyAdminPlaces.Count > 0)
+                {
+                    foreach (var place in readyAdminPlaces)
+                    {
+                        place.Status = "Active";
+                        place.IsAvailable = true;
+                    }
+
+                    await _db.SaveChangesAsync(cancellationToken);
+                }
+            }
+
             /*
              * PlacePolicy محمّل أصلًا مع المنشأة، لذلك لا نعمل Query منفصلة
              * لجلب أرقام المنشآت التي لديها سياسات. هذا يقلل تحميل الصفحة.
@@ -110,6 +161,43 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
             });
         }
 
+
+        [HttpGet]
+        [RequireAdminPermission(AdminPermissionKeys.Places.Edit)]
+        public async Task<IActionResult> ManageOwnPlace(int id)
+        {
+            var adminIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (!int.TryParse(adminIdClaim, out int currentAdminId) || currentAdminId <= 0)
+                return Forbid();
+
+            bool ownsPlace = await _db.Places
+                .AsNoTracking()
+                .AnyAsync(place =>
+                    place.PlaceId == id &&
+                    place.OwnerId == currentAdminId);
+
+            if (!ownsPlace)
+                return NotFound();
+
+            string cookieName = $"ownerActivePlace_{currentAdminId}";
+            Response.Cookies.Append(
+                cookieName,
+                id.ToString(CultureInfo.InvariantCulture),
+                new Microsoft.AspNetCore.Http.CookieOptions
+                {
+                    Expires = DateTimeOffset.UtcNow.AddYears(1),
+                    HttpOnly = false,
+                    IsEssential = true,
+                    SameSite = Microsoft.AspNetCore.Http.SameSiteMode.Lax,
+                    Secure = Request.IsHttps,
+                    Path = "/"
+                });
+
+            return RedirectToAction(
+                "ManagePlaces",
+                "Place",
+                new { area = "Owner" });
+        }
 
         [HttpGet]
         [RequireAdminPermission(AdminPermissionKeys.Places.Create)]
@@ -791,7 +879,21 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                     bool hasPolicies = !isBookable || await _db.PlacePolicies
                         .AnyAsync(policy => policy.PlaceId == p.PlaceId);
 
-                    p.IsAvailable = hasPolicies;
+                    if (!hasPolicies)
+                    {
+                        p.Status = previousStatus;
+                        p.IsAvailable = false;
+
+                        return Json(new
+                        {
+                            success = false,
+                            message = L(
+                                "لا يمكن تفعيل المنشأة قبل إكمال سياسات الحجز.",
+                                "The place cannot be activated before booking policies are completed.")
+                        });
+                    }
+
+                    p.IsAvailable = true;
                     p.RejectionReason = null;
                 }
                 else if (status == "Rejected" || status == "Suspended")
@@ -1087,7 +1189,7 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                 SetAsPlatformOwner;
 
             string targetStatus = isAdministrationOperation
-                ? "Active"
+                ? (isBookable ? "Pending" : "Active")
                 : (isBookable ? "WaitOwner" : "Active");
             string targetAvailability = isBookable ? "false" : "true";
 

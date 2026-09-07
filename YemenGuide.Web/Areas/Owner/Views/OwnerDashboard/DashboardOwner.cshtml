@@ -3,6 +3,9 @@
 @model YemenGuide.Core.DTOs.Owner.OwnerDashboardDto
 @{
     ViewData["Title"] = "نظرة عامة";
+    var isAdminPlaceAccount =
+        (ViewData["IsAdministrationOwnedPlace"] is bool isAdminOwned && isAdminOwned) ||
+        User.IsInRole("Admin");
 
     string Money(decimal value) => value.ToString("N0");
     string Number(long value) => value.ToString("N0");
@@ -35,22 +38,25 @@
             trialStatus = Model.TrialStatus
         },
         new JsonSerializerOptions
-                {
-                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-                });
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        });
 }
 
-@section PageStyles {
+@section Styles {
     <link rel="stylesheet" href="~/lib/sweetalert2/sweetalert2.min.css" />
     <link rel="stylesheet"
-      href="~/css/owner/dashboard-owner.css"
-      asp-append-version="true" />
+          href="~/css/owner/dashboard-owner.css"
+          asp-append-version="true" />
     <link rel="stylesheet"
-      href="~/css/owner/dashboard-owner-onboarding.css"
-      asp-append-version="true" />
+          href="~/css/owner/dashboard-owner-onboarding.css"
+          asp-append-version="true" />
+    <link rel="stylesheet"
+          href="~/css/owner/dashboard-owner-refine.css"
+          asp-append-version="true" />
 }
 
-    <div class="owner-dashboard-page od-ultra"
+<div class="owner-dashboard-page od-ultra"
      data-owner-dashboard
      data-place-id="@(Model.PlaceId?.ToString() ?? string.Empty)">
 
@@ -88,15 +94,17 @@
                 </div>
 
                 <a class="od-button od-button--primary od-empty-state__action"
-               href="/Owner/Place/ManagePlaces?placeTab=add-place-tab">
+                   href="@(isAdminPlaceAccount ? "/Admin/Places/PlaceManagement" : "/Owner/Place/ManagePlaces?placeTab=add-place-tab")">
                     <i class="bi bi-building-add"></i>
-                    <span>أضف منشأتك الأولى</span>
+                    <span>@(isAdminPlaceAccount ? "العودة إلى إدارة المنشآت" : "أضف منشأتك الأولى")</span>
                     <i class="bi bi-arrow-left-short od-empty-state__action-arrow" aria-hidden="true"></i>
                 </a>
 
                 <small class="od-empty-state__hint">
                     <i class="bi bi-info-circle"></i>
-                    سينقلك الزر مباشرة إلى تبويب إضافة المنشأة داخل إدارة منشآتك.
+                    @(isAdminPlaceAccount
+                        ? "تتم إضافة المنشآت الإدارية من إدارة المنشآت في لوحة الأدمن."
+                        : "سينقلك الزر مباشرة إلى تبويب إضافة المنشأة داخل إدارة منشآتك.")
                 </small>
             </div>
         </section>
@@ -216,8 +224,8 @@
                 @if (Model.TodayOperation.HasRoomUnits)
                 {
                     var roomOccupancy = Model.TodayOperation.TotalRoomUnits > 0
-                    ? Math.Clamp((int)Math.Round(Model.TodayOperation.OccupiedRoomUnits * 100d / Model.TodayOperation.TotalRoomUnits), 0, 100)
-                    : 0;
+                        ? Math.Clamp((int)Math.Round(Model.TodayOperation.OccupiedRoomUnits * 100d / Model.TodayOperation.TotalRoomUnits), 0, 100)
+                        : 0;
                     <div class="od-day-occupancy" style="--od-day-occupancy:@roomOccupancy">
                         <div class="od-day-occupancy__ring">
                             <svg viewBox="0 0 120 120" aria-hidden="true">
@@ -236,52 +244,53 @@
             </div>
         </section>
 
-        @if (Model.TrialStatus.HasTrialHistory &&
-       Model.TrialStatus.StartedAt.HasValue &&
-       Model.TrialStatus.EndsAt.HasValue &&
-       (Model.TrialStatus.IsActive || Model.TrialStatus.IsExpired))
+        @if (!isAdminPlaceAccount &&
+             Model.TrialStatus.HasTrialHistory &&
+             Model.TrialStatus.StartedAt.HasValue &&
+             Model.TrialStatus.EndsAt.HasValue &&
+             (Model.TrialStatus.IsActive || Model.TrialStatus.IsExpired))
         {
             var dashboardTrial = Model.TrialStatus;
             var dashboardTrialProgress = dashboardTrial.TotalTrialDays > 0
-            ? Math.Clamp(
-            (int)Math.Round(
-            (DateTime.Now - dashboardTrial.StartedAt.Value).TotalDays *
-            100d / dashboardTrial.TotalTrialDays),
-            0,
-            100)
-            : 0;
+                ? Math.Clamp(
+                    (int)Math.Round(
+                        (DateTime.Now - dashboardTrial.StartedAt.Value).TotalDays *
+                        100d / dashboardTrial.TotalTrialDays),
+                    0,
+                    100)
+                : 0;
 
             var dashboardTrialTone = dashboardTrial.IsExpired
-            ? (dashboardTrial.NeedsTopUp ? "is-expired" : "is-ready")
-            : dashboardTrial.RemainingTrialDays <= 1
-            ? "is-ending"
-            : dashboardTrial.RemainingTrialDays <= 3
-            ? "is-near"
-            : "is-comfortable";
+                ? (dashboardTrial.NeedsTopUp ? "is-expired" : "is-ready")
+                : dashboardTrial.RemainingTrialDays <= 1
+                    ? "is-ending"
+                    : dashboardTrial.RemainingTrialDays <= 3
+                        ? "is-near"
+                        : "is-comfortable";
 
             var dashboardTrialBalanceUrl = Url.Action(
-            "ManageOwnerFinancials",
-            "OwnerFinancials",
-            new
-            {
-                area = "Owner",
-                financeTab = "balance",
-                placeId = Model.PlaceId
-            }) ?? $"/Owner/Financials?financeTab=balance&placeId={Model.PlaceId}";
+                "ManageOwnerFinancials",
+                "OwnerFinancials",
+                new
+                {
+                    area = "Owner",
+                    financeTab = "balance",
+                    placeId = Model.PlaceId
+                }) ?? $"/Owner/Financials?financeTab=balance&placeId={Model.PlaceId}";
 
             <section class="od-trial-banner @dashboardTrialTone"
-             data-trial-status
-             data-trial-active="@(dashboardTrial.IsActive ? "true" : "false")"
-             data-trial-expired="@(dashboardTrial.IsExpired ? "true" : "false")"
-             data-trial-ending-soon="@(dashboardTrial.IsEndingSoon ? "true" : "false")"
-             data-trial-remaining-days="@dashboardTrial.RemainingTrialDays"
-             data-trial-ends-at="@dashboardTrial.EndsAt.Value.ToString("yyyy-MM-ddTHH:mm:ss")"
-             data-trial-reminder-key="@dashboardTrial.ReminderKey"
-             data-trial-needs-topup="@(dashboardTrial.NeedsTopUp ? "true" : "false")"
-             data-trial-missing="@dashboardTrial.MissingGuaranteeBalance.ToString(System.Globalization.CultureInfo.InvariantCulture)"
-             data-trial-currency="@dashboardTrial.Currency"
-             data-trial-balance-url="@dashboardTrialBalanceUrl"
-             aria-label="حالة الفترة التجريبية">
+                     data-trial-status
+                     data-trial-active="@(dashboardTrial.IsActive ? "true" : "false")"
+                     data-trial-expired="@(dashboardTrial.IsExpired ? "true" : "false")"
+                     data-trial-ending-soon="@(dashboardTrial.IsEndingSoon ? "true" : "false")"
+                     data-trial-remaining-days="@dashboardTrial.RemainingTrialDays"
+                     data-trial-ends-at="@dashboardTrial.EndsAt.Value.ToString("yyyy-MM-ddTHH:mm:ss")"
+                     data-trial-reminder-key="@dashboardTrial.ReminderKey"
+                     data-trial-needs-topup="@(dashboardTrial.NeedsTopUp ? "true" : "false")"
+                     data-trial-missing="@dashboardTrial.MissingGuaranteeBalance.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                     data-trial-currency="@dashboardTrial.Currency"
+                     data-trial-balance-url="@dashboardTrialBalanceUrl"
+                     aria-label="حالة الفترة التجريبية">
                 <div class="od-trial-banner__glow" aria-hidden="true"></div>
                 <div class="od-trial-particles" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
 
@@ -296,8 +305,8 @@
                             @(dashboardTrial.IsExpired
                                 ? (dashboardTrial.NeedsTopUp ? "تنبيه تشغيل الحساب" : "حالة الحساب")
                                 : dashboardTrial.IsEndingSoon
-                                ? "الفترة التجريبية تقترب من النهاية"
-                                : "الفترة التجريبية المجانية فعّالة")
+                                    ? "الفترة التجريبية تقترب من النهاية"
+                                    : "الفترة التجريبية المجانية فعّالة")
                         </span>
 
                         @if (dashboardTrial.IsActive)
@@ -348,10 +357,10 @@
                         </div>
 
                         <div class="od-trial-banner__progress"
-                 role="progressbar"
-                 aria-valuemin="0"
-                 aria-valuemax="100"
-                 aria-valuenow="@dashboardTrialProgress">
+                             role="progressbar"
+                             aria-valuemin="0"
+                             aria-valuemax="100"
+                             aria-valuenow="@dashboardTrialProgress">
                             <span style="--od-trial-progress:@(dashboardTrialProgress)%"></span>
                         </div>
 
@@ -401,8 +410,8 @@
                         @(dashboardTrial.IsEndingSoon
                             ? "سنذكّرك تلقائيًا قبل الانتهاء حتى لا يتأثر التشغيل."
                             : dashboardTrial.IsExpired
-                            ? (dashboardTrial.NeedsTopUp ? "أكمل الرصيد المطلوب وستعود الحجوزات الجديدة مباشرة." : "الحساب جاهز للتشغيل بصورة طبيعية.")
-                            : "سننبهك تلقائيًا عندما يقترب موعد انتهاء التجربة.")
+                                ? (dashboardTrial.NeedsTopUp ? "أكمل الرصيد المطلوب وستعود الحجوزات الجديدة مباشرة." : "الحساب جاهز للتشغيل بصورة طبيعية.")
+                                : "سننبهك تلقائيًا عندما يقترب موعد انتهاء التجربة.")
                     </span>
                     <a href="@dashboardTrialBalanceUrl">
                         @(dashboardTrial.NeedsTopUp ? "شحن رصيد الضمان" : "تفاصيل الرصيد والعمولات")
@@ -552,29 +561,58 @@
                         <span><small>مدفوع إلكترونيًا</small><b>@Money(Model.Finance.PaidOnline)</b></span>
                         <span><small>محصل في المنشأة</small><b>@Money(Model.Finance.CollectedAtProperty)</b></span>
                         <span class="is-danger"><small>مستردات</small><b>-@Money(Model.Finance.RefundedAmount)</b></span>
-                        <span><small>عمولة المنصة</small><b>@Money(Model.Finance.PlatformCommission)</b></span>
+                        @if (isAdminPlaceAccount)
+                        {
+                            <span><small>عمولة المنصة</small><b>معفاة</b></span>
+                        }
+                        else
+                        {
+                            <span><small>عمولة المنصة</small><b>@Money(Model.Finance.PlatformCommission)</b></span>
+                        }
                         <span class="is-total"><small>صافي المحصل</small><b>@Money(Model.Finance.NetCollectedRevenue) @Model.Currency</b></span>
                     </div>
                 </div>
             </article>
 
             <article data-od-tilt class="od-panel od-panel--guarantee">
-                <header class="od-panel__head od-panel__head--compact">
-                    <div><span class="od-section-kicker">الحماية المالية</span><h2>رصيد ضمان العمولات</h2></div>
-                    <span class="od-state-pill @GuaranteeTone(Model.Guarantee.AccountStatus)">@Model.Guarantee.AccountStatusLabel</span>
-                </header>
-                <div class="od-guarantee-layout">
-                    <div class="od-chart od-chart--radial" id="ownerGuaranteeChart"></div>
-                    <div class="od-guarantee-values">
-                        <span><small>المتاح</small><strong>@Money(Model.Guarantee.AvailableBalance)</strong></span>
-                        <span><small>المحجوز</small><strong>@Money(Model.Guarantee.HeldBalance)</strong></span>
-                        <span><small>الدين</small><strong>@Money(Model.Guarantee.DebtAmount)</strong></span>
-                        <span><small>المطلوب</small><strong>@Money(Model.Guarantee.RequiredBalance)</strong></span>
+                @if (isAdminPlaceAccount)
+                {
+                    <header class="od-panel__head od-panel__head--compact">
+                        <div><span class="od-section-kicker">الحماية المالية</span><h2>الوضع المالي للمنشأة الإدارية</h2></div>
+                        <span class="od-state-pill is-success">معفاة</span>
+                    </header>
+                    <div class="od-guarantee-layout">
+                        <div class="od-chart od-chart--radial" id="ownerGuaranteeChart" hidden></div>
+                        <div class="od-guarantee-values">
+                            <span><small>ضمان العمولة</small><strong>غير مطلوب</strong></span>
+                            <span><small>شحن الرصيد</small><strong>غير مطلوب</strong></span>
+                            <span><small>عمولة المنصة</small><strong>0%</strong></span>
+                            <span><small>حالة التشغيل</small><strong>معفاة</strong></span>
+                        </div>
                     </div>
-                </div>
-                <a class="od-button od-button--wide od-button--soft" href="/Owner/Financials?financeTab=balance&placeId=@Model.PlaceId">
-                    <i class="bi bi-wallet2"></i>فتح مركز الرصيد والعمولات
-                </a>
+                    <div class="od-button od-button--wide od-button--soft" aria-disabled="true">
+                        <i class="bi bi-shield-check"></i>منشأة إدارية — لا يلزم رصيد ضمان
+                    </div>
+                }
+                else
+                {
+                    <header class="od-panel__head od-panel__head--compact">
+                        <div><span class="od-section-kicker">الحماية المالية</span><h2>رصيد ضمان العمولات</h2></div>
+                        <span class="od-state-pill @GuaranteeTone(Model.Guarantee.AccountStatus)">@Model.Guarantee.AccountStatusLabel</span>
+                    </header>
+                    <div class="od-guarantee-layout">
+                        <div class="od-chart od-chart--radial" id="ownerGuaranteeChart"></div>
+                        <div class="od-guarantee-values">
+                            <span><small>المتاح</small><strong>@Money(Model.Guarantee.AvailableBalance)</strong></span>
+                            <span><small>المحجوز</small><strong>@Money(Model.Guarantee.HeldBalance)</strong></span>
+                            <span><small>الدين</small><strong>@Money(Model.Guarantee.DebtAmount)</strong></span>
+                            <span><small>المطلوب</small><strong>@Money(Model.Guarantee.RequiredBalance)</strong></span>
+                        </div>
+                    </div>
+                    <a class="od-button od-button--wide od-button--soft" href="/Owner/Financials?financeTab=balance&placeId=@Model.PlaceId">
+                        <i class="bi bi-wallet2"></i>فتح مركز الرصيد والعمولات
+                    </a>
+                }
             </article>
         </section>
 
@@ -702,10 +740,11 @@
 
 <script id="ownerDashboardData" type="application/json">@Html.Raw(dashboardJson)</script>
 
-@if (Model?.TrialWelcome?.ShouldShow == true &&
-   Model.TrialWelcome.IsActive &&
-   Model.TrialWelcome.StartedAt.HasValue &&
-   Model.TrialWelcome.EndsAt.HasValue)
+@if (!isAdminPlaceAccount &&
+     Model?.TrialWelcome?.ShouldShow == true &&
+     Model.TrialWelcome.IsActive &&
+     Model.TrialWelcome.StartedAt.HasValue &&
+     Model.TrialWelcome.EndsAt.HasValue)
 {
     var trial = Model.TrialWelcome;
     var elapsedDays = Math.Max(
@@ -731,26 +770,26 @@
         }) ?? "/Owner/Financials?financeTab=balance";
 
     <div class="owner-trial-welcome"
-     id="ownerTrialWelcome"
-     hidden
-     aria-hidden="true"
-     data-owner-trial-welcome
-     data-show-trial-welcome="true"
-     data-storage-key="@trial.StorageKey">
+         id="ownerTrialWelcome"
+         hidden
+         aria-hidden="true"
+         data-owner-trial-welcome
+         data-show-trial-welcome="true"
+         data-storage-key="@trial.StorageKey">
 
         <div class="owner-trial-welcome__backdrop" aria-hidden="true"></div>
 
         <section class="owner-trial-welcome__dialog"
-             role="dialog"
-             aria-modal="true"
-             aria-labelledby="ownerTrialWelcomeTitle"
-             aria-describedby="ownerTrialWelcomeDescription"
-             tabindex="-1">
+                 role="dialog"
+                 aria-modal="true"
+                 aria-labelledby="ownerTrialWelcomeTitle"
+                 aria-describedby="ownerTrialWelcomeDescription"
+                 tabindex="-1">
 
             <button type="button"
-                class="owner-trial-welcome__close"
-                data-owner-trial-dismiss
-                aria-label="إغلاق رسالة الترحيب">
+                    class="owner-trial-welcome__close"
+                    data-owner-trial-dismiss
+                    aria-label="إغلاق رسالة الترحيب">
                 <i class="bi bi-x-lg" aria-hidden="true"></i>
             </button>
 
@@ -815,11 +854,11 @@
                 </div>
 
                 <div class="owner-trial-welcome__progress-track"
-                 role="progressbar"
-                 aria-label="تقدم الفترة التجريبية"
-                 aria-valuemin="0"
-                 aria-valuemax="100"
-                 aria-valuenow="@progressPercent">
+                     role="progressbar"
+                     aria-label="تقدم الفترة التجريبية"
+                     aria-valuemin="0"
+                     aria-valuemax="100"
+                     aria-valuenow="@progressPercent">
                     <span style="--owner-trial-progress:@(progressPercent)%"></span>
                 </div>
 
@@ -870,15 +909,15 @@
 
             <div class="owner-trial-welcome__actions">
                 <button type="button"
-                    class="owner-trial-welcome__primary"
-                    data-owner-trial-dismiss>
+                        class="owner-trial-welcome__primary"
+                        data-owner-trial-dismiss>
                     <i class="bi bi-rocket-takeoff"></i>
                     <span>فهمت، ابدأ الآن</span>
                 </button>
 
                 <a class="owner-trial-welcome__secondary"
-               href="@balanceUrl"
-               data-owner-trial-balance>
+                   href="@balanceUrl"
+                   data-owner-trial-balance>
                     <i class="bi bi-wallet2"></i>
                     <span>
                         @(trial.RequiredGuaranteeBalance > 0m
@@ -901,5 +940,5 @@
     <script src="~/lib/apexcharts/apexcharts.min.js"></script>
     <script src="~/lib/fullcalendar/index.global.min.js"></script>
     <script src="~/js/owner/dashboard-owner.js"
-        asp-append-version="true"></script>
+            asp-append-version="true"></script>
 }
