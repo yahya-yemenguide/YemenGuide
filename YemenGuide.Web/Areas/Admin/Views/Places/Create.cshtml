@@ -4,11 +4,15 @@
     ViewData["Title"] = "إضافة منشأة";
     Layout = "~/Areas/Admin/Views/Shared/_AdminLayout.cshtml";
 
+    string currentAdminName = ViewBag.CurrentAdminName?.ToString() ?? "حساب الإدارة الحالي";
+    string currentAdminUsername = ViewBag.CurrentAdminUsername?.ToString() ?? "";
+    string currentAdminEmail = ViewBag.CurrentAdminEmail?.ToString() ?? "";
+    string currentAdminPhone = ViewBag.CurrentAdminPhone?.ToString() ?? "";
+    string currentAdminJobTitle = ViewBag.CurrentAdminJobTitle?.ToString() ?? "إدارة النظام";
+
+    // المسار القديم لحساب التشغيل يبقى فقط داخل خيار إنشاء مالك جديد
+    // حتى لا نغيّر سلوك هذا المسار الموجود مسبقًا.
     bool platformOwnerExists = ViewBag.PlatformOwnerExists != null && (bool)ViewBag.PlatformOwnerExists;
-    bool platformOwnerConfigured = ViewBag.PlatformOwnerConfigured != null && (bool)ViewBag.PlatformOwnerConfigured;
-    string platformOwnerName = ViewBag.PlatformOwnerName?.ToString() ?? "";
-    string platformOwnerUsername = ViewBag.PlatformOwnerUsername?.ToString() ?? "";
-    string platformOwnerEmail = ViewBag.PlatformOwnerEmail?.ToString() ?? "";
 }
 
 @section Styles {
@@ -19,7 +23,7 @@
 
     <div class="admin-place-create-page admin-place-create-page--premium"
      data-admin-place-create
-     data-platform-owner-ready="@(platformOwnerExists ? "true" : "false")"
+     data-platform-owner-ready="true"
      data-account-check-url="@Url.Action("CheckOwnerAccountAvailability", "Places", new { area = "Admin" })">
 
     @if (TempData["ErrorMessage"] is string errorMessage && !string.IsNullOrWhiteSpace(errorMessage))
@@ -33,60 +37,8 @@
         </div>
     }
 
-    <section class="admin-place-create-hero admin-place-create-hero--premium">
-        <div class="admin-place-create-hero__copy">
-            <a asp-action="PlaceManagement" class="admin-place-create-back">
-                <i class="bi bi-arrow-right"></i>
-                <span>إدارة المنشآت</span>
-            </a>
-
-            <span class="admin-place-create-eyebrow">
-                <span class="admin-place-create-eyebrow__dot"></span>
-                إضافة منشأة جديدة
-            </span>
-
-            <h1>جهّز المنشأة بخطوتين فقط</h1>
-            <p>اختر الفئة ثم حدد الحساب المسؤول عنها، وبعدها تنتقل مباشرة إلى نموذج المنشأة المشترك نفسه المستخدم عند المالك.</p>
-
-            <div class="admin-place-create-hero__trust">
-                <span><i class="bi bi-shield-check"></i> تحقق آمن من الحساب</span>
-                <span><i class="bi bi-diagram-3"></i> نفس نموذج المالك</span>
-                <span><i class="bi bi-phone"></i> متوافق مع الهاتف</span>
-            </div>
-        </div>
-
-        <div class="admin-place-create-progress admin-place-create-progress--premium" aria-label="مراحل إنشاء المنشأة">
-            <div class="admin-place-create-progress__item is-active" data-create-step="1">
-                <span class="admin-place-create-progress__number">1</span>
-                <span class="admin-place-create-progress__text">
-                    <small>الخطوة الأولى</small>
-                    <strong>اختيار الفئة</strong>
-                </span>
-                <i class="bi bi-check-lg admin-place-create-progress__check"></i>
-            </div>
-
-            <span class="admin-place-create-progress__line"></span>
-
-            <div class="admin-place-create-progress__item" data-create-step="2">
-                <span class="admin-place-create-progress__number">2</span>
-                <span class="admin-place-create-progress__text">
-                    <small>الخطوة الثانية</small>
-                    <strong>تحديد المالك</strong>
-                </span>
-                <i class="bi bi-check-lg admin-place-create-progress__check"></i>
-            </div>
-
-            <span class="admin-place-create-progress__line"></span>
-
-            <div class="admin-place-create-progress__item" data-create-step="3">
-                <span class="admin-place-create-progress__number">3</span>
-                <span class="admin-place-create-progress__text">
-                    <small>بعد المتابعة</small>
-                    <strong>بيانات المنشأة</strong>
-                </span>
-            </div>
-        </div>
-    </section>
+    @* تم حذف شريط المقدمة ومؤشر الخطوات بناءً على المطلوب.
+    تبدأ الصفحة مباشرة من اختيار الفئة. *@
 
     <form asp-action="StartSetup"
           method="post"
@@ -196,7 +148,7 @@
                     <div>
                         <span>02 · الحساب المسؤول</span>
                         <h2>من سيدير هذه المنشأة؟</h2>
-                        <p>اختر طريقة الربط المناسبة. كل منشأة ترتبط بحساب Owner فعلي حتى تعمل الحجوزات والدردشة ولوحة المالك بصورة طبيعية.</p>
+                        <p>يمكنك ربط المنشأة بنفس حسابك الإداري الحالي، أو بمالك موجود، أو إنشاء مالك جديد.</p>
                     </div>
                 </div>
 
@@ -207,9 +159,38 @@
             </header>
 
             <div class="admin-owner-mode-grid admin-owner-mode-grid--premium">
-                <label class="admin-owner-mode-card admin-owner-mode-card--premium is-active" data-owner-mode-card>
-                    <input type="radio" name="OwnerMode" id="newOwner" value="new" checked />
-                    <span class="admin-owner-mode-card__badge">الأكثر استخدامًا</span>
+                <label class="admin-owner-mode-card admin-owner-mode-card--premium admin-owner-mode-card--official is-ready is-active"
+                       data-owner-mode-card>
+                    <input type="radio" name="OwnerMode" id="adminOwner" value="admin" checked />
+                    <span class="admin-owner-mode-card__badge admin-owner-mode-card__badge--official">حسابي</span>
+                    <span class="admin-owner-mode-card__icon admin-owner-mode-card__icon--admin"><i class="bi bi-shield-check"></i></span>
+                    <span class="admin-owner-mode-card__copy">
+                        <strong>حسابي الإداري</strong>
+                        <small>اربط المنشأة بنفس حساب الأدمن الذي تستخدمه الآن بدون إنشاء حساب Owner إضافي.</small>
+                    </span>
+                    <span class="admin-owner-mode-card__footer">
+                        <span class="is-success"><i class="bi bi-check-circle-fill"></i> جاهز مباشرة</span>
+                        <i class="bi bi-arrow-left"></i>
+                    </span>
+                    <span class="admin-owner-mode-card__check"><i class="bi bi-check-lg"></i></span>
+                </label>
+
+                <label class="admin-owner-mode-card admin-owner-mode-card--premium" data-owner-mode-card>
+                    <input type="radio" name="OwnerMode" id="existingOwner" value="existing" />
+                    <span class="admin-owner-mode-card__icon"><i class="bi bi-person-check-fill"></i></span>
+                    <span class="admin-owner-mode-card__copy">
+                        <strong>اختيار مالك موجود</strong>
+                        <small>ابحث داخل حسابات الملاك النشطة واربط المنشأة بالمالك المطلوب.</small>
+                    </span>
+                    <span class="admin-owner-mode-card__footer">
+                        <span><i class="bi bi-lightning-charge"></i> ربط مباشر</span>
+                        <i class="bi bi-arrow-left"></i>
+                    </span>
+                    <span class="admin-owner-mode-card__check"><i class="bi bi-check-lg"></i></span>
+                </label>
+
+                <label class="admin-owner-mode-card admin-owner-mode-card--premium" data-owner-mode-card>
+                    <input type="radio" name="OwnerMode" id="newOwner" value="new" />
                     <span class="admin-owner-mode-card__icon"><i class="bi bi-person-plus-fill"></i></span>
                     <span class="admin-owner-mode-card__copy">
                         <strong>إنشاء مالك جديد</strong>
@@ -221,58 +202,148 @@
                     </span>
                     <span class="admin-owner-mode-card__check"><i class="bi bi-check-lg"></i></span>
                 </label>
-
-                <label class="admin-owner-mode-card admin-owner-mode-card--premium" data-owner-mode-card>
-                    <input type="radio" name="OwnerMode" id="existingOwner" value="existing" />
-                    <span class="admin-owner-mode-card__icon"><i class="bi bi-person-check-fill"></i></span>
-                    <span class="admin-owner-mode-card__copy">
-                        <strong>اختيار مالك موجود</strong>
-                        <small>ابحث داخل الحسابات النشطة وحدد المالك المطلوب.</small>
-                    </span>
-                    <span class="admin-owner-mode-card__footer">
-                        <span><i class="bi bi-lightning-charge"></i> ربط مباشر</span>
-                        <i class="bi bi-arrow-left"></i>
-                    </span>
-                    <span class="admin-owner-mode-card__check"><i class="bi bi-check-lg"></i></span>
-                </label>
-
-                <label class="admin-owner-mode-card admin-owner-mode-card--premium admin-owner-mode-card--official @(platformOwnerExists ? "is-ready" : "is-needs-setup")"
-                       data-owner-mode-card>
-                    <input type="radio" name="OwnerMode" id="adminOwner" value="admin" />
-                    <span class="admin-owner-mode-card__badge admin-owner-mode-card__badge--official">رسمي</span>
-                    <span class="admin-owner-mode-card__icon admin-owner-mode-card__icon--admin"><i class="bi bi-buildings-fill"></i></span>
-                    <span class="admin-owner-mode-card__copy">
-                        <strong>منشآت الإدارة</strong>
-                        <small>@(platformOwnerExists ? "الحساب الرسمي جاهز ويمكن الربط به فورًا." : "يلزم تجهيز حساب تشغيل رسمي مرة واحدة فقط.")</small>
-                    </span>
-                    <span class="admin-owner-mode-card__footer">
-                        @if (platformOwnerExists)
-                        {
-                            <span class="is-success"><i class="bi bi-check-circle-fill"></i> حساب التشغيل جاهز</span>
-                        }
-                        else
-                        {
-                            <span class="is-warning"><i class="bi bi-exclamation-circle-fill"></i> يحتاج إعداد</span>
-                        }
-                        <i class="bi bi-arrow-left"></i>
-                    </span>
-                    <span class="admin-owner-mode-card__check"><i class="bi bi-check-lg"></i></span>
-                </label>
             </div>
 
-            <div id="newOwnerInputs" class="admin-owner-form-panel admin-owner-form-panel--premium">
+            <div id="adminOwnerInputs" class="admin-owner-form-panel admin-owner-form-panel--premium admin-owner-form-panel--admin">
+                <div class="admin-owner-form-panel__heading admin-owner-form-panel__heading--premium">
+                    <span><i class="bi bi-shield-lock-fill"></i></span>
+                    <div>
+                        <strong>نفس حساب الإدارة الحالي</strong>
+                        <small>لن يتم إنشاء أي حساب جديد. ستصبح المنشأة مرتبطة مباشرة بحساب الأدمن الحالي.</small>
+                    </div>
+                </div>
+
+                <div class="admin-owner-admin-note admin-owner-admin-note--ready admin-owner-admin-note--premium">
+                    <span class="admin-owner-admin-note__icon"><i class="bi bi-check2-circle"></i></span>
+                    <div class="admin-owner-admin-note__content">
+                        <span class="admin-owner-admin-note__eyebrow">سيتم الربط بهذا الحساب</span>
+                        <strong>@currentAdminName</strong>
+                        <p>بعد حفظ المنشأة ستظهر تلقائيًا في تبويب «منشآت الإدارة»، وسيبقى مالكها الفعلي هو حساب الأدمن الحالي نفسه.</p>
+
+                        <div class="admin-owner-account-meta admin-owner-account-meta--premium">
+                            @if (!string.IsNullOrWhiteSpace(currentAdminUsername))
+                            {
+                                <span><i class="bi bi-person-circle"></i><b dir="ltr">@currentAdminUsername</b></span>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(currentAdminEmail))
+                            {
+                                <span><i class="bi bi-envelope"></i><b dir="ltr">@currentAdminEmail</b></span>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(currentAdminPhone))
+                            {
+                                <span><i class="bi bi-telephone"></i><b dir="ltr">@currentAdminPhone</b></span>
+                            }
+                            <span><i class="bi bi-shield-check"></i><b>Admin · @currentAdminJobTitle</b></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="existingOwnerInputs" class="admin-owner-form-panel admin-owner-form-panel--premium" hidden>
+                <div class="admin-owner-form-panel__heading admin-owner-form-panel__heading--premium">
+                    <span><i class="bi bi-person-lines-fill"></i></span>
+                    <div>
+                        <strong>اختر مالكًا موجودًا</strong>
+                        <small>ابحث بالاسم أو اسم المستخدم أو البريد أو الهاتف، ثم اضغط على بطاقة المالك.</small>
+                    </div>
+                </div>
+
+                <div class="admin-owner-search admin-owner-search--premium">
+                    <i class="bi bi-search"></i>
+                    <input type="search"
+                           id="ownerSearchInput"
+                           placeholder="ابحث عن مالك بالاسم، المستخدم، البريد أو الهاتف..."
+                           autocomplete="off" />
+                    <button type="button" data-clear-owner-search aria-label="مسح البحث" hidden>
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                </div>
+
+                <select name="ExistingOwnerId"
+                        id="ExistingOwnerId"
+                        class="admin-place-create-native-select"
+                        disabled>
+                    <option value="">-- اختر المالك --</option>
+                    @if (ViewBag.Owners != null)
+                    {
+                        foreach (var owner in ViewBag.Owners)
+                        {
+                            <option value="@owner.UserId"
+                            data-owner-name="@owner.FullName"
+                            data-owner-username="@owner.Username"
+                            data-owner-email="@owner.ContactInfo"
+                            data-owner-phone="@owner.PhoneNumber">
+                                @owner.FullName (@owner.Username)
+                            </option>
+                        }
+                    }
+                </select>
+
+                <div class="admin-existing-owner-grid" data-existing-owner-grid>
+                    @if (ViewBag.Owners != null)
+                    {
+                        foreach (var owner in ViewBag.Owners)
+                        {
+                            string ownerName = owner.FullName?.ToString() ?? owner.Username?.ToString() ?? "مالك";
+                            string ownerUsername = owner.Username?.ToString() ?? "";
+                            string ownerEmail = owner.ContactInfo?.ToString() ?? "";
+                            string ownerPhone = owner.PhoneNumber?.ToString() ?? "";
+                            string ownerInitial = !string.IsNullOrWhiteSpace(ownerName) ? ownerName.Substring(0, 1) : "م";
+
+                            <button type="button"
+                            class="admin-existing-owner-card"
+                            data-owner-option
+                            data-owner-id="@owner.UserId"
+                            data-owner-name="@ownerName"
+                            data-owner-username="@ownerUsername"
+                            data-owner-email="@ownerEmail"
+                            data-owner-phone="@ownerPhone">
+                                <span class="admin-existing-owner-card__avatar">@ownerInitial</span>
+                                <span class="admin-existing-owner-card__copy">
+                                    <strong>@ownerName</strong>
+                                    <small dir="ltr">@("@" + ownerUsername)</small>
+                                    <span>
+                                        <b><i class="bi bi-envelope"></i>@(string.IsNullOrWhiteSpace(ownerEmail) ? "بدون بريد" : ownerEmail)</b>
+                                        <b><i class="bi bi-telephone"></i>@(string.IsNullOrWhiteSpace(ownerPhone) ? "بدون هاتف" : ownerPhone)</b>
+                                    </span>
+                                </span>
+                                <span class="admin-existing-owner-card__status"><i class="bi bi-check-circle-fill"></i> نشط</span>
+                                <span class="admin-existing-owner-card__check"><i class="bi bi-check-lg"></i></span>
+                            </button>
+                        }
+                    }
+                </div>
+
+                <div class="admin-owner-search-empty" data-owner-search-empty hidden>
+                    <i class="bi bi-search-heart"></i>
+                    <strong>لا توجد نتائج مطابقة</strong>
+                    <span>جرّب اسمًا أو بريدًا أو رقم هاتف مختلفًا.</span>
+                </div>
+
+                <div class="admin-selected-owner-summary" data-selected-owner-summary hidden>
+                    <span class="admin-selected-owner-summary__icon"><i class="bi bi-person-check-fill"></i></span>
+                    <div>
+                        <small>المالك المحدد</small>
+                        <strong data-selected-owner-name>—</strong>
+                        <span data-selected-owner-meta>—</span>
+                    </div>
+                    <button type="button" data-clear-owner-selection>تغيير</button>
+                </div>
+            </div>
+
+            <div id="newOwnerInputs" class="admin-owner-form-panel admin-owner-form-panel--premium" hidden>
                 <div class="admin-owner-form-panel__heading admin-owner-form-panel__heading--premium">
                     <span><i class="bi bi-person-vcard-fill"></i></span>
                     <div>
                         <strong>بيانات حساب المالك الجديد</strong>
-                        <small>نفس حقول الحساب المعتمدة في تسجيل المالك، مع تحقق مباشر قبل المتابعة.</small>
+                        <small>سيتم إنشاء حساب Owner مستقل وربط المنشأة به.</small>
                     </div>
                     <span class="admin-owner-form-panel__security"><i class="bi bi-shield-check"></i> محمي</span>
                 </div>
 
                 <div class="admin-owner-account-guidance">
                     <span><i class="bi bi-info-circle-fill"></i></span>
-                    <p>سيتم إنشاء الحساب بدور <strong>Owner</strong>. اسم المستخدم والبريد يجب ألا يكونا مستخدمين مسبقًا، وكلمة المرور لا تقل عن 6 أحرف.</p>
+                    <p>اسم المستخدم والبريد يجب ألا يكونا مستخدمين مسبقًا، وكلمة المرور لا تقل عن 6 أحرف.</p>
                 </div>
 
                 <div class="admin-owner-fields-grid admin-owner-fields-grid--premium">
@@ -380,6 +451,8 @@
                     </div>
                 </div>
 
+                @* نحافظ على خيار حساب التشغيل القديم داخل «مالك جديد» كما هو،
+                لكن خيار «حسابي الإداري» أعلاه لا يعتمد عليه إطلاقًا. *@
                 @if (!platformOwnerExists)
                 {
                     <label class="admin-platform-owner-toggle admin-platform-owner-toggle--premium" for="SetAsPlatformOwner">
@@ -391,7 +464,7 @@
                         <span class="admin-platform-owner-toggle__icon"><i class="bi bi-buildings-fill"></i></span>
                         <span class="admin-platform-owner-toggle__copy">
                             <strong>تعيين هذا الحساب كحساب تشغيل منشآت الإدارة</strong>
-                            <small>استخدمه فقط للحساب الرسمي الذي سيدير منشآت الإدارة من لوحة المالك ويستقبل حجوزاتها ورسائلها.</small>
+                            <small>استخدمه فقط إذا كنت تريد إنشاء حساب Owner رسمي مستقل كما كان يعمل النظام سابقًا.</small>
                         </span>
                         <span class="admin-platform-owner-toggle__badge">مرة واحدة فقط</span>
                     </label>
@@ -407,147 +480,6 @@
                     </div>
                 }
             </div>
-
-            <div id="existingOwnerInputs" class="admin-owner-form-panel admin-owner-form-panel--premium" hidden>
-                <div class="admin-owner-form-panel__heading admin-owner-form-panel__heading--premium">
-                    <span><i class="bi bi-person-lines-fill"></i></span>
-                    <div>
-                        <strong>اختر مالكًا موجودًا</strong>
-                        <small>ابحث بالاسم أو اسم المستخدم أو البريد أو الهاتف، ثم اضغط على بطاقة المالك.</small>
-                    </div>
-                </div>
-
-                <div class="admin-owner-search admin-owner-search--premium">
-                    <i class="bi bi-search"></i>
-                    <input type="search"
-                           id="ownerSearchInput"
-                           placeholder="ابحث عن مالك بالاسم، المستخدم، البريد أو الهاتف..."
-                           autocomplete="off" />
-                    <button type="button" data-clear-owner-search aria-label="مسح البحث" hidden>
-                        <i class="bi bi-x-lg"></i>
-                    </button>
-                </div>
-
-                <select name="ExistingOwnerId"
-                        id="ExistingOwnerId"
-                        class="admin-place-create-native-select"
-                        disabled>
-                    <option value="">-- اختر المالك --</option>
-                    @if (ViewBag.Owners != null)
-                    {
-                        foreach (var owner in ViewBag.Owners)
-                        {
-                            <option value="@owner.UserId"
-                            data-owner-name="@owner.FullName"
-                            data-owner-username="@owner.Username"
-                            data-owner-email="@owner.ContactInfo"
-                            data-owner-phone="@owner.PhoneNumber">
-                                @owner.FullName (@owner.Username)
-                            </option>
-                        }
-                    }
-                </select>
-
-                <div class="admin-existing-owner-grid" data-existing-owner-grid>
-                    @if (ViewBag.Owners != null)
-                    {
-                        foreach (var owner in ViewBag.Owners)
-                        {
-                            string ownerName = owner.FullName?.ToString() ?? owner.Username?.ToString() ?? "مالك";
-                            string ownerUsername = owner.Username?.ToString() ?? "";
-                            string ownerEmail = owner.ContactInfo?.ToString() ?? "";
-                            string ownerPhone = owner.PhoneNumber?.ToString() ?? "";
-                            string ownerInitial = !string.IsNullOrWhiteSpace(ownerName) ? ownerName.Substring(0, 1) : "م";
-
-                            <button type="button"
-                            class="admin-existing-owner-card"
-                            data-owner-option
-                            data-owner-id="@owner.UserId"
-                            data-owner-name="@ownerName"
-                            data-owner-username="@ownerUsername"
-                            data-owner-email="@ownerEmail"
-                            data-owner-phone="@ownerPhone">
-                                <span class="admin-existing-owner-card__avatar">@ownerInitial</span>
-                                <span class="admin-existing-owner-card__copy">
-                                    <strong>@ownerName</strong>
-                                    <small dir="ltr">@("@" + ownerUsername)</small>
-                                    <span>
-                                        <b><i class="bi bi-envelope"></i>@(string.IsNullOrWhiteSpace(ownerEmail) ? "بدون بريد" : ownerEmail)</b>
-                                        <b><i class="bi bi-telephone"></i>@(string.IsNullOrWhiteSpace(ownerPhone) ? "بدون هاتف" : ownerPhone)</b>
-                                    </span>
-                                </span>
-                                <span class="admin-existing-owner-card__status"><i class="bi bi-check-circle-fill"></i> نشط</span>
-                                <span class="admin-existing-owner-card__check"><i class="bi bi-check-lg"></i></span>
-                            </button>
-                        }
-                    }
-                </div>
-
-                <div class="admin-owner-search-empty" data-owner-search-empty hidden>
-                    <i class="bi bi-search-heart"></i>
-                    <strong>لا توجد نتائج مطابقة</strong>
-                    <span>جرّب اسمًا أو بريدًا أو رقم هاتف مختلفًا.</span>
-                </div>
-
-                <div class="admin-selected-owner-summary" data-selected-owner-summary hidden>
-                    <span class="admin-selected-owner-summary__icon"><i class="bi bi-person-check-fill"></i></span>
-                    <div>
-                        <small>المالك المحدد</small>
-                        <strong data-selected-owner-name>—</strong>
-                        <span data-selected-owner-meta>—</span>
-                    </div>
-                    <button type="button" data-clear-owner-selection>تغيير</button>
-                </div>
-            </div>
-
-            <div id="adminOwnerInputs" class="admin-owner-form-panel admin-owner-form-panel--premium admin-owner-form-panel--admin" hidden>
-                <div class="admin-owner-form-panel__heading admin-owner-form-panel__heading--premium">
-                    <span><i class="bi bi-shield-lock-fill"></i></span>
-                    <div>
-                        <strong>حساب تشغيل منشآت الإدارة</strong>
-                        <small>حساب Owner رسمي واحد يشغّل منشآت الإدارة من لوحة المالك دون تغيير نظام الحجوزات أو الدردشة.</small>
-                    </div>
-                </div>
-
-                @if (platformOwnerExists)
-                {
-                    <div class="admin-owner-admin-note admin-owner-admin-note--ready admin-owner-admin-note--premium">
-                        <span class="admin-owner-admin-note__icon"><i class="bi bi-check2-circle"></i></span>
-                        <div class="admin-owner-admin-note__content">
-                            <span class="admin-owner-admin-note__eyebrow">جاهز للربط</span>
-                            <strong>@platformOwnerName</strong>
-                            <p>ستُربط المنشأة بهذا الحساب، وستظهر له في لوحة المالك لاستقبال الحجوزات والرسائل وإدارة السياسات والتقويم.</p>
-
-                            <div class="admin-owner-account-meta admin-owner-account-meta--premium">
-                                <span><i class="bi bi-person-circle"></i><b dir="ltr">@platformOwnerUsername</b></span>
-                                <span><i class="bi bi-envelope"></i><b dir="ltr">@platformOwnerEmail</b></span>
-                                <span><i class="bi bi-shield-check"></i><b>Owner · Active</b></span>
-                            </div>
-
-                            <div class="admin-owner-admin-note__login-tip">
-                                <i class="bi bi-box-arrow-in-left"></i>
-                                <span>لإدارة المنشآت: سجّل الخروج من حساب الأدمن ثم ادخل ببيانات هذا الحساب من صفحة تسجيل الدخول العادية.</span>
-                            </div>
-                        </div>
-                    </div>
-                }
-                else
-                {
-                    <div class="admin-owner-admin-note admin-owner-admin-note--warning admin-owner-admin-note--premium">
-                        <span class="admin-owner-admin-note__icon"><i class="bi bi-exclamation-triangle-fill"></i></span>
-                        <div class="admin-owner-admin-note__content">
-                            <span class="admin-owner-admin-note__eyebrow">إعداد أول مرة</span>
-                            <strong>@(platformOwnerConfigured ? "حساب التشغيل المسجل غير متاح" : "حساب التشغيل لم يُنشأ بعد")</strong>
-                            <p>أنشئ حساب Owner رسميًا مرة واحدة، ثم سيبقى خيار «منشآت الإدارة» جاهزًا في كل إضافة لاحقة.</p>
-                            <button type="button" class="admin-owner-setup-button" data-setup-platform-owner>
-                                <i class="bi bi-person-plus-fill"></i>
-                                <span>إنشاء حساب التشغيل الآن</span>
-                                <i class="bi bi-arrow-left"></i>
-                            </button>
-                        </div>
-                    </div>
-                }
-            </div>
         </section>
 
         <footer class="admin-place-create-footer admin-place-create-footer--premium">
@@ -557,7 +489,7 @@
                     <small>ملخص الاختيار</small>
                     <div>
                         <span><b>الفئة:</b> <strong data-summary-category>لم تُحدد بعد</strong></span>
-                        <span><b>الحساب:</b> <strong data-summary-owner>مالك جديد</strong></span>
+                        <span><b>الحساب:</b> <strong data-summary-owner>حسابي الإداري</strong></span>
                     </div>
                 </div>
             </div>
@@ -579,4 +511,26 @@
 @section Scripts {
     <script src="~/lib/sweetalert2/sweetalert2.js"></script>
     <script src="~/js/admin/places-actions.js" asp-append-version="true"></script>
+    <script>
+        // places-actions.js القديم يستخدم اسم "حساب تشغيل الإدارة" في الملخص فقط.
+        // نصححه هنا إلى المفهوم الجديد بدون تغيير الملف المشترك أو التأثير على إدارة المنشآت.
+        document.addEventListener("DOMContentLoaded", function () {
+            const root = document.querySelector("[data-admin-place-create]");
+            const ownerSummary = document.querySelector("[data-summary-owner]");
+            if (!root || !ownerSummary) return;
+
+            const syncAdminOwnerSummary = function () {
+                const mode = root.querySelector('[name="OwnerMode"]:checked')?.value;
+                if (mode === "admin") {
+                    ownerSummary.textContent = "حسابي الإداري";
+                }
+            };
+
+            root.addEventListener("change", syncAdminOwnerSummary);
+            root.addEventListener("click", function () {
+                window.setTimeout(syncAdminOwnerSummary, 0);
+            });
+            syncAdminOwnerSummary();
+        });
+    </script>
 }

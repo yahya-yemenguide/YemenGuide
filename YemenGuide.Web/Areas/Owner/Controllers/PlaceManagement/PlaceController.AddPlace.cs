@@ -264,14 +264,99 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     }
 
                     int ownerId = 0;
-                    string ownerMode = Request.Form.ContainsKey("OwnerMode") ? Request.Form["OwnerMode"].ToString() : "";
+                    string ownerMode = Request.Form.ContainsKey("OwnerMode")
+                        ? Request.Form["OwnerMode"].ToString().Trim().ToLowerInvariant()
+                        : string.Empty;
 
-                    // أوضاع ربط مالك جديد/موجود/حساب تشغيل الإدارة لا يقبلها الخادم إلا من مستخدم Admin.
+                    // أوضاع الربط الخاصة بالأدمن لا يقبلها الخادم إلا من مستخدم Admin فعلي.
                     if (!currentUserIsAdmin)
                         ownerMode = "current";
 
-                    // 1. معالجة المالك الجديد
-                    if (currentUserIsAdmin && ownerMode == "new")
+                    // 1. وضع الإدارة يدعم حالتين فقط:
+                    //    أ) «حسابي الإداري» الجديد: OwnerId هو نفس UserId للأدمن الحالي.
+                    //    ب) حساب التشغيل القديم الذي قد يكون موجودًا من بيانات سابقة أو من خيار
+                    //       SetAsPlatformOwner داخل مسار «مالك جديد».
+                    // أي OwnerId آخر يُرفض حتى لا يستطيع الأدمن استخدام واجهة المالك على حساب عشوائي.
+                    if (currentUserIsAdmin && ownerMode == "admin")
+                    {
+                        var adminIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+                        if (!int.TryParse(adminIdClaim, out int adminId) || adminId <= 0)
+                        {
+                            return Json(new
+                            {
+                                success = false,
+                                message = "تعذر تحديد حساب الإدارة الحالي. سجّل الدخول من جديد ثم حاول مرة أخرى."
+                            });
+                        }
+
+                        var currentAdmin = await _context.Users
+                            .AsNoTracking()
+                            .FirstOrDefaultAsync(u =>
+                                u.UserId == adminId &&
+                                u.Role == SystemRoles.Admin);
+
+                        if (currentAdmin == null)
+                        {
+                            return Json(new
+                            {
+                                success = false,
+                                message = "حساب الإدارة الحالي غير موجود أو لم يعد يملك صلاحية Admin."
+                            });
+                        }
+
+                        int requestedOwnerId = adminId;
+                        if (Request.Form.ContainsKey("OwnerId") &&
+                            int.TryParse(Request.Form["OwnerId"], out int submittedAdminOwnerId) &&
+                            submittedAdminOwnerId > 0)
+                        {
+                            requestedOwnerId = submittedAdminOwnerId;
+                        }
+
+                        if (requestedOwnerId == adminId)
+                        {
+                            // المسار الجديد: نفس حساب الأدمن الحالي، بلا أي حساب وسيط.
+                            ownerId = adminId;
+                        }
+                        else
+                        {
+                            // توافق خلفي فقط مع حساب التشغيل القديم؛ لا يُقبل أي Owner آخر.
+                            int? platformOwnerId = await _context.SystemSettings
+                                .AsNoTracking()
+                                .OrderBy(setting => setting.Id)
+                                .Select(setting => setting.PlatformOwnerUserId)
+                                .FirstOrDefaultAsync();
+
+                            if (!platformOwnerId.HasValue || platformOwnerId.Value != requestedOwnerId)
+                            {
+                                return Json(new
+                                {
+                                    success = false,
+                                    message = "حساب مالك منشأة الإدارة لا يطابق حساب الأدمن الحالي ولا حساب التشغيل المعتمد."
+                                });
+                            }
+
+                            bool validPlatformOwner = await _context.Users
+                                .AsNoTracking()
+                                .AnyAsync(u =>
+                                    u.UserId == requestedOwnerId &&
+                                    u.Role == SystemRoles.Owner &&
+                                    u.AccountState == "Active");
+
+                            if (!validPlatformOwner)
+                            {
+                                return Json(new
+                                {
+                                    success = false,
+                                    message = "حساب تشغيل منشآت الإدارة غير موجود أو غير نشط."
+                                });
+                            }
+
+                            ownerId = requestedOwnerId;
+                        }
+                    }
+                    // 2. معالجة المالك الجديد
+                    else if (currentUserIsAdmin && ownerMode == "new")
                     {
                         string firstName = Request.Form["NewFirstName"].ToString();
                         string lastName = Request.Form["NewLastName"].ToString();
@@ -291,7 +376,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                         {
                             FullName = fullName,
                             Username = newUsername,
-                            ContactInfo = newEmail, // حفظ الإيميل في حقل التواصل
+                            ContactInfo = newEmail,
                             PasswordHash = HashPassword(newPassword ?? "123456"),
                             Role = "Owner",
                             CreatedAt = DateTime.Now,
@@ -307,8 +392,10 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                         await _context.SaveChangesAsync();
                         ownerId = newOwner.UserId;
                     }
-                    // 2. معالجة المالك الموجود (أو المحدد من الأدمن)
-                    else if (currentUserIsAdmin && Request.Form.ContainsKey("OwnerId") && int.TryParse(Request.Form["OwnerId"], out int injectedOwnerId))
+                    // 3. معالجة المالك الموجود الذي اختاره الأدمن
+                    else if (currentUserIsAdmin && ownerMode == "existing" &&
+                             Request.Form.ContainsKey("OwnerId") &&
+                             int.TryParse(Request.Form["OwnerId"], out int injectedOwnerId))
                     {
                         bool validOwner = await _context.Users.AsNoTracking().AnyAsync(u =>
                             u.UserId == injectedOwnerId &&
@@ -320,13 +407,13 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
                         ownerId = injectedOwnerId;
                     }
-                    // 3. معالجة المالك الحالي (مع تحديث بياناته تلقائياً)
+                    // 4. معالجة المالك الحالي في رحلة المالك العادية
                     else
                     {
                         var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-                        if (!string.IsNullOrEmpty(userIdClaim))
+                        if (!string.IsNullOrEmpty(userIdClaim) && int.TryParse(userIdClaim, out int parsedOwnerId))
                         {
-                            ownerId = int.Parse(userIdClaim);
+                            ownerId = parsedOwnerId;
 
                             var existingOwner = await _context.Users.FindAsync(ownerId);
                             if (existingOwner != null)
@@ -378,23 +465,8 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                         return Json(new { success = false, message = "خطأ: لم يتم تحديد مالك للمنشأة. يرجى العودة للخلف وتحديد المالك." });
                     }
 
-                    if (currentUserIsAdmin && string.Equals(ownerMode, "admin", StringComparison.OrdinalIgnoreCase))
-                    {
-                        int? platformOwnerId = await _context.SystemSettings
-                            .AsNoTracking()
-                            .OrderBy(setting => setting.Id)
-                            .Select(setting => setting.PlatformOwnerUserId)
-                            .FirstOrDefaultAsync();
-
-                        if (!platformOwnerId.HasValue || platformOwnerId.Value != ownerId)
-                        {
-                            return Json(new
-                            {
-                                success = false,
-                                message = "حساب المالك المحدد ليس حساب تشغيل منشآت الإدارة المعتمد."
-                            });
-                        }
-                    }
+                    // تم حسم هوية مالك وضع admin أعلاه: إما نفس الأدمن الحالي،
+                    // أو حساب التشغيل القديم المعتمد فقط للتوافق مع البيانات السابقة.
 
                     // 1. قراءة الإحداثيات من الجافاسكريبت
                     string latStr = Request.Form.ContainsKey("Latitude") ? Request.Form["Latitude"].ToString().Replace(",", ".") : "0";
@@ -406,8 +478,8 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
                     if (currentUserIsAdmin)
                     {
-                        bool isPlatformOperation = string.Equals(ownerMode, "admin", StringComparison.OrdinalIgnoreCase);
-                        status = isPlatformOperation
+                        bool isAdminOperation = string.Equals(ownerMode, "admin", StringComparison.OrdinalIgnoreCase);
+                        status = isAdminOperation
                             ? "Active"
                             : (isBookable ? "WaitOwner" : "Active");
                         isAvailable = !isBookable;

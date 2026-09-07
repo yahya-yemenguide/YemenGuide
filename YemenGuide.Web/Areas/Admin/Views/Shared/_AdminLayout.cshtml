@@ -80,15 +80,15 @@
     @if (showEmployeePasswordGate)
     {
         <link rel="stylesheet"
-              href="~/css/admin/admin-employee-password-modal.css"
-              asp-append-version="true" />
+          href="~/css/admin/admin-employee-password-modal.css"
+          asp-append-version="true" />
     }
 
     @if (!isRtl)
     {
         <link rel="stylesheet"
-              href="~/css/shared/_Admin_OwnerLayout.ltr.css"
-              asp-append-version="true" />
+          href="~/css/shared/_Admin_OwnerLayout.ltr.css"
+          asp-append-version="true" />
     }
 
     @await RenderSectionAsync("Styles", required: false)
@@ -125,8 +125,57 @@
     @if (showEmployeePasswordGate)
     {
         <script src="~/js/admin/admin-employee-password-modal.js"
-                asp-append-version="true"></script>
+            asp-append-version="true"></script>
     }
+
+    <!-- إصلاح مودال الصورة بدون ملف JavaScript إضافي -->
+    <script>
+        (function () {
+            'use strict';
+
+            const avatarModalElement =
+                document.getElementById('avatarManageModal');
+
+            if (!avatarModalElement) {
+                return;
+            }
+
+            // إخراج المودال من stacking context الخاص بمحتوى لوحة التحكم.
+            if (avatarModalElement.parentElement !== document.body) {
+                document.body.appendChild(avatarModalElement);
+            }
+
+            avatarModalElement.addEventListener('show.bs.modal', function () {
+                avatarModalElement.style.setProperty(
+                    'z-index',
+                    '20020',
+                    'important'
+                );
+            });
+
+            avatarModalElement.addEventListener('shown.bs.modal', function () {
+                const backdrops =
+                    document.querySelectorAll('.modal-backdrop');
+
+                const currentBackdrop =
+                    backdrops.length
+                        ? backdrops[backdrops.length - 1]
+                        : null;
+
+                if (currentBackdrop) {
+                    currentBackdrop.style.setProperty(
+                        'z-index',
+                        '20010',
+                        'important'
+                    );
+                }
+            });
+
+            avatarModalElement.addEventListener('hidden.bs.modal', function () {
+                avatarModalElement.style.removeProperty('z-index');
+            });
+        })();
+    </script>
 
     @await RenderSectionAsync("Scripts", required: false)
 

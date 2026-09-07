@@ -21,7 +21,7 @@ using YemenGuide.Web.Hubs;
 namespace YemenGuide.Web.Areas.Owner.Controllers
 {
     [Area("Owner")]
-    [Authorize(Roles = "Owner")]
+    [Authorize(Roles = "Owner,Admin")]
     [AuthorizeActiveOwner]
     public class ChatController : Controller
     {

@@ -1226,6 +1226,8 @@
             if (mode === "existing") {
                 const card = getSelectedExistingOwnerCard();
                 ownerTarget.textContent = card?.dataset.ownerName || "اختر مالكًا موجودًا";
+            } else if (mode === "selfadmin") {
+                ownerTarget.textContent = "حسابي الإداري الحالي";
             } else if (mode === "admin") {
                 const root = document.querySelector("[data-admin-place-create]");
                 ownerTarget.textContent = String(root?.dataset.platformOwnerReady || "false") === "true"
@@ -1250,6 +1252,8 @@
         if (categorySelected) {
             if (mode === "existing") {
                 ownerReady = Boolean(byId("ExistingOwnerId")?.value);
+            } else if (mode === "selfadmin") {
+                ownerReady = true;
             } else if (mode === "admin") {
                 ownerReady = platformReady;
             } else {
@@ -1287,7 +1291,9 @@
 
         const isNew = selectedMode === "new";
         const isExisting = selectedMode === "existing";
-        const isAdmin = selectedMode === "admin";
+        const isSelfAdmin = selectedMode === "selfadmin";
+        const isLegacyAdmin = selectedMode === "admin";
+        const isAdmin = isSelfAdmin || isLegacyAdmin;
 
         const newPanel = byId("newOwnerInputs");
         const existingPanel = byId("existingOwnerInputs");
@@ -1329,7 +1335,7 @@
             existingSelect.required = isExisting;
         }
 
-        if (isAdmin && !platformOwnerReady && !options.silent) {
+        if (isLegacyAdmin && !platformOwnerReady && !options.silent) {
             adminPanel?.scrollIntoView({ behavior: "smooth", block: "nearest" });
         }
 

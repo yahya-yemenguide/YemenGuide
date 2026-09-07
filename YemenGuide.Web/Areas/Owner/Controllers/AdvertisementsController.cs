@@ -16,7 +16,7 @@ using YemenGuide.Web.Services.Advertisements;
 namespace YemenGuide.Web.Areas.Owner.Controllers
 {
     [Area("Owner")]
-    [Authorize(Roles = "Owner")]
+    [Authorize(Roles = "Owner,Admin")]
     public sealed class AdvertisementsController : Controller
     {
         private const long MaximumImageBytes = 10L * 1024L * 1024L;

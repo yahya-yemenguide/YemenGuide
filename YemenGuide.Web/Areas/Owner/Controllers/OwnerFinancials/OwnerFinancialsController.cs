@@ -11,7 +11,7 @@ using YemenGuide.Web.Services.Finance;
 namespace YemenGuide.Web.Areas.Owner.Controllers.OwnerFinancials
 {
     [Area("Owner")]
-    [Authorize]
+    [Authorize(Roles = "Owner,Admin")]
     [AuthorizeActiveOwner]
     [Route("Owner/Financials")]
     [ResponseCache(

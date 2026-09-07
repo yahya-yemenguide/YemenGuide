@@ -13,7 +13,7 @@ using YemenGuide.Web.Services.Reports;
 namespace YemenGuide.Web.Areas.Owner.Controllers
 {
     [Area("Owner")]
-    [Authorize(Roles = "Owner")]
+    [Authorize(Roles = "Owner,Admin")]
     [AuthorizeActiveOwner]
     public sealed class ReportsController : Controller
     {

@@ -1,9 +1,9 @@
 ﻿/**
- * ============================================================================
- * Dalilak Al-Yamani - Master Entities Management
- * الفئات + المدن | Premium / Responsive Edition
- * ============================================================================
- */
+* ============================================================================
+* Dalilak Al-Yamani - Master Entities Management
+* الفئات + المدن | Premium / Responsive Edition
+* ============================================================================
+*/
 
 document.addEventListener('DOMContentLoaded', () => {
     'use strict';
@@ -725,7 +725,13 @@ document.addEventListener('DOMContentLoaded', () => {
             title,
             text,
             confirmButtonText: 'تم',
-            confirmButtonColor: '#00A6DA'
+            confirmButtonColor: '#00A6DA',
+            didOpen: () => {
+                const container = Swal.getContainer();
+                if (container) {
+                    container.style.setProperty('z-index', '2147483647', 'important');
+                }
+            }
         });
     }
 

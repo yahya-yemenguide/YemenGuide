@@ -15,7 +15,7 @@ using YemenGuide.Web.Filters;
 namespace YemenGuide.Web.Areas.Owner.Controllers
 {
     [Area("Owner")]
-    [Authorize(Roles = "Owner")]
+    [Authorize(Roles = "Owner,Admin")]
     [AuthorizeActiveOwner]
     public class SettingsController : Controller
     {
@@ -52,11 +52,24 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
         private async Task<string> GetOwnerAccountStateAsync(int ownerId)
         {
-            return await _context.Users
+            var account = await _context.Users
                 .AsNoTracking()
-                .Where(user => user.UserId == ownerId && user.Role == "Owner")
-                .Select(user => user.AccountState ?? string.Empty)
-                .FirstOrDefaultAsync() ?? string.Empty;
+                .Where(user => user.UserId == ownerId)
+                .Select(user => new
+                {
+                    user.Role,
+                    user.AccountState
+                })
+                .FirstOrDefaultAsync();
+
+            if (account == null)
+                return string.Empty;
+
+            // حساب الأدمن الذي يملك منشأة لا يدخل رحلة توثيق حساب Owner.
+            if (string.Equals(account.Role, "Admin", StringComparison.OrdinalIgnoreCase))
+                return "Active";
+
+            return account.AccountState ?? string.Empty;
         }
 
         private static bool IsPreActivationState(string? state)
@@ -519,7 +532,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     ownedPlace.Status = "Active";
                     ownedPlace.IsAvailable = true;
                 }
-                else if (platformOwnerId == ownerId &&
+                else if ((User.IsInRole("Admin") || platformOwnerId == ownerId) &&
                          string.Equals(ownedPlace.Status, "Active", StringComparison.OrdinalIgnoreCase))
                 {
                     ownedPlace.IsAvailable = true;
@@ -683,7 +696,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 place.Status = "Active";
                 place.IsAvailable = true;
             }
-            else if (platformOwnerId == ownerId &&
+            else if ((User.IsInRole("Admin") || platformOwnerId == ownerId) &&
                      string.Equals(place.Status, "Active", StringComparison.OrdinalIgnoreCase))
             {
                 place.IsAvailable = true;

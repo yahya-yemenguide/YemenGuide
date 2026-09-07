@@ -2100,18 +2100,24 @@
                         }
 
                         if (config.mode === 'admin') {
-                            const adminOwnsPlace = config.ownerMode === 'admin';
-                            const targetTab = config.targetTab ||
-                                (adminOwnsPlace ? 'admin-places-tab' : (systemId > 0 ? 'waiting-owner-tab' : 'admin-places-tab'));
+                            const currentAdminOwnsPlace = config.ownerMode === 'selfadmin';
+                            const legacyPlatformPlace = config.ownerMode === 'admin';
+
+                            const targetTab = (currentAdminOwnsPlace || legacyPlatformPlace)
+                                ? 'admin-places-tab'
+                                : (config.targetTab ||
+                                    (systemId > 0 ? 'waiting-owner-tab' : 'admin-places-tab'));
 
                             Swal.fire({
                                 icon: 'success',
                                 title: 'تم إنشاء المنشأة بنجاح',
-                                text: adminOwnsPlace
-                                    ? 'تم ربط المنشأة بحساب تشغيل الإدارة وحفظها نشطة، وتبقى الحجوزات متوقفة حتى استكمال السياسات.'
-                                    : (systemId > 0
-                                        ? 'تم إرسال المنشأة إلى المالك المختار ليراجعها ويكمل السياسات.'
-                                        : 'تم إنشاء المنشأة وإضافتها إلى منشآت الإدارة.'),
+                                text: currentAdminOwnsPlace
+                                    ? 'تم ربط المنشأة مباشرة بحساب الأدمن الحالي وحفظها نشطة، وتبقى الحجوزات متوقفة حتى استكمال السياسات.'
+                                    : (legacyPlatformPlace
+                                        ? 'تم ربط المنشأة بحساب تشغيل الإدارة وحفظها نشطة، وتبقى الحجوزات متوقفة حتى استكمال السياسات.'
+                                        : (systemId > 0
+                                            ? 'تم إرسال المنشأة إلى المالك المختار ليراجعها ويكمل السياسات.'
+                                            : 'تم إنشاء المنشأة وإضافتها إلى منشآت الإدارة.')),
                                 confirmButtonText: 'العودة إلى إدارة المنشآت',
                                 confirmButtonColor: '#00A6DA',
                                 allowOutsideClick: false,
@@ -3479,3 +3485,4 @@ function hideWizardInlineError() {
         Swal.resetValidationMessage();
     }
 }
+ل

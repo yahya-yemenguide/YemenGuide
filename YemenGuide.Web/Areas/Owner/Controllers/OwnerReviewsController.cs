@@ -15,7 +15,7 @@ using YemenGuide.Web.Filters;
 namespace YemenGuide.Web.Areas.Owner.Controllers
 {
     [Area("Owner")]
-    [Authorize(Roles = "Owner")]
+    [Authorize(Roles = "Owner,Admin")]
     [AuthorizeActiveOwner]
     [Route("Owner/Reviews")]
     public class OwnerReviewsController : Controller

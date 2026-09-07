@@ -15,8 +15,6 @@ using YemenGuide.Core.DTOs.Notifications;
 using YemenGuide.Core.DTOs.Owner;
 using YemenGuide.Data;
 using YemenGuide.Web.Filters;
-using YemenGuide.Web.Services;
-using YemenGuide.Web.Services.ExchangeRates;
 using YemenGuide.Web.Services.Finance;
 using YemenGuide.Web.Services.Notifications;
 using YemenGuide.Web.Services.OwnerDashboard;
@@ -24,7 +22,7 @@ using YemenGuide.Web.Services.OwnerDashboard;
 namespace YemenGuide.Web.Areas.Owner.Controllers
 {
     [Area("Owner")]
-    [Authorize(Roles = "Owner")]
+    [Authorize(Roles = "Owner,Admin")]
     [AuthorizeActiveOwner]
     public class OwnerDashboardController : Controller
     {
@@ -32,14 +30,12 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
         private readonly ICommissionFinanceService _commissionFinanceService;
         private readonly IOwnerDashboardService _ownerDashboardService;
         private readonly INotificationService _notificationService;
-        private readonly CurrencyService _currencyService;
 
         public OwnerDashboardController(
             AppDbContext context,
             ICommissionFinanceService commissionFinanceService,
             IOwnerDashboardService ownerDashboardService,
-            INotificationService notificationService,
-            CurrencyService currencyService)
+            INotificationService notificationService)
         {
             _context = context ??
                 throw new ArgumentNullException(nameof(context));
@@ -52,9 +48,6 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
             _notificationService = notificationService ??
                 throw new ArgumentNullException(nameof(notificationService));
-
-            _currencyService = currencyService ??
-                throw new ArgumentNullException(nameof(currencyService));
         }
 
         public async Task<IActionResult> DashboardOwner(
@@ -84,9 +77,8 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
             // =========================================================
             // حالة الفترة التجريبية المستمرة داخل الداشبورد.
-            // مبالغ الداشبورد أصبحت أصلًا بعملة بروفايل المالك؛
-            // أي مبلغ إضافي نقرأه من الخدمات المالية (YER) نحوله هنا
-            // بنفس سوق المنشأة المختارة قبل إرساله للواجهة.
+            // التجربة نفسها تخص حساب المالك، بينما الرصيد والتشغيل
+            // يظلان حسب المنشأة المختارة من الهيدر.
             // =========================================================
             var ownerTrial = await _context.Users
                 .AsNoTracking()
@@ -108,38 +100,10 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 .OrderBy(item => item.Id)
                 .Select(item => new
                 {
+                    item.DefaultCurrency,
                     item.RequiredCommissionGuaranteeBalance
                 })
                 .FirstOrDefaultAsync(cancellationToken);
-
-            var currency = CurrencyDisplayService.NormalizeCurrency(model.Currency);
-            if (string.IsNullOrWhiteSpace(currency))
-            {
-                currency = CurrencyDisplayService.YemeniRial;
-            }
-
-            var exchangeRateRegion = ExchangeRateRegionResolver.SanaaMarket;
-            if (model.PlaceId.HasValue && model.PlaceId.Value > 0)
-            {
-                var storedRegion = await _context.Places
-                    .AsNoTracking()
-                    .Where(place => place.PlaceId == model.PlaceId.Value)
-                    .Select(place => place.City != null
-                        ? place.City.ExchangeRateRegion
-                        : null)
-                    .FirstOrDefaultAsync(cancellationToken);
-
-                if (!string.IsNullOrWhiteSpace(storedRegion))
-                {
-                    exchangeRateRegion = storedRegion.Trim();
-                }
-            }
-
-            decimal DisplayAmount(decimal amountInYer) =>
-                _currencyService.ConvertAmount(
-                    amountInYer,
-                    currency,
-                    exchangeRateRegion);
 
             var now = DateTime.Now;
             var startedAt = ownerTrial.FreeTrialStartedAt;
@@ -172,12 +136,21 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                         (endsAt!.Value - now).TotalDays))
                 : 0;
 
-            var requiredGuarantee = DisplayAmount(
+            var currency = string.IsNullOrWhiteSpace(settings?.DefaultCurrency)
+                ? model.Currency
+                : settings!.DefaultCurrency!.Trim();
+
+            if (string.IsNullOrWhiteSpace(currency))
+            {
+                currency = "ريال يمني";
+            }
+
+            var requiredGuarantee = Math.Round(
                 Math.Max(
                     0m,
-                    settings?.RequiredCommissionGuaranteeBalance ?? 0m));
+                    settings?.RequiredCommissionGuaranteeBalance ?? 0m),
+                2);
 
-            // هذه القيمة حُولت بالفعل داخل OwnerDashboardService.
             var availableGuarantee = Math.Round(
                 Math.Max(0m, model.Guarantee.AvailableBalance),
                 2);
@@ -203,8 +176,9 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
                 if (financialAccessForSelectedPlace.RequiredGuaranteeBalance > 0m)
                 {
-                    requiredGuarantee = DisplayAmount(
-                        financialAccessForSelectedPlace.RequiredGuaranteeBalance);
+                    requiredGuarantee = Math.Round(
+                        financialAccessForSelectedPlace.RequiredGuaranteeBalance,
+                        2);
 
                     missingGuarantee = Math.Round(
                         Math.Max(
@@ -264,11 +238,17 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     : string.Empty
             };
 
+            // إشعار دائم في مركز الإشعارات عند 3/2/1 أيام،
+            // وعند انتهاء التجربة إذا كان الرصيد ما زال غير كافٍ.
             await EnsureTrialReminderNotificationAsync(
                 ownerId,
                 model,
                 cancellationToken);
 
+            // =========================================================
+            // مهم: الجزء التالي يحافظ على منطق منبثقة الترحيب القديمة.
+            // لا تظهر إلا أثناء تجربة فعالة ومع وجود منشأة حجز تشغيلية.
+            // =========================================================
             if (!trialIsActive)
             {
                 return View(model);
@@ -343,14 +323,13 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                         (int)Math.Ceiling(
                             (welcomeEndsAt.Value - now).TotalDays));
 
-            var welcomeRequiredGuaranteeYer = Math.Max(
-                0m,
-                financialAccess.RequiredGuaranteeBalance > 0m
-                    ? financialAccess.RequiredGuaranteeBalance
-                    : settings?.RequiredCommissionGuaranteeBalance ?? 0m);
-
-            var welcomeRequiredGuarantee = DisplayAmount(
-                welcomeRequiredGuaranteeYer);
+            var welcomeRequiredGuarantee = Math.Round(
+                Math.Max(
+                    0m,
+                    financialAccess.RequiredGuaranteeBalance > 0m
+                        ? financialAccess.RequiredGuaranteeBalance
+                        : settings?.RequiredCommissionGuaranteeBalance ?? 0m),
+                2);
 
             model.TrialWelcome = new OwnerTrialWelcomeDto
             {
@@ -422,9 +401,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             }
 
             var amountText = trial.MissingGuaranteeBalance > 0m
-                ? $" ينقص رصيد الضمان " +
-                  $"{CurrencyDisplayService.FormatNumber(trial.MissingGuaranteeBalance, trial.Currency)} " +
-                  $"{CurrencyDisplayService.GetCurrencySymbol(trial.Currency)}."
+                ? $" ينقص رصيد الضمان {trial.MissingGuaranteeBalance:N0} {trial.Currency}."
                 : string.Empty;
 
             var text = shouldNotifyExpired

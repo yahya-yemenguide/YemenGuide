@@ -133,7 +133,7 @@
            asp-controller="Home"
            asp-action="Index">
             <span class="yg-platform-orb" aria-hidden="true">
-<img src="@logoPath"
+                <img src="@logoPath"
                      alt=""
                      height="35"
                      onerror="this.onerror=null;this.src='/images/logo1.png';" />
@@ -215,13 +215,25 @@
                 </a>
             </li>
 
-            <li class="nav-item">
-                <a class="nav-link @(IsActive("Profile", "OwnerProfile") ? "active" : "")"
+            @if (User.IsInRole("Admin"))
+            {
+                <li class="nav-item">
+                    <a class="nav-link" href="/Admin/Places/PlaceManagement">
+                        <i class="bi bi-arrow-return-right"></i>
+                        <span class="nav-text">العودة إلى إدارة المنشآت</span>
+                    </a>
+                </li>
+            }
+            else
+            {
+                <li class="nav-item">
+                    <a class="nav-link @(IsActive("Profile", "OwnerProfile") ? "active" : "")"
                    asp-area="Owner" asp-controller="Profile" asp-action="OwnerProfile">
-                    <i class="bi bi-person-badge"></i>
-                    <span class="nav-text">حسابي الشخصي</span>
-                </a>
-            </li>
+                        <i class="bi bi-person-badge"></i>
+                        <span class="nav-text">حسابي الشخصي</span>
+                    </a>
+                </li>
+            }
         </ul>
     </div>
 
@@ -508,9 +520,16 @@
                 </div>
             </a>
             <ul class="dropdown-menu dropdown-menu-end">
-                <li><a class="dropdown-item" href="/Owner/Profile/OwnerProfile#personal"><i class="bi bi-person-lines-fill me-2"></i>حسابي الشخصي</a></li>
-                <li><a class="dropdown-item" href="/Owner/Profile/OwnerProfile#settings"><i class="bi bi-sliders me-2"></i>تفضيلات النظام والتنبيهات</a></li>
-                <li><a class="dropdown-item text-danger-hover" href="/Owner/Profile/OwnerProfile#security"><i class="bi bi-shield-lock me-2"></i>الأمان ومنطقة الحساب</a></li>
+                @if (User.IsInRole("Admin"))
+                {
+                    <li><a class="dropdown-item" href="/Admin/Places/PlaceManagement"><i class="bi bi-arrow-return-right me-2"></i>العودة إلى إدارة المنشآت</a></li>
+                }
+                else
+                {
+                    <li><a class="dropdown-item" href="/Owner/Profile/OwnerProfile#personal"><i class="bi bi-person-lines-fill me-2"></i>حسابي الشخصي</a></li>
+                    <li><a class="dropdown-item" href="/Owner/Profile/OwnerProfile#settings"><i class="bi bi-sliders me-2"></i>تفضيلات النظام والتنبيهات</a></li>
+                    <li><a class="dropdown-item text-danger-hover" href="/Owner/Profile/OwnerProfile#security"><i class="bi bi-shield-lock me-2"></i>الأمان ومنطقة الحساب</a></li>
+                }
                 <li><hr class="dropdown-divider" /></li>
                 <li><a class="dropdown-item text-danger" asp-area="" asp-controller="Account" asp-action="Logout"><i class="bi bi-box-arrow-right"></i>تسجيل الخروج</a></li>
             </ul>
@@ -519,4 +538,3 @@
 </header>
 
 <div class="owner-place-backdrop" id="ownerPlaceBackdrop" aria-hidden="true"></div>
-

@@ -60,7 +60,13 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
         {
             var cancellationToken = HttpContext.RequestAborted;
 
-            // رقم حساب التشغيل الرسمي محفوظ في إعدادات النظام، ولا يعتمد على اسم مستخدم ثابت.
+            var adminIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            int currentAdminId = int.TryParse(adminIdClaim, out var parsedAdminId)
+                ? parsedAdminId
+                : 0;
+
+            // نبقي حساب التشغيل القديم للمنشآت السابقة فقط حتى لا تختفي بيانات موجودة،
+            // أما الإضافات الجديدة من خيار «حسابي الإداري» فتُربط بحساب الأدمن نفسه.
             int? platformOwnerId = await _db.SystemSettings
                 .AsNoTracking()
                 .OrderBy(s => s.Id)
@@ -92,10 +98,13 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                 RejectedPlaces = places.Where(p => p.Status == "Rejected").ToList(),
                 SuspendedPlaces = places.Where(p => p.Status == "Suspended").ToList(),
 
-                // لم نعد نعتمد على Role = Admin؛ بل على حساب التشغيل الرسمي للإدارة.
-                AdminPlaces = platformOwnerId.HasValue
-                    ? places.Where(p => p.OwnerId == platformOwnerId.Value).ToList()
-                    : new List<Place>(),
+                // تظهر للأدمن منشآته المرتبطة بحسابه مباشرة، مع إبقاء منشآت
+                // حساب التشغيل القديم ظاهرة للتوافق مع البيانات السابقة.
+                AdminPlaces = places
+                    .Where(p =>
+                        (currentAdminId > 0 && p.OwnerId == currentAdminId) ||
+                        (platformOwnerId.HasValue && p.OwnerId == platformOwnerId.Value))
+                    .ToList(),
 
                 WaitingOwnerApprovalPlaces = places.Where(p => p.Status == "WaitOwner").ToList()
             });
@@ -112,14 +121,13 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                 .FirstOrDefaultAsync();
 
             User? platformOwner = null;
-
             if (settings?.PlatformOwnerUserId is int platformOwnerId && platformOwnerId > 0)
             {
                 platformOwner = await _db.Users
                     .AsNoTracking()
                     .FirstOrDefaultAsync(u =>
                         u.UserId == platformOwnerId &&
-                        u.Role == "Owner" &&
+                        u.Role == SystemRoles.Owner &&
                         u.AccountState == "Active");
             }
 
@@ -132,16 +140,38 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                 .ToListAsync();
 
             int? excludedPlatformOwnerId = platformOwner?.UserId;
-
             ViewBag.Owners = await _db.Users
                 .AsNoTracking()
                 .Where(u =>
-                    u.Role == "Owner" &&
+                    u.Role == SystemRoles.Owner &&
                     u.AccountState == "Active" &&
                     (!excludedPlatformOwnerId.HasValue || u.UserId != excludedPlatformOwnerId.Value))
                 .OrderBy(u => u.FullName)
                 .ToListAsync();
 
+            var adminIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            User? currentAdmin = null;
+
+            if (int.TryParse(adminIdClaim, out int adminId) && adminId > 0)
+            {
+                currentAdmin = await _db.Users
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(u =>
+                        u.UserId == adminId &&
+                        u.Role == SystemRoles.Admin);
+            }
+
+            if (currentAdmin == null)
+                return Forbid();
+
+            ViewBag.CurrentAdminName = currentAdmin.FullName ?? currentAdmin.Username ?? "حساب الإدارة الحالي";
+            ViewBag.CurrentAdminUsername = currentAdmin.Username ?? "";
+            ViewBag.CurrentAdminEmail = currentAdmin.ContactInfo ?? "";
+            ViewBag.CurrentAdminPhone = currentAdmin.PhoneNumber ?? "";
+            ViewBag.CurrentAdminJobTitle = currentAdmin.JobTitle ?? "إدارة النظام";
+
+            // هذه القيم تخص المسار القديم فقط حتى يبقى خيار إنشاء حساب تشغيل
+            // داخل «مالك جديد» كما كان، بدون أن يعتمد عليه خيار حسابي الإداري.
             ViewBag.PlatformOwnerExists = platformOwner != null;
             ViewBag.PlatformOwnerConfigured = settings?.PlatformOwnerUserId.HasValue == true;
             ViewBag.PlatformOwnerName = platformOwner?.FullName ?? "";
@@ -855,34 +885,27 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
             {
                 case "admin":
                     {
-                        var platformOwnerId = await _db.SystemSettings
-                            .AsNoTracking()
-                            .OrderBy(s => s.Id)
-                            .Select(s => s.PlatformOwnerUserId)
-                            .FirstOrDefaultAsync();
-
-                        if (!platformOwnerId.HasValue || platformOwnerId.Value <= 0)
+                        // المطلوب هنا هو نفس حساب الأدمن المسجل حاليًا، وليس حساب Owner وسيط.
+                        var adminIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                        if (!int.TryParse(adminIdClaim, out int adminId) || adminId <= 0)
                         {
-                            TempData["ErrorMessage"] =
-                                "حساب تشغيل منشآت الإدارة غير مجهز بعد. أنشئ مالكًا جديدًا وحدد خيار تعيينه كحساب تشغيل الإدارة.";
+                            TempData["ErrorMessage"] = "تعذر تحديد حساب الإدارة الحالي.";
                             return RedirectToAction(nameof(Create));
                         }
 
-                        var platformOwner = await _db.Users
+                        var currentAdmin = await _db.Users
                             .AsNoTracking()
                             .FirstOrDefaultAsync(u =>
-                                u.UserId == platformOwnerId.Value &&
-                                u.Role == "Owner" &&
-                                u.AccountState == "Active");
+                                u.UserId == adminId &&
+                                u.Role == SystemRoles.Admin);
 
-                        if (platformOwner == null)
+                        if (currentAdmin == null)
                         {
-                            TempData["ErrorMessage"] =
-                                "حساب تشغيل منشآت الإدارة المسجل غير موجود أو غير نشط. أنشئ حساب تشغيل جديدًا من خيار المالك الجديد.";
+                            TempData["ErrorMessage"] = "حساب الإدارة الحالي غير موجود أو لم يعد يملك دور Admin.";
                             return RedirectToAction(nameof(Create));
                         }
 
-                        targetOwnerId = platformOwner.UserId;
+                        targetOwnerId = currentAdmin.UserId;
                         TempData["OwnerMode"] = "admin";
                         break;
                     }
@@ -899,7 +922,7 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                             .AsNoTracking()
                             .FirstOrDefaultAsync(u =>
                                 u.UserId == ExistingOwnerId.Value &&
-                                u.Role == "Owner" &&
+                                u.Role == SystemRoles.Owner &&
                                 u.AccountState == "Active");
 
                         if (existingOwner == null)
@@ -988,7 +1011,7 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                                     .AsNoTracking()
                                     .FirstOrDefaultAsync(u =>
                                         u.UserId == settings.PlatformOwnerUserId.Value &&
-                                        u.Role == "Owner" &&
+                                        u.Role == SystemRoles.Owner &&
                                         u.AccountState == "Active");
                             }
 
@@ -1009,7 +1032,7 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                                     Username = username,
                                     ContactInfo = email,
                                     PasswordHash = HashPassword(password),
-                                    Role = "Owner",
+                                    Role = SystemRoles.Owner,
                                     CreatedAt = DateTime.Now,
                                     PreferredLanguage = "ar",
                                     AccountState = "Active",
@@ -1059,9 +1082,11 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
             }
 
             bool isBookable = category.BookingSystemId >= 1 && category.BookingSystemId <= 4;
-            bool isPlatformOperation = string.Equals(normalizedOwnerMode, "admin", StringComparison.OrdinalIgnoreCase) || SetAsPlatformOwner;
+            bool isAdministrationOperation =
+                string.Equals(normalizedOwnerMode, "admin", StringComparison.OrdinalIgnoreCase) ||
+                SetAsPlatformOwner;
 
-            string targetStatus = isPlatformOperation
+            string targetStatus = isAdministrationOperation
                 ? "Active"
                 : (isBookable ? "WaitOwner" : "Active");
             string targetAvailability = isBookable ? "false" : "true";
@@ -1090,23 +1115,29 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
             ViewBag.InitialStatus = initialStatus ?? "Active";
             ViewBag.InitialAvailability = initialAvailability ?? "true";
 
-            // =================================================================
-            // 🌟🌟 التعديل السحري: سحب بيانات المالك أو الأدمن (بدون إيميلات!) 🌟🌟
-            // =================================================================
+            var fillAdminIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            bool isCurrentAdminOwner =
+                ownerId.HasValue &&
+                int.TryParse(fillAdminIdClaim, out int fillAdminId) &&
+                fillAdminId > 0 &&
+                ownerId.Value == fillAdminId;
+
+            ViewBag.IsCurrentAdminOwner = isCurrentAdminOwner;
+
             if (ownerId.HasValue && ownerId.Value > 0)
             {
-                // حالة: تم تحديد مالك سابق
-                var existingOwner = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.UserId == ownerId.Value);
-                if (existingOwner != null)
+                var selectedAccount = await _db.Users
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(u => u.UserId == ownerId.Value);
+
+                if (selectedAccount != null)
                 {
-                    ViewBag.CurrentOwnerName = existingOwner.FullName;
-                    // 🌟 حذفنا سحب الإيميل، ليأخذ رقم الهاتف فقط
-                    ViewBag.CurrentOwnerPhone = existingOwner.PhoneNumber;
+                    ViewBag.CurrentOwnerName = selectedAccount.FullName;
+                    ViewBag.CurrentOwnerPhone = selectedAccount.PhoneNumber;
                 }
             }
             else
             {
-                // 🌟 حالة: منشأة بدون حجز (أو لم يُحدد مالك) -> نسحب بيانات الأدمن الحالي
                 var adminIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
                 if (!string.IsNullOrEmpty(adminIdClaim) && int.TryParse(adminIdClaim, out int adminId))
                 {
@@ -1114,13 +1145,11 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                     if (adminUser != null)
                     {
                         ViewBag.CurrentOwnerName = adminUser.FullName;
-                        // 🌟 حذفنا سحب الإيميل، ليأخذ رقم الهاتف فقط
                         ViewBag.CurrentOwnerPhone = adminUser.PhoneNumber;
                     }
                 }
             }
 
-            // استقبال بيانات المالك الجديد المخفية لتمريرها للواجهة
             ViewBag.OwnerMode = TempData["OwnerMode"]?.ToString();
             ViewBag.NewFirstName = TempData["NewFirstName"]?.ToString();
             ViewBag.NewLastName = TempData["NewLastName"]?.ToString();

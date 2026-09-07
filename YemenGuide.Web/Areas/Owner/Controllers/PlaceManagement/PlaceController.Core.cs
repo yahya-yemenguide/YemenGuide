@@ -55,13 +55,27 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
         private async Task<bool> CanManagePlaceAsync(int placeId, string? adminPermission = null)
         {
-            if (User.IsInRole("Admin"))
-                return adminPermission == null || await HasAdminPermissionAsync(adminPermission);
-            if (!TryGetCurrentUserId(out int ownerId)) return false;
+            if (!TryGetCurrentUserId(out int currentUserId))
+                return false;
 
-            return await _context.Places
+            // داخل واجهات المالك: ملكية المنشأة الفعلية تأتي أولاً.
+            // بهذا يستطيع الأدمن إدارة منشآته الخاصة كمالك كامل.
+            bool ownsPlace = await _context.Places
                 .AsNoTracking()
-                .AnyAsync(place => place.PlaceId == placeId && place.OwnerId == ownerId);
+                .AnyAsync(place =>
+                    place.PlaceId == placeId &&
+                    place.OwnerId == currentUserId);
+
+            if (ownsPlace)
+                return true;
+
+            // منشآت الآخرين لا تصبح "منشآت الأدمن" داخل وضع المالك.
+            // تبقى صلاحية الإدارة الأصلية متاحة فقط للإجراءات التي تمرر مفتاح صلاحية صريحًا.
+            if (User.IsInRole("Admin"))
+                return adminPermission != null &&
+                       await HasAdminPermissionAsync(adminPermission);
+
+            return false;
         }
 
         private async Task<bool> IsPlatformOwnerAsync(int? ownerId)
@@ -87,9 +101,6 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
         [HttpGet]
         public async Task<IActionResult> ManagePlaces(int? categoryId, int? ownerId, bool autoOpenWizard = false)
         {
-            if (User.IsInRole("Admin") && !await HasAdminPermissionAsync(AdminPermissionKeys.Places.View))
-                return Forbid();
-
             ViewBag.SelectedCategoryId = categoryId;
             ViewBag.SelectedOwnerId = ownerId;
             ViewBag.AutoOpenWizard = autoOpenWizard;
@@ -101,10 +112,8 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             if (!int.TryParse(loggedInUserId, out int currentUserId) || currentUserId <= 0)
                 return Unauthorized();
 
-            // المالك لا يستطيع تمرير رقم مالك آخر في الرابط. السماح بذلك محصور بالإدارة.
-            int targetOwnerId = User.IsInRole("Admin") && ownerId.HasValue
-                ? ownerId.Value
-                : currentUserId;
+            // واجهة المالك تعرض دائمًا منشآت الحساب الحالي فقط، سواء كان Owner أو Admin.
+            int targetOwnerId = currentUserId;
 
             // 🚀 تم حذف (p.PlaceImages) من هنا لأن القائمة لا تحتاجه للعرض الأساسي
             var places = await _context.Places
