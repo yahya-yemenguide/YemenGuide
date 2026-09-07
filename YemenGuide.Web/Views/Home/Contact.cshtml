@@ -1,528 +1,505 @@
-﻿@{
+﻿@inject YemenGuide.Data.AppDbContext _context
+@{
     ViewData["Title"] = "تواصل معنا";
     Layout = "~/Views/Shared/_Layout.cshtml";
+
+    var settings = _context.SystemSettings.FirstOrDefault();
+
+    string siteName = settings?.SiteName ?? "دليلك اليمني";
+    string whatsappRaw = settings?.WhatsAppNumber?.Trim() ?? string.Empty;
+    string whatsappNumber = System.Text.RegularExpressions.Regex.Replace(
+        whatsappRaw,
+        @"\D",
+        string.Empty);
+
+    string contactEmail = settings?.ContactEmail?.Trim() ?? string.Empty;
+
+    bool hasWhatsapp = !string.IsNullOrWhiteSpace(whatsappNumber);
+    bool hasEmail = !string.IsNullOrWhiteSpace(contactEmail);
+
+    string whatsappDirectUrl = hasWhatsapp
+        ? $"https://wa.me/{whatsappNumber}"
+        : "#";
+
+    string emailDirectUrl = hasEmail
+        ? $"mailto:{contactEmail}"
+        : "#";
 }
 
 @section Styles {
     <link rel="stylesheet"
-          href="~/css/customer/contact.css"
-          asp-append-version="true" />
+      href="~/css/customer/contact.css"
+      asp-append-version="true" />
 }
 
-<main class="yg-contact-page"
-      id="ygContactPage">
+    <main class="yg-contact-page"
+      id="ygContactPage"
+      data-whatsapp="@whatsappNumber"
+      data-email="@contactEmail"
+      data-site-name="@siteName">
 
-    <!-- ============================================================= -->
-    <!-- 01 — SIGNAL HORIZON HERO                                      -->
-    <!-- ============================================================= -->
-    <section class="yg-contact-hero"
+        <!-- ============================================================= -->
+        <!-- HERO                                                           -->
+        <!-- ============================================================= -->
+        <section class="yg-contact-hero"
              aria-labelledby="contactHeroTitle">
 
-        <!-- Visual canvas -->
-        <div class="yg-contact-hero-canvas"
-             aria-hidden="true">
-
-            <span class="yg-contact-hero-image"></span>
-            <span class="yg-contact-hero-shade"></span>
-
-            <span class="yg-contact-topography yg-contact-topography--a"></span>
-            <span class="yg-contact-topography yg-contact-topography--b"></span>
-
-            <span class="yg-contact-aurora yg-contact-aurora--cyan"></span>
-            <span class="yg-contact-aurora yg-contact-aurora--orange"></span>
-            <span class="yg-contact-aurora yg-contact-aurora--micro"></span>
-
-            <span class="yg-contact-star yg-contact-star--01"></span>
-            <span class="yg-contact-star yg-contact-star--02"></span>
-            <span class="yg-contact-star yg-contact-star--03"></span>
-            <span class="yg-contact-star yg-contact-star--04"></span>
-            <span class="yg-contact-star yg-contact-star--05"></span>
-            <span class="yg-contact-star yg-contact-star--06"></span>
-            <span class="yg-contact-star yg-contact-star--07"></span>
-            <span class="yg-contact-star yg-contact-star--08"></span>
-            <span class="yg-contact-star yg-contact-star--09"></span>
-            <span class="yg-contact-star yg-contact-star--10"></span>
-            <span class="yg-contact-star yg-contact-star--11"></span>
-            <span class="yg-contact-star yg-contact-star--12"></span>
-
-            <span class="yg-contact-dust yg-contact-dust--a"></span>
-            <span class="yg-contact-dust yg-contact-dust--b"></span>
-
-            <span class="yg-contact-comet"></span>
-            <span class="yg-contact-sweep"></span>
-        </div>
-
-        <div class="container yg-contact-hero-container">
-            <div class="row align-items-center g-4 g-xl-5">
-
-                <!-- Copy -->
-                <div class="col-lg-7">
-                    <div class="yg-contact-hero-copy"
-                         data-yg-reveal>
-
-                        <span class="yg-contact-status-pill">
-                            <span class="yg-contact-live-dot"></span>
-                            <i class="bi bi-headset"></i>
-                            <span>فريق الدعم جاهز لمساعدتك</span>
-                        </span>
-
-                        <div class="yg-contact-kicker">
-                            <span></span>
-                            <b>YemenGuide Support</b>
-                        </div>
-
-                        <h1 id="contactHeroTitle"
-                            class="yg-contact-title">
-                            نحن على بُعد
-                            <span>رسالة</span>
-                        </h1>
-
-                        <p class="yg-contact-lead">
-                            لديك استفسار، مشكلة في حجز، أو فكرة تحب تشاركنا بها؟
-                            نحن هنا لنسمعك ونساعدك بطريقة أسرع وأوضح.
-                        </p>
-
-                        <div class="yg-contact-hero-chips"
-                             aria-label="أنواع المساعدة">
-
-                            <span>
-                                <i class="bi bi-calendar2-check"></i>
-                                مساعدة في الحجز
-                            </span>
-
-                            <span>
-                                <i class="bi bi-building-add"></i>
-                                إضافة منشأة
-                            </span>
-
-                            <span>
-                                <i class="bi bi-lightbulb"></i>
-                                استفسار أو اقتراح
-                            </span>
-
-                        </div>
-
-                    </div>
-                </div>
-
-                <!-- Signal Orb -->
-                <div class="col-lg-5">
-                    <div class="yg-contact-signal-stage"
-                         id="ygContactSignalStage"
-                         data-yg-reveal
-                         aria-hidden="true">
-
-                        <div class="yg-contact-signal-orb">
-
-                            <span class="yg-signal-glow"></span>
-
-                            <span class="yg-signal-ring yg-signal-ring--outer"></span>
-                            <span class="yg-signal-ring yg-signal-ring--middle"></span>
-                            <span class="yg-signal-ring yg-signal-ring--inner"></span>
-
-                            <span class="yg-signal-node yg-signal-node--phone">
-                                <i class="bi bi-telephone-fill"></i>
-                            </span>
-
-                            <span class="yg-signal-node yg-signal-node--mail">
-                                <i class="bi bi-envelope-fill"></i>
-                            </span>
-
-                            <span class="yg-signal-node yg-signal-node--location">
-                                <i class="bi bi-geo-alt-fill"></i>
-                            </span>
-
-                            <div class="yg-signal-core">
-                                <span class="yg-signal-core-halo"></span>
-
-                                <span class="yg-signal-core-icon">
-                                    <i class="bi bi-headset"></i>
-                                </span>
-
-                                <strong>معك دائمًا</strong>
-                                <small>Contact Signal</small>
-                            </div>
-
-                            <span class="yg-signal-spark yg-signal-spark--a"></span>
-                            <span class="yg-signal-spark yg-signal-spark--b"></span>
-                            <span class="yg-signal-spark yg-signal-spark--c"></span>
-
-                        </div>
-
-                        <div class="yg-contact-signal-caption">
-                            <span class="yg-signal-caption-dot"></span>
-                            قناة التواصل مفتوحة
-                        </div>
-
-                    </div>
-                </div>
-
+            <div class="yg-contact-hero-art" aria-hidden="true">
+                <span class="yg-contact-grid"></span>
+                <span class="yg-contact-orbit yg-contact-orbit--one"></span>
+                <span class="yg-contact-orbit yg-contact-orbit--two"></span>
+                <span class="yg-contact-glow yg-contact-glow--cyan"></span>
+                <span class="yg-contact-glow yg-contact-glow--orange"></span>
+                <span class="yg-contact-star yg-contact-star--1"></span>
+                <span class="yg-contact-star yg-contact-star--2"></span>
+                <span class="yg-contact-star yg-contact-star--3"></span>
+                <span class="yg-contact-star yg-contact-star--4"></span>
+                <span class="yg-contact-star yg-contact-star--5"></span>
+                <span class="yg-contact-star yg-contact-star--6"></span>
             </div>
-        </div>
 
-        <div class="yg-contact-hero-edge"
-             aria-hidden="true"></div>
+            <div class="container yg-contact-hero-container">
+                <div class="row align-items-center g-5">
 
-    </section>
+                    <div class="col-lg-7">
+                        <div class="yg-contact-hero-copy" data-contact-reveal>
 
+                            <span class="yg-contact-live-pill">
+                                <span class="yg-contact-live-dot"></span>
+                                <i class="bi bi-headset"></i>
+                                فريق الدعم قريب منك
+                            </span>
 
-    <!-- ============================================================= -->
-    <!-- 02 — CONTACT COMMAND DECK                                     -->
-    <!-- ============================================================= -->
-    <section class="yg-contact-content">
+                            <span class="yg-contact-kicker">YEMENGUIDE SUPPORT</span>
 
-        <div class="container yg-contact-content-container">
+                            <h1 id="contactHeroTitle">
+                                رسالتك توصلنا
+                                <span>بالطريقة التي تفضّلها</span>
+                            </h1>
 
-            <div class="yg-contact-command-deck"
-                 data-yg-reveal>
-
-                <span class="yg-command-deck-glow"
-                      aria-hidden="true"></span>
-
-                <div class="row g-0">
-
-                    <!-- ================================================= -->
-                    <!-- CONTACT CHANNELS                                  -->
-                    <!-- ================================================= -->
-                    <div class="col-lg-4">
-
-                        <aside class="yg-contact-channels">
-
-                            <div class="yg-section-heading">
-
-                                <span class="yg-section-heading-icon">
-                                    <i class="bi bi-broadcast-pin"></i>
-                                </span>
-
-                                <div>
-                                    <span class="yg-section-kicker">
-                                        قنوات التواصل
-                                    </span>
-
-                                    <h2>
-                                        يسعدنا الاستماع إليك
-                                    </h2>
-                                </div>
-
-                            </div>
-
-                            <p class="yg-channels-intro">
-                                سواء كان لديك استفسار عن حجز، أو واجهت مشكلة،
-                                أو ترغب في إضافة منشأتك إلى دليلك اليمني،
-                                فريقنا جاهز لخدمتك.
+                            <p>
+                                اكتب رسالتك مرة واحدة، ثم اختر واتساب أو البريد الإلكتروني.
+                                سنجهّز النص لك وننقلك مباشرة إلى وسيلة التواصل الرسمية
+                                المحفوظة من إعدادات الإدارة.
                             </p>
 
+                            <div class="yg-contact-hero-badges">
+                                <span><i class="bi bi-whatsapp"></i> واتساب مباشر</span>
+                                <span><i class="bi bi-envelope-paper"></i> بريد إلكتروني</span>
+                                <span><i class="bi bi-shield-check"></i> بيانات رسمية من الإدارة</span>
+                            </div>
 
-                            <div class="yg-contact-rails">
+                        </div>
+                    </div>
 
-                                <article class="yg-contact-rail">
-                                    <span class="yg-rail-icon">
-                                        <i class="bi bi-geo-alt-fill"></i>
-                                    </span>
+                    <div class="col-lg-5">
+                        <div class="yg-contact-signal-card" data-contact-reveal>
+                            <span class="yg-signal-card-shine"></span>
 
-                                    <div class="yg-rail-copy">
-                                        <small>موقعنا</small>
-                                        <strong>صنعاء، شارع الستين الجنوبي</strong>
+                            <div class="yg-signal-radar" aria-hidden="true">
+                                <span class="yg-radar-ring yg-radar-ring--1"></span>
+                                <span class="yg-radar-ring yg-radar-ring--2"></span>
+                                <span class="yg-radar-ring yg-radar-ring--3"></span>
+
+                                <span class="yg-radar-core">
+                                    <i class="bi bi-chat-heart-fill"></i>
+                                </span>
+
+                                <span class="yg-radar-node yg-radar-node--wa">
+                                    <i class="bi bi-whatsapp"></i>
+                                </span>
+
+                                <span class="yg-radar-node yg-radar-node--mail">
+                                    <i class="bi bi-envelope-fill"></i>
+                                </span>
+                            </div>
+
+                            <div class="yg-signal-card-copy">
+                                <small>قنوات التواصل الرسمية</small>
+                                <strong>اختر، اكتب، وأرسل مباشرة</strong>
+                                <span>
+                                    بدون إنشاء تذكرة جديدة أو انتظار نموذج داخلي.
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+
+
+        <!-- ============================================================= -->
+        <!-- CONTACT HUB                                                    -->
+        <!-- ============================================================= -->
+        <section class="yg-contact-hub">
+            <div class="container">
+
+                <div class="yg-contact-section-head" data-contact-reveal>
+                    <span class="yg-section-eyebrow">تواصل بالطريقة المناسبة لك</span>
+                    <h2>قناتان واضحتان، ورسالة واحدة جاهزة</h2>
+                    <p>
+                        الرقم والإيميل في هذه الصفحة لا يتم تثبيتهما داخل الكود؛
+                        يتم قراءتهما مباشرة من تبويب التواصل في إعدادات الإدارة.
+                    </p>
+                </div>
+
+                <div class="row g-4 yg-contact-channel-row">
+
+                    <div class="col-lg-6">
+                        <a class="yg-channel-card yg-channel-card--whatsapp @(hasWhatsapp ? "" : "is-unavailable")"
+                       href="@whatsappDirectUrl"
+                       target="@(hasWhatsapp ? "_blank" : null)"
+                       rel="@(hasWhatsapp ? "noopener noreferrer" : null)"
+                       aria-disabled="@(!hasWhatsapp)">
+
+                            <span class="yg-channel-card-glow"></span>
+
+                            <span class="yg-channel-icon">
+                                <i class="bi bi-whatsapp"></i>
+                            </span>
+
+                            <span class="yg-channel-copy">
+                                <small>تواصل سريع</small>
+                                <strong>واتساب</strong>
+                                <span class="yg-channel-value" dir="ltr">
+                                    @(hasWhatsapp ? whatsappRaw : "لم يتم إضافة رقم واتساب من الإدارة")
+                            </span>
+                        </span>
+
+                        <span class="yg-channel-arrow">
+                            <i class="bi bi-arrow-up-left"></i>
+                        </span>
+                    </a>
+                </div>
+
+                <div class="col-lg-6">
+                    <a class="yg-channel-card yg-channel-card--email @(hasEmail ? "" : "is-unavailable")"
+                       href="@emailDirectUrl"
+                       aria-disabled="@(!hasEmail)">
+
+                        <span class="yg-channel-card-glow"></span>
+
+                        <span class="yg-channel-icon">
+                            <i class="bi bi-envelope-paper-heart-fill"></i>
+                        </span>
+
+                        <span class="yg-channel-copy">
+                            <small>للتفاصيل والمراسلات</small>
+                            <strong>البريد الإلكتروني</strong>
+                            <span class="yg-channel-value" dir="ltr">
+                                @(hasEmail ? contactEmail : "لم يتم إضافة بريد إلكتروني من الإدارة")
+                            </span>
+                        </span>
+
+                        <span class="yg-channel-arrow">
+                            <i class="bi bi-arrow-up-left"></i>
+                        </span>
+                    </a>
+                </div>
+
+            </div>
+
+
+            <!-- ===================================================== -->
+            <!-- MESSAGE COMPOSER                                      -->
+            <!-- ===================================================== -->
+            <div class="yg-contact-composer" data-contact-reveal>
+
+                <div class="yg-composer-side">
+                    <span class="yg-composer-side-badge">
+                        <i class="bi bi-stars"></i>
+                        رسالة جاهزة للإرسال
+                    </span>
+
+                    <h3>
+                        اكتب التفاصيل
+                        <span>ونحن نجهّز الرابط</span>
+                    </h3>
+
+                    <p>
+                        اختر موضوع الرسالة واكتب التفاصيل. عند الضغط على واتساب أو البريد
+                        سيتم إنشاء رسالة مرتبة تلقائيًا ثم فتح التطبيق المناسب.
+                    </p>
+
+                    <div class="yg-composer-steps">
+                        <span><b>01</b> اكتب اسمك</span>
+                        <span><b>02</b> اختر الموضوع</span>
+                        <span><b>03</b> اكتب الرسالة</span>
+                        <span><b>04</b> اختر وسيلة الإرسال</span>
+                    </div>
+                </div>
+
+                <div class="yg-composer-form-shell">
+                    <form id="contactForm"
+                          class="yg-contact-form"
+                          novalidate>
+
+                        <div class="row g-3 g-md-4">
+
+                            <div class="col-md-6">
+                                <div class="yg-field">
+                                    <label for="SenderName">
+                                        <i class="bi bi-person"></i>
+                                        الاسم الكامل
+                                    </label>
+
+                                    <div class="yg-field-shell">
+                                        <input type="text"
+                                               id="SenderName"
+                                               class="form-control"
+                                               placeholder="مثال: أحمد محمد"
+                                               maxlength="80"
+                                               autocomplete="name"
+                                               required />
+                                        <span class="yg-field-line"></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="yg-field">
+                                    <label for="Subject">
+                                        <i class="bi bi-grid"></i>
+                                        موضوع الرسالة
+                                    </label>
+
+                                    <div class="yg-field-shell yg-field-shell--select">
+                                        <select id="Subject"
+                                                class="form-select"
+                                                required>
+                                            <option value="استفسار عام">استفسار عام</option>
+                                            <option value="مشكلة في الحجز">مشكلة في الحجز</option>
+                                            <option value="طلب إضافة منشأة">طلب إضافة منشأة</option>
+                                            <option value="شكوى أو اقتراح">شكوى أو اقتراح</option>
+                                            <option value="مساعدة تقنية">مساعدة تقنية</option>
+                                        </select>
+                                        <span class="yg-field-line"></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-12">
+                                <div class="yg-field">
+                                    <div class="yg-field-label-row">
+                                        <label for="MessageBody">
+                                            <i class="bi bi-chat-left-text"></i>
+                                            تفاصيل الرسالة
+                                        </label>
+
+                                        <span id="ygMessageCounter"
+                                              class="yg-message-counter">
+                                            0 / 700
+                                        </span>
                                     </div>
 
-                                    <span class="yg-rail-signal"
-                                          aria-hidden="true"></span>
-                                </article>
-
-
-                                <article class="yg-contact-rail is-orange">
-                                    <span class="yg-rail-icon">
-                                        <i class="bi bi-telephone-fill"></i>
-                                    </span>
-
-                                    <div class="yg-rail-copy">
-                                        <small>رقم الهاتف</small>
-                                        <strong dir="ltr">
-                                            +967 777 000 000
-                                        </strong>
+                                    <div class="yg-field-shell yg-field-shell--textarea">
+                                        <textarea id="MessageBody"
+                                                  class="form-control"
+                                                  rows="6"
+                                                  maxlength="700"
+                                                  placeholder="اكتب تفاصيل استفسارك أو المشكلة بوضوح..."
+                                                  required></textarea>
+                                        <span class="yg-field-line"></span>
                                     </div>
+                                </div>
+                            </div>
 
-                                    <span class="yg-rail-signal"
-                                          aria-hidden="true"></span>
-                                </article>
+                        </div>
 
+                        <div class="yg-send-zone">
 
-                                <article class="yg-contact-rail">
-                                    <span class="yg-rail-icon">
+                            <div class="yg-send-zone-copy">
+                                <i class="bi bi-shield-lock"></i>
+                                <span>
+                                    لن يتم حفظ نص الرسالة في الموقع؛ سيتم فقط نقلك
+                                    إلى وسيلة التواصل التي تختارها.
+                                </span>
+                            </div>
+
+                            <div class="yg-send-actions">
+                                <button type="button"
+                                        id="sendByWhatsapp"
+                                        class="yg-send-btn yg-send-btn--whatsapp"
+                                        @(hasWhatsapp ? null : "disabled")>
+                                    <span class="yg-send-icon">
+                                        <i class="bi bi-whatsapp"></i>
+                                    </span>
+                                    <span class="yg-send-copy">
+                                        <small>إرسال مباشر</small>
+                                        <strong>عبر واتساب</strong>
+                                    </span>
+                                    <i class="bi bi-arrow-up-left yg-send-arrow"></i>
+                                </button>
+
+                                <button type="button"
+                                        id="sendByEmail"
+                                        class="yg-send-btn yg-send-btn--email"
+                                        @(hasEmail ? null : "disabled")>
+                                    <span class="yg-send-icon">
                                         <i class="bi bi-envelope-fill"></i>
                                     </span>
-
-                                    <div class="yg-rail-copy">
-                                        <small>البريد الإلكتروني</small>
-                                        <strong>
-                                            info@yemenguide.com
-                                        </strong>
-                                    </div>
-
-                                    <span class="yg-rail-signal"
-                                          aria-hidden="true"></span>
-                                </article>
-
-                            </div>
-
-
-                            <div class="yg-contact-mini-note">
-                                <i class="bi bi-stars"></i>
-
-                                <span>
-                                    كل رسالة تهمنا، وسنعمل على توجيهها
-                                    إلى الجهة المناسبة.
-                                </span>
-                            </div>
-
-                        </aside>
-
-                    </div>
-
-
-                    <!-- ================================================= -->
-                    <!-- MESSAGE COMPOSER                                  -->
-                    <!-- ================================================= -->
-                    <div class="col-lg-8">
-
-                        <section class="yg-message-composer">
-
-                            <div class="yg-composer-header">
-
-                                <div class="yg-composer-title-group">
-
-                                    <span class="yg-composer-icon">
-                                        <i class="bi bi-chat-square-dots-fill"></i>
+                                    <span class="yg-send-copy">
+                                        <small>فتح تطبيق البريد</small>
+                                        <strong>عبر الإيميل</strong>
                                     </span>
-
-                                    <div>
-                                        <span class="yg-section-kicker">
-                                            Message Composer
-                                        </span>
-
-                                        <h2>
-                                            أرسل لنا رسالة
-                                        </h2>
-                                    </div>
-
-                                </div>
-
-                                <span class="yg-composer-status">
-                                    <span></span>
-                                    متاحون لاستقبال رسالتك
-                                </span>
-
+                                    <i class="bi bi-arrow-up-left yg-send-arrow"></i>
+                                </button>
                             </div>
 
+                        </div>
 
-                            <!-- Design-only form for now.
-                                 Backend wiring intentionally postponed. -->
-                            <form id="contactForm"
-                                  action="#"
-                                  method="post"
-                                  class="yg-contact-form"
-                                  data-design-only="true">
+                        <div class="yg-contact-feedback"
+                             id="contactFeedback"
+                             role="status"
+                             aria-live="polite"></div>
 
-                                <div class="row g-3 g-md-4">
-
-                                    <div class="col-md-6">
-                                        <div class="yg-field">
-
-                                            <label for="SenderName">
-                                                الاسم الكامل
-                                            </label>
-
-                                            <div class="yg-field-shell">
-
-                                                <span class="yg-field-icon">
-                                                    <i class="bi bi-person"></i>
-                                                </span>
-
-                                                <input type="text"
-                                                       id="SenderName"
-                                                       class="form-control"
-                                                       placeholder="أدخل اسمك هنا..."
-                                                       autocomplete="name"
-                                                       required>
-
-                                                <span class="yg-field-focus-line"
-                                                      aria-hidden="true"></span>
-
-                                            </div>
-
-                                        </div>
-                                    </div>
-
-
-                                    <div class="col-md-6">
-                                        <div class="yg-field">
-
-                                            <label for="ContactInfo">
-                                                رقم الهاتف / الإيميل
-                                            </label>
-
-                                            <div class="yg-field-shell">
-
-                                                <span class="yg-field-icon">
-                                                    <i class="bi bi-at"></i>
-                                                </span>
-
-                                                <input type="text"
-                                                       id="ContactInfo"
-                                                       class="form-control"
-                                                       placeholder="طريقة التواصل معك..."
-                                                       autocomplete="email"
-                                                       required>
-
-                                                <span class="yg-field-focus-line"
-                                                      aria-hidden="true"></span>
-
-                                            </div>
-
-                                        </div>
-                                    </div>
-
-
-                                    <div class="col-12">
-                                        <div class="yg-field">
-
-                                            <label for="Subject">
-                                                موضوع الرسالة
-                                            </label>
-
-                                            <div class="yg-field-shell yg-field-shell--select">
-
-                                                <span class="yg-field-icon">
-                                                    <i class="bi bi-grid"></i>
-                                                </span>
-
-                                                <select id="Subject"
-                                                        class="form-select">
-
-                                                    <option>استفسار عام</option>
-                                                    <option>مشكلة في الحجز</option>
-                                                    <option>طلب إضافة منشأة</option>
-                                                    <option>شكوى أو اقتراح</option>
-
-                                                </select>
-
-                                                <span class="yg-field-focus-line"
-                                                      aria-hidden="true"></span>
-
-                                            </div>
-
-                                        </div>
-                                    </div>
-
-
-                                    <div class="col-12">
-                                        <div class="yg-field">
-
-                                            <div class="yg-field-label-row">
-                                                <label for="MessageBody">
-                                                    نص الرسالة
-                                                </label>
-
-                                                <span class="yg-message-counter"
-                                                      id="ygMessageCounter">
-                                                    0 حرف
-                                                </span>
-                                            </div>
-
-                                            <div class="yg-field-shell yg-field-shell--textarea">
-
-                                                <span class="yg-field-icon">
-                                                    <i class="bi bi-pencil-square"></i>
-                                                </span>
-
-                                                <textarea id="MessageBody"
-                                                          class="form-control"
-                                                          rows="5"
-                                                          maxlength="700"
-                                                          placeholder="اكتب تفاصيل رسالتك هنا بوضوح..."
-                                                          required></textarea>
-
-                                                <span class="yg-field-focus-line"
-                                                      aria-hidden="true"></span>
-
-                                            </div>
-
-                                        </div>
-                                    </div>
-
-
-                                    <div class="col-12">
-
-                                        <div class="yg-composer-footer">
-
-                                            <div class="yg-composer-hint">
-                                                <i class="bi bi-lock"></i>
-                                                <span>
-                                                    بياناتك تستخدم فقط للتواصل معك
-                                                    بخصوص رسالتك.
-                                                </span>
-                                            </div>
-
-                                            <button type="submit"
-                                                    id="btnSubmitContact"
-                                                    class="yg-contact-submit">
-
-                                                <span class="yg-submit-icon">
-                                                    <i class="bi bi-send-fill"></i>
-                                                </span>
-
-                                                <span class="yg-submit-copy">
-                                                    <small>جاهز للإرسال</small>
-                                                    <strong>إرسال الرسالة</strong>
-                                                </span>
-
-                                                <span class="yg-submit-arrow">
-                                                    <i class="bi bi-arrow-up-left"></i>
-                                                </span>
-
-                                                <span class="yg-submit-shine"
-                                                      aria-hidden="true"></span>
-
-                                            </button>
-
-                                        </div>
-
-                                    </div>
-
-                                </div>
-
-                            </form>
-
-
-                            <div class="yg-design-only-note"
-                                 id="ygDesignOnlyNote"
-                                 role="status"
-                                 aria-live="polite">
-
-                                <i class="bi bi-code-slash"></i>
-                                <span>
-                                    واجهة الإرسال جاهزة بصريًا — الربط البرمجي
-                                    سيتم إضافته لاحقًا.
-                                </span>
-
-                            </div>
-
-                        </section>
-
-                    </div>
-
+                    </form>
                 </div>
 
             </div>
 
         </div>
-
     </section>
 
 </main>
 
-
 @section Scripts {
-    <script src="~/js/customer/contact.js"
-            asp-append-version="true"></script>
+    <script>
+        (() => {
+            const page = document.getElementById('ygContactPage');
+            const form = document.getElementById('contactForm');
+            const nameInput = document.getElementById('SenderName');
+            const subjectInput = document.getElementById('Subject');
+            const messageInput = document.getElementById('MessageBody');
+            const counter = document.getElementById('ygMessageCounter');
+            const feedback = document.getElementById('contactFeedback');
+            const whatsappButton = document.getElementById('sendByWhatsapp');
+            const emailButton = document.getElementById('sendByEmail');
+
+            if (!page || !form) return;
+
+            const whatsappNumber = (page.dataset.whatsapp || '').trim();
+            const contactEmail = (page.dataset.email || '').trim();
+            const siteName = (page.dataset.siteName || 'دليلك اليمني').trim();
+
+            const showFeedback = (message, type = 'info') => {
+                if (!feedback) return;
+                feedback.textContent = message;
+                feedback.dataset.type = type;
+                feedback.classList.add('is-visible');
+            };
+
+            const clearFeedback = () => {
+                if (!feedback) return;
+                feedback.textContent = '';
+                feedback.classList.remove('is-visible');
+                feedback.removeAttribute('data-type');
+            };
+
+            const updateCounter = () => {
+                if (!messageInput || !counter) return;
+                counter.textContent = `${messageInput.value.length} / 700`;
+            };
+
+            const validateMessage = () => {
+                clearFeedback();
+
+                const senderName = (nameInput?.value || '').trim();
+                const subject = (subjectInput?.value || '').trim();
+                const message = (messageInput?.value || '').trim();
+
+                if (!senderName) {
+                    nameInput?.focus();
+                    showFeedback('اكتب اسمك أولاً حتى نجهّز الرسالة بشكل مرتب.', 'warning');
+                    return null;
+                }
+
+                if (!subject) {
+                    subjectInput?.focus();
+                    showFeedback('اختر موضوع الرسالة.', 'warning');
+                    return null;
+                }
+
+                if (!message) {
+                    messageInput?.focus();
+                    showFeedback('اكتب تفاصيل الرسالة قبل الإرسال.', 'warning');
+                    return null;
+                }
+
+                return { senderName, subject, message };
+            };
+
+            const buildMessage = (data) => {
+                return [
+                    `مرحبًا فريق ${siteName} 👋`,
+                    '',
+                    `الاسم: ${data.senderName}`,
+                    `الموضوع: ${data.subject}`,
+                    '',
+                    'تفاصيل الرسالة:',
+                    data.message,
+                    '',
+                    'تم إرسال هذه الرسالة من صفحة تواصل معنا في دليلك اليمني.'
+                ].join('\n');
+            };
+
+            whatsappButton?.addEventListener('click', () => {
+                const data = validateMessage();
+                if (!data) return;
+
+                if (!whatsappNumber) {
+                    showFeedback('رقم واتساب غير مضاف حاليًا من إعدادات الإدارة.', 'error');
+                    return;
+                }
+
+                const text = buildMessage(data);
+                const url = `https://wa.me/${encodeURIComponent(whatsappNumber)}?text=${encodeURIComponent(text)}`;
+
+                showFeedback('تم تجهيز الرسالة، يتم الآن فتح واتساب...', 'success');
+                window.open(url, '_blank', 'noopener,noreferrer');
+            });
+
+            emailButton?.addEventListener('click', () => {
+                const data = validateMessage();
+                if (!data) return;
+
+                if (!contactEmail) {
+                    showFeedback('البريد الإلكتروني غير مضاف حاليًا من إعدادات الإدارة.', 'error');
+                    return;
+                }
+
+                const body = buildMessage(data);
+                const subject = `[${siteName}] ${data.subject}`;
+                const url = `mailto:${contactEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+                showFeedback('تم تجهيز الرسالة، يتم الآن فتح تطبيق البريد...', 'success');
+                window.location.href = url;
+            });
+
+            messageInput?.addEventListener('input', updateCounter);
+            updateCounter();
+
+            form.addEventListener('submit', (event) => event.preventDefault());
+
+            document.querySelectorAll('.yg-channel-card.is-unavailable').forEach((card) => {
+                card.addEventListener('click', (event) => event.preventDefault());
+            });
+
+            const revealItems = document.querySelectorAll('[data-contact-reveal]');
+            if ('IntersectionObserver' in window) {
+                const observer = new IntersectionObserver((entries) => {
+                    entries.forEach((entry) => {
+                        if (!entry.isIntersecting) return;
+                        entry.target.classList.add('is-visible');
+                        observer.unobserve(entry.target);
+                    });
+                }, { threshold: 0.12 });
+
+                revealItems.forEach((item) => observer.observe(item));
+            } else {
+                revealItems.forEach((item) => item.classList.add('is-visible'));
+            }
+        })();
+    </script>
 }
