@@ -37,9 +37,11 @@
                 : $"{fallback:N0} ر.ي";
     }
 
-    bool isHotel = Model.BookingSystemId == 1;
-    bool isPackageSystem = Model.BookingSystemId == 2;
-    bool isHall = Model.BookingSystemId == 3;
+    // نستخدم التعريف المركزي الموجود في PlaceDetailsViewModel
+    // حتى لا تُستبعد BookingSystemId = 4 من رحلة القاعات/الباقات مرة أخرى.
+    bool isHotel = Model.IsHotelSystem;
+    bool isPackageSystem = Model.IsPackageSystem;
+    bool isHall = Model.IsHallSystem;
     bool isBookingPlace = Model.RequiresBooking;
 
     var currentUserIdClaim =

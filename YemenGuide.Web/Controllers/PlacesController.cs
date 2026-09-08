@@ -440,11 +440,23 @@ namespace YemenGuide.Web.Controllers
                         .TotalMinutes;
             }
 
-            foreach (
-                var shift in
+            var configuredShifts =
                 ReadPolicyShiftWindows(
                     place.PlacePolicy?
-                        .ShiftsJson))
+                        .ShiftsJson);
+
+            /*
+             * إذا كان وضع التشغيل "Shifts" لكن لم تُحفظ أي فترة تشغيلية،
+             * لا نخفي/نمنع كل الباقات. وقت الباقة نفسه يكفي في هذه الحالة.
+             */
+            if (configuredShifts.Count == 0)
+            {
+                return true;
+            }
+
+            foreach (
+                var shift in
+                configuredShifts)
             {
                 var shiftStart =
                     shift.Start.TotalMinutes;
@@ -579,15 +591,11 @@ namespace YemenGuide.Web.Controllers
                     $"لا يمكن الحجز لأكثر من {maximumHorizonMonths} أشهر مقدمًا.");
             }
 
-            if (!PackageFitsConfiguredShift(
-                    place,
-                    selectedPackage))
-            {
-                return (
-                    false,
-                    "وقت هذه الباقة لا يقع ضمن إحدى الفترات التشغيلية المفعلة في سياسة المنشأة.");
-            }
-
+            /*
+             * وقت الباقة نفسه (StartTime / EndTime) هو نافذة التشغيل
+             * الخاصة بهذه الباقة. لا نمنعها بسبب ShiftsJson هنا،
+             * لأن ذلك كان يجعل الباقة ظاهرة ثم يمنع تحميل التقويم.
+             */
             var minimumNoticeHours =
                 Math.Max(
                     0,
@@ -2006,14 +2014,11 @@ namespace YemenGuide.Web.Controllers
                         "الباقة غير موجودة أو لا تتبع هذه المنشأة.");
                 }
 
-                if (!PackageFitsConfiguredShift(
-                        place,
-                        selectedPackage))
-                {
-                    return BadRequest(
-                        "وقت هذه الباقة لا يقع ضمن إحدى الفترات التشغيلية المفعلة.");
-                }
-
+                /*
+                 * لا نرجع BadRequest بسبب ShiftsJson.
+                 * التقويم يجب أن يُحمّل دائمًا للباقة المفعلة، ثم نحدد
+                 * الأيام غير المتاحة من الإغلاقات والحجوزات الفعلية.
+                 */
                 var existingPackageBookings =
                     await _context.Bookings
                         .AsNoTracking()
@@ -4516,13 +4521,15 @@ namespace YemenGuide.Web.Controllers
                     .ToList() ??
                 new List<PlaceSpace>();
 
+            /*
+             * الباقة المفعلة يجب أن تظهر للعميل دائمًا.
+             * لا نخفيها هنا بسبب نظام الفترات؛ التحقق من توافق موعدها
+             * مع سياسة التشغيل يتم عند اختيار التاريخ/إكمال الحجز.
+             */
             var activePackages =
                 place.PlacePackages?
                     .Where(package =>
-                        package.IsActive == true &&
-                        PackageFitsConfiguredShift(
-                            place,
-                            package))
+                        package.IsActive == true)
                     .OrderBy(package =>
                         package.Price)
                     .ToList() ??
@@ -4531,7 +4538,7 @@ namespace YemenGuide.Web.Controllers
             var hasBookingOptions =
                 bookingSystemId == 1
                     ? activeRooms.Count > 0
-                    : bookingSystemId is 2 or 3
+                    : bookingSystemId is 2 or 3 or 4
                         ? activePackages.Count > 0
                         : true;
 
@@ -4561,7 +4568,7 @@ namespace YemenGuide.Web.Controllers
                 bookingAvailabilityMessage =
                     "اختر تاريخ الإقامة لعرض الغرف والأسعار المتاحة.";
             }
-            else if (bookingSystemId is 2 or 3)
+            else if (bookingSystemId is 2 or 3 or 4)
             {
                 bookingAvailabilityMessage =
                     "اختر الباقة المناسبة ثم حدد يوم الحجز.";
@@ -4689,7 +4696,7 @@ namespace YemenGuide.Web.Controllers
             var compatibleBasePrice =
                 bookingSystemId == 1
                     ? lowestRoomPrice ?? 0m
-                    : bookingSystemId is 2 or 3
+                    : bookingSystemId is 2 or 3 or 4
                         ? lowestPackagePrice ?? 0m
                         : place.Price;
 
@@ -5061,7 +5068,7 @@ namespace YemenGuide.Web.Controllers
                         bookingSystemId == 1 &&
                         roomTypeSummaries.Count > 0
                             ? "roomTypesSection"
-                            : bookingSystemId is 2 or 3 &&
+                            : bookingSystemId is 2 or 3 or 4 &&
                               activePackages.Count > 0
                                 ? "packagesSection"
                                 : "placeOverviewSection";
@@ -5690,7 +5697,7 @@ namespace YemenGuide.Web.Controllers
                     PriceUnit =
                         bookingSystemId == 1
                             ? "ليلة"
-                            : bookingSystemId is 2 or 3
+                            : bookingSystemId is 2 or 3 or 4
                                 ? "باقة"
                                 : "زيارة",
 
