@@ -67,27 +67,26 @@
             ? "القاعة"
             : "الباقة";
 
-    var approvalTitle = Model.RequiresOwnerApproval
-        ? "يحتاج موافقة المالك"
-        : "تأكيد فوري";
+    /*
+     * رحلة حجز واحدة:
+     * مع العربون: إنشاء -> دفع -> مراجعة المالك -> تأكيد.
+     * بدون العربون: إنشاء -> مراجعة المالك -> تأكيد.
+     */
+    var approvalTitle = Model.RequiresDeposit
+        ? "الدفع ثم مراجعة المالك"
+        : "مراجعة المالك بعد الإرسال";
 
-    var approvalDescription = Model.RequiresOwnerApproval
-        ? "بعد إرسال الطلب يراجعه مالك المنشأة، وتظهر خطوة الدفع بعد الموافقة عند وجود عربون."
-        : Model.RequiresDeposit
-            ? $"بعد تأكيد الحجز تنتقل إلى دفع العربون خلال {Model.PaymentTimeoutHours} ساعة."
-            : "يتم تأكيد الحجز مباشرة بعد التحقق النهائي من التوفر.";
+    var approvalDescription = Model.RequiresDeposit
+        ? $"بعد إنشاء الحجز تنتقل لدفع العربون خلال {Model.PaymentTimeoutHours} ساعة، وبعد رفع الإثبات يراجعه المالك ويؤكد الحجز."
+        : "بعد إرسال الحجز يراجعه مالك المنشأة ثم يؤكده من لوحة الحجوزات.";
 
-    var submitTitle = Model.RequiresOwnerApproval
-        ? "إرسال طلب الحجز"
-        : Model.RequiresDeposit
-            ? "تأكيد الحجز والمتابعة للدفع"
-            : "تأكيد الحجز الآن";
+    var submitTitle = Model.RequiresDeposit
+        ? "تأكيد الحجز والمتابعة للدفع"
+        : "تأكيد وإرسال الحجز";
 
-    var submitSubtitle = Model.RequiresOwnerApproval
-        ? "لن يتم طلب الدفع قبل موافقة المالك"
-        : Model.RequiresDeposit
-            ? "سيظهر لك مبلغ العربون ووسائل الدفع في الخطوة التالية"
-            : "سيعيد النظام التحقق من التوفر قبل التأكيد";
+    var submitSubtitle = Model.RequiresDeposit
+        ? "بعد رفع إثبات الدفع يراجعه المالك لتأكيد الحجز"
+        : "بعد الإرسال يراجع المالك الحجز ويؤكده";
 
     var displayEndDate = Model.EndDate?.ToString("yyyy/MM/dd", CultureInfo.InvariantCulture)
         ?? Model.StartDate.ToString("yyyy/MM/dd", CultureInfo.InvariantCulture);
@@ -162,12 +161,12 @@
                         <span><i class="bi bi-shield-check"></i><small>التأكيد</small></span>
                     </div>
 
-                    <div class="checkout-approval-badge @(Model.RequiresOwnerApproval ? "is-manual" : "is-instant")">
+                    <div class="checkout-approval-badge is-instant">
                         <span>
-                            <i class="bi @(Model.RequiresOwnerApproval ? "bi-hourglass-split" : "bi-lightning-charge-fill")"></i>
+                            <i class="bi bi-shield-check-fill"></i>
                         </span>
                         <div>
-                            <small>آلية التأكيد</small>
+                            <small>مسار الحجز</small>
                             <strong>@approvalTitle</strong>
                         </div>
                     </div>
@@ -824,8 +823,8 @@
                         </div>
                     }
 
-                    <div class="checkout-approval-note @(Model.RequiresOwnerApproval ? "is-manual" : "is-instant")">
-                        <i class="bi @(Model.RequiresOwnerApproval ? "bi-hourglass-split" : "bi-lightning-charge-fill")"></i>
+                    <div class="checkout-approval-note is-instant">
+                        <i class="bi bi-shield-check-fill"></i>
                         <div>
                             <strong>@approvalTitle</strong>
                             <p>@approvalDescription</p>

@@ -4090,11 +4090,16 @@ namespace YemenGuide.Web.Controllers
                 paymentTimeout = 12;
             }
 
+            /*
+             * رحلة الحجز أصبحت موحدة:
+             * - مع عربون: ينتقل العميل للدفع، ثم يراجع المالك الحجز.
+             * - بدون عربون: ينتقل الحجز مباشرة إلى مراجعة المالك.
+             *
+             * القيمة التالية للتوافق مع Checkout.js الحالي فقط،
+             * وليست سياسة يختارها المالك.
+             */
             var approvalMode =
-                IsState(
-                    place.PlacePolicy?
-                        .BookingApprovalMode,
-                    "Instant")
+                depositAmount > 0
                     ? "Instant"
                     : "Manual";
 
@@ -4954,16 +4959,12 @@ namespace YemenGuide.Web.Controllers
                 });
             }
 
-            var isInstant =
-                IsState(
-                    place.PlacePolicy?
-                        .BookingApprovalMode,
-                    "Instant");
-
-            var approvalMode =
-                isInstant
-                    ? "Instant"
-                    : "Manual";
+            /*
+             * BookingApprovalMode لم يعد خيارًا تشغيليًا.
+             * تتحدد الرحلة لاحقًا من وجود العربون فقط.
+             */
+            string approvalMode =
+                "Manual";
 
             var startDate =
                 request.StartDate.Date;
@@ -5709,6 +5710,12 @@ namespace YemenGuide.Web.Controllers
                 requiresDeposit =
                     depositAmount > 0;
 
+                // للتوافق مع واجهة Checkout الحالية فقط.
+                approvalMode =
+                    requiresDeposit
+                        ? "Instant"
+                        : "Manual";
+
                 amountToPayAtProperty =
                     Math.Round(
                         Math.Max(
@@ -5724,22 +5731,22 @@ namespace YemenGuide.Web.Controllers
                         100m,
                         2);
 
-                if (isInstant)
+                /*
+                 * الرحلة الموحدة:
+                 * مع عربون:
+                 * AwaitingPayment -> PaymentReview -> موافقة المالك -> Confirmed
+                 *
+                 * بدون عربون:
+                 * Pending -> موافقة المالك -> Confirmed
+                 */
+                if (requiresDeposit)
                 {
-                    if (requiresDeposit)
-                    {
-                        bookingState =
-                            "AwaitingPayment";
+                    bookingState =
+                        "AwaitingPayment";
 
-                        timerExpiredAt =
-                            createdAt.AddHours(
-                                paymentTimeout);
-                    }
-                    else
-                    {
-                        bookingState =
-                            "Confirmed";
-                    }
+                    timerExpiredAt =
+                        createdAt.AddHours(
+                            paymentTimeout);
                 }
                 else
                 {
@@ -6053,9 +6060,7 @@ namespace YemenGuide.Web.Controllers
                             createdAt,
 
                         AcceptedAt =
-                            isInstant
-                                ? createdAt
-                                : null,
+                            null,
 
                         CreatedAt =
                             createdAt
@@ -6237,36 +6242,25 @@ namespace YemenGuide.Web.Controllers
                 string customerNotificationType;
                 string customerTargetUrl;
 
-                if (!isInstant)
-                {
-                    customerNotificationTitle =
-                        "تم إرسال طلب الحجز";
-                    customerNotificationType =
-                        NotificationTypes.BookingCreated;
-                    customerNotificationText =
-                        $"تم إرسال طلب الحجز رقم {booking.BookingId} إلى مالك المنشأة، وهو الآن بانتظار الموافقة.";
-                    customerTargetUrl =
-                        $"/Places/BookingDetails/{booking.BookingId}";
-                }
-                else if (requiresDeposit)
+                if (requiresDeposit)
                 {
                     customerNotificationTitle =
                         "مطلوب دفع العربون";
                     customerNotificationType =
                         NotificationTypes.PaymentRequired;
                     customerNotificationText =
-                        $"تم إنشاء الحجز رقم {booking.BookingId}. يرجى دفع عربون بقيمة {depositAmountText} قبل انتهاء المهلة.";
+                        $"تم إنشاء الحجز رقم {booking.BookingId}. يرجى دفع عربون بقيمة {depositAmountText} قبل انتهاء المهلة، ثم يراجع المالك إثبات الدفع ويؤكد الحجز.";
                     customerTargetUrl =
                         $"/BookingFlow/Payment/{booking.BookingId}";
                 }
                 else
                 {
                     customerNotificationTitle =
-                        "تم تأكيد حجزك";
+                        "تم إرسال الحجز للمالك";
                     customerNotificationType =
-                        NotificationTypes.BookingConfirmed;
+                        NotificationTypes.BookingCreated;
                     customerNotificationText =
-                        $"تم تأكيد الحجز رقم {booking.BookingId} بنجاح.";
+                        $"تم إنشاء الحجز رقم {booking.BookingId} وإرساله إلى مالك المنشأة للمراجعة والتأكيد.";
                     customerTargetUrl =
                         $"/Places/BookingDetails/{booking.BookingId}";
                 }
@@ -6295,32 +6289,23 @@ namespace YemenGuide.Web.Controllers
                     string ownerNotificationTitle;
                     string ownerNotificationType;
 
-                    if (!isInstant)
+                    if (requiresDeposit)
+                    {
+                        ownerNotificationTitle =
+                            "حجز جديد بانتظار العربون";
+                        ownerNotificationType =
+                            NotificationTypes.BookingCreated;
+                        ownerNotificationText =
+                            $"تم إنشاء الحجز رقم {booking.BookingId}، وهو بانتظار دفع العربون من العميل. بعد رفع الإثبات سيظهر لك للمراجعة والتأكيد.";
+                    }
+                    else
                     {
                         ownerNotificationTitle =
                             "طلب حجز جديد";
                         ownerNotificationType =
                             NotificationTypes.BookingCreated;
                         ownerNotificationText =
-                            $"لديك طلب حجز جديد رقم {booking.BookingId} يحتاج إلى الموافقة.";
-                    }
-                    else if (requiresDeposit)
-                    {
-                        ownerNotificationTitle =
-                            "حجز فوري جديد";
-                        ownerNotificationType =
-                            NotificationTypes.BookingCreated;
-                        ownerNotificationText =
-                            $"تم إنشاء حجز فوري جديد رقم {booking.BookingId}، وهو بانتظار دفع العربون من العميل.";
-                    }
-                    else
-                    {
-                        ownerNotificationTitle =
-                            "حجز جديد مؤكد";
-                        ownerNotificationType =
-                            NotificationTypes.BookingConfirmed;
-                        ownerNotificationText =
-                            $"تم تأكيد حجز فوري جديد رقم {booking.BookingId}.";
+                            $"لديك حجز جديد رقم {booking.BookingId} جاهز للمراجعة والموافقة.";
                     }
 
                     _notificationService.Queue(
@@ -6347,9 +6332,8 @@ namespace YemenGuide.Web.Controllers
                     .SaveChangesAsync();
 
                 /*
-                 * الحجز الفوري الذي لا يحتاج عربونًا ينتقل مباشرة إلى
-                 * Confirmed ولا يمر على موافقة المالك؛ لذلك نحجز عمولته
-                 * هنا داخل نفس معاملة إنشاء الحجز.
+                 * الرحلة الجديدة لا تنشئ Confirmed مباشرة.
+                 * الشرط التالي يبقى للتوافق مع الحالات القديمة فقط.
                  */
                 if (IsState(
                         booking.BookingState,
@@ -6399,7 +6383,6 @@ namespace YemenGuide.Web.Controllers
                 }
 
                 var redirectUrl =
-                    isInstant &&
                     requiresDeposit
                         ? Url.Action(
                             nameof(Payment),
@@ -6430,7 +6413,6 @@ namespace YemenGuide.Web.Controllers
                     bookingState,
 
                     requiresPayment =
-                        isInstant &&
                         requiresDeposit,
 
                     depositAmount,
@@ -6480,11 +6462,9 @@ namespace YemenGuide.Web.Controllers
                     redirectUrl,
 
                     message =
-                        !isInstant
-                            ? "تم إرسال طلب الحجز للمالك بنجاح."
-                            : requiresDeposit
-                                ? $"تم إنشاء الحجز. قيمة العربون المطلوبة {depositAmountText}."
-                                : "تم تأكيد الحجز بنجاح."
+                        requiresDeposit
+                            ? $"تم إنشاء الحجز. قيمة العربون المطلوبة {depositAmountText}، وبعد رفع الإثبات يراجع المالك الحجز ويؤكده."
+                            : "تم إنشاء الحجز وإرساله للمالك للمراجعة والتأكيد."
                 });
             }
             catch (Exception ex)
