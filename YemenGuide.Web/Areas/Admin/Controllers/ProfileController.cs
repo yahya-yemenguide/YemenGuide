@@ -122,7 +122,16 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
         public async Task<IActionResult> RequestEmailChange([FromBody] AdminEmailChangeRequestDto model)
         {
             var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            int currentUserId = string.IsNullOrEmpty(userIdClaim) ? 1 : int.Parse(userIdClaim);
+
+            if (!int.TryParse(userIdClaim, out int currentUserId) ||
+                currentUserId <= 0)
+            {
+                return Unauthorized(new
+                {
+                    success = false,
+                    message = "تعذر تحديد حساب المدير الحالي."
+                });
+            }
 
             var adminUser = await _context.Users.FindAsync(currentUserId);
             if (adminUser == null) return Json(new { success = false, message = "حساب المدير غير موجود." });
@@ -161,7 +170,16 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
         public async Task<IActionResult> UpdatePersonalInfo([FromBody] AdminPersonalInfoUpdateDto model)
         {
             var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            int currentUserId = string.IsNullOrEmpty(userIdClaim) ? 1 : int.Parse(userIdClaim);
+
+            if (!int.TryParse(userIdClaim, out int currentUserId) ||
+                currentUserId <= 0)
+            {
+                return Unauthorized(new
+                {
+                    success = false,
+                    message = "تعذر تحديد حساب المدير الحالي."
+                });
+            }
 
             var adminUser = await _context.Users.FindAsync(currentUserId);
             if (adminUser == null)
@@ -233,7 +251,16 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
         public async Task<IActionResult> UploadProfileImage(IFormFile profileImage)
         {
             var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            int currentUserId = string.IsNullOrEmpty(userIdClaim) ? 1 : int.Parse(userIdClaim);
+
+            if (!int.TryParse(userIdClaim, out int currentUserId) ||
+                currentUserId <= 0)
+            {
+                return Unauthorized(new
+                {
+                    success = false,
+                    message = "تعذر تحديد حساب المدير الحالي."
+                });
+            }
 
             var adminUser = await _context.Users.FindAsync(currentUserId);
             if (adminUser == null)
@@ -273,7 +300,16 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
         public async Task<IActionResult> DeleteImage()
         {
             var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            int currentUserId = string.IsNullOrEmpty(userIdClaim) ? 1 : int.Parse(userIdClaim);
+
+            if (!int.TryParse(userIdClaim, out int currentUserId) ||
+                currentUserId <= 0)
+            {
+                return Unauthorized(new
+                {
+                    success = false,
+                    message = "تعذر تحديد حساب المدير الحالي."
+                });
+            }
 
             var adminUser = await _context.Users.FindAsync(currentUserId);
             if (adminUser == null)
@@ -296,7 +332,16 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
         public async Task<IActionResult> ChangePassword([FromBody] AdminPasswordUpdateDto model)
         {
             var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            int currentUserId = string.IsNullOrEmpty(userIdClaim) ? 1 : int.Parse(userIdClaim);
+
+            if (!int.TryParse(userIdClaim, out int currentUserId) ||
+                currentUserId <= 0)
+            {
+                return Unauthorized(new
+                {
+                    success = false,
+                    message = "تعذر تحديد حساب المدير الحالي."
+                });
+            }
 
             var adminUser = await _context.Users.FindAsync(currentUserId);
             if (adminUser == null)
@@ -507,7 +552,16 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
         public IActionResult SuspendAccount()
         {
             var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            int currentUserId = string.IsNullOrEmpty(userIdClaim) ? 1 : int.Parse(userIdClaim);
+
+            if (!int.TryParse(userIdClaim, out int currentUserId) ||
+                currentUserId <= 0)
+            {
+                return Unauthorized(new
+                {
+                    success = false,
+                    message = "تعذر تحديد حساب المدير الحالي."
+                });
+            }
 
             var adminUser = _context.Users.FirstOrDefault(u => u.UserId == currentUserId);
             if (adminUser != null)

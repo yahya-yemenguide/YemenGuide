@@ -1,0 +1,476 @@
+@model YemenGuide.Core.DTOs.Owner.OwnerDashboardDto
+
+@{
+    ViewData["Title"] = "لوحة تحكم المنشأة";
+    Layout = "~/Areas/Owner/Views/Shared/_OwnerLayout.cshtml";
+
+    string statusText = string.IsNullOrWhiteSpace(Model.PlaceStatusLabel)
+        ? "غير محددة"
+        : Model.PlaceStatusLabel;
+
+    string statusClass =
+        Model.IsPlaceAvailable &&
+        (string.Equals(Model.PlaceStatus, "Approved", System.StringComparison.OrdinalIgnoreCase) ||
+         string.Equals(Model.PlaceStatus, "Active", System.StringComparison.OrdinalIgnoreCase))
+            ? "is-active"
+            : "is-muted";
+}
+
+@section PageStyles {
+    <style>
+        .nb-owner-dashboard {
+            --nb-surface: rgba(255,255,255,.96);
+            --nb-border: rgba(5,32,60,.09);
+            --nb-text: #102a43;
+            --nb-muted: #64748b;
+            --nb-cyan: #00a6da;
+            --nb-orange: #f59e0b;
+            padding: 24px 0 36px;
+            direction: rtl;
+        }
+
+        .dark-mode .nb-owner-dashboard {
+            --nb-surface: rgba(8,28,48,.92);
+            --nb-border: rgba(255,255,255,.08);
+            --nb-text: #eef8ff;
+            --nb-muted: #9fb5c8;
+        }
+
+        .nb-owner-hero,
+        .nb-owner-card,
+        .nb-owner-review,
+        .nb-owner-empty {
+            background: var(--nb-surface);
+            border: 1px solid var(--nb-border);
+            box-shadow: 0 18px 48px rgba(5,32,60,.08);
+        }
+
+        .nb-owner-hero {
+            position: relative;
+            overflow: hidden;
+            border-radius: 28px;
+            padding: 28px;
+            margin-bottom: 20px;
+        }
+
+        .nb-owner-hero::after {
+            content: "";
+            position: absolute;
+            inset-inline-end: -80px;
+            top: -100px;
+            width: 260px;
+            height: 260px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(0,166,218,.22), transparent 68%);
+            pointer-events: none;
+        }
+
+        .nb-owner-kicker {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 7px 12px;
+            border-radius: 999px;
+            background: rgba(0,166,218,.09);
+            color: var(--nb-cyan);
+            font-size: .83rem;
+            font-weight: 800;
+            margin-bottom: 12px;
+        }
+
+        .nb-owner-hero h1 {
+            color: var(--nb-text);
+            font-size: clamp(1.5rem, 3vw, 2.2rem);
+            font-weight: 900;
+            margin: 0 0 8px;
+        }
+
+        .nb-owner-hero p {
+            color: var(--nb-muted);
+            max-width: 760px;
+            margin: 0;
+            line-height: 1.9;
+        }
+
+        .nb-owner-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 18px;
+        }
+
+        .nb-owner-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 8px 12px;
+            border-radius: 12px;
+            background: rgba(15,23,42,.045);
+            color: var(--nb-text);
+            font-weight: 700;
+            font-size: .86rem;
+        }
+
+        .nb-owner-chip.is-active { color: #138a57; }
+        .nb-owner-chip.is-muted { color: #b45309; }
+
+        .nb-owner-info {
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+            padding: 14px 16px;
+            border-radius: 16px;
+            background: rgba(245,158,11,.08);
+            border: 1px solid rgba(245,158,11,.18);
+            color: var(--nb-text);
+            margin-top: 18px;
+        }
+
+        .nb-owner-info i { color: var(--nb-orange); margin-top: 3px; }
+        .nb-owner-info strong { display: block; margin-bottom: 2px; }
+        .nb-owner-info span { color: var(--nb-muted); font-size: .9rem; }
+
+        .nb-owner-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0,1fr));
+            gap: 14px;
+            margin-bottom: 20px;
+        }
+
+        .nb-owner-card {
+            border-radius: 20px;
+            padding: 18px;
+            min-width: 0;
+        }
+
+        .nb-owner-card__icon {
+            width: 42px;
+            height: 42px;
+            display: grid;
+            place-items: center;
+            border-radius: 13px;
+            background: rgba(0,166,218,.09);
+            color: var(--nb-cyan);
+            font-size: 1.15rem;
+            margin-bottom: 12px;
+        }
+
+        .nb-owner-card small {
+            display: block;
+            color: var(--nb-muted);
+            margin-bottom: 4px;
+            font-weight: 700;
+        }
+
+        .nb-owner-card strong {
+            display: block;
+            color: var(--nb-text);
+            font-size: 1.55rem;
+            font-weight: 900;
+            overflow-wrap: anywhere;
+        }
+
+        .nb-owner-columns {
+            display: grid;
+            grid-template-columns: minmax(0,1.3fr) minmax(280px,.7fr);
+            gap: 18px;
+        }
+
+        .nb-owner-section {
+            background: var(--nb-surface);
+            border: 1px solid var(--nb-border);
+            border-radius: 24px;
+            padding: 20px;
+            box-shadow: 0 18px 48px rgba(5,32,60,.07);
+        }
+
+        .nb-owner-section__head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .nb-owner-section__head h2 {
+            color: var(--nb-text);
+            font-size: 1.05rem;
+            font-weight: 900;
+            margin: 0;
+        }
+
+        .nb-owner-section__head a {
+            color: var(--nb-cyan);
+            font-weight: 800;
+            text-decoration: none;
+            font-size: .88rem;
+        }
+
+        .nb-owner-review {
+            border-radius: 17px;
+            padding: 14px;
+            box-shadow: none;
+        }
+
+        .nb-owner-review + .nb-owner-review { margin-top: 10px; }
+
+        .nb-owner-review__top {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 7px;
+        }
+
+        .nb-owner-review__top strong { color: var(--nb-text); }
+        .nb-owner-stars { color: #f59e0b; white-space: nowrap; }
+        .nb-owner-review p { color: var(--nb-muted); margin: 0; line-height: 1.7; font-size: .9rem; }
+
+        .nb-owner-actions {
+            display: grid;
+            gap: 10px;
+        }
+
+        .nb-owner-action {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 13px 14px;
+            border-radius: 16px;
+            text-decoration: none;
+            border: 1px solid var(--nb-border);
+            color: var(--nb-text);
+            transition: transform .15s ease, border-color .15s ease;
+        }
+
+        .nb-owner-action:hover {
+            transform: translateY(-1px);
+            border-color: rgba(0,166,218,.3);
+            color: var(--nb-text);
+        }
+
+        .nb-owner-action i {
+            width: 38px;
+            height: 38px;
+            display: grid;
+            place-items: center;
+            border-radius: 12px;
+            background: rgba(0,166,218,.09);
+            color: var(--nb-cyan);
+        }
+
+        .nb-owner-action span { flex: 1; font-weight: 800; }
+
+        .nb-owner-empty {
+            border-radius: 18px;
+            padding: 22px;
+            color: var(--nb-muted);
+            text-align: center;
+            box-shadow: none;
+        }
+
+        @@media (max-width: 1100px) {
+            .nb-owner-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+            .nb-owner-columns { grid-template-columns: 1fr; }
+        }
+
+        @@media (max-width: 600px) {
+            .nb-owner-dashboard { padding-top: 14px; }
+            .nb-owner-hero { padding: 20px; border-radius: 21px; }
+            .nb-owner-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+            .nb-owner-card { padding: 14px; border-radius: 17px; }
+            .nb-owner-card strong { font-size: 1.2rem; }
+            .nb-owner-section { padding: 15px; border-radius: 19px; }
+        }
+    </style>
+}
+
+<div class="nb-owner-dashboard">
+    @if (TempData["OwnerNonBookableInfo"] is string nonBookableMessage &&
+         !string.IsNullOrWhiteSpace(nonBookableMessage))
+    {
+        <div class="alert alert-info border-0 rounded-4 mb-3" role="status">
+            <i class="bi bi-info-circle-fill ms-2"></i>
+            @nonBookableMessage
+        </div>
+    }
+
+    @if (!Model.HasPlace)
+    {
+        <section class="nb-owner-empty">
+            <i class="bi bi-building-add fs-2 d-block mb-2"></i>
+            <h2 class="h5 fw-bold">لا توجد منشأة مرتبطة بالحساب</h2>
+            <p class="mb-3">أضف منشأتك الأولى حتى تبدأ إدارة معلوماتها وإعلاناتها وتقييماتها.</p>
+            <a class="btn btn-primary"
+               asp-area="Owner"
+               asp-controller="Place"
+               asp-action="ManagePlaces">
+                إدارة منشآتي
+            </a>
+        </section>
+    }
+    else
+    {
+        <section class="nb-owner-hero">
+            <span class="nb-owner-kicker">
+                <i class="bi bi-grid-1x2-fill"></i>
+                لوحة منشأة غير حجزية
+            </span>
+
+            <h1>@Model.PlaceName</h1>
+            <p>
+                هذه المنشأة تابعة لفئة تعمل بدون نظام حجز. لذلك تعرض لوحة المالك
+                الأدوات المناسبة للمحتوى والتواصل والتقييمات والإعلانات فقط.
+            </p>
+
+            <div class="nb-owner-meta">
+                <span class="nb-owner-chip">
+                    <i class="bi bi-tag-fill"></i>
+                    @(string.IsNullOrWhiteSpace(Model.CategoryName) ? "بدون فئة" : Model.CategoryName)
+                </span>
+                <span class="nb-owner-chip @statusClass">
+                    <i class="bi bi-activity"></i>
+                    @statusText
+                </span>
+                <span class="nb-owner-chip">
+                    <i class="bi bi-calendar-x"></i>
+                    بدون حجز
+                </span>
+            </div>
+
+            <div class="nb-owner-info">
+                <i class="bi bi-shield-check"></i>
+                <div>
+                    <strong>تم تخصيص اللوحة تلقائيًا حسب قالب الفئة</strong>
+                    <span>الحجوزات، سياسات الحجز، والمالية والعمولات غير معروضة لهذه المنشأة.</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="nb-owner-grid" aria-label="مؤشرات المنشأة">
+            <article class="nb-owner-card">
+                <span class="nb-owner-card__icon"><i class="bi bi-star-fill"></i></span>
+                <small>متوسط التقييم</small>
+                <strong>@Model.Reviews.AverageRating.ToString("0.0") / 5</strong>
+            </article>
+
+            <article class="nb-owner-card">
+                <span class="nb-owner-card__icon"><i class="bi bi-chat-square-heart-fill"></i></span>
+                <small>عدد التقييمات</small>
+                <strong>@Model.Reviews.TotalReviews.ToString("N0")</strong>
+            </article>
+
+            <article class="nb-owner-card">
+                <span class="nb-owner-card__icon"><i class="bi bi-heart-fill"></i></span>
+                <small>في المفضلة</small>
+                <strong>@Model.Kpis.FavoritesCount.ToString("N0")</strong>
+            </article>
+
+            <article class="nb-owner-card">
+                <span class="nb-owner-card__icon"><i class="bi bi-megaphone-fill"></i></span>
+                <small>إعلانات نشطة</small>
+                <strong>@Model.Marketing.ActiveAdvertisements.ToString("N0")</strong>
+            </article>
+
+            <article class="nb-owner-card">
+                <span class="nb-owner-card__icon"><i class="bi bi-eye-fill"></i></span>
+                <small>مشاهدات الإعلانات</small>
+                <strong>@Model.Marketing.Impressions.ToString("N0")</strong>
+            </article>
+
+            <article class="nb-owner-card">
+                <span class="nb-owner-card__icon"><i class="bi bi-cursor-fill"></i></span>
+                <small>نقرات الإعلانات</small>
+                <strong>@Model.Marketing.Clicks.ToString("N0")</strong>
+            </article>
+
+            <article class="nb-owner-card">
+                <span class="nb-owner-card__icon"><i class="bi bi-reply-fill"></i></span>
+                <small>تقييمات بانتظار الرد</small>
+                <strong>@Model.Reviews.AwaitingReply.ToString("N0")</strong>
+            </article>
+
+            <article class="nb-owner-card">
+                <span class="nb-owner-card__icon"><i class="bi bi-building-check"></i></span>
+                <small>نوع التشغيل</small>
+                <strong style="font-size:1rem">معلوماتي</strong>
+            </article>
+        </section>
+
+        <div class="nb-owner-columns">
+            <section class="nb-owner-section">
+                <div class="nb-owner-section__head">
+                    <h2><i class="bi bi-star ms-1"></i> أحدث التقييمات</h2>
+                    <a href="/Owner/Chat/ChatInterface?communicationTab=reviews">عرض الكل</a>
+                </div>
+
+                @if (Model.Reviews.LatestReviews != null && Model.Reviews.LatestReviews.Count > 0)
+                {
+                    @foreach (var review in Model.Reviews.LatestReviews)
+                    {
+                        <article class="nb-owner-review">
+                            <div class="nb-owner-review__top">
+                                <strong>@review.CustomerName</strong>
+                                <span class="nb-owner-stars" aria-label="@review.Stars من 5">
+                                    @for (var star = 1; star <= 5; star++)
+                                    {
+                                        <i class="bi @(star <= review.Stars ? "bi-star-fill" : "bi-star")"></i>
+                                    }
+                                </span>
+                            </div>
+                            <p>@(string.IsNullOrWhiteSpace(review.ReviewText) ? "بدون تعليق نصي." : review.ReviewText)</p>
+                        </article>
+                    }
+                }
+                else
+                {
+                    <div class="nb-owner-empty">
+                        <i class="bi bi-star d-block fs-4 mb-2"></i>
+                        لا توجد تقييمات حتى الآن.
+                    </div>
+                }
+            </section>
+
+            <aside class="nb-owner-section">
+                <div class="nb-owner-section__head">
+                    <h2><i class="bi bi-lightning-charge ms-1"></i> إجراءات سريعة</h2>
+                </div>
+
+                <div class="nb-owner-actions">
+                    <a class="nb-owner-action"
+                       asp-area="Owner"
+                       asp-controller="Place"
+                       asp-action="ManagePlaces">
+                        <i class="bi bi-building-gear"></i>
+                        <span>إدارة بيانات المنشأة</span>
+                        <i class="bi bi-chevron-left"></i>
+                    </a>
+
+                    <a class="nb-owner-action"
+                       asp-area="Owner"
+                       asp-controller="Advertisements"
+                       asp-action="AdvertisementManagement">
+                        <i class="bi bi-megaphone"></i>
+                        <span>إدارة الإعلانات</span>
+                        <i class="bi bi-chevron-left"></i>
+                    </a>
+
+                    <a class="nb-owner-action"
+                       href="/Owner/Chat/ChatInterface?communicationTab=reviews">
+                        <i class="bi bi-star"></i>
+                        <span>التقييمات والردود</span>
+                        <i class="bi bi-chevron-left"></i>
+                    </a>
+
+                    <a class="nb-owner-action"
+                       asp-area="Owner"
+                       asp-controller="Reports"
+                       asp-action="OwnerReports">
+                        <i class="bi bi-flag"></i>
+                        <span>الدعم والبلاغات</span>
+                        <i class="bi bi-chevron-left"></i>
+                    </a>
+                </div>
+            </aside>
+        </div>
+    }
+</div>

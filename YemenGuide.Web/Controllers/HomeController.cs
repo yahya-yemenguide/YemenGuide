@@ -11,6 +11,7 @@ using YemenGuide.Core.Constants;
 using YemenGuide.Data;
 using YemenGuide.Core.DTOs.Customer;
 using YemenGuide.Web.Services.ExchangeRates;
+using YemenGuide.Web.Services.Employees;
 
 namespace YemenGuide.Web.Controllers
 {
@@ -20,6 +21,7 @@ namespace YemenGuide.Web.Controllers
         private readonly AppDbContext _context;
         private readonly CurrencyDisplayService _currencyDisplayService;
         private readonly IMemoryCache _cache;
+        private readonly IAdminPermissionService _adminPermissionService;
 
         // =============================================================
         // معايير الأماكن المميزة التلقائية
@@ -49,12 +51,14 @@ namespace YemenGuide.Web.Controllers
             ILogger<HomeController> logger,
             AppDbContext context,
             CurrencyDisplayService currencyDisplayService,
-            IMemoryCache cache)
+            IMemoryCache cache,
+            IAdminPermissionService adminPermissionService)
         {
             _logger = logger;
             _context = context;
             _currencyDisplayService = currencyDisplayService;
             _cache = cache;
+            _adminPermissionService = adminPermissionService;
         }
 
         // =============================================================
@@ -62,16 +66,131 @@ namespace YemenGuide.Web.Controllers
         // =============================================================
         public async Task<IActionResult> Index()
         {
-            // 1. توجيه الأدمن والمالك إلى لوحات التحكم الخاصة بهم
+            // 1. توجيه الحساب المسجل إلى أول صفحة مسموحة له.
+            // مهم لموظفي الإدارة: لا نفترض أن كل Admin يملك Dashboard.View.
+            // عند تشغيل المشروع على "/" نختار أول قسم فعلي حسب الصلاحيات
+            // حتى لا يصل الموظف إلى HTTP 403 لمجرد أن الداشبورد غير مسموح له.
             if (User.Identity != null && User.Identity.IsAuthenticated)
             {
                 if (User.IsInRole(SystemRoles.Admin))
                 {
-                    return RedirectToAction("DashboardOverview", "AdminDashboard", new { area = "Admin" });
+                    var adminIdText =
+                        User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+                    if (!int.TryParse(adminIdText, out var adminId) ||
+                        adminId <= 0)
+                    {
+                        return RedirectToAction("Login", "Account");
+                    }
+
+                    var permissionKeys =
+                        await _adminPermissionService
+                            .GetPermissionKeysAsync(adminId);
+
+                    bool HasPermission(string key) =>
+                        permissionKeys.Any(permission =>
+                            string.Equals(
+                                permission,
+                                key,
+                                StringComparison.OrdinalIgnoreCase));
+
+                    bool HasPrefix(string prefix) =>
+                        permissionKeys.Any(permission =>
+                            permission.StartsWith(
+                                prefix,
+                                StringComparison.OrdinalIgnoreCase));
+
+                    if (HasPermission("Dashboard.View"))
+                    {
+                        return RedirectToAction(
+                            "DashboardOverview",
+                            "AdminDashboard",
+                            new { area = "Admin" });
+                    }
+
+                    if (HasPrefix("Employees.") ||
+                        HasPrefix("Roles.") ||
+                        HasPrefix("AuditLogs."))
+                    {
+                        return RedirectToAction(
+                            "EmployeeManagement",
+                            "Employees",
+                            new { area = "Admin" });
+                    }
+
+                    if (HasPrefix("Users."))
+                    {
+                        return RedirectToAction(
+                            "UserManagement",
+                            "Users",
+                            new { area = "Admin" });
+                    }
+
+                    if (HasPrefix("Places."))
+                    {
+                        return RedirectToAction(
+                            "PlaceManagement",
+                            "Places",
+                            new { area = "Admin" });
+                    }
+
+                    if (HasPrefix("Advertisements."))
+                    {
+                        return RedirectToAction(
+                            "AdvertisementManagement",
+                            "Advertisements",
+                            new { area = "Admin" });
+                    }
+
+                    if (HasPrefix("Cases."))
+                    {
+                        return RedirectToAction(
+                            "ReportsCenter",
+                            "Reports",
+                            new { area = "Admin" });
+                    }
+
+                    if (HasPrefix("Finance."))
+                    {
+                        return RedirectToAction(
+                            "ManageAdminFinancials",
+                            "AdminFinancials",
+                            new { area = "Admin" });
+                    }
+
+                    if (HasPrefix("MasterData.") ||
+                        HasPrefix("Categories.") ||
+                        HasPrefix("Cities."))
+                    {
+                        return RedirectToAction(
+                            "MasterEntitiesManagement",
+                            "MasterEntities",
+                            new { area = "Admin" });
+                    }
+
+                    if (HasPrefix("Settings."))
+                    {
+                        return RedirectToAction(
+                            "SystemSettings",
+                            "Settings",
+                            new { area = "Admin" });
+                    }
+
+                    // الملف الشخصي متاح لموظف الإدارة حتى لو لم يملك
+                    // صلاحية قسم تشغيلية، ويُستخدم أيضًا لمودل تغيير
+                    // كلمة المرور الإجباري عند أول دخول.
+                    return RedirectToAction(
+                        "AdminProfile",
+                        "Profile",
+                        new { area = "Admin" });
                 }
+
                 if (User.IsInRole(SystemRoles.Owner))
                 {
-                    return RedirectToAction("DashboardOwner", "OwnerDashboard", new { area = "Owner" });
+                    return RedirectToAction(
+                        "DashboardOwner",
+                        "OwnerDashboard",
+                        new { area = "Owner" });
                 }
             }
 

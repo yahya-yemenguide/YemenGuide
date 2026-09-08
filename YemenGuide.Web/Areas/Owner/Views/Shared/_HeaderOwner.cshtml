@@ -43,6 +43,7 @@
 
     // منشآت المالك. يتم استخدام الكوكي كتفضيل واجهة فقط،
     // وأي كنترولر يستخدم القيمة لاحقًا يجب أن يتحقق من ملكية المنشأة.
+    // BookingSystemId هو المصدر المركزي لتحديد ما إذا كانت المنشأة حجزية أم لا.
     var ownerPlaces = _context.Places
         .Where(p => p.OwnerId == ownerId)
         .Select(p => new
@@ -54,6 +55,7 @@
             p.Status,
             p.IsAvailable,
             CategoryName = p.Category.CategoryName,
+            BookingSystemId = p.Category.BookingSystemId,
             CityName = p.City.CityName
         })
         .OrderByDescending(p => p.Status == "Approved" || p.Status == "Active")
@@ -70,6 +72,11 @@
     string activePlaceImage = activePlace?.LogoImage
         ?? activePlace?.CoverImage
         ?? logoPath;
+
+    // 0 = منشأة معلوماتية/غير حجزية، وأي قيمة أكبر من صفر = قالب حجز.
+    bool activePlaceIsBookable =
+        activePlace != null &&
+        activePlace.BookingSystemId > 0;
 
     string StatusLabel(string? status, bool? isAvailable)
     {
@@ -167,21 +174,24 @@
                 </a>
             </li>
 
-            <li class="nav-item">
-                <a class="nav-link @(IsActive("Settings", "FacilitySettings") ? "active" : "")"
+            @if (activePlaceIsBookable)
+            {
+                <li class="nav-item">
+                    <a class="nav-link @(IsActive("Settings", "FacilitySettings") ? "active" : "")"
                    asp-area="Owner" asp-controller="Settings" asp-action="FacilitySettings">
-                    <i class="bi bi-sliders2"></i>
-                    <span class="nav-text">سياسات المنشأة</span>
-                </a>
-            </li>
+                        <i class="bi bi-sliders2"></i>
+                        <span class="nav-text">سياسات المنشأة</span>
+                    </a>
+                </li>
 
-            <li class="nav-item">
-                <a class="nav-link @(IsActive("Reservation", "ManageReservations") ? "active" : "")"
+                <li class="nav-item">
+                    <a class="nav-link @(IsActive("Reservation", "ManageReservations") ? "active" : "")"
                    asp-area="Owner" asp-controller="Reservation" asp-action="ManageReservations">
-                    <i class="bi bi-calendar-check"></i>
-                    <span class="nav-text">إدارة الحجوزات</span>
-                </a>
-            </li>
+                        <i class="bi bi-calendar-check"></i>
+                        <span class="nav-text">إدارة الحجوزات</span>
+                    </a>
+                </li>
+            }
 
             <li class="nav-item">
                 <a class="nav-link @(IsActive("Advertisements") ? "active" : "")"
@@ -191,13 +201,16 @@
                 </a>
             </li>
 
-            <li class="nav-item">
-                <a class="nav-link @(IsActive("OwnerFinancials", "ManageOwnerFinancials") ? "active" : "")"
+            @if (activePlaceIsBookable)
+            {
+                <li class="nav-item">
+                    <a class="nav-link @(IsActive("OwnerFinancials", "ManageOwnerFinancials") ? "active" : "")"
                    asp-area="Owner" asp-controller="OwnerFinancials" asp-action="ManageOwnerFinancials">
-                    <i class="bi bi-wallet2"></i>
-                    <span class="nav-text">الشؤون المالية والعمولات</span>
-                </a>
-            </li>
+                        <i class="bi bi-wallet2"></i>
+                        <span class="nav-text">الشؤون المالية والعمولات</span>
+                    </a>
+                </li>
+            }
 
             <li class="nav-item">
                 <a class="nav-link @(IsActive("Chat", "ChatInterface") ? "active" : "")"
@@ -273,7 +286,7 @@
             <i class="bi bi-search"></i>
             <input type="text"
                    class="form-control search-input"
-                   placeholder="ابحث عن حجز، منشأة، تقرير..."
+                   placeholder="@(activePlaceIsBookable ? "ابحث عن حجز، منشأة، تقرير..." : "ابحث عن منشأة، إعلان، تقرير...")"
                    id="globalSearch"
                    autocomplete="off" />
         </div>

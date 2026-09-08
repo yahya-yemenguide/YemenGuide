@@ -16,6 +16,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers.OwnerFinancials
     [Area("Owner")]
     [Authorize(Roles = "Owner,Admin")]
     [AuthorizeActiveOwner]
+    [OwnerBookablePlace]
     [Route("Owner/Financials")]
     [ResponseCache(
         NoStore = true,

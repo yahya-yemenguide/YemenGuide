@@ -91,6 +91,45 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             ViewData["IsAdministrationOwnedPlace"] =
                 isAdministrationAccount;
 
+            // BookingSystemId هو المصدر المركزي لنوع لوحة المنشأة.
+            // 0 = منشأة غير حجزية، وأي قيمة أكبر من صفر = منشأة حجزية.
+            var isBookablePlace =
+                model.HasPlace &&
+                model.BookingSystemId > 0;
+
+            ViewData["IsBookablePlace"] =
+                isBookablePlace;
+
+            // المنشأة غير الحجزية لا تدخل في دورة الحجوزات أو ضمان العمولة
+            // ولا تُنشأ لها تنبيهات انتهاء تجربة مرتبطة بالحجوزات.
+            // نعرض لها لوحة مستقلة معلوماتية/تسويقية، مع إبقاء لوحة الحجز كما هي تمامًا.
+            if (model.HasPlace && !isBookablePlace)
+            {
+                model.AttentionItems.RemoveAll(item =>
+                    string.Equals(
+                        item.Key,
+                        "commission-balance",
+                        StringComparison.OrdinalIgnoreCase));
+
+                model.TrialStatus = new OwnerTrialStatusDto
+                {
+                    CanAcceptNewBookings = false,
+                    Currency = string.IsNullOrWhiteSpace(model.Currency)
+                        ? "ريال يمني"
+                        : model.Currency,
+                    AlertLevel = "normal"
+                };
+
+                model.TrialWelcome = new OwnerTrialWelcomeDto
+                {
+                    ShouldShow = false
+                };
+
+                return View(
+                    "DashboardNonBookable",
+                    model);
+            }
+
             // المنشآت المملوكة مباشرة لحساب Admin لا تدخل في دورة
             // الفترة التجريبية أو ضمان/شحن عمولات الملاك.
             if (isAdministrationAccount)
