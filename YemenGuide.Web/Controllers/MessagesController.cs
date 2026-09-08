@@ -292,7 +292,10 @@ namespace YemenGuide.Web.Controllers
                 if (!placesById.TryGetValue(key.PlaceId, out Place? place) ||
                     place.OwnerId != key.OwnerId ||
                     place.Owner == null ||
-                    !string.Equals(place.Owner.Role, "Owner", StringComparison.OrdinalIgnoreCase))
+                    (
+                        !string.Equals(place.Owner.Role, "Owner", StringComparison.OrdinalIgnoreCase) &&
+                        !string.Equals(place.Owner.Role, "Admin", StringComparison.OrdinalIgnoreCase)
+                    ))
                 {
                     continue;
                 }
@@ -1081,7 +1084,10 @@ namespace YemenGuide.Web.Controllers
 
             if (place == null ||
                 place.Owner == null ||
-                !string.Equals(place.Owner.Role, "Owner", StringComparison.OrdinalIgnoreCase))
+                (
+                        !string.Equals(place.Owner.Role, "Owner", StringComparison.OrdinalIgnoreCase) &&
+                        !string.Equals(place.Owner.Role, "Admin", StringComparison.OrdinalIgnoreCase)
+                    ))
             {
                 return null;
             }

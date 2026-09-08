@@ -13,10 +13,12 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using YemenGuide.Core.DTOs.Owner;
+using YemenGuide.Core.DTOs.Notifications;
 using YemenGuide.Core.Entities;
 using YemenGuide.Data;
 using YemenGuide.Web.Filters;
 using YemenGuide.Web.Hubs;
+using YemenGuide.Web.Services.Notifications;
 
 namespace YemenGuide.Web.Areas.Owner.Controllers
 {
@@ -43,15 +45,18 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
         private readonly AppDbContext _context;
         private readonly IWebHostEnvironment _environment;
         private readonly IHubContext<ChatHub> _hubContext;
+        private readonly INotificationService _notificationService;
 
         public ChatController(
             AppDbContext context,
             IWebHostEnvironment environment,
-            IHubContext<ChatHub> hubContext)
+            IHubContext<ChatHub> hubContext,
+            INotificationService notificationService)
         {
             _context = context;
             _environment = environment;
             _hubContext = hubContext;
+            _notificationService = notificationService;
         }
 
         // =====================================================================
@@ -548,6 +553,17 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
                 _context.Chats.AddRange(messagesToSave);
                 await _context.SaveChangesAsync(cancellationToken);
+
+                _notificationService.Queue(new CreateNotificationDto
+                {
+                    UserId = receiverId,
+                    NotificationTitle = "رسالة جديدة",
+                    NotificationText = "لديك رسالة جديدة من صاحب المنشأة.",
+                    NotificationType = "Message",
+                    TargetUrl = $"/Messages/Index?placeId={activePlace.PlaceId}",
+                    ReferenceType = "Chat",
+                    ReferenceId = messagesToSave.FirstOrDefault()?.MessageId
+                });
             }
             catch
             {

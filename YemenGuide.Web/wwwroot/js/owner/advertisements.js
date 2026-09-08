@@ -1332,7 +1332,7 @@
         const startValue = form.elements.RequestedStartAt?.value;
 
         if (immediate) {
-            text(root, "[data-review-start]", "بعد اعتماد الإدارة");
+            text(root, "[data-review-start]", "يبدأ الآن");
             text(root, "[data-review-end]", "تُحسب من وقت البدء الفعلي");
         } else {
             const start = startValue ? new Date(startValue) : null;
@@ -1482,13 +1482,20 @@
                 throw new Error(submitResult.message || "تعذر تجهيز الإعلان للدفع.");
             }
 
-            if (submitResult.status === "AwaitingPayment") {
+            const isAdminPlace = app.dataset.adminPlace === "True";
+
+            if (submitResult.status === "AwaitingPayment" && !isAdminPlace) {
                 await openPayment(advertisementId, root);
                 return;
             }
 
             Swal.close();
-            toast(submitResult.message || "تم إرسال الإعلان للمراجعة.", "success");
+            toast(
+                isAdminPlace
+                    ? "تم تأكيد الإعلان وعرضه بنجاح."
+                    : (submitResult.message || "تم إرسال الإعلان للمراجعة."),
+                "success"
+            );
             await refreshAfterChange();
         } catch (error) {
             hideWizardConfirmation(root);

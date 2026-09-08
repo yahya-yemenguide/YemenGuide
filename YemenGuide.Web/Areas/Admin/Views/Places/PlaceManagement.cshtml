@@ -226,22 +226,22 @@
                                                 @if (adminPlaceNeedsPolicies)
                                                 {
                                                     <a asp-area="Owner"
-                                       asp-controller="Settings"
-                                       asp-action="FacilitySettings"
-                                       asp-route-autoPlaceId="@item.PlaceId"
-                                       class="action-btn action-btn--edit"
-                                       title="@L("أكمل سياسات الحجز لتفعيل المنشأة", "Complete booking policies to activate the place")">
+                                                       asp-controller="Settings"
+                                                       asp-action="FacilitySettings"
+                                                       asp-route-autoPlaceId="@item.PlaceId"
+                                                       class="action-btn action-btn--edit"
+                                                       title="@L("أكمل سياسات الحجز لتفعيل المنشأة", "Complete booking policies to activate the place")">
                                                         <i class="bi bi-sliders2"></i>
                                                         <span>@L("إكمال السياسات", "Complete policies")</span>
                                                     </a>
                                                 }
 
                                                 <a asp-area="Admin"
-                                       asp-controller="Places"
-                                       asp-action="ManageOwnPlace"
-                                       asp-route-id="@item.PlaceId"
-                                       class="action-btn action-btn--view"
-                                       title="@L("إدارة المنشأة بجميع أدوات المالك", "Manage the place with all owner tools")">
+                                                   asp-controller="Places"
+                                                   asp-action="ManageOwnPlace"
+                                                   asp-route-id="@item.PlaceId"
+                                                   class="action-btn action-btn--view"
+                                                   title="@L("إدارة المنشأة بجميع أدوات المالك", "Manage the place with all owner tools")">
                                                     <i class="bi bi-speedometer2"></i>
                                                     <span>@L("إدارة كاملة", "Full management")</span>
                                                 </a>
@@ -288,11 +288,12 @@
 
                                                         </div>
 
-                                                        @if (canEditPlaces)
+                                                        @* الأدمن يعدل منشآته الخاصة فقط، أما منشآت المالكين فلا تظهر لها أدوات التعديل *@
+                                                        @if (canEditPlaces && item.OwnerId == currentAdminUserId)
 
                                                         {
 
-                                                            <button class="action-btn action-btn--edit edit-btn" type="button" title="@L("تعديل بيانات المنشأة", "Edit place data")" onclick="window.openEditPlaceModal(@item.PlaceId)"><i class="bi bi-pencil-square"></i><span>@L("تعديل", "Edit")</span></button>
+                                                            
 
                                                             <button class="action-btn action-btn--view" type="button" title="@L("إدارة صور المنشأة", "Manage place photos")" onclick="window.openManagePlaceImagesModal(@item.PlaceId)"><i class="bi bi-images"></i><span>@L("الصور", "Photos")</span></button>
 
@@ -396,7 +397,7 @@
 
                                                         {
 
-                                                            <button class="action-btn action-btn--edit" type="button" onclick="window.openEditPlaceModal(@item.PlaceId)"><i class="bi bi-pencil-square"></i><span>@L("تعديل", "Edit")</span></button>
+                                                            
 
                                                             <button class="action-btn action-btn--view" type="button" onclick="window.openManagePlaceImagesModal(@item.PlaceId)"><i class="bi bi-images"></i><span>@L("الصور", "Photos")</span></button>
 
@@ -499,7 +500,7 @@
 
                                                         {
 
-                                                            <button class="action-btn action-btn--edit" type="button" onclick="window.openEditPlaceModal(@item.PlaceId)"><i class="bi bi-pencil-square"></i><span>@L("تعديل", "Edit")</span></button>
+                                                            
 
                                                             <button class="action-btn action-btn--view" type="button" onclick="window.openManagePlaceImagesModal(@item.PlaceId)"><i class="bi bi-images"></i><span>@L("الصور", "Photos")</span></button>
 
@@ -600,7 +601,7 @@
 
                                                         {
 
-                                                            <button class="action-btn action-btn--edit" type="button" onclick="window.openEditPlaceModal(@item.PlaceId)"><i class="bi bi-pencil-square"></i><span>@L("تعديل", "Edit")</span></button>
+                                                            
 
                                                             <button class="action-btn action-btn--view" type="button" onclick="window.openManagePlaceImagesModal(@item.PlaceId)"><i class="bi bi-images"></i><span>@L("الصور", "Photos")</span></button>
 
@@ -701,7 +702,7 @@
 
                                                         {
 
-                                                            <button class="action-btn action-btn--edit" type="button" onclick="window.openEditPlaceModal(@item.PlaceId)"><i class="bi bi-pencil-square"></i><span>@L("تعديل", "Edit")</span></button>
+                                                            
 
                                                             <button class="action-btn action-btn--view" type="button" onclick="window.openManagePlaceImagesModal(@item.PlaceId)"><i class="bi bi-images"></i><span>@L("الصور", "Photos")</span></button>
 
@@ -802,7 +803,7 @@
 
                                                         {
 
-                                                            <button class="action-btn action-btn--edit" type="button" onclick="window.openEditPlaceModal(@item.PlaceId)"><i class="bi bi-pencil-square"></i><span>@L("تعديل", "Edit")</span></button>
+                                                            
 
                                                             <button class="action-btn action-btn--view" type="button" onclick="window.openManagePlaceImagesModal(@item.PlaceId)"><i class="bi bi-images"></i><span>@L("الصور", "Photos")</span></button>
 
@@ -1074,6 +1075,6 @@
                 );
         });
 
-                                        // محرر البيانات والصور موجود داخل places-actions.js نفسه؛ لا يعتمد على ملف أو مسار جديد.
+                                // محرر البيانات والصور موجود داخل places-actions.js نفسه؛ لا يعتمد على ملف أو مسار جديد.
     </script>
 }

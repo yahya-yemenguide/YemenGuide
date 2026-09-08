@@ -653,56 +653,106 @@ const loadNearbyPlaces = async (userLocation, options = {}) => {
 };
 
 // ============================================================================
-// 🧭 2. وظيفة البوصلة السحرية (5 ثوانٍ دوران ثم النزول للخريطة الجاهزة)
+// 🧭 2. زر "اكتشف القريب منك" في القسم العلوي
+// ينزل أولاً إلى قسم الخريطة ثم يشغّل نفس زر GPS السفلي نفسه.
 // ============================================================================
 window.scrollToNearby = function () {
-    if (window.isCompassMagic) return;
+    if (window.isNearbyHeroLaunching) return;
 
     const compassBtn = document.getElementById('compassMagicBtn');
     const compassPortal = document.getElementById('dlxCompassPortal');
     const compassStatus = document.getElementById('dlxCompassStatus');
+    const nearbySection = document.getElementById('nearby-section');
     const nearbyGpsBtn = document.getElementById('nearbyGpsBtn');
 
-    if (compassBtn) compassBtn.classList.add('spin-compass-anim');
+    if (!nearbySection || !nearbyGpsBtn) return;
+
+    window.isNearbyHeroLaunching = true;
+
+    // لا نستخدم وضع البوصلة القديم؛ نريد نفس سلوك زر الخريطة السفلي.
+    window.isCompassMagic = false;
+
+    if (compassBtn) {
+        compassBtn.classList.add('spin-compass-anim');
+        compassBtn.setAttribute('aria-busy', 'true');
+    }
+
     if (compassPortal) {
         compassPortal.classList.add('spin-compass-anim');
         compassPortal.setAttribute('aria-busy', 'true');
     }
+
     if (compassStatus) {
-        compassStatus.textContent = 'نحدد موقعك ونجهّز الأماكن القريبة...';
+        compassStatus.textContent = 'ننقلك إلى الخريطة ونجهّز تحديد موقعك...';
     }
 
-    // تفعيل وضع "البوصلة السحرية" لمنع النزول الفوري
-    window.isCompassMagic = true;
+    // أولاً نصل لقسم الخريطة؛ بهذا يعمل Lazy Load الموجود أصلًا.
+    nearbySection.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center'
+    });
 
-    // الضغط برمجياً على زر GPS ليبدأ التجهيز في الخلفية
-    if (nearbyGpsBtn) {
-        nearbyGpsBtn.click();
-    }
+    let launched = false;
+    let fallbackTimer = 0;
 
-    // ⏳ انتظار 5 ثوانٍ بالضبط قبل النزول (كما طلبت) ⏳
-    setTimeout(() => {
-        if (compassBtn) compassBtn.classList.remove('spin-compass-anim');
+    const cleanup = () => {
+        window.removeEventListener('scrollend', launchSameMapButton);
+
+        if (fallbackTimer) {
+            window.clearTimeout(fallbackTimer);
+            fallbackTimer = 0;
+        }
+    };
+
+    const finishHeroState = () => {
+        cleanup();
+
+        if (compassBtn) {
+            compassBtn.classList.remove('spin-compass-anim');
+            compassBtn.removeAttribute('aria-busy');
+        }
+
         if (compassPortal) {
             compassPortal.classList.remove('spin-compass-anim');
             compassPortal.removeAttribute('aria-busy');
         }
+
         if (compassStatus) {
-            compassStatus.textContent = 'الأماكن القريبة جاهزة — انطلق الآن';
+            compassStatus.textContent = 'جارٍ تحديد موقعك من الخريطة...';
         }
 
-        const mapDiv = document.getElementById('map');
-        // النزول للخريطة (التي يفترض أنها فُتحت وجهزت خلال الـ 5 ثواني)
-        if (mapDiv && mapDiv.style.display === 'block') {
-            mapDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        } else {
-            const targetSection = document.getElementById('nearby-section');
-            if (targetSection) targetSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
+        window.isNearbyHeroLaunching = false;
+    };
 
-        // إنهاء وضع البوصلة السحرية
-        window.isCompassMagic = false;
-    }, 5000);
+    function launchSameMapButton() {
+        if (launched) return;
+
+        launched = true;
+        cleanup();
+
+        // هنا بالضبط نشغّل نفس الزر الموجود بجانب الخريطة،
+        // وبالتالي نفس GPS ونفس Google Maps ونفس جلب المنشآت.
+        window.setTimeout(() => {
+            if (!nearbyGpsBtn.disabled) {
+                nearbyGpsBtn.click();
+            }
+
+            finishHeroState();
+        }, 180);
+    }
+
+    // Chrome والمتصفحات التي تدعم scrollend.
+    window.addEventListener(
+        'scrollend',
+        launchSameMapButton,
+        { once: true }
+    );
+
+    // احتياط إذا لم يكن scrollend مدعومًا.
+    fallbackTimer = window.setTimeout(
+        launchSameMapButton,
+        950
+    );
 };
 
 document.addEventListener('DOMContentLoaded', function () {

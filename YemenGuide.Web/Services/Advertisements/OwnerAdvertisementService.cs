@@ -895,6 +895,11 @@ namespace YemenGuide.Web.Services.Advertisements
             }
 
             var advertisement = loaded.Advertisement;
+            var isAdminPlace = string.Equals(
+                loaded.Place?.OwnerRole,
+                "Admin",
+                StringComparison.OrdinalIgnoreCase);
+
             if (!CanSubmit(advertisement.Status))
             {
                 return OwnerAdvertisementOperationResultDto.Fail("لا يمكن إرسال الإعلان في حالته الحالية.");
@@ -917,7 +922,29 @@ namespace YemenGuide.Web.Services.Advertisements
             advertisement.UpdatedAt = DateTime.Now;
             advertisement.RejectionReason = null;
 
-            if (paymentComplete)
+            if (isAdminPlace)
+            {
+                // منشآت الإدارة لا تحتاج دفع أو مراجعة أو موافقة.
+                advertisement.PaymentStatus = OwnerAdvertisementPaymentStatuses.Paid;
+
+                if (advertisement.StartImmediately == true)
+                {
+                    advertisement.Status = OwnerAdvertisementStatuses.Active;
+                    advertisement.StartAt = DateTime.Now;
+                    advertisement.EndAt = DateTime.Now.AddDays(
+                        Math.Max(1, advertisement.DurationDaysSnapshot));
+                }
+                else
+                {
+                    advertisement.Status = OwnerAdvertisementStatuses.Scheduled;
+                    advertisement.StartAt = advertisement.RequestedStartAt;
+                    advertisement.EndAt = advertisement.RequestedStartAt.HasValue
+                        ? advertisement.RequestedStartAt.Value.AddDays(
+                            Math.Max(1, advertisement.DurationDaysSnapshot))
+                        : DateTime.Now.AddDays(Math.Max(1, advertisement.DurationDaysSnapshot));
+                }
+            }
+            else if (paymentComplete)
             {
                 advertisement.Status = OwnerAdvertisementStatuses.Pending;
                 advertisement.PaymentStatus = OwnerAdvertisementPaymentStatuses.PendingReview;
@@ -933,7 +960,7 @@ namespace YemenGuide.Web.Services.Advertisements
 
             try
             {
-                if (paymentComplete)
+                if (paymentComplete && !isAdminPlace)
                 {
                     await _notificationService.QueueForAdminPermissionAsync(
                         AdminPermissionKeys.Advertisements.Review,
@@ -2196,7 +2223,11 @@ namespace YemenGuide.Web.Services.Advertisements
                     Coordinates = item.Coordinates,
                     Status = item.Status,
                     IsAvailable = item.IsAvailable,
-                    ExchangeRateRegion = item.City != null ? item.City.ExchangeRateRegion : null
+                    ExchangeRateRegion = item.City != null ? item.City.ExchangeRateRegion : null,
+                    OwnerRole = _context.Users
+                        .Where(user => user.UserId == item.OwnerId)
+                        .Select(user => user.Role)
+                        .FirstOrDefault()
                 });
 
             if (requestedPlaceId.HasValue && requestedPlaceId.Value > 0)
@@ -3363,6 +3394,7 @@ namespace YemenGuide.Web.Services.Advertisements
             public string? Status { get; init; }
             public bool? IsAvailable { get; init; }
             public string? ExchangeRateRegion { get; init; }
+            public string? OwnerRole { get; init; }
         }
 
         private sealed class AdvertisementRow

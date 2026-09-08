@@ -39,13 +39,13 @@
       href="~/css/customer/customer-sidebar.css"
       asp-append-version="true" />
 
+    <!--
+        مهم: هذه الصفحة تستخدم نفس owner-profile.css نفسه،
+        لذلك شكل البطاقة والتبويبات والحقول والإعدادات والعملة
+        هو نفس تصميم المالك فعليًا وليس محاكاة.
+    -->
     <link rel="stylesheet"
-      href="~/css/customer/customer-profile.css"
-      asp-append-version="true" />
-
-    <!-- توحيد بروفايل العميل مع تصميم المالك والأدمن -->
-    <link rel="stylesheet"
-      href="~/css/customer/customer-profile-admin-match.css"
+      href="~/css/owner/owner-profile.css"
       asp-append-version="true" />
 
     <link rel="stylesheet"
@@ -58,7 +58,7 @@
 
         <main class="customer-main-content">
 
-            <div class="profile-container container-fluid px-4 px-lg-5 customer-profile-page"
+            <div class="profile-container container-fluid px-4 px-lg-5 owner-profile-page"
              data-booking-profile-mode="@(hasBookingReturnUrl ? "true" : "false")"
              data-profile-email-verified="@(Model.IsEmailVerified ? "true" : "false")"
              style="margin-bottom: 80px;">
@@ -756,7 +756,7 @@
 
                                         <label class="profile-currency-option">
                                             <input type="radio"
-                                                   name="preferredCurrencyUi"
+                                                   name="preferredCurrency"
                                                    value="ريال يمني"
                                                    @(activeCurrency == "ريال يمني" ? "checked" : null)>
 
@@ -776,7 +776,7 @@
 
                                         <label class="profile-currency-option">
                                             <input type="radio"
-                                                   name="preferredCurrencyUi"
+                                                   name="preferredCurrency"
                                                    value="ريال سعودي"
                                                    @(activeCurrency == "ريال سعودي" ? "checked" : null)>
 
@@ -796,7 +796,7 @@
 
                                         <label class="profile-currency-option">
                                             <input type="radio"
-                                                   name="preferredCurrencyUi"
+                                                   name="preferredCurrency"
                                                    value="دولار أمريكي"
                                                    @(activeCurrency == "دولار أمريكي" ? "checked" : null)>
 
@@ -814,29 +814,6 @@
                                         </label>
 
                                     </div>
-
-                                    <!--
-                                        نُبقي select القديم مخفيًا فقط حتى نستفيد من
-                                        منطق الحفظ الموجود في customer-profile.js
-                                        بدون تغيير أي وظيفة أخرى في البروفايل.
-                                    -->
-                                    <select id="currencySelect"
-                                            class="d-none"
-                                            aria-hidden="true"
-                                            tabindex="-1">
-                                        <option value="ريال يمني"
-                                                selected="@(activeCurrency == "ريال يمني")">
-                                            ريال يمني
-                                        </option>
-                                        <option value="ريال سعودي"
-                                                selected="@(activeCurrency == "ريال سعودي")">
-                                            ريال سعودي
-                                        </option>
-                                        <option value="دولار أمريكي"
-                                                selected="@(activeCurrency == "دولار أمريكي")">
-                                            دولار أمريكي
-                                        </option>
-                                    </select>
 
                                 </div>
 
@@ -1184,66 +1161,236 @@
     <script src="~/js/customer/customer-profile.js"
         asp-append-version="true"></script>
 
-    <!--
-        واجهة العملة الجديدة تشغّل نفس منطق الحفظ القديم الموجود
-        في customer-profile.js عبر select مخفي، لذلك لا نغيّر أي Endpoint.
-    -->
+    <!-- نفس تجربة حفظ العملة في بروفايل المالك، لكن على Endpoint العميل -->
     <script>
         (() => {
-            const currencySelect =
-                document.getElementById('currencySelect');
-
-            const currencyStatus =
-                document.getElementById('preferredCurrencyStatus');
-
             const currencyInputs =
                 Array.from(
                     document.querySelectorAll(
-                        'input[name="preferredCurrencyUi"]'
+                        'input[name="preferredCurrency"]'
                     )
                 );
 
-            if (!currencySelect || currencyInputs.length === 0) {
+            const currencyStatus =
+                document.getElementById(
+                    'preferredCurrencyStatus'
+                );
+
+            if (currencyInputs.length === 0) {
                 return;
             }
 
-            currencyInputs.forEach(input => {
-                input.addEventListener('change', function () {
-                    if (!this.checked) {
-                        return;
-                    }
+            let lastSavedCurrency =
+                currencyInputs
+                    .find(input => input.checked)
+                    ?.value ||
+                'ريال يمني';
 
-                    const selectedCurrency =
-                        this.value;
+            let currencySaveSequence = 0;
+            let currencySaveController = null;
 
-                    currencySelect.value =
-                        selectedCurrency;
+            function setCurrencyStatusText(
+                currency,
+                state = 'saved'
+            ) {
+                if (!currencyStatus) {
+                    return;
+                }
 
-                    if (currencyStatus) {
-                        currencyStatus.classList.remove(
-                            'is-saved',
-                            'is-error'
-                        );
+                currencyStatus.classList.remove(
+                    'is-saving',
+                    'is-saved',
+                    'is-error'
+                );
 
-                        currencyStatus.classList.add(
-                            'is-saving'
-                        );
-
-                        currencyStatus.innerHTML =
-                            `<i class="bi bi-arrow-repeat"></i>
-                                     <span>جاري تثبيت <strong>${selectedCurrency}</strong>...</span>`;
-                    }
-
-                    currencySelect.dispatchEvent(
-                        new Event(
-                            'change',
-                            { bubbles: true }
-                        )
+                if (state === 'saving') {
+                    currencyStatus.classList.add(
+                        'is-saving'
                     );
-                });
+
+                    currencyStatus.innerHTML =
+                        `<i class="bi bi-arrow-repeat"></i>
+                                 <span>جاري تثبيت <strong>${currency}</strong>...</span>`;
+
+                    return;
+                }
+
+                if (state === 'error') {
+                    currencyStatus.classList.add(
+                        'is-error'
+                    );
+
+                    currencyStatus.innerHTML =
+                        '<i class="bi bi-exclamation-circle"></i><span>تعذر حفظ العملة</span>';
+
+                    return;
+                }
+
+                currencyStatus.classList.add(
+                    'is-saved'
+                );
+
+                currencyStatus.innerHTML =
+                    `<i class="bi bi-check2-circle"></i>
+                             <span>العملة الحالية: <strong>${currency}</strong></span>`;
+            }
+
+            function saveCustomerCurrencyFast(
+                selectedCurrency
+            ) {
+                currencySaveController?.abort();
+
+                const controller =
+                    new AbortController();
+
+                currencySaveController =
+                    controller;
+
+                return fetch(
+                    '/Profile/SetPreference',
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type':
+                                'application/json',
+                            'X-Requested-With':
+                                'XMLHttpRequest'
+                        },
+                        body: JSON.stringify({
+                            Key: 'Currency',
+                            Value: selectedCurrency
+                        }),
+                        signal:
+                            controller.signal
+                    }
+                )
+                    .then(async response => {
+                        const data =
+                            await response
+                                .json()
+                                .catch(() => ({}));
+
+                        if (
+                            !response.ok ||
+                            data.success === false
+                        ) {
+                            throw new Error(
+                                data.message ||
+                                'تعذر حفظ العملة المفضلة.'
+                            );
+                        }
+
+                        return data;
+                    })
+                    .finally(() => {
+                        if (
+                            currencySaveController ===
+                            controller
+                        ) {
+                            currencySaveController =
+                                null;
+                        }
+                    });
+            }
+
+            currencyInputs.forEach(input => {
+                input.addEventListener(
+                    'change',
+                    function () {
+                        if (!this.checked) {
+                            return;
+                        }
+
+                        const selectedCurrency =
+                            this.value;
+
+                        const previousCurrency =
+                            lastSavedCurrency;
+
+                        const currentSequence =
+                            ++currencySaveSequence;
+
+                        setCurrencyStatusText(
+                            selectedCurrency,
+                            'saving'
+                        );
+
+                        void saveCustomerCurrencyFast(
+                            selectedCurrency
+                        )
+                            .then(() => {
+                                if (
+                                    currentSequence !==
+                                    currencySaveSequence
+                                ) {
+                                    return;
+                                }
+
+                                lastSavedCurrency =
+                                    selectedCurrency;
+
+                                setCurrencyStatusText(
+                                    lastSavedCurrency,
+                                    'saved'
+                                );
+
+                                window.dispatchEvent(
+                                    new CustomEvent(
+                                        'yemenguide:currency-changed',
+                                        {
+                                            detail: {
+                                                currency:
+                                                    lastSavedCurrency
+                                            }
+                                        }
+                                    )
+                                );
+                            })
+                            .catch(error => {
+                                if (
+                                    error.name ===
+                                    'AbortError' ||
+                                    currentSequence !==
+                                    currencySaveSequence
+                                ) {
+                                    return;
+                                }
+
+                                const previousInput =
+                                    currencyInputs.find(
+                                        item =>
+                                            item.value ===
+                                            previousCurrency
+                                    );
+
+                                if (previousInput) {
+                                    previousInput.checked =
+                                        true;
+                                }
+
+                                setCurrencyStatusText(
+                                    previousCurrency,
+                                    'error'
+                                );
+
+                                Swal.fire({
+                                    toast: true,
+                                    position: 'top-end',
+                                    icon: 'error',
+                                    title: 'تعذر حفظ العملة',
+                                    text:
+                                        error.message ||
+                                        'حاول مرة أخرى.',
+                                    showConfirmButton: false,
+                                    timer: 2200
+                                });
+                            });
+                    }
+                );
             });
         })();
     </script>
+
 
     <script src="~/js/customer/customer-sidebar.js"
         asp-append-version="true"></script>

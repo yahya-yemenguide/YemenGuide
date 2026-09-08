@@ -1906,9 +1906,9 @@ namespace YemenGuide.Web.Services.Notifications
             }
 
             if (string.Equals(
-                    referenceType,
-                    NotificationReferenceTypes.Chat,
-                    StringComparison.OrdinalIgnoreCase))
+            referenceType,
+            NotificationReferenceTypes.Chat,
+            StringComparison.OrdinalIgnoreCase))
             {
                 var chat = await _context.Chats
                     .AsNoTracking()
@@ -1932,7 +1932,17 @@ namespace YemenGuide.Web.Services.Notifications
                     ? chat.ReceiverId
                     : chat.SenderId;
 
-                if (string.Equals(userRole, "Owner", StringComparison.OrdinalIgnoreCase))
+
+                // نتحقق هل المستخدم مالك أو أدمن يملك منشأة
+                var hasOwnedPlace = await _context.Places
+                    .AsNoTracking()
+                    .AnyAsync(
+                        place => place.OwnerId == userId,
+                        cancellationToken);
+
+
+                if (string.Equals(userRole, "Owner", StringComparison.OrdinalIgnoreCase)
+                    || hasOwnedPlace)
                 {
                     var placePart = chat.PlaceId.HasValue && chat.PlaceId.Value > 0
                         ? $"&placeId={chat.PlaceId.Value}"
@@ -1945,6 +1955,8 @@ namespace YemenGuide.Web.Services.Notifications
                         placePart;
                 }
 
+
+                // العميل يفتح رسائل العميل
                 if (chat.PlaceId.HasValue)
                 {
                     return
@@ -1952,6 +1964,7 @@ namespace YemenGuide.Web.Services.Notifications
                         $"&withOwnerId={otherUserId}" +
                         $"&messageId={chat.MessageId}";
                 }
+
 
                 return
                     $"/Messages/MyMessages?withOwnerId={otherUserId}" +
