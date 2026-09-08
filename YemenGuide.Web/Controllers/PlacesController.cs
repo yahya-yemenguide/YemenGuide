@@ -3207,17 +3207,38 @@ namespace YemenGuide.Web.Controllers
                         group => group.Key,
                         group => group.Count());
 
-            var floorCounts =
+            var floorDisplayNamesByRoom =
                 activeRoomUnits
                     .GroupBy(unit =>
                         unit.RoomId)
                     .ToDictionary(
-                        group => group.Key,
-                        group => group
-                            .Select(unit =>
+                        roomGroup => roomGroup.Key,
+                        roomGroup => roomGroup
+                            .GroupBy(unit =>
                                 unit.FloorNumber)
-                            .Distinct()
-                            .Count());
+                            .OrderBy(floorGroup =>
+                                floorGroup.Key)
+                            .Select(floorGroup =>
+                            {
+                                var floorLabel =
+                                    floorGroup
+                                        .Select(unit =>
+                                            unit.FloorLabel?
+                                                .Trim())
+                                        .FirstOrDefault(label =>
+                                            !string.IsNullOrWhiteSpace(label));
+
+                                if (!string.IsNullOrWhiteSpace(
+                                        floorLabel))
+                                {
+                                    return floorLabel!;
+                                }
+
+                                return floorGroup.Key == 0
+                                    ? "الدور الأرضي"
+                                    : $"الطابق {floorGroup.Key}";
+                            })
+                            .ToList());
 
             /* ================================================================
                العملة وصورة المنشأة
@@ -3282,9 +3303,12 @@ namespace YemenGuide.Web.Controllers
                     room.RoomId,
                     out var legacyReservedQuantity);
 
-                floorCounts.TryGetValue(
-                    room.RoomId,
-                    out var floorsCount);
+                var floorDisplayNames =
+                    floorDisplayNamesByRoom.TryGetValue(
+                        room.RoomId,
+                        out var storedFloorDisplayNames)
+                            ? storedFloorDisplayNames
+                            : new List<string>();
 
                 totalQuantity =
                     Math.Max(
@@ -3875,9 +3899,10 @@ namespace YemenGuide.Web.Controllers
                             string.Empty,
 
                         FloorsCount =
-                            Math.Max(
-                                0,
-                                floorsCount),
+                            floorDisplayNames.Count,
+
+                        FloorDisplayNames =
+                            floorDisplayNames,
 
                         Images =
                             roomImages,

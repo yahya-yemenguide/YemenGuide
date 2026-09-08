@@ -941,7 +941,21 @@ document.addEventListener("DOMContentLoaded", function () {
                         const price = r.price !== undefined ? r.price.toLocaleString() : '0';
                         const qty = r.quantity || r.Quantity || 0;
                         const units = r.units || r.Units || [];
-                        const floorCount = new Set(units.map(unit => unit.floorNumber ?? unit.FloorNumber ?? 0)).size;
+
+                        // اعرض رقم/أرقام الطوابق التي يوجد فيها هذا النوع فعليًا،
+                        // بدل عرض عدد الطوابق فقط. مثال: غرفة في الطابق 2 => "الطابق 2" وليس "1 طابق".
+                        const floorNumbers = [...new Set(
+                            units
+                                .map(unit => Number(unit.floorNumber ?? unit.FloorNumber ?? 0))
+                                .filter(number => Number.isInteger(number))
+                        )].sort((a, b) => a - b);
+
+                        const floorsText = floorNumbers.length === 0
+                            ? 'بدون طابق'
+                            : floorNumbers.length === 1
+                                ? (floorNumbers[0] === 0 ? 'الدور الأرضي' : `الطابق ${floorNumbers[0]}`)
+                                : `الطوابق ${floorNumbers.map(number => number === 0 ? 'الأرضي' : number).join('، ')}`;
+
                         const area = r.areaSquareMeters ?? r.AreaSquareMeters;
                         const adults = r.maxAdults ?? r.MaxAdults ?? 1;
                         const children = r.maxChildren ?? r.MaxChildren ?? 0;
@@ -962,7 +976,7 @@ document.addEventListener("DOMContentLoaded", function () {
                             <p class="text-success fw-black fs-6 mb-2">${price} ر.ي</p>
                             <div class="details-room-card-meta">
                                 <small><i class="bi ${isSuite ? 'bi-gem' : 'bi-door-open-fill'}"></i> ${qty} ${isSuite ? 'جناح فعلي' : 'غرفة فعلية'}</small>
-                                <small><i class="bi bi-layers"></i> ${floorCount} طابق</small>
+                                <small><i class="bi bi-layers"></i> ${floorsText}</small>
                                 <small><i class="bi bi-people"></i> ${adults} بالغ / ${children} طفل</small>
                                 ${area ? `<small><i class="bi bi-aspect-ratio"></i> ${area} م²</small>` : ''}
                                 ${isSuite ? `<small><i class="bi bi-grid-3x3-gap"></i> ${internalRooms} غرف داخلية</small>` : (beds !== null && beds !== undefined ? `<small><i class="bi bi-moon-stars"></i> ${beds} سرير</small>` : '')}
@@ -2113,12 +2127,28 @@ document.addEventListener("DOMContentLoaded", function () {
 
         function groupHotelFloorPlanUnits(units) {
             const map = new Map();
+
             (units || []).forEach(unit => {
                 const floorNumber = Number(unit.floorNumber ?? 0);
                 const floorLabel = String(unit.floorLabel ?? '').trim();
-                const key = `${floorNumber}|${floorLabel}`;
-                if (!map.has(key)) map.set(key, { floorNumber, floorLabel, units: [] });
-                map.get(key).units.push(unit);
+
+                // FIX: الطابق يُعرَّف برقم الطابق نفسه، وليس بالرقم + الاسم.
+                // هذا يمنع تقسيم نفس الطابق إلى أكثر من بطاقة إذا اختلف FloorLabel
+                // بين الوحدات القديمة أو كان بعضه فارغًا.
+                const key = floorNumber;
+
+                if (!map.has(key)) {
+                    map.set(key, { floorNumber, floorLabel, units: [] });
+                }
+
+                const floor = map.get(key);
+
+                // إذا أول وحدة لم يكن لها اسم طابق، نأخذ أول اسم غير فارغ من بقية الوحدات.
+                if (!floor.floorLabel && floorLabel) {
+                    floor.floorLabel = floorLabel;
+                }
+
+                floor.units.push(unit);
             });
 
             const floors = Array.from(map.values()).sort((a, b) => a.floorNumber - b.floorNumber);
@@ -2272,7 +2302,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 </div>
 
                 <div class="details-floor-cards" data-plan-floor-cards>
-                    ${floors.map((floor, index) => floorPlanCardHtml(floor, index, rooms, index === 0)).join('')}
+                    ${floors.map((floor, index) => floorPlanCardHtml(floor, index, rooms, true)).join('')}
                 </div>
             </div>`;
         }
@@ -2283,7 +2313,18 @@ document.addEventListener("DOMContentLoaded", function () {
             root.dataset.ready = 'true';
 
             const cards = root.querySelector('[data-plan-floor-cards]');
-            let sequence = cards.querySelectorAll('[data-plan-floor]').length + 1;
+
+            // FIX: رقم الطابق الجديد يعتمد على أكبر FloorNumber موجود فعليًا،
+            // وليس على عدد البطاقات. مثال: الطوابق 0 و 2 و 5 => التالي 6.
+            const existingFloorNumbers = Array.from(
+                cards.querySelectorAll('[data-plan-floor-number]')
+            )
+                .map(input => Number(input.value))
+                .filter(value => Number.isInteger(value));
+
+            let sequence = existingFloorNumbers.length
+                ? Math.max(...existingFloorNumbers, 0) + 1
+                : 1;
 
             const updateFloor = card => {
                 const units = card.querySelector('[data-plan-units]');
@@ -2396,6 +2437,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
             const units = [];
             const numbers = new Set();
+            const floorNumbers = new Set();
 
             for (const floor of root.querySelectorAll('[data-plan-floor]')) {
                 const floorNumber = Number(floor.querySelector('[data-plan-floor-number]')?.value || 0);
@@ -2404,6 +2446,12 @@ document.addEventListener("DOMContentLoaded", function () {
                 if (!Number.isInteger(floorNumber) || floorNumber < -100 || floorNumber > 1000) {
                     return { error: 'رقم أحد الطوابق غير صحيح.' };
                 }
+
+                // FIX: لا نسمح بوجود بطاقتي طابق بنفس FloorNumber.
+                if (floorNumbers.has(floorNumber)) {
+                    return { error: `رقم الطابق (${floorNumber}) مكرر.` };
+                }
+                floorNumbers.add(floorNumber);
 
                 for (const row of floor.querySelectorAll('[data-plan-unit]')) {
                     const roomUnitId = Number(row.querySelector('[data-plan-field="RoomUnitId"]')?.value || 0);

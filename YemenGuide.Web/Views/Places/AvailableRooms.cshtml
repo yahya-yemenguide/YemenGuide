@@ -37,9 +37,9 @@
 }
 
     <main class="available-rooms-page"
-          dir="rtl"
-          data-currency-code="@Model.CurrencyCode"
-          data-currency-symbol="@Model.CurrencySymbol">
+      dir="rtl"
+      data-currency-code="@Model.CurrencyCode"
+      data-currency-symbol="@Model.CurrencySymbol">
 
         <input type="hidden" id="placeIdInput" value="@Model.PlaceId" />
         <input type="hidden" id="startDateInput" value="@Model.StartDate.ToString("yyyy-MM-dd")" />
@@ -278,18 +278,18 @@
                         ? Math.Clamp((room.RemainingQuantity * 100) / room.TotalQuantity, 0, 100)
                         : 0;
                         var promotionValueForDisplay =
-                            string.Equals(
-                                room.PromotionDiscountType,
-                                "Percentage",
-                                StringComparison.OrdinalIgnoreCase)
-                                ? room.PromotionDiscountValue
-                                : room.PromotionDiscountValueDisplay;
+                        string.Equals(
+                        room.PromotionDiscountType,
+                        "Percentage",
+                        StringComparison.OrdinalIgnoreCase)
+                        ? room.PromotionDiscountValue
+                        : room.PromotionDiscountValueDisplay;
 
                         var promotionMaximumForDisplay =
-                            room.PromotionMaximumDiscountAmountDisplay ?? 0m;
+                        room.PromotionMaximumDiscountAmountDisplay ?? 0m;
 
                         var promotionMinimumForDisplay =
-                            room.PromotionMinimumBookingAmountDisplay ?? 0m;
+                        room.PromotionMinimumBookingAmountDisplay ?? 0m;
 
                         var galleryImages = room.Images?
                         .Where(image => !string.IsNullOrWhiteSpace(image))
@@ -422,7 +422,7 @@
                                         {
                                             <span class="room-card-fact">
                                                 <i class="bi bi-building" aria-hidden="true"></i>
-                                                موزعة على @room.FloorsCount @(room.FloorsCount == 1 ? "طابق" : "طوابق")
+                                                @room.FloorsDisplayText
                                             </span>
                                         }
                                     </div>
@@ -582,8 +582,8 @@
                                                 {
                                                     <div class="room-specification-item">
                                                         <i class="bi bi-building" aria-hidden="true"></i>
-                                                        <span>توزيع الوحدات</span>
-                                                        <strong>@room.FloorsCount @(room.FloorsCount == 1 ? "طابق" : "طوابق")</strong>
+                                                        <span>الطوابق المتاحة لهذا النوع</span>
+                                                        <strong>@room.FloorsDisplayText</strong>
                                                     </div>
                                                 }
                                             </div>
@@ -656,9 +656,11 @@
                                             </div>
 
                                             <div class="room-total-value">
-                                                <strong id="@totalId">@room.EffectiveStayPriceDisplay.ToString(
-                                                    Model.CurrencyCode == "YER" ? "N0" : "N2",
-                                                    CultureInfo.InvariantCulture)</strong>
+                                                <strong id="@totalId">
+                                                    @room.EffectiveStayPriceDisplay.ToString(
+                                            Model.CurrencyCode == "YER" ? "N0" : "N2",
+                                            CultureInfo.InvariantCulture)
+                                                </strong>
                                                 <span>@Model.CurrencySymbol</span>
                                             </div>
                                         </section>

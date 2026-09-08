@@ -281,9 +281,22 @@ namespace YemenGuide.Core.DTOs.Customer
 
         /// <summary>
         /// عدد الطوابق التي توجد عليها وحدات نشطة من هذا النوع.
-        /// لا يكشف أرقام الغرف قبل إنشاء الحجز.
+        /// يبقى للتوافق مع بقية الكود، بينما العرض يستخدم أسماء/أرقام الطوابق الفعلية.
         /// </summary>
         public int FloorsCount { get; set; }
+
+        /// <summary>
+        /// أسماء/أرقام الطوابق الفعلية التي توجد عليها وحدات نشطة من هذا النوع.
+        /// مثال: الدور الأرضي، الطابق 2.
+        /// </summary>
+        public List<string> FloorDisplayNames { get; set; } = new();
+
+        public string FloorsDisplayText =>
+            string.Join(
+                "، ",
+                FloorDisplayNames
+                    .Where(value =>
+                        !string.IsNullOrWhiteSpace(value)));
 
         public bool HasCapacity =>
             Capacity.HasValue &&
@@ -307,7 +320,8 @@ namespace YemenGuide.Core.DTOs.Customer
             !string.IsNullOrWhiteSpace(BedType);
 
         public bool HasFloorDistribution =>
-            FloorsCount > 0;
+            FloorDisplayNames.Any(value =>
+                !string.IsNullOrWhiteSpace(value));
 
         public bool HasSpecifications =>
             HasArea ||
