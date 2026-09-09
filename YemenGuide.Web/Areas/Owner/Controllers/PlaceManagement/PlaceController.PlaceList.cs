@@ -24,6 +24,84 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 {
     public partial class PlaceController
     {
+        private const string CustomHouseRulePrefix = "قاعدة إضافية:";
+
+        private static string NormalizeCustomHouseRule(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return string.Empty;
+
+            var normalized = value
+                .Replace("\r", " ")
+                .Replace("\n", " ")
+                .Trim();
+
+            while (normalized.Contains("  "))
+                normalized = normalized.Replace("  ", " ");
+
+            return normalized.Length <= 200
+                ? normalized
+                : normalized.Substring(0, 200).Trim();
+        }
+
+        private static List<string> ExtractCustomHouseRules(string? terms)
+        {
+            if (string.IsNullOrWhiteSpace(terms))
+                return new List<string>();
+
+            return terms
+                .Split(
+                    new[] { "\r\n", "\n", "\r" },
+                    StringSplitOptions.RemoveEmptyEntries)
+                .Select(line => line.Trim())
+                .Where(line =>
+                    line.StartsWith(
+                        CustomHouseRulePrefix,
+                        StringComparison.Ordinal))
+                .Select(line =>
+                    NormalizeCustomHouseRule(
+                        line.Substring(CustomHouseRulePrefix.Length)))
+                .Where(rule => !string.IsNullOrWhiteSpace(rule))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(20)
+                .ToList();
+        }
+
+        private static string? MergeCustomHouseRules(
+            string? existingTerms,
+            IEnumerable<string>? requestedRules)
+        {
+            var preservedLines =
+                string.IsNullOrWhiteSpace(existingTerms)
+                    ? new List<string>()
+                    : existingTerms
+                        .Split(
+                            new[] { "\r\n", "\n", "\r" },
+                            StringSplitOptions.RemoveEmptyEntries)
+                        .Select(line => line.Trim())
+                        .Where(line =>
+                            !line.StartsWith(
+                                CustomHouseRulePrefix,
+                                StringComparison.Ordinal))
+                        .Where(line => !string.IsNullOrWhiteSpace(line))
+                        .ToList();
+
+            var customLines = (requestedRules ?? Enumerable.Empty<string>())
+                .Select(NormalizeCustomHouseRule)
+                .Where(rule => !string.IsNullOrWhiteSpace(rule))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(20)
+                .Select(rule => $"{CustomHouseRulePrefix} {rule}")
+                .ToList();
+
+            var allLines = preservedLines
+                .Concat(customLines)
+                .ToList();
+
+            return allLines.Count == 0
+                ? null
+                : string.Join(Environment.NewLine, allLines);
+        }
 
         // =========================================================================
         // 📁 القسم الأول: التبويبة الأولى - قائمة منشآتي (PlaceList)
@@ -103,7 +181,6 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
         [HttpGet]
         [Authorize(Roles = "Owner, Admin")]
-
         public async Task<IActionResult> GetPlaceForEdit(int placeId)
         {
             var place = await _context.Places
@@ -126,16 +203,14 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     place.PhoneNumber,
                     place.Coordinates,
                     HasBookingSystem = place.Category != null ? place.Category.HasBookingSystem : false,
-                    SystemId = place.Category != null ? place.Category.BookingSystemId : 0  // 🌟 هذا هو السطر الناقص الذي دمر الدنيا!
+                    SystemId = place.Category != null ? place.Category.BookingSystemId : 0
                 }
             });
         }
 
 
-
         [HttpPost]
         [Authorize(Roles = "Owner, Admin")]
-
         public async Task<IActionResult> EditPlace([FromBody] EditPlaceDto updatedData)
         {
             var place = await _context.Places.FindAsync(updatedData.PlaceId);
@@ -155,6 +230,111 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
             await _context.SaveChangesAsync();
             return Json(new { success = true });
+        }
+
+        // =========================================================================
+        // قواعد المنشأة الإضافية - بدون أي جدول أو عمود جديد
+        // يتم تخزينها داخل Places.Terms الموجود أصلًا، مع Prefix واضح حتى لا
+        // نلمس أي نص قديم آخر موجود في Terms.
+        // =========================================================================
+
+        [HttpGet]
+        [AllowPendingOwnerVerification]
+        public async Task<IActionResult> GetCustomHouseRules(int placeId)
+        {
+            if (placeId <= 0)
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = "رقم المنشأة غير صحيح."
+                });
+            }
+
+            if (!await CanManagePlaceAsync(placeId, AdminPermissionKeys.Places.View))
+            {
+                return StatusCode(403, new
+                {
+                    success = false,
+                    message = "غير مصرح لك بإدارة هذه المنشأة."
+                });
+            }
+
+            var terms = await _context.Places
+                .AsNoTracking()
+                .Where(place => place.PlaceId == placeId)
+                .Select(place => place.Terms)
+                .FirstOrDefaultAsync();
+
+            return Json(new
+            {
+                success = true,
+                rules = ExtractCustomHouseRules(terms)
+            });
+        }
+
+        [HttpPost]
+        [AllowPendingOwnerVerification]
+        public async Task<IActionResult> SaveCustomHouseRules(
+            [FromBody] SaveCustomHouseRulesRequest request)
+        {
+            if (request == null || request.PlaceId <= 0)
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = "بيانات المنشأة غير صالحة."
+                });
+            }
+
+            if (!await CanManagePlaceAsync(
+                    request.PlaceId,
+                    AdminPermissionKeys.Places.Edit))
+            {
+                return StatusCode(403, new
+                {
+                    success = false,
+                    message = "غير مصرح لك بتعديل هذه المنشأة."
+                });
+            }
+
+            var place = await _context.Places
+                .FirstOrDefaultAsync(item => item.PlaceId == request.PlaceId);
+
+            if (place == null)
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = "المنشأة غير موجودة."
+                });
+            }
+
+            var normalizedRules = (request.Rules ?? new List<string>())
+                .Select(NormalizeCustomHouseRule)
+                .Where(rule => !string.IsNullOrWhiteSpace(rule))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(20)
+                .ToList();
+
+            place.Terms = MergeCustomHouseRules(
+                place.Terms,
+                normalizedRules);
+
+            await _context.SaveChangesAsync();
+
+            return Json(new
+            {
+                success = true,
+                rules = normalizedRules,
+                message = "تم حفظ القواعد الإضافية بنجاح."
+            });
+        }
+
+        public sealed class SaveCustomHouseRulesRequest
+        {
+            public int PlaceId { get; set; }
+            public List<string> Rules { get; set; } = new();
         }
 
 
@@ -188,7 +368,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 var policies = _context.PlacePolicies.Where(p => p.PlaceId == placeId);
                 _context.PlacePolicies.RemoveRange(policies);
 
-                // 6. حذف استثناءات التقويم 
+                // 6. حذف استثناءات التقويم
                 var calendarExceptions = _context.PlaceCalendarExceptions.Where(c => c.PlaceId == placeId);
                 _context.PlaceCalendarExceptions.RemoveRange(calendarExceptions);
 
@@ -236,7 +416,6 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
         }
 
 
-
         [HttpPost]
         public async Task<IActionResult> TogglePlaceStatus(int placeId, bool isAvailable)
         {
@@ -281,7 +460,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
             if (needsPolicies && !hasPolicies)
             {
-                // 🌟 السر هنا: لا نغير الحالة إلى Active! نتركها مخفية لكي لا يراها العملاء
+                // لا نغير الحالة إلى Active؛ تظل مخفية حتى يتم إكمال السياسات.
                 place.IsAvailable = false;
 
                 await _context.SaveChangesAsync();
@@ -294,7 +473,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             }
             else
             {
-                // 🟢 إذا لم تكن تحتاج سياسات، أو تم إدخال السياسات مسبقاً، نفعّلها للعملاء
+                // إذا لم تكن تحتاج سياسات، أو تم إدخال السياسات مسبقاً، نفعّلها للعملاء.
                 place.Status = "Active";
                 place.IsAvailable = true;
                 await _context.SaveChangesAsync();

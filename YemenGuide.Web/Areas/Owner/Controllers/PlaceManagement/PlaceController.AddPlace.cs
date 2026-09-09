@@ -478,18 +478,29 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
                     if (currentUserIsAdmin)
                     {
-                        // منشأة الأدمن الخاصة به تعامل كمنشأة مالك كاملة.
-                        // إذا كانت قابلة للحجز تبقى غير متاحة حتى تكتمل السياسات،
-                        // وبعد حفظ السياسات يتم تفعيلها مباشرة بدون مراجعة إدارية.
-                        bool isAdminOperation = string.Equals(ownerMode, "admin", StringComparison.OrdinalIgnoreCase);
-                        status = isAdminOperation
-                            ? (isBookable ? "Pending" : "Active")
-                            : (isBookable ? "WaitOwner" : "Active");
-                        isAvailable = isAdminOperation ? !isBookable : !isBookable;
+                        bool isAdminOperation = string.Equals(
+                            ownerMode,
+                            "admin",
+                            StringComparison.OrdinalIgnoreCase);
+
+                        if (isAdminOperation)
+                        {
+                            // منشأة يضيفها الأدمن لنفس حسابه الإداري:
+                            // غير الحجزية تظهر مباشرة، والحجزية تنتظر اكتمال السياسات.
+                            status = isBookable ? "Pending" : "Active";
+                            isAvailable = !isBookable;
+                        }
+                        else
+                        {
+                            // منشأة يضيفها الأدمن لمالك جديد أو مالك موجود:
+                            // لا تظهر للعملاء مطلقًا قبل موافقة المالك، سواء كانت حجزية أو غير حجزية.
+                            status = "WaitOwner";
+                            isAvailable = false;
+                        }
                     }
                     else
                     {
-                        // منشأة المالك تمر بالمراجعة، ولا تصبح قابلة للحجز قبل وجود السياسات واعتماد الإدارة.
+                        // منشأة يضيفها المالك بنفسه تمر بالمراجعة المعتادة.
                         status = "Pending";
                         isAvailable = false;
                     }
@@ -1015,6 +1026,38 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     if (isPlaceUpdatedForImage)
                     {
                         _context.Places.Update(place);
+                        await _context.SaveChangesAsync();
+                    }
+
+                    // ================================================================
+                    // إشعار المالك عند إضافة الإدارة منشأة إلى حسابه:
+                    // - ينفذ فقط عندما تكون المنشأة مضافة لمالك آخر (new/existing).
+                    // - لا ينفذ لمنشأة الإدارة الخاصة بها (OwnerMode = admin).
+                    // - الإشعار عام على مستوى حساب المالك (ReferenceType = User) حتى
+                    //   يظهر في جرس المالك مهما كانت المنشأة المختارة في الهيدر.
+                    // ================================================================
+                    if (currentUserIsAdmin &&
+                        !string.Equals(ownerMode, "admin", StringComparison.OrdinalIgnoreCase) &&
+                        place.OwnerId.HasValue &&
+                        place.OwnerId.Value > 0)
+                    {
+                        var notificationService = HttpContext.RequestServices
+                            .GetRequiredService<INotificationService>();
+
+                        notificationService.Queue(
+                            new CreateNotificationDto
+                            {
+                                UserId = place.OwnerId.Value,
+                                NotificationTitle = "منشأة جديدة تحتاج موافقتك",
+                                NotificationText =
+                                    $"أضافت الإدارة منشأة «{place.PlaceNameAndDesc}» إلى حسابك. يرجى مراجعتها والموافقة عليها أو رفضها.",
+                                NotificationType = NotificationTypes.Account,
+                                TargetUrl = "/Owner/Place/ManagePlaces",
+                                ReferenceType = NotificationReferenceTypes.User,
+                                ReferenceId = place.OwnerId.Value
+                            });
+
+                        // Queue لا تحفظ وحدها؛ نحفظ داخل نفس Transaction الحالية.
                         await _context.SaveChangesAsync();
                     }
 

@@ -86,8 +86,6 @@
                 </p>
             </div>
         </div>
-
-
     </header>
 
     @if (!canManagePolicies)
@@ -239,7 +237,7 @@
                                 </div>
                             </header>
 
-                            <div class="policy-toggle-grid">
+                            <div class="policy-toggle-grid" id="houseRulesGrid">
                                 <label class="policy-toggle-card">
                                     <span class="policy-toggle-card__icon policy-toggle-card__icon--cyan">
                                         <i class="bi bi-people-fill"></i>
@@ -299,6 +297,31 @@
                                            id="allowQatInside" />
                                     </span>
                                 </label>
+
+                                <div id="customHouseRulesList" class="policy-custom-house-rules-list"></div>
+
+                                <div class="policy-toggle-card policy-custom-rule-composer">
+                                    <span class="policy-toggle-card__icon policy-custom-rule-icon">
+                                        <i class="bi bi-plus-lg"></i>
+                                    </span>
+                                    <span class="policy-toggle-card__copy policy-custom-rule-copy">
+                                        <strong>أخرى</strong>
+                                        <small>اكتب قاعدة إضافية خاصة بهذه المنشأة.</small>
+                                        <span class="policy-custom-rule-entry">
+                                            <input type="text"
+                                               id="customHouseRuleInput"
+                                               maxlength="200"
+                                               autocomplete="off"
+                                               placeholder="مثال: يمنع اصطحاب الحيوانات الأليفة" />
+                                            <button type="button"
+                                                id="addCustomHouseRuleButton"
+                                                aria-label="إضافة القاعدة">
+                                                <i class="bi bi-plus-circle"></i>
+                                                <span>إضافة</span>
+                                            </button>
+                                        </span>
+                                    </span>
+                                </div>
                             </div>
                         </section>
 
@@ -307,7 +330,7 @@
                                 <i class="bi bi-info-circle"></i>
                                 <span>سيتم تطبيق القواعد على المنشأة الحالية فقط.</span>
                             </div>
-                            <button type="button" class="btn-royal-save">
+                            <button type="button" class="btn-royal-save" id="saveHouseRulesButton">
                                 <i class="bi bi-shield-check"></i>
                                 <span>حفظ قواعد المنشأة</span>
                             </button>
@@ -319,3 +342,291 @@
     }
 </main>
 
+<style>
+    .policy-custom-house-rules-list {
+        display: contents;
+    }
+
+    .policy-custom-rule-composer {
+        cursor: default !important;
+        align-items: flex-start !important;
+    }
+
+    .policy-custom-rule-icon {
+        color: #7c3aed !important;
+        background: #f3e8ff !important;
+    }
+
+    .policy-custom-rule-copy {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    .policy-custom-rule-entry {
+        display: flex;
+        gap: 8px;
+        width: 100%;
+        margin-top: 9px;
+    }
+
+        .policy-custom-rule-entry input {
+            min-width: 0;
+            flex: 1 1 auto;
+            height: 39px;
+            padding: 7px 11px;
+            color: #26323d;
+            border: 1px solid #d8e5ec;
+            border-radius: 10px;
+            background: #fff;
+            outline: none;
+            transition: border-color .2s ease, box-shadow .2s ease;
+        }
+
+            .policy-custom-rule-entry input:focus {
+                border-color: #00a6da;
+                box-shadow: 0 0 0 3px rgba(0,166,218,.10);
+            }
+
+        .policy-custom-rule-entry button {
+            display: inline-flex;
+            flex: 0 0 auto;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            min-width: 84px;
+            height: 39px;
+            padding: 0 12px;
+            color: #fff;
+            border: 0;
+            border-radius: 10px;
+            background: linear-gradient(135deg, #00a6da, #008fbd);
+            font-weight: 800;
+            cursor: pointer;
+        }
+
+    .policy-custom-rule-card {
+        cursor: default !important;
+    }
+
+        .policy-custom-rule-card .policy-toggle-card__copy strong {
+            overflow-wrap: anywhere;
+        }
+
+    .policy-custom-rule-delete {
+        display: grid;
+        flex: 0 0 38px;
+        width: 38px;
+        height: 38px;
+        place-items: center;
+        color: #ff5a5f;
+        border: 1px solid rgba(255,90,95,.22);
+        border-radius: 10px;
+        background: #fff1f2;
+        cursor: pointer;
+        transition: transform .2s ease, background .2s ease;
+    }
+
+        .policy-custom-rule-delete:hover {
+            background: #ffe5e7;
+            transform: translateY(-1px);
+        }
+
+    @@media (max-width: 700px) {
+        .policy-custom-rule-entry {
+            flex-direction: column;
+        }
+
+            .policy-custom-rule-entry button {
+                width: 100%;
+            }
+    }
+</style>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const page = document.getElementById("facilitySettingsPage");
+        const list = document.getElementById("customHouseRulesList");
+        const input = document.getElementById("customHouseRuleInput");
+        const addButton = document.getElementById("addCustomHouseRuleButton");
+        const saveButton = document.getElementById("saveHouseRulesButton");
+
+        if (!page || !list || !input || !addButton) return;
+
+        const placeId = Number.parseInt(page.dataset.placeId || "0", 10);
+        if (!Number.isInteger(placeId) || placeId <= 0) return;
+
+        function normalizeRule(value) {
+            return String(value || "")
+                .replace(/[\r\n]+/g, " ")
+                .replace(/\s+/g, " ")
+                .trim()
+                .slice(0, 200);
+        }
+
+        function getRules() {
+            return Array.from(list.querySelectorAll("[data-custom-house-rule]"))
+                .map(card => normalizeRule(card.dataset.rule || ""))
+                .filter(Boolean);
+        }
+
+        function makeRuleCard(rule) {
+            const cleanRule = normalizeRule(rule);
+            if (!cleanRule) return null;
+
+            const card = document.createElement("div");
+            card.className = "policy-toggle-card policy-custom-rule-card fade-in-up";
+            card.dataset.customHouseRule = "true";
+            card.dataset.rule = cleanRule;
+
+            const icon = document.createElement("span");
+            icon.className = "policy-toggle-card__icon policy-toggle-card__icon--cyan";
+            icon.innerHTML = '<i class="bi bi-card-checklist"></i>';
+
+            const copy = document.createElement("span");
+            copy.className = "policy-toggle-card__copy";
+
+            const strong = document.createElement("strong");
+            strong.textContent = cleanRule;
+
+            const small = document.createElement("small");
+            small.textContent = "قاعدة إضافية خاصة بالمنشأة.";
+
+            copy.appendChild(strong);
+            copy.appendChild(small);
+
+            const remove = document.createElement("button");
+            remove.type = "button";
+            remove.className = "policy-custom-rule-delete";
+            remove.title = "حذف القاعدة";
+            remove.setAttribute("aria-label", "حذف القاعدة");
+            remove.innerHTML = '<i class="bi bi-trash3"></i>';
+            remove.addEventListener("click", () => card.remove());
+
+            card.appendChild(icon);
+            card.appendChild(copy);
+            card.appendChild(remove);
+            return card;
+        }
+
+        function addRule() {
+            const rule = normalizeRule(input.value);
+            if (!rule) {
+                input.focus();
+                return;
+            }
+
+            const existing = getRules();
+            if (existing.some(item => item.localeCompare(rule, "ar", { sensitivity: "base" }) === 0)) {
+                if (window.Swal) {
+                    Swal.fire({
+                        icon: "info",
+                        title: "القاعدة موجودة",
+                        text: "هذه القاعدة مضافة مسبقًا.",
+                        confirmButtonColor: "#00A6DA"
+                    });
+                }
+                return;
+            }
+
+            if (existing.length >= 20) {
+                if (window.Swal) {
+                    Swal.fire({
+                        icon: "warning",
+                        title: "الحد الأقصى",
+                        text: "يمكن إضافة 20 قاعدة إضافية كحد أقصى.",
+                        confirmButtonColor: "#00A6DA"
+                    });
+                }
+                return;
+            }
+
+            const card = makeRuleCard(rule);
+            if (card) list.appendChild(card);
+            input.value = "";
+            input.focus();
+        }
+
+        async function loadRules() {
+            try {
+                const response = await fetch(
+                    `/Owner/Place/GetCustomHouseRules?placeId=${encodeURIComponent(placeId)}`,
+                    {
+                        method: "GET",
+                        credentials: "same-origin",
+                        headers: { "X-Requested-With": "XMLHttpRequest" }
+                    }
+                );
+
+                const result = await response.json();
+                if (!response.ok || !result.success) return;
+
+                list.innerHTML = "";
+                (result.rules || []).forEach(rule => {
+                    const card = makeRuleCard(rule);
+                    if (card) list.appendChild(card);
+                });
+            } catch (error) {
+                console.error("Failed to load custom house rules:", error);
+            }
+        }
+
+        async function saveRules() {
+            try {
+                const response = await fetch("/Owner/Place/SaveCustomHouseRules", {
+                    method: "POST",
+                    credentials: "same-origin",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-Requested-With": "XMLHttpRequest"
+                    },
+                    body: JSON.stringify({
+                        PlaceId: placeId,
+                        Rules: getRules()
+                    })
+                });
+
+                const result = await response.json();
+                if (!response.ok || !result.success) {
+                    throw new Error(result.message || "تعذر حفظ القواعد الإضافية.");
+                }
+
+                return true;
+            } catch (error) {
+                console.error("Failed to save custom house rules:", error);
+                if (window.Swal) {
+                    await Swal.fire({
+                        icon: "error",
+                        title: "تعذر حفظ القواعد الإضافية",
+                        text: error.message || "حدث خطأ أثناء الحفظ.",
+                        confirmButtonColor: "#FF5A5F"
+                    });
+                }
+                return false;
+            }
+        }
+
+        addButton.addEventListener("click", addRule);
+        input.addEventListener("keydown", function (event) {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                addRule();
+            }
+        });
+
+        if (saveButton) {
+            saveButton.addEventListener("click", async function (event) {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+
+                const customRulesSaved = await saveRules();
+                if (!customRulesSaved) return;
+
+                if (typeof window.saveCurrentSettings === "function") {
+                    await window.saveCurrentSettings();
+                }
+            });
+        }
+
+        loadRules();
+    });
+</script>

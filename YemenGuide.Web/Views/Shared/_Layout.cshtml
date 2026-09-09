@@ -55,7 +55,7 @@
 
     var customerDashboardControllers =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-                                                                        {
+                                                                                {
             "Overview",
             "Profile",
             "Messages",
@@ -64,7 +64,7 @@
             "Favorites",
             "Reports",
             "Notifications"
-                                                                        };
+                                                                                };
 
     bool isCustomerDashboardPage =
         User.Identity?.IsAuthenticated == true &&
@@ -165,6 +165,33 @@
 
     @await RenderSectionAsync("Styles", required: false)
 
+    @* إصلاح قائمة استكشف داخل لوحة العميل فقط: خلفية داكنة + نص واضح *@
+    <style id="customerDashboardExploreDropdownFix">
+        body.customer-dashboard-page #customerSignatureNav .dropdown-menu.modern-dropdown {
+            background: rgba(5, 32, 60, 0.985) !important;
+            border-color: rgba(0, 166, 218, 0.30) !important;
+            box-shadow: 0 18px 45px rgba(5, 32, 60, 0.30) !important;
+        }
+
+            body.customer-dashboard-page #customerSignatureNav .dropdown-menu.modern-dropdown .dropdown-item,
+            body.customer-dashboard-page #customerSignatureNav .dropdown-menu.modern-dropdown .dropdown-item span,
+            body.customer-dashboard-page #customerSignatureNav .dropdown-menu.modern-dropdown .dropdown-item strong,
+            body.customer-dashboard-page #customerSignatureNav .dropdown-menu.modern-dropdown .dropdown-item small {
+                color: #ffffff !important;
+            }
+
+                body.customer-dashboard-page #customerSignatureNav .dropdown-menu.modern-dropdown .dropdown-item:hover,
+                body.customer-dashboard-page #customerSignatureNav .dropdown-menu.modern-dropdown .dropdown-item:focus {
+                    color: #ffffff !important;
+                    background: rgba(0, 166, 218, 0.20) !important;
+                    transform: translateX(-2px);
+                }
+
+                    body.customer-dashboard-page #customerSignatureNav .dropdown-menu.modern-dropdown .dropdown-item:hover span,
+                    body.customer-dashboard-page #customerSignatureNav .dropdown-menu.modern-dropdown .dropdown-item:focus span {
+                        color: #ffffff !important;
+                    }
+    </style>
 
     @if (!isHomeIndex)
     {
@@ -279,8 +306,6 @@
     }
 
     @await RenderSectionAsync("Scripts", required: false)
-
-
 
     <button type="button"
             class="customer-back-to-top"
