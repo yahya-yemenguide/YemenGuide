@@ -5732,6 +5732,46 @@ namespace YemenGuide.Web.Controllers
                         2);
 
                 /*
+                 * قبل إنشاء الحجز فعليًا نتحقق من أن الحساب المالي
+                 * يستطيع تغطية عمولة هذا الحجز نفسه، وليس الحد الأدنى
+                 * العام للضمان فقط. الخدمة تراعي أيضًا التجربة المجانية،
+                 * الإعفاء الإداري، سياسة الدين وحد الدين وحالة الإيقاف.
+                 */
+                var bookingFinancialAccess =
+                    await _commissionFinanceService
+                        .GetBookingCommissionAccessAsync(
+                            place.PlaceId,
+                            platformCommission,
+                            createdAt,
+                            HttpContext.RequestAborted);
+
+                if (!bookingFinancialAccess.CanAcceptNewBookings)
+                {
+                    await transaction.RollbackAsync();
+
+                    return BadRequest(new
+                    {
+                        success = false,
+                        financialAccessDenied = true,
+                        missingGuaranteeBalance =
+                            bookingFinancialAccess.MissingGuaranteeBalance,
+                        missingCommissionCoverage =
+                            bookingFinancialAccess.MissingCommissionCoverage,
+                        message =
+                            string.IsNullOrWhiteSpace(
+                                bookingFinancialAccess.Message)
+                                ? "المنشأة غير متاحة لاستقبال حجوزات جديدة حاليًا."
+                                : bookingFinancialAccess.Message
+                    });
+                }
+
+                var commissionExemptAtCreation =
+                    bookingFinancialAccess.IsFreeTrialActive ||
+                    IsState(
+                        bookingFinancialAccess.AccountStatus,
+                        "Exempt");
+
+                /*
                  * الرحلة الموحدة:
                  * مع عربون:
                  * AwaitingPayment -> PaymentReview -> موافقة المالك -> Confirmed
@@ -6171,16 +6211,25 @@ namespace YemenGuide.Web.Controllers
                             depositAmount,
 
                         PlatformCommission =
-                            platformCommission,
+                            commissionExemptAtCreation
+                                ? 0m
+                                : platformCommission,
 
                         CommissionRateSnapshot =
-                            commissionPercentage,
+                            commissionExemptAtCreation
+                                ? 0m
+                                : commissionPercentage,
 
                         CommissionBaseAmount =
-                            totalPrice,
+                            commissionExemptAtCreation
+                                ? 0m
+                                : totalPrice,
 
                         CommissionStatus =
-                            "Calculated",
+                            commissionExemptAtCreation ||
+                            platformCommission <= 0m
+                                ? FinancialCommissionStatuses.NotApplicable
+                                : FinancialCommissionStatuses.Calculated,
 
                         AmountPaidOnline =
                             0m,
@@ -7100,6 +7149,22 @@ namespace YemenGuide.Web.Controllers
                     ? "كامل قيمة الحجز"
                     : "العربون";
 
+            var referenceNumber =
+                TransferReferenceNumber?
+                    .Trim();
+
+            if (!string.IsNullOrWhiteSpace(
+                    referenceNumber) &&
+                referenceNumber.Length > 100)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message =
+                        "رقم مرجع الحوالة طويل جدًا. الحد الأقصى 100 حرف."
+                });
+            }
+
             if (PaymentProof == null ||
                 PaymentProof.Length <= 0)
             {
@@ -7218,7 +7283,8 @@ namespace YemenGuide.Web.Controllers
 
             await using var transaction =
                 await _context.Database
-                    .BeginTransactionAsync();
+                    .BeginTransactionAsync(
+                        IsolationLevel.Serializable);
 
             try
             {
@@ -7245,19 +7311,44 @@ namespace YemenGuide.Web.Controllers
                             30);
                 }
 
-                var referenceNumber =
-                    TransferReferenceNumber?
-                        .Trim();
-
                 if (!string.IsNullOrWhiteSpace(
-                        referenceNumber) &&
-                    referenceNumber.Length >
-                    100)
+                        referenceNumber))
                 {
-                    referenceNumber =
-                        referenceNumber.Substring(
-                            0,
-                            100);
+                    var referenceAlreadyUsed =
+                        await _context.FinancialRecords
+                            .AsNoTracking()
+                            .AnyAsync(record =>
+                                record.BookingId != booking.BookingId &&
+                                record.TransferReferenceNumber == referenceNumber &&
+                                record.Booking.Place.OwnerId ==
+                                    booking.Place.OwnerId);
+
+                    if (referenceAlreadyUsed)
+                    {
+                        await transaction.RollbackAsync();
+
+                        if (System.IO.File.Exists(
+                                absoluteFilePath))
+                        {
+                            try
+                            {
+                                System.IO.File.Delete(
+                                    absoluteFilePath);
+                            }
+                            catch
+                            {
+                                // فشل تنظيف الملف لا يغيّر قرار رفض المرجع المكرر.
+                            }
+                        }
+
+                        return BadRequest(new
+                        {
+                            success = false,
+                            duplicateTransferReference = true,
+                            message =
+                                "رقم مرجع الحوالة مستخدم مسبقًا في حجز آخر لدى نفس المالك."
+                        });
+                    }
                 }
 
                 var createdAt =

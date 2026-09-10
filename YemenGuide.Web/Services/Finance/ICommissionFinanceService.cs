@@ -190,6 +190,18 @@ namespace YemenGuide.Web.Services.Finance
                 int placeId,
                 CancellationToken cancellationToken = default);
 
+        /// <summary>
+        /// فحص أدق قبل إنشاء الحجز، ويأخذ عمولة الحجز نفسها في الاعتبار
+        /// حتى لا يدخل العميل دورة الدفع ثم يفشل التأكيد بسبب عدم كفاية
+        /// الرصيد أو حد الدين.
+        /// </summary>
+        Task<BookingFinancialAccessResult>
+            GetBookingCommissionAccessAsync(
+                int placeId,
+                decimal requiredCommissionAmount,
+                DateTime commissionReferenceAt,
+                CancellationToken cancellationToken = default);
+
         /* ================================================================
            العمليات الداخلية لدورة عمولة الحجز
            ================================================================ */
@@ -273,6 +285,10 @@ namespace YemenGuide.Web.Services.Finance
         public decimal AvailableBalance { get; set; }
 
         public decimal MissingGuaranteeBalance { get; set; }
+
+        public decimal RequiredCommissionAmount { get; set; }
+
+        public decimal MissingCommissionCoverage { get; set; }
 
         public string AccountStatus { get; set; } = string.Empty;
 

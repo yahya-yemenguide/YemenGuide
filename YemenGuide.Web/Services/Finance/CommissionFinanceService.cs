@@ -775,6 +775,50 @@ namespace YemenGuide.Web.Services.Finance
                 place => place.PlaceId == placeId && place.OwnerId == ownerId,
                 cancellationToken);
 
+        private async Task<bool> IsAdminOwnedPlaceAsync(
+            int placeId,
+            CancellationToken cancellationToken)
+        {
+            if (placeId <= 0)
+            {
+                return false;
+            }
+
+            var ownerId = await _context.Places
+                .AsNoTracking()
+                .Where(place => place.PlaceId == placeId)
+                .Select(place => place.OwnerId)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (!ownerId.HasValue || ownerId.Value <= 0)
+            {
+                return false;
+            }
+
+            return await _context.Users
+                .AsNoTracking()
+                .AnyAsync(
+                    user =>
+                        user.UserId == ownerId.Value &&
+                        user.Role == "Admin",
+                    cancellationToken);
+        }
+
+        private static void MarkAdministrativeCommissionExempt(
+            FinancialRecord financial,
+            DateTime now)
+        {
+            financial.CommissionRateSnapshot = 0m;
+            financial.CommissionBaseAmount = 0m;
+            financial.PlatformCommission = 0m;
+            financial.CommissionStatus =
+                FinancialCommissionStatuses.NotApplicable;
+            financial.CommissionHeldAt = null;
+            financial.CommissionChargedAt = null;
+            financial.CommissionReleasedAt = null;
+            financial.UpdatedAt = now;
+        }
+
         private async Task<int?> ValidatePlaceAsync(
             int ownerId,
             int? placeId,
@@ -2031,10 +2075,16 @@ namespace YemenGuide.Web.Services.Finance
                 .Select(booking => new
                 {
                     booking.BookingId,
+                    BookingState =
+                        booking.BookingState,
                     AmountPaidOnline =
                         booking.FinancialRecord != null
                             ? booking.FinancialRecord.AmountPaidOnline
                             : 0m,
+                    AmountToPayAtProperty =
+                        booking.FinancialRecord != null
+                            ? booking.FinancialRecord.AmountToPayAtProperty
+                            : booking.TotalPrice,
                     PlatformCommission =
                         booking.FinancialRecord != null
                             ? booking.FinancialRecord.PlatformCommission
@@ -2072,6 +2122,14 @@ namespace YemenGuide.Web.Services.Finance
                             paid - Math.Min(paid, refunded)),
                         2);
                 });
+
+            summary.TotalRemainingAtProperty =
+                bookingSummaryRows.Sum(item =>
+                    IsCancelledBookingState(item.BookingState)
+                        ? 0m
+                        : Math.Max(
+                            0m,
+                            item.AmountToPayAtProperty));
 
             summary.TotalCommission =
                 bookingSummaryRows
@@ -2567,6 +2625,12 @@ namespace YemenGuide.Web.Services.Finance
             if (!await OwnerOwnsPlaceAsync(ownerId, request.PlaceId, cancellationToken))
             {
                 return FinanceOperationResult.Failed("المنشأة غير موجودة أو لا تملك صلاحية شحن رصيدها.");
+            }
+
+            if (await IsAdminOwnedPlaceAsync(request.PlaceId, cancellationToken))
+            {
+                return FinanceOperationResult.Failed(
+                    "المنشآت الإدارية معفاة من ضمان وعمولة المنصة ولا تحتاج إلى شحن رصيد.");
             }
 
             var settings = await GetSettingsAsync(cancellationToken);
@@ -9663,6 +9727,17 @@ namespace YemenGuide.Web.Services.Finance
                     return FinanceOperationResult.Failed("تعذر العثور على حساب مالك المنشأة.");
                 }
 
+                if (string.Equals(
+                        owner.Role,
+                        "Admin",
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    await CommitIfOwnedAsync(databaseTransaction, cancellationToken);
+                    return FinanceOperationResult.Succeeded(
+                        "المنشأة مملوكة لحساب إداري؛ لا تطبق عليها الفترة التجريبية أو ضمان العمولات.",
+                        place.PlaceId);
+                }
+
                 /*
                  * بمجرد وجود أي تاريخ للتجربة نعتبر أن المالك سبق أن دخل
                  * دورة التجربة. لا نعيد ضبط التواريخ عند اعتماد منشأة ثانية
@@ -9787,6 +9862,18 @@ namespace YemenGuide.Web.Services.Finance
                 return result;
             }
 
+            if (await IsAdminOwnedPlaceAsync(placeId, cancellationToken))
+            {
+                result.CanAcceptNewBookings = true;
+                result.RequiredGuaranteeBalance = 0m;
+                result.AvailableBalance = 0m;
+                result.MissingGuaranteeBalance = 0m;
+                result.AccountStatus = "Exempt";
+                result.Message =
+                    "المنشأة إدارية ومعفاة من ضمان وعمولة المنصة.";
+                return result;
+            }
+
             var settings = await GetSettingsAsync(cancellationToken);
             var owner = await _context.Users
                 .AsNoTracking()
@@ -9893,6 +9980,285 @@ namespace YemenGuide.Web.Services.Finance
             return result;
         }
 
+        /// <summary>
+        /// فحص مالي للحجز نفسه قبل إنشاء طلب يجعل العميل يدخل دورة الدفع.
+        /// يطبق نفس منطق الحد الأدنى للضمان وحالة الحساب وسياسة الدين،
+        /// ثم يتحقق أيضًا من إمكانية تغطية عمولة الحجز المحددة. تاريخ
+        /// المرجع يحافظ على إعفاء الحجز الذي أُنشئ داخل التجربة المجانية
+        /// حتى لو نُفذت خطواته اللاحقة بعد انتهاء التجربة.
+        /// </summary>
+        public async Task<BookingFinancialAccessResult>
+            GetBookingCommissionAccessAsync(
+                int placeId,
+                decimal requiredCommissionAmount,
+                DateTime commissionReferenceAt,
+                CancellationToken cancellationToken = default)
+        {
+            var result = new BookingFinancialAccessResult
+            {
+                CanAcceptNewBookings = false,
+                RequiredCommissionAmount = Math.Round(
+                    Math.Max(0m, requiredCommissionAmount),
+                    2),
+                Message = "تعذر التحقق من قدرة الحساب على تغطية عمولة الحجز."
+            };
+
+            if (placeId <= 0)
+            {
+                result.Message = "رقم المنشأة غير صحيح.";
+                return result;
+            }
+
+            var place = await _context.Places
+                .AsNoTracking()
+                .Include(item => item.Category)
+                .FirstOrDefaultAsync(
+                    item => item.PlaceId == placeId,
+                    cancellationToken);
+
+            if (place == null)
+            {
+                result.Message = "المنشأة غير موجودة.";
+                return result;
+            }
+
+            result.IsBookingCategory =
+                IsBookingEnabledCategory(place.Category);
+
+            if (!result.IsBookingCategory)
+            {
+                result.CanAcceptNewBookings = true;
+                result.Message = "الفئة لا تستخدم نظام الحجوزات.";
+                return result;
+            }
+
+            if (!IsOperationalPlace(place))
+            {
+                result.Message =
+                    "المنشأة ليست جاهزة حاليًا لاستقبال حجوزات جديدة.";
+                return result;
+            }
+
+            if (!place.OwnerId.HasValue || place.OwnerId.Value <= 0)
+            {
+                result.Message =
+                    "لا يوجد مالك مرتبط بالمنشأة للتحقق من سياستها المالية.";
+                return result;
+            }
+
+            if (await IsAdminOwnedPlaceAsync(placeId, cancellationToken))
+            {
+                result.CanAcceptNewBookings = true;
+                result.RequiredGuaranteeBalance = 0m;
+                result.RequiredCommissionAmount = 0m;
+                result.AvailableBalance = 0m;
+                result.MissingGuaranteeBalance = 0m;
+                result.MissingCommissionCoverage = 0m;
+                result.AccountStatus = "Exempt";
+                result.Message =
+                    "المنشأة إدارية ومعفاة من ضمان وعمولة المنصة.";
+                return result;
+            }
+
+            var settings = await GetSettingsAsync(cancellationToken);
+
+            var owner = await _context.Users
+                .AsNoTracking()
+                .Where(item => item.UserId == place.OwnerId.Value)
+                .Select(item => new
+                {
+                    item.FreeTrialStartedAt,
+                    item.FreeTrialEndsAt
+                })
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (owner == null)
+            {
+                result.Message = "تعذر العثور على حساب مالك المنشأة.";
+                return result;
+            }
+
+            result.FreeTrialStartedAt = owner.FreeTrialStartedAt;
+            result.FreeTrialEndsAt = owner.FreeTrialEndsAt;
+
+            var now = DateTime.Now;
+            var referenceAt =
+                commissionReferenceAt == default
+                    ? now
+                    : commissionReferenceAt;
+
+            var freeTrialApplies =
+                owner.FreeTrialStartedAt.HasValue &&
+                owner.FreeTrialEndsAt.HasValue &&
+                referenceAt >= owner.FreeTrialStartedAt.Value &&
+                referenceAt < owner.FreeTrialEndsAt.Value;
+
+            if (freeTrialApplies)
+            {
+                var remaining =
+                    owner.FreeTrialEndsAt!.Value - now;
+
+                result.IsFreeTrialActive = true;
+                result.RemainingTrialDays =
+                    remaining.TotalSeconds > 0
+                        ? Math.Max(
+                            1,
+                            (int)Math.Ceiling(remaining.TotalDays))
+                        : 0;
+                result.CanAcceptNewBookings = true;
+                result.RequiredGuaranteeBalance = 0m;
+                result.RequiredCommissionAmount = 0m;
+                result.MissingGuaranteeBalance = 0m;
+                result.MissingCommissionCoverage = 0m;
+                result.AccountStatus = "FreeTrial";
+                result.Message =
+                    remaining.TotalSeconds > 0
+                        ? $"الحجز ضمن الفترة التجريبية المجانية، متبقي نحو {result.RemainingTrialDays} يوم."
+                        : "الحجز أُنشئ خلال الفترة التجريبية المجانية؛ لا تطبق عليه عمولة منصة.";
+
+                return result;
+            }
+
+            var account = await GetOrCreateAccountAsync(
+                placeId,
+                settings,
+                cancellationToken);
+
+            RefreshAccountStatus(account, settings);
+            await _context.SaveChangesAsync(cancellationToken);
+
+            var requiredGuarantee = Math.Round(
+                Math.Max(
+                    0m,
+                    settings?.RequiredCommissionGuaranteeBalance ?? 0m),
+                2);
+
+            var available = Math.Round(
+                Math.Max(0m, account.AvailableBalance),
+                2);
+
+            result.RequiredGuaranteeBalance = requiredGuarantee;
+            result.AvailableBalance = available;
+            result.MissingGuaranteeBalance = Math.Round(
+                Math.Max(0m, requiredGuarantee - available),
+                2);
+            result.AccountStatus =
+                account.AccountStatus?.Trim() ?? string.Empty;
+
+            if (available + 0.01m < requiredGuarantee)
+            {
+                result.Message =
+                    result.MissingGuaranteeBalance > 0m
+                        ? $"يجب استكمال رصيد ضمان العمولة بمبلغ {result.MissingGuaranteeBalance:N2} قبل استقبال حجوزات جديدة."
+                        : "رصيد ضمان العمولة غير كافٍ لاستقبال حجوزات جديدة.";
+                return result;
+            }
+
+            var suspendWhenInsufficient =
+                settings?.SuspendBookingWhenBalanceInsufficient ?? true;
+
+            if (account.DebtAmount > 0m &&
+                account.DebtDueAt.HasValue &&
+                account.DebtDueAt.Value <= now &&
+                suspendWhenInsufficient)
+            {
+                result.AccountStatus =
+                    FinancialAccountStatuses.Suspended;
+                result.Message =
+                    "الحساب المالي موقوف بسبب تجاوز موعد سداد الدين. سدد الدين أولًا.";
+                return result;
+            }
+
+            if (IsState(
+                    account.AccountStatus,
+                    FinancialAccountStatuses.Suspended) &&
+                suspendWhenInsufficient)
+            {
+                result.Message =
+                    account.DebtAmount > 0m
+                        ? "حساب ضمان العمولة موقوف حاليًا بسبب سياسة الدين."
+                        : "حساب ضمان العمولة موقوف حاليًا. اشحن الرصيد أو راجع حالة الحساب.";
+                return result;
+            }
+
+            var commissionAmount = Math.Round(
+                Math.Max(0m, requiredCommissionAmount),
+                2);
+
+            result.RequiredCommissionAmount = commissionAmount;
+
+            if (commissionAmount <= 0m)
+            {
+                result.CanAcceptNewBookings = true;
+                result.MissingCommissionCoverage = 0m;
+                result.Message =
+                    "لا توجد عمولة مستحقة على هذا الحجز.";
+                return result;
+            }
+
+            var amountFromAvailable =
+                Math.Min(available, commissionAmount);
+
+            var shortage = Math.Round(
+                Math.Max(0m, commissionAmount - amountFromAvailable),
+                2);
+
+            result.MissingCommissionCoverage = shortage;
+
+            if (shortage > 0m)
+            {
+                var allowNegative =
+                    account.AllowNegativeBalance ??
+                    settings?.AllowNegativeCommissionBalance ??
+                    false;
+
+                if (!allowNegative)
+                {
+                    result.Message =
+                        $"رصيد ضمان العمولة لا يغطي عمولة هذا الحجز. يلزم توفير {shortage:N2} إضافية قبل متابعة الحجز.";
+                    return result;
+                }
+
+                var debtLimit = Math.Round(
+                    Math.Max(
+                        0m,
+                        account.DebtLimit ??
+                        settings?.DefaultCommissionDebtLimit ??
+                        0m),
+                    2);
+
+                var currentDebt = Math.Round(
+                    Math.Max(0m, account.DebtAmount),
+                    2);
+
+                var proposedDebt = Math.Round(
+                    currentDebt + shortage,
+                    2);
+
+                if (debtLimit <= 0m ||
+                    proposedDebt > debtLimit + 0.01m)
+                {
+                    var remainingDebtCapacity = Math.Round(
+                        Math.Max(0m, debtLimit - currentDebt),
+                        2);
+
+                    result.Message =
+                        debtLimit <= 0m
+                            ? "الدين مسموح للحساب لكن حد الدين يساوي صفرًا. اشحن رصيد ضمان العمولة أولًا."
+                            : $"الرصيد وحد الدين لا يكفيان لتغطية عمولة الحجز. المتاح من حد الدين {remainingDebtCapacity:N2}.";
+                    return result;
+                }
+            }
+
+            result.CanAcceptNewBookings = true;
+            result.Message =
+                shortage > 0m
+                    ? "يمكن تغطية عمولة الحجز من الرصيد المتاح والجزء المسموح من حد الدين."
+                    : "رصيد ضمان العمولة يغطي عمولة هذا الحجز.";
+
+            return result;
+        }
+
         public async Task<FinanceOperationResult> EnsurePlaceCommissionAccountAsync(
             int placeId,
             CancellationToken cancellationToken = default)
@@ -9909,6 +10275,13 @@ namespace YemenGuide.Web.Services.Finance
             if (!placeExists)
             {
                 return FinanceOperationResult.Failed("المنشأة غير موجودة.");
+            }
+
+            if (await IsAdminOwnedPlaceAsync(placeId, cancellationToken))
+            {
+                return FinanceOperationResult.Succeeded(
+                    "المنشأة الإدارية معفاة من حساب ضمان العمولات.",
+                    placeId);
             }
 
             try
@@ -9972,6 +10345,22 @@ namespace YemenGuide.Web.Services.Finance
                     await RollbackIfOwnedAsync(databaseTransaction, cancellationToken);
                     return FinanceOperationResult.Failed(
                         "لا يوجد سجل مالي مرتبط بهذا الحجز.");
+                }
+
+                if (await IsAdminOwnedPlaceAsync(booking.PlaceId, cancellationToken))
+                {
+                    MarkAdministrativeCommissionExempt(
+                        financial,
+                        DateTime.Now);
+
+                    await _context.SaveChangesAsync(cancellationToken);
+                    await CommitIfOwnedAsync(
+                        databaseTransaction,
+                        cancellationToken);
+
+                    return FinanceOperationResult.Succeeded(
+                        "المنشأة إدارية؛ لا يتم حجز أو خصم عمولة منصة على هذا الحجز.",
+                        financial.RecordId);
                 }
 
                 if (IsState(financial.CommissionStatus, FinancialCommissionStatuses.Held) ||
@@ -10270,6 +10659,22 @@ namespace YemenGuide.Web.Services.Finance
                         "لا يوجد سجل مالي مرتبط بهذا الحجز.");
                 }
 
+                if (await IsAdminOwnedPlaceAsync(booking.PlaceId, cancellationToken))
+                {
+                    MarkAdministrativeCommissionExempt(
+                        financial,
+                        DateTime.Now);
+
+                    await _context.SaveChangesAsync(cancellationToken);
+                    await CommitIfOwnedAsync(
+                        databaseTransaction,
+                        cancellationToken);
+
+                    return FinanceOperationResult.Succeeded(
+                        "المنشأة إدارية؛ لا توجد عمولة منصة مستحقة على هذا الحجز.",
+                        financial.RecordId);
+                }
+
                 if (IsState(financial.CommissionStatus, FinancialCommissionStatuses.Charged))
                 {
                     await CommitIfOwnedAsync(databaseTransaction, cancellationToken);
@@ -10393,6 +10798,22 @@ namespace YemenGuide.Web.Services.Finance
                     await RollbackIfOwnedAsync(databaseTransaction, cancellationToken);
                     return FinanceOperationResult.Failed(
                         "لا يوجد سجل مالي مرتبط بهذا الحجز.");
+                }
+
+                if (await IsAdminOwnedPlaceAsync(booking.PlaceId, cancellationToken))
+                {
+                    MarkAdministrativeCommissionExempt(
+                        financial,
+                        DateTime.Now);
+
+                    await _context.SaveChangesAsync(cancellationToken);
+                    await CommitIfOwnedAsync(
+                        databaseTransaction,
+                        cancellationToken);
+
+                    return FinanceOperationResult.Succeeded(
+                        "المنشأة إدارية؛ لا توجد عمولة منصة محجوزة تحتاج إلى تحرير.",
+                        financial.RecordId);
                 }
 
                 if (IsState(financial.CommissionStatus, FinancialCommissionStatuses.Released))
@@ -10752,6 +11173,21 @@ namespace YemenGuide.Web.Services.Finance
                     "لا يوجد سجل مالي مرتبط بهذا الحجز.");
             }
 
+            if (await IsAdminOwnedPlaceAsync(
+                    financial.Booking.PlaceId,
+                    cancellationToken))
+            {
+                MarkAdministrativeCommissionExempt(
+                    financial,
+                    DateTime.Now);
+
+                await _context.SaveChangesAsync(cancellationToken);
+
+                return FinanceOperationResult.Succeeded(
+                    "المنشأة إدارية؛ تم تثبيت الحجز دون عمولة منصة.",
+                    financial.RecordId);
+            }
+
             if (IsState(financial.CommissionStatus, FinancialCommissionStatuses.Charged))
             {
                 return FinanceOperationResult.Failed(
@@ -10838,6 +11274,13 @@ namespace YemenGuide.Web.Services.Finance
             if (placeId <= 0)
             {
                 return FinanceOperationResult.Failed("رقم المنشأة غير صحيح.");
+            }
+
+            if (await IsAdminOwnedPlaceAsync(placeId, cancellationToken))
+            {
+                return FinanceOperationResult.Succeeded(
+                    "المنشأة الإدارية معفاة من حساب ضمان العمولات.",
+                    placeId);
             }
 
             try

@@ -285,6 +285,17 @@ namespace YemenGuide.Web.Services.Finance
                     "إثبات تحويل الاسترداد مطلوب.");
             }
 
+            /*
+             * نستخدم Serializable حتى يكون فحص مرجع الحوالة وحفظه
+             * عملية ذرية قدر الإمكان بدون إضافة قيد أو عمود جديد للقاعدة.
+             */
+            await using var databaseTransaction =
+                _context.Database.CurrentTransaction == null
+                    ? await _context.Database.BeginTransactionAsync(
+                        System.Data.IsolationLevel.Serializable,
+                        cancellationToken)
+                    : null;
+
             var refund = await _context.RefundRequests
                 .Include(item => item.Booking)
                     .ThenInclude(booking =>
@@ -382,6 +393,27 @@ namespace YemenGuide.Web.Services.Finance
                     "تم تسجيل حوالة استرداد لهذا الطلب مسبقًا. لا يمكن استبدالها بعد الإرسال.");
             }
 
+            /*
+             * لا نسمح باستخدام نفس مرجع حوالة الاسترداد لطلبين مختلفين
+             * لدى المالك نفسه. الطلب الحالي مستثنى حتى تبقى إعادة المحاولة
+             * لنفس العملية Idempotent ولا تُسجّل تحويلًا ثانيًا.
+             */
+            var referenceAlreadyUsed =
+                await _context.RefundRequests
+                    .AsNoTracking()
+                    .AnyAsync(item =>
+                        item.RefundRequestId != refund.RefundRequestId &&
+                        item.Place.OwnerId == ownerId &&
+                        item.ReferenceNumber != null &&
+                        item.ReferenceNumber == reference,
+                        cancellationToken);
+
+            if (referenceAlreadyUsed)
+            {
+                return FinanceOperationResult.Failed(
+                    "رقم حوالة الاسترداد مستخدم مسبقًا في طلب استرداد آخر.");
+            }
+
             var now = DateTime.Now;
 
             refund.ReferenceNumber = reference;
@@ -439,6 +471,12 @@ namespace YemenGuide.Web.Services.Finance
             try
             {
                 await _context.SaveChangesAsync(cancellationToken);
+
+                if (databaseTransaction != null)
+                {
+                    await databaseTransaction.CommitAsync(
+                        cancellationToken);
+                }
 
                 return FinanceOperationResult.Succeeded(
                     "تم تسجيل تحويل الاسترداد. بانتظار تأكيد العميل للاستلام.",
