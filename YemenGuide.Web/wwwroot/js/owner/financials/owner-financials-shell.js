@@ -68,6 +68,7 @@
             window.OwnerFinancialTabs ??= {};
 
             this.ensureRuntimeStyles();
+            this.repairPartialRootClasses(this.content);
             this.prepareTabs();
             this.captureInitialQuery();
             this.bindEvents();
@@ -209,11 +210,13 @@
                     return;
                 }
 
-                next.focus();
+                next.focus({ preventScroll: true });
+                this.scrollActiveTabIntoView(next);
 
                 this.openTab(next.dataset.financialTab, {
                     history: 'push',
-                    focus: false
+                    focus: false,
+                    keepScroll: true
                 });
             };
 
@@ -442,6 +445,7 @@
 
                 this.content.innerHTML = html;
                 this.content.setAttribute('aria-busy', 'false');
+                this.repairPartialRootClasses(this.content);
 
                 this.initActiveModule(key);
                 this.applyVipEffects(this.content);
@@ -593,6 +597,37 @@
 
             box.append(icon, title, text, button);
             this.content.appendChild(box);
+        },
+
+        repairPartialRootClasses(scope) {
+            if (!scope) {
+                return;
+            }
+
+            const classMap = {
+                overview: ['owner-financial-overview'],
+                bookings: ['owner-booking-accounts', 'owner-booking-dossier'],
+                balance: ['owner-balance-center'],
+                refunds: ['refund-signature'],
+                wallets: ['wallet-vault'],
+                reports: ['ofir-editorial']
+            };
+
+            scope.querySelectorAll('[data-owner-financial-partial]').forEach(element => {
+                const key = String(element.dataset.ownerFinancialPartial || '')
+                    .trim()
+                    .toLowerCase();
+
+                const requiredClasses = classMap[key];
+
+                if (!requiredClasses) {
+                    return;
+                }
+
+                requiredClasses.forEach(className => {
+                    element.classList.add(className);
+                });
+            });
         },
 
         initActiveModule(key) {
@@ -851,7 +886,7 @@
                 button.scrollIntoView({
                     behavior: 'smooth',
                     block: 'nearest',
-                    inline: 'nearest'
+                    inline: 'center'
                 });
             } catch {
                 button.scrollIntoView(false);
