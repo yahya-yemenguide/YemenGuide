@@ -2204,15 +2204,41 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                         });
                     }
 
+                    /*
+                     * نوع الدفع اختاره العميل عند رفع إشعار الحوالة:
+                     * Deposit = العربون فقط.
+                     * Full    = كامل قيمة الحجز.
+                     *
+                     * الحقول المالية لا تعتبر أي مبلغ محصلًا قبل اعتماد
+                     * المالك لإثبات الدفع. عند الاعتماد فقط نسجل القيمة
+                     * الصحيحة في AmountPaidOnline.
+                     */
+                    var isFullOnlinePayment =
+                        IsState(
+                            financialRecord.OnlinePaymentType,
+                            FinancialOnlinePaymentTypes.Full);
+
+                    var expectedPaidOnline =
+                        isFullOnlinePayment
+                            ? Math.Max(0m, booking.TotalPrice)
+                            : Math.Max(
+                                0m,
+                                financialRecord.DepositAmount);
+
                     var paidOnline = Math.Round(
                         Math.Min(
-                            Math.Max(0m, financialRecord.DepositAmount),
-                            booking.TotalPrice),
+                            expectedPaidOnline,
+                            Math.Max(0m, booking.TotalPrice)),
                         2);
 
                     var remainingAmount = Math.Round(
                         Math.Max(0m, booking.TotalPrice - paidOnline),
                         2);
+
+                    var onlinePaymentLabel =
+                        isFullOnlinePayment
+                            ? "كامل قيمة الحجز"
+                            : "العربون";
 
                     financialRecord.AmountPaidOnline = paidOnline;
                     financialRecord.AmountToPayAtProperty =
@@ -2253,7 +2279,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     AddStructuredNotification(
                         booking.CustomerId,
                         "تم اعتماد الدفع",
-                        $"تم اعتماد إشعار دفع العربون للحجز رقم " +
+                        $"تم اعتماد إشعار دفع {onlinePaymentLabel} للحجز رقم " +
                         $"{booking.BookingId}، وأصبح الحجز مؤكدًا.",
                         NotificationTypes.PaymentApproved,
                         $"/Places/BookingDetails/{booking.BookingId}",
@@ -2266,8 +2292,9 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     return Json(new
                     {
                         success = true,
-                        message =
-                            "تم تأكيد استلام العربون وتأكيد الحجز بنجاح.",
+                        message = isFullOnlinePayment
+                            ? "تم تأكيد استلام كامل قيمة الحجز وتأكيد الحجز بنجاح."
+                            : "تم تأكيد استلام العربون وتأكيد الحجز بنجاح.",
                         nextState = "Confirmed"
                     });
                 }
