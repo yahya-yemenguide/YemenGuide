@@ -1558,6 +1558,18 @@ CREATE TABLE dbo.Advertisements
     TransferDate DATETIME NULL,
     ReceiptImage NVARCHAR(255) NULL,
 
+    -- بيانات استرداد مبلغ الإعلان
+    RefundRequestedAt DATETIME2 NULL,
+    RefundAmount DECIMAL(18,2) NULL,
+    RefundWalletID INT NULL,
+    RefundAccountNumber NVARCHAR(100) NULL,
+    RefundBeneficiaryName NVARCHAR(150) NULL,
+    RefundReferenceNumber NVARCHAR(100) NULL,
+    RefundProofImage NVARCHAR(255) NULL,
+    RefundedAt DATETIME2 NULL,
+    RefundedByUserID INT NULL,
+    RefundNote NVARCHAR(500) NULL,
+
     PaymentStatus NVARCHAR(20) NOT NULL
         CONSTRAINT DF_Advertisements_PaymentStatus DEFAULT N'Unpaid',
 
@@ -1607,6 +1619,14 @@ CREATE TABLE dbo.Advertisements
         FOREIGN KEY (PlatformWalletID)
         REFERENCES dbo.PlatformWallets (PlatformWalletID),
 
+    CONSTRAINT FK_Advertisements_RefundWallet
+        FOREIGN KEY (RefundWalletID)
+        REFERENCES dbo.SupportedWallets (WalletID),
+
+    CONSTRAINT FK_Advertisements_RefundedBy
+        FOREIGN KEY (RefundedByUserID)
+        REFERENCES dbo.Users (UserID),
+
     CONSTRAINT FK_Advertisements_ReviewedBy
         FOREIGN KEY (ReviewedByUserID)
         REFERENCES dbo.Users (UserID),
@@ -1654,6 +1674,18 @@ CREATE TABLE dbo.Advertisements
         (
             TransferredAmount IS NULL
             OR TransferredAmount >= 0
+        ),
+
+    CONSTRAINT CK_Advertisements_RefundAmount
+        CHECK
+        (
+            RefundAmount IS NULL
+            OR
+            (
+                RefundAmount >= 0
+                AND TransferredAmount IS NOT NULL
+                AND RefundAmount <= TransferredAmount
+            )
         ),
 
     CONSTRAINT CK_Advertisements_DateRange
