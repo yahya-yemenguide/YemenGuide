@@ -58,38 +58,9 @@ namespace YemenGuide.Web.Services.ExchangeRates
 
         public string Resolve(string? cityName)
         {
-            // إذا وصلنا أصلًا بالقيمة المحفوظة في Cities.ExchangeRateRegion
-            // فلا نعيد تفسيرها كاسم مدينة.
-            if (string.Equals(
-                    cityName?.Trim(),
-                    AdenMarket,
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                return AdenMarket;
-            }
-
-            if (string.Equals(
-                    cityName?.Trim(),
-                    SanaaMarket,
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                return SanaaMarket;
-            }
-
             string normalized = Normalize(cityName);
 
             if (string.IsNullOrWhiteSpace(normalized))
-            {
-                return SanaaMarket;
-            }
-
-            // دعم أسماء السوق الإنجليزية عند استخدامها من أي خدمة خارجية.
-            if (normalized == "aden")
-            {
-                return AdenMarket;
-            }
-
-            if (normalized == "sanaa" || normalized == "sana a")
             {
                 return SanaaMarket;
             }
@@ -125,42 +96,12 @@ namespace YemenGuide.Web.Services.ExchangeRates
 
         public bool TryResolve(string? cityName, out string region)
         {
-            if (string.Equals(
-                    cityName?.Trim(),
-                    AdenMarket,
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                region = AdenMarket;
-                return true;
-            }
-
-            if (string.Equals(
-                    cityName?.Trim(),
-                    SanaaMarket,
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                region = SanaaMarket;
-                return true;
-            }
-
             string normalized = Normalize(cityName);
 
             if (string.IsNullOrWhiteSpace(normalized))
             {
                 region = SanaaMarket;
                 return false;
-            }
-
-            if (normalized == "aden")
-            {
-                region = AdenMarket;
-                return true;
-            }
-
-            if (normalized == "sanaa" || normalized == "sana a")
-            {
-                region = SanaaMarket;
-                return true;
             }
 
             if (AdenMarketNames.Contains(normalized))

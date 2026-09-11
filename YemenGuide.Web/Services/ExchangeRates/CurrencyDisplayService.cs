@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using YemenGuide.Data;
-using YemenGuide.Web.Services;
+using YemenGuide.Web.Services.ExchangeRates;
 
 namespace YemenGuide.Web.Services.ExchangeRates
 {
@@ -185,35 +185,6 @@ namespace YemenGuide.Web.Services.ExchangeRates
         }
 
         /// <summary>
-        /// تحويل رقمي مباشر لعملة محددة. مفيد لطبقات التجميع التي تحتاج
-        /// جلب تفضيل المستخدم مرة واحدة ثم تحويل عدد كبير من القيم.
-        /// </summary>
-        public decimal ConvertAmountForCurrency(
-            decimal amountInYer,
-            string targetCurrency,
-            string? exchangeRateRegion)
-        {
-            return _currencyService.ConvertAmount(
-                amountInYer,
-                targetCurrency,
-                NormalizeRegion(exchangeRateRegion));
-        }
-
-        /// <summary>
-        /// تحويل عكسي مباشر من عملة العرض إلى YER قبل الحفظ.
-        /// </summary>
-        public decimal ConvertToYerForCurrency(
-            decimal amountInDisplayCurrency,
-            string sourceCurrency,
-            string? exchangeRateRegion)
-        {
-            return _currencyService.ConvertToYer(
-                amountInDisplayCurrency,
-                sourceCurrency,
-                NormalizeRegion(exchangeRateRegion));
-        }
-
-        /// <summary>
         /// تنسيق مبلغ مرتبط بمنشأة حسب CityId الخاص بها.
         /// </summary>
         public async Task<string> FormatAsync(
@@ -246,7 +217,7 @@ namespace YemenGuide.Web.Services.ExchangeRates
             return _currencyService.ConvertPrice(
                 amountInYer,
                 currency,
-                NormalizeRegion(exchangeRateRegion));
+                exchangeRateRegion);
         }
 
         /// <summary>
@@ -299,7 +270,7 @@ namespace YemenGuide.Web.Services.ExchangeRates
                 await GetPreferredCurrencyAsync(
                     cancellationToken);
 
-            return ConvertAmountForCurrency(
+            return _currencyService.ConvertAmount(
                 amountInYer,
                 currency,
                 exchangeRateRegion);
@@ -324,41 +295,6 @@ namespace YemenGuide.Web.Services.ExchangeRates
         }
 
         /// <summary>
-        /// تحويل عكسي من عملة المستخدم الحالية إلى YER حسب CityId.
-        /// يستخدم للمدخلات المالية مثل شحن رصيد الضمان.
-        /// </summary>
-        public async Task<decimal> ConvertToYerAsync(
-            decimal amountInDisplayCurrency,
-            int cityId,
-            CancellationToken cancellationToken = default)
-        {
-            string currency =
-                await GetPreferredCurrencyAsync(cancellationToken);
-
-            return _currencyService.ConvertToYer(
-                amountInDisplayCurrency,
-                currency,
-                cityId);
-        }
-
-        /// <summary>
-        /// تحويل عكسي من عملة المستخدم الحالية إلى YER حسب السوق.
-        /// </summary>
-        public async Task<decimal> ConvertToYerByRegionAsync(
-            decimal amountInDisplayCurrency,
-            string? exchangeRateRegion,
-            CancellationToken cancellationToken = default)
-        {
-            string currency =
-                await GetPreferredCurrencyAsync(cancellationToken);
-
-            return ConvertToYerForCurrency(
-                amountInDisplayCurrency,
-                currency,
-                exchangeRateRegion);
-        }
-
-        /// <summary>
         /// تنسيق رقم محول بدون تكرار رمز العملة.
         /// </summary>
         public static string FormatNumber(
@@ -372,16 +308,6 @@ namespace YemenGuide.Web.Services.ExchangeRates
                         MidpointRounding.AwayFromZero)
                     .ToString("N0")
                 : convertedAmount.ToString("N2");
-        }
-
-        private static string NormalizeRegion(string? exchangeRateRegion)
-        {
-            return string.Equals(
-                    exchangeRateRegion?.Trim(),
-                    ExchangeRateRegionResolver.AdenMarket,
-                    StringComparison.OrdinalIgnoreCase)
-                ? ExchangeRateRegionResolver.AdenMarket
-                : ExchangeRateRegionResolver.SanaaMarket;
         }
     }
 }
