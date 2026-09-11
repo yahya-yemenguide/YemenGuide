@@ -1,0 +1,978 @@
+﻿/* ==========================================================================
+   YemenGuide — Luxury Language Switcher
+   المبدل مستقل عن customer-layout.css حتى لا نغيّر التصميم الأساسي.
+   ========================================================================== */
+
+:root {
+    --yg-lang-navy: #05203C;
+    --yg-lang-cyan: #00A6DA;
+    --yg-lang-cyan-soft: #67D6F4;
+    --yg-lang-orange: #F59E0B;
+    --yg-lang-white: #FFFFFF;
+}
+
+/* ==========================================================================
+   1) تصحيح اتجاه الهيدر بالكامل
+   customer-layout.css القديم يجبر container-fluid على RTL.
+   هذا الملف يُحمّل بعده ويجعل الهيدر يتبع html[dir].
+   ========================================================================== */
+
+html[dir="rtl"] .custom-navbar.customer-signature-header .container-fluid {
+    direction: rtl !important;
+}
+
+html[dir="ltr"] .custom-navbar.customer-signature-header .container-fluid {
+    direction: ltr !important;
+}
+
+html[dir="rtl"] .customer-public-navigation,
+html[dir="rtl"] .customer-signature-nav-shell,
+html[dir="rtl"] #customerSignatureNav,
+html[dir="rtl"] .customer-header-actions,
+html[dir="rtl"] .nav-actions {
+    direction: rtl;
+}
+
+html[dir="ltr"] .customer-public-navigation,
+html[dir="ltr"] .customer-signature-nav-shell,
+html[dir="ltr"] #customerSignatureNav,
+html[dir="ltr"] .customer-header-actions,
+html[dir="ltr"] .nav-actions {
+    direction: ltr;
+}
+
+/*
+   ترتيب الهيدر نفسه يبقى كما صُمم:
+   Brand -> Navigation -> Actions
+   لكن inline direction هو الذي يحدد يمين/يسار.
+*/
+.custom-navbar.customer-signature-header .customer-navbar-brand,
+.custom-navbar.customer-signature-header .customer-header-actions,
+.custom-navbar.customer-signature-header .customer-public-navigation {
+    transition: transform .34s cubic-bezier(.2,.82,.25,1), opacity .24s ease;
+}
+
+/* ==========================================================================
+   2) الحاوية
+   ========================================================================== */
+
+.yg-language-switcher {
+    position: relative;
+    z-index: 35;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+}
+
+/* ==========================================================================
+   3) الزر — Globe Jewel
+   ========================================================================== */
+
+.yg-language-trigger {
+    position: relative;
+    width: 42px;
+    height: 42px;
+    min-width: 42px;
+    padding: 0;
+    display: inline-grid;
+    place-items: center;
+    isolation: isolate;
+    overflow: visible;
+    color: rgba(255,255,255,.96);
+    background: radial-gradient(circle at 28% 22%, rgba(255,255,255,.20), transparent 30%), linear-gradient(145deg, rgba(255,255,255,.11), rgba(255,255,255,.045));
+    border: 1px solid rgba(255,255,255,.15);
+    border-radius: 50%;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.18), 0 9px 24px rgba(0,0,0,.14);
+    cursor: pointer;
+    -webkit-backdrop-filter: blur(14px) saturate(130%);
+    backdrop-filter: blur(14px) saturate(130%);
+    transform: translateZ(0);
+    transition: transform .28s cubic-bezier(.2,.82,.25,1), border-color .28s ease, box-shadow .28s ease, background .28s ease;
+}
+
+    .yg-language-trigger.dropdown-toggle::after {
+        display: none !important;
+    }
+
+    .yg-language-trigger::before {
+        content: "";
+        position: absolute;
+        inset: 3px;
+        z-index: -1;
+        border-radius: inherit;
+        border: 1px solid rgba(0,166,218,.10);
+        background: radial-gradient(circle at 60% 72%, rgba(0,166,218,.14), transparent 52%);
+        opacity: .92;
+        pointer-events: none;
+    }
+
+    .yg-language-trigger::after {
+        content: "";
+        position: absolute;
+        inset: -5px;
+        z-index: -2;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(0,166,218,.20), transparent 68%);
+        opacity: 0;
+        transform: scale(.82);
+        transition: opacity .28s ease, transform .28s ease;
+        pointer-events: none;
+    }
+
+    .yg-language-trigger:hover,
+    .yg-language-trigger:focus-visible,
+    .yg-language-trigger[aria-expanded="true"] {
+        color: #fff;
+        border-color: rgba(103,214,244,.55);
+        background: radial-gradient(circle at 28% 22%, rgba(255,255,255,.24), transparent 30%), linear-gradient(145deg, rgba(0,166,218,.22), rgba(255,255,255,.055));
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.24), 0 12px 28px rgba(0,0,0,.18), 0 0 0 3px rgba(0,166,218,.08);
+        transform: translateY(-2px);
+    }
+
+        .yg-language-trigger:hover::after,
+        .yg-language-trigger:focus-visible::after,
+        .yg-language-trigger[aria-expanded="true"]::after {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+    .yg-language-trigger:focus-visible {
+        outline: none;
+    }
+
+.yg-language-trigger-globe {
+    position: relative;
+    z-index: 2;
+    width: 24px;
+    height: 24px;
+    display: grid;
+    place-items: center;
+}
+
+    .yg-language-trigger-globe > i {
+        position: relative;
+        z-index: 2;
+        font-size: 1.08rem;
+        line-height: 1;
+        color: #fff;
+        text-shadow: 0 0 16px rgba(103,214,244,.34);
+    }
+
+.yg-language-orbit {
+    position: absolute;
+    inset: 1px;
+    border: 1px solid rgba(103,214,244,.28);
+    border-radius: 50%;
+    transform: rotate(-22deg) scaleX(.74);
+    opacity: .75;
+    pointer-events: none;
+}
+
+.yg-language-code {
+    position: absolute;
+    inset-inline-end: -5px;
+    inset-block-end: -3px;
+    z-index: 4;
+    min-width: 22px;
+    height: 16px;
+    padding: 0 5px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--yg-lang-navy);
+    border-radius: 999px;
+    color: #fff;
+    background: linear-gradient(135deg, var(--yg-lang-cyan), #078DB8);
+    box-shadow: 0 4px 10px rgba(0,166,218,.26);
+    font-size: .49rem;
+    font-weight: 950;
+    line-height: 1;
+    letter-spacing: .025em;
+}
+
+.yg-language-spark {
+    position: absolute;
+    inset-inline-start: 5px;
+    inset-block-start: 5px;
+    z-index: 4;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--yg-lang-orange);
+    box-shadow: 0 0 0 3px rgba(245,158,11,.10), 0 0 10px rgba(245,158,11,.42);
+}
+
+/* loading */
+.yg-language-trigger.is-switching .yg-language-trigger-globe {
+    animation: ygLanguageSwitch .72s cubic-bezier(.4,0,.2,1) infinite;
+}
+
+.yg-language-trigger.is-switching {
+    pointer-events: none;
+}
+
+/* ==========================================================================
+   4) القائمة
+   ========================================================================== */
+
+.yg-language-menu {
+    --bs-dropdown-spacer: 12px;
+    width: 232px;
+    min-width: 232px;
+    padding: 8px;
+    overflow: visible;
+    color: #17354A;
+    text-align: start;
+    border: 1px solid rgba(255,255,255,.70);
+    border-radius: 20px;
+    background: radial-gradient(circle at 100% 0, rgba(0,166,218,.09), transparent 42%), rgba(255,255,255,.975);
+    box-shadow: 0 24px 62px rgba(5,32,60,.20), 0 8px 22px rgba(5,32,60,.09);
+    -webkit-backdrop-filter: blur(22px) saturate(145%);
+    backdrop-filter: blur(22px) saturate(145%);
+    transform-origin: top center;
+}
+
+    .yg-language-menu::before {
+        content: "";
+        position: absolute;
+        inset-block-start: -7px;
+        inset-inline-end: 15px;
+        width: 14px;
+        height: 14px;
+        border-inline-start: 1px solid rgba(255,255,255,.72);
+        border-block-start: 1px solid rgba(255,255,255,.72);
+        background: rgba(255,255,255,.975);
+        transform: rotate(45deg);
+    }
+
+    .yg-language-menu.show {
+        animation: ygLanguageMenuIn .24s cubic-bezier(.2,.82,.25,1) both;
+    }
+
+.yg-language-menu-head {
+    position: relative;
+    z-index: 1;
+    padding: 9px 9px 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.yg-language-menu-icon {
+    flex: 0 0 35px;
+    width: 35px;
+    height: 35px;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(0,166,218,.14);
+    border-radius: 12px;
+    color: var(--yg-lang-cyan);
+    background: linear-gradient(145deg, rgba(0,166,218,.10), rgba(255,255,255,.72));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.8);
+}
+
+    .yg-language-menu-icon i {
+        font-size: .96rem;
+    }
+
+.yg-language-menu-title {
+    min-width: 0;
+}
+
+    .yg-language-menu-title strong,
+    .yg-language-menu-title small {
+        display: block;
+    }
+
+    .yg-language-menu-title strong {
+        margin-bottom: 2px;
+        color: #153247;
+        font-size: .77rem;
+        font-weight: 950;
+        line-height: 1.35;
+    }
+
+    .yg-language-menu-title small {
+        color: #7A909E;
+        font-size: .57rem;
+        font-weight: 700;
+        line-height: 1.45;
+    }
+
+.yg-language-options {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    gap: 6px;
+}
+
+.yg-language-option {
+    width: 100%;
+    min-height: 53px;
+    padding: 7px 8px;
+    display: grid;
+    grid-template-columns: 37px minmax(0,1fr) 27px;
+    align-items: center;
+    gap: 9px;
+    text-align: start;
+    color: #28485E;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 14px;
+    cursor: pointer;
+    transition: transform .2s ease, border-color .2s ease, background .2s ease, box-shadow .2s ease;
+}
+
+    .yg-language-option:hover,
+    .yg-language-option:focus-visible {
+        outline: none;
+        border-color: rgba(0,166,218,.13);
+        background: rgba(0,166,218,.055);
+        transform: translateY(-1px);
+    }
+
+    .yg-language-option.is-active {
+        border-color: rgba(0,166,218,.18);
+        background: linear-gradient(90deg, rgba(0,166,218,.08), rgba(255,255,255,.76));
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.8);
+    }
+
+html[dir="ltr"] .yg-language-option.is-active {
+    background: linear-gradient(270deg, rgba(0,166,218,.08), rgba(255,255,255,.76));
+}
+
+.yg-language-option-symbol {
+    width: 37px;
+    height: 37px;
+    display: grid;
+    place-items: center;
+    border-radius: 12px;
+    font-size: .69rem;
+    font-weight: 950;
+    line-height: 1;
+}
+
+.yg-language-option-symbol--ar {
+    color: #078DB8;
+    border: 1px solid rgba(0,166,218,.13);
+    background: rgba(0,166,218,.07);
+    font-size: .88rem;
+}
+
+.yg-language-option-symbol--en {
+    color: #B66A00;
+    border: 1px solid rgba(245,158,11,.15);
+    background: rgba(245,158,11,.08);
+}
+
+.yg-language-option-copy {
+    min-width: 0;
+}
+
+    .yg-language-option-copy strong,
+    .yg-language-option-copy small {
+        display: block;
+    }
+
+    .yg-language-option-copy strong {
+        color: #17354A;
+        font-size: .75rem;
+        font-weight: 900;
+        line-height: 1.35;
+    }
+
+    .yg-language-option-copy small {
+        margin-top: 2px;
+        color: #8CA0AC;
+        font-size: .55rem;
+        font-weight: 700;
+    }
+
+.yg-language-option[data-culture="ar"] .yg-language-option-copy {
+    direction: rtl;
+}
+
+.yg-language-option[data-culture="en"] .yg-language-option-copy {
+    direction: ltr;
+}
+
+.yg-language-option-check {
+    width: 25px;
+    height: 25px;
+    display: grid;
+    place-items: center;
+    color: transparent;
+    border-radius: 50%;
+    background: transparent;
+    transition: color .2s ease, background .2s ease, transform .2s ease;
+}
+
+.yg-language-option.is-active .yg-language-option-check {
+    color: #fff;
+    background: linear-gradient(135deg, var(--yg-lang-cyan), #078DB8);
+    box-shadow: 0 6px 14px rgba(0,166,218,.18);
+}
+
+.yg-language-option.is-active:hover .yg-language-option-check {
+    transform: scale(1.05);
+}
+
+.yg-language-menu-foot {
+    margin-top: 7px;
+    padding: 8px 10px 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    color: #9AAAB4;
+    border-top: 1px solid rgba(5,32,60,.065);
+    font-size: .52rem;
+    font-weight: 850;
+    letter-spacing: .03em;
+}
+
+.yg-language-menu-foot-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--yg-lang-orange);
+    box-shadow: 0 0 0 3px rgba(245,158,11,.08);
+}
+
+/* ==========================================================================
+   5) الوضع الداكن — جاهز من الآن حتى لا يحتاج إعادة تصميم لاحقًا
+   ========================================================================== */
+
+body.dark-mode .yg-language-menu,
+html[data-bs-theme="dark"] .yg-language-menu {
+    color: #DDEAF2;
+    border-color: rgba(255,255,255,.08);
+    background: radial-gradient(circle at 100% 0, rgba(0,166,218,.11), transparent 42%), rgba(16,39,56,.985);
+    box-shadow: 0 26px 70px rgba(0,0,0,.45), 0 8px 24px rgba(0,166,218,.07);
+}
+
+    body.dark-mode .yg-language-menu::before,
+    html[data-bs-theme="dark"] .yg-language-menu::before {
+        border-color: rgba(255,255,255,.08);
+        background: #102738;
+    }
+
+body.dark-mode .yg-language-menu-title strong,
+body.dark-mode .yg-language-option-copy strong,
+html[data-bs-theme="dark"] .yg-language-menu-title strong,
+html[data-bs-theme="dark"] .yg-language-option-copy strong {
+    color: #F1F8FC;
+}
+
+body.dark-mode .yg-language-menu-title small,
+body.dark-mode .yg-language-option-copy small,
+body.dark-mode .yg-language-menu-foot,
+html[data-bs-theme="dark"] .yg-language-menu-title small,
+html[data-bs-theme="dark"] .yg-language-option-copy small,
+html[data-bs-theme="dark"] .yg-language-menu-foot {
+    color: #96AFBD;
+}
+
+body.dark-mode .yg-language-option,
+html[data-bs-theme="dark"] .yg-language-option {
+    color: #DDEAF2;
+}
+
+    body.dark-mode .yg-language-option:hover,
+    body.dark-mode .yg-language-option:focus-visible,
+    html[data-bs-theme="dark"] .yg-language-option:hover,
+    html[data-bs-theme="dark"] .yg-language-option:focus-visible {
+        border-color: rgba(0,166,218,.16);
+        background: rgba(0,166,218,.075);
+    }
+
+    body.dark-mode .yg-language-option.is-active,
+    html[data-bs-theme="dark"] .yg-language-option.is-active {
+        border-color: rgba(0,166,218,.18);
+        background: linear-gradient(90deg, rgba(0,166,218,.11), rgba(255,255,255,.025));
+    }
+
+html[dir="ltr"] body.dark-mode .yg-language-option.is-active,
+html[dir="ltr"][data-bs-theme="dark"] .yg-language-option.is-active {
+    background: linear-gradient(270deg, rgba(0,166,218,.11), rgba(255,255,255,.025));
+}
+
+body.dark-mode .yg-language-menu-foot,
+html[data-bs-theme="dark"] .yg-language-menu-foot {
+    border-top-color: rgba(255,255,255,.07);
+}
+
+/* ==========================================================================
+   6) استجابة الهاتف
+   ========================================================================== */
+
+@media (max-width: 575.98px) {
+    .yg-language-trigger {
+        width: 36px;
+        height: 36px;
+        min-width: 36px;
+    }
+
+    .yg-language-trigger-globe {
+        width: 21px;
+        height: 21px;
+    }
+
+        .yg-language-trigger-globe > i {
+            font-size: .96rem;
+        }
+
+    .yg-language-code {
+        display: none;
+    }
+
+    .yg-language-spark {
+        width: 4px;
+        height: 4px;
+        inset-inline-start: 4px;
+        inset-block-start: 4px;
+    }
+
+    .yg-language-menu {
+        width: min(226px, calc(100vw - 18px));
+        min-width: min(226px, calc(100vw - 18px));
+        margin-top: 9px !important;
+        border-radius: 18px;
+    }
+}
+
+/* ==========================================================================
+   7) تقليل الحركة
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+    .yg-language-trigger,
+    .yg-language-trigger::after,
+    .yg-language-trigger-globe,
+    .yg-language-menu,
+    .yg-language-option,
+    .yg-language-option-check {
+        animation: none !important;
+        transition: none !important;
+    }
+}
+
+@keyframes ygLanguageMenuIn {
+    from {
+        opacity: 0;
+        transform: translateY(-7px) scale(.97);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes ygLanguageSwitch {
+    0% {
+        transform: rotate(0) scale(1);
+    }
+
+    50% {
+        transform: rotate(180deg) scale(.92);
+    }
+
+    100% {
+        transform: rotate(360deg) scale(1);
+    }
+}
+
+
+/* ==========================================================================
+   8) موضع زر اللغة للزائر
+   الزائر له تركيب Header مختلف: Login/Add Place داخل nav-actions.
+   لذلك يعيش زر اللغة معهم بدل مجموعة الحساب.
+   ========================================================================== */
+
+.yg-language-switcher--guest {
+    flex: 0 0 auto;
+    width: auto !important;
+    margin: 0;
+}
+
+/* سطح المكتب: جوهرة صغيرة قبل تسجيل الدخول بدون تغيير أبعاد الأزرار */
+@media (min-width: 1200px) {
+    .customer-public-navigation .nav-actions .yg-language-switcher--guest {
+        display: inline-flex !important;
+        align-items: center;
+        justify-content: center;
+        align-self: center;
+        margin-inline-end: 1px;
+    }
+
+        .customer-public-navigation .nav-actions .yg-language-switcher--guest .yg-language-trigger {
+            width: 40px;
+            height: 40px;
+            min-width: 40px;
+        }
+
+    /* القائمة تنفتح باتجاه داخل الشاشة حسب اتجاه اللغة */
+    html[dir="rtl"] .customer-public-navigation .nav-actions .yg-language-switcher--guest .yg-language-menu {
+        inset-inline-start: auto !important;
+        inset-inline-end: 0 !important;
+    }
+
+    html[dir="ltr"] .customer-public-navigation .nav-actions .yg-language-switcher--guest .yg-language-menu {
+        inset-inline-start: 0 !important;
+        inset-inline-end: auto !important;
+    }
+}
+
+/* الهاتف/التابلت: صف صغير مستقل داخل Drawer ولا يتحول لزر بعرض كامل */
+@media (max-width: 1199.98px) {
+    .customer-public-navigation .nav-actions .yg-language-switcher--guest {
+        width: 100% !important;
+        display: flex !important;
+        justify-content: center;
+        margin-block-end: 2px;
+    }
+
+        .customer-public-navigation .nav-actions .yg-language-switcher--guest .yg-language-trigger {
+            width: 42px;
+            height: 42px;
+            min-width: 42px;
+        }
+
+        .customer-public-navigation .nav-actions .yg-language-switcher--guest .yg-language-menu {
+            inset-inline-start: 50% !important;
+            inset-inline-end: auto !important;
+            transform: translateX(-50%);
+        }
+
+    html[dir="rtl"] .customer-public-navigation .nav-actions .yg-language-switcher--guest .yg-language-menu.show,
+    html[dir="ltr"] .customer-public-navigation .nav-actions .yg-language-switcher--guest .yg-language-menu.show {
+        animation: ygGuestLanguageMenuIn .24s cubic-bezier(.2,.82,.25,1) both;
+    }
+}
+
+@keyframes ygGuestLanguageMenuIn {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(-7px) scale(.97);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0) scale(1);
+    }
+}
+
+
+/* ==========================================================================
+   9) الهاتف — لغة نظيفة داخل Drawer بدون أي دائرة إضافية
+   الكمبيوتر لا يتغير.
+   ========================================================================== */
+
+.yg-mobile-language-row {
+    display: none;
+}
+
+@media (max-width: 1199.98px) {
+
+    /*
+       في الهاتف نخفي زر الجوهرة الدائري كليًا:
+       - للمستخدم المسجل من الهيدر.
+       - للزائر من مجموعة Login/Add Place.
+    */
+    .yg-language-switcher,
+    .yg-language-switcher--guest {
+        display: none !important;
+    }
+
+    .yg-mobile-language-row {
+        width: 100%;
+        min-height: 66px;
+        margin: 18px 0 4px;
+        padding: 10px 12px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        color: rgba(255,255,255,.96);
+        background: linear-gradient(135deg, rgba(0,166,218,.075), rgba(255,255,255,.045)), rgba(255,255,255,.035);
+        border: 1px solid rgba(103,214,244,.13);
+        border-radius: 16px;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.06), 0 10px 28px rgba(0,0,0,.08);
+        -webkit-backdrop-filter: blur(12px);
+        backdrop-filter: blur(12px);
+    }
+
+    .yg-mobile-language-identity {
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .yg-mobile-language-icon {
+        flex: 0 0 36px;
+        width: 36px;
+        height: 36px;
+        display: grid;
+        place-items: center;
+        color: #67D6F4;
+        background: rgba(0,166,218,.09);
+        border: 1px solid rgba(103,214,244,.15);
+        border-radius: 11px;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
+    }
+
+        .yg-mobile-language-icon i {
+            font-size: .95rem;
+            line-height: 1;
+        }
+
+    .yg-mobile-language-copy {
+        min-width: 0;
+        display: block;
+        text-align: start;
+    }
+
+        .yg-mobile-language-copy strong,
+        .yg-mobile-language-copy small {
+            display: block;
+        }
+
+        .yg-mobile-language-copy strong {
+            margin: 0;
+            color: #FFFFFF;
+            font-size: .76rem;
+            font-weight: 900;
+            line-height: 1.35;
+            white-space: nowrap;
+        }
+
+        .yg-mobile-language-copy small {
+            margin-top: 3px;
+            color: rgba(225,240,248,.58);
+            font-size: .57rem;
+            font-weight: 700;
+            line-height: 1.25;
+        }
+
+    .yg-mobile-language-segment {
+        flex: 0 0 auto;
+        min-height: 36px;
+        padding: 3px;
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        direction: ltr;
+        background: rgba(3,24,43,.48);
+        border: 1px solid rgba(255,255,255,.08);
+        border-radius: 11px;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+    }
+
+    .yg-mobile-language-choice {
+        min-width: 42px;
+        height: 30px;
+        padding: 0 9px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: rgba(225,240,248,.64);
+        background: transparent;
+        border: 0;
+        border-radius: 8px;
+        font-size: .62rem;
+        font-weight: 950;
+        line-height: 1;
+        letter-spacing: .025em;
+        cursor: pointer;
+        transition: color .18s ease, background .18s ease, box-shadow .18s ease, transform .18s ease;
+    }
+
+        .yg-mobile-language-choice:hover,
+        .yg-mobile-language-choice:focus-visible {
+            color: #FFFFFF;
+            outline: none;
+            background: rgba(255,255,255,.06);
+        }
+
+        .yg-mobile-language-choice.is-active {
+            color: #FFFFFF;
+            background: linear-gradient(135deg, #00A6DA, #078DB8);
+            box-shadow: 0 5px 12px rgba(0,166,218,.18), inset 0 1px 0 rgba(255,255,255,.18);
+        }
+
+            .yg-mobile-language-choice.is-active:hover {
+                transform: none;
+            }
+
+    /*
+       في الزائر نخلي مجموعة الدخول تبدأ مباشرة بعد سطر اللغة،
+       بدون فراغ كبير كان موجود بسبب زر اللغة الدائري السابق.
+    */
+    .customer-public-navigation .nav-actions {
+        margin-top: 12px !important;
+    }
+}
+
+@media (max-width: 575.98px) {
+    .yg-mobile-language-row {
+        min-height: 62px;
+        margin-top: 14px;
+        padding: 9px 10px;
+        border-radius: 15px;
+    }
+
+    .yg-mobile-language-icon {
+        width: 34px;
+        height: 34px;
+        flex-basis: 34px;
+        border-radius: 10px;
+    }
+
+    .yg-mobile-language-copy strong {
+        font-size: .72rem;
+    }
+
+    .yg-mobile-language-copy small {
+        font-size: .54rem;
+    }
+
+    .yg-mobile-language-choice {
+        min-width: 39px;
+        height: 29px;
+        padding-inline: 8px;
+        font-size: .59rem;
+    }
+}
+
+
+/* ==========================================================================
+   10) Mobile hard-fix
+   - إزالة جوهرة اللغة القديمة فعليًا من الهاتف.
+   - منع تداخل آخر رابط مع سطر اللغة.
+   - ترتيب محتوى Drawer كمسار رأسي طبيعي.
+   ========================================================================== */
+
+@media (max-width: 1199.98px) {
+
+    /*
+       selectors أقوى من قواعد النسخة السابقة حتى مع !important.
+       Desktop لا يتأثر لأن القاعدة داخل media فقط.
+    */
+    .custom-navbar.customer-signature-header
+    .customer-header-actions
+    .yg-language-switcher {
+        display: none !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+    }
+
+    #offcanvasNavbar
+    .nav-actions
+    .yg-language-switcher--guest {
+        display: none !important;
+        visibility: hidden !important;
+        width: 0 !important;
+        height: 0 !important;
+        min-width: 0 !important;
+        min-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+        pointer-events: none !important;
+    }
+
+    /*
+       الـDrawer يصبح Flex Column حقيقي:
+       1) روابط الموقع
+       2) لغة العرض
+       3) دخول / أضف منشأتك
+       بدون overlay أو ارتفاعات وهمية.
+    */
+    #offcanvasNavbar
+    .customer-signature-drawer-body {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        justify-content: flex-start !important;
+        gap: 0 !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+    }
+
+    #offcanvasNavbar
+    .customer-drawer-nav-shell,
+    #offcanvasNavbar
+    .customer-signature-nav-shell {
+        position: relative !important;
+        inset: auto !important;
+        width: 100% !important;
+        height: auto !important;
+        min-height: 0 !important;
+        max-height: none !important;
+        flex: 0 0 auto !important;
+        margin: 0 !important;
+        padding-bottom: 0 !important;
+        overflow: visible !important;
+    }
+
+    #offcanvasNavbar
+    #customerSignatureNav {
+        position: relative !important;
+        width: 100% !important;
+        height: auto !important;
+        min-height: 0 !important;
+        max-height: none !important;
+        margin: 0 !important;
+        overflow: visible !important;
+    }
+
+    /*
+       بعض طبقات الرحلة/glider داخل shell مطلقة.
+       تبقى للزينة، لكن لا تسمح لها بالتحكم بارتفاع المحتوى.
+    */
+    #offcanvasNavbar
+    .customer-nav-active-glider,
+    #offcanvasNavbar
+    .customer-drawer-journey,
+    #offcanvasNavbar
+    .customer-drawer-journey-glow {
+        pointer-events: none !important;
+    }
+
+    /*
+       فصل واضح بعد آخر رابط حتى سطر اللغة لا يغطيه.
+    */
+    #offcanvasNavbar
+    .yg-mobile-language-row {
+        position: relative !important;
+        inset: auto !important;
+        z-index: 2 !important;
+        flex: 0 0 auto !important;
+        width: 100% !important;
+        margin: 16px 0 0 !important;
+        transform: none !important;
+    }
+
+    /*
+       أزرار الزائر تأتي تحت اللغة، وليس حول الدائرة القديمة.
+    */
+    #offcanvasNavbar
+    .nav-actions {
+        position: relative !important;
+        inset: auto !important;
+        z-index: 1 !important;
+        flex: 0 0 auto !important;
+        width: 100% !important;
+        margin-top: 12px !important;
+        transform: none !important;
+    }
+}
+
+@media (max-width: 575.98px) {
+    #offcanvasNavbar
+    .yg-mobile-language-row {
+        margin-top: 14px !important;
+    }
+}

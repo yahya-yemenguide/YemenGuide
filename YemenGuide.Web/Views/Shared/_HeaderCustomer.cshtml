@@ -1,3 +1,4 @@
+﻿@using System.Globalization
 @using System.Security.Claims
 @using Microsoft.EntityFrameworkCore
 @using Microsoft.Extensions.Caching.Memory
@@ -113,6 +114,15 @@
         currentPath.Equals(
             "/Home/Contact",
             StringComparison.OrdinalIgnoreCase);
+
+    // --- 5. اللغة الحالية للهيدر ---
+    string currentLanguage =
+        string.Equals(
+            CultureInfo.CurrentUICulture.TwoLetterISOLanguageName,
+            "en",
+            StringComparison.OrdinalIgnoreCase)
+            ? "en"
+            : "ar";
 }
 
 <header class="customer-site-header @(isCustomerDashboardPage ? "is-dashboard-header" : "is-public-header")">
@@ -129,7 +139,7 @@
                aria-label="العودة إلى الصفحة الرئيسية">
 
                 <span class="customer-brand-emblem" aria-hidden="true">
-<img src="@logoPath"
+                    <img src="@logoPath"
                          alt=""
                          class="customer-navbar-logo"
                          onerror="this.src='/images/logo1.png'">
@@ -143,6 +153,108 @@
             </a>
 
             <div class="customer-header-actions d-flex align-items-center gap-2 order-xl-3">
+
+                @if (User.Identity?.IsAuthenticated == true)
+                {
+                    <div class="dropdown yg-language-switcher"
+                     id="customerLanguageSwitcher">
+
+                        <button class="yg-language-trigger dropdown-toggle"
+                            type="button"
+                            id="customerLanguageDropdown"
+                            data-bs-toggle="dropdown"
+                            data-bs-auto-close="outside"
+                            aria-expanded="false"
+                            aria-label="@(currentLanguage == "ar" ? "تغيير اللغة" : "Change language")"
+                            title="@(currentLanguage == "ar" ? "العربية / English" : "English / العربية")">
+
+                            <span class="yg-language-trigger-globe"
+                              aria-hidden="true">
+                                <i class="bi bi-globe2"></i>
+                                <span class="yg-language-orbit"></span>
+                            </span>
+
+                            <span class="yg-language-code"
+                              aria-hidden="true">
+                                @(currentLanguage == "ar" ? "AR" : "EN")
+                            </span>
+
+                            <span class="yg-language-spark"
+                              aria-hidden="true"></span>
+                        </button>
+
+                        <div class="dropdown-menu dropdown-menu-end yg-language-menu"
+                         aria-labelledby="customerLanguageDropdown">
+
+                            <div class="yg-language-menu-head">
+                                <span class="yg-language-menu-icon"
+                                  aria-hidden="true">
+                                    <i class="bi bi-translate"></i>
+                                </span>
+
+                                <div class="yg-language-menu-title">
+                                    <strong>
+                                        @(currentLanguage == "ar"
+                                            ? "لغة العرض"
+                                            : "Display language")
+                                    </strong>
+
+                                    <small>
+                                        @(currentLanguage == "ar"
+                                            ? "اختر لغة واجهة دليلك اليمني"
+                                            : "Choose your YemenGuide language")
+                                    </small>
+                                </div>
+                            </div>
+
+                            <div class="yg-language-options">
+                                <button type="button"
+                                    class="yg-language-option js-customer-language @(currentLanguage == "ar" ? "is-active" : "")"
+                                    data-culture="ar"
+                                    aria-pressed="@(currentLanguage == "ar" ? "true" : "false")">
+
+                                    <span class="yg-language-option-symbol yg-language-option-symbol--ar"
+                                      aria-hidden="true">ع</span>
+
+                                    <span class="yg-language-option-copy">
+                                        <strong>العربية</strong>
+                                        <small>العربية</small>
+                                    </span>
+
+                                    <span class="yg-language-option-check"
+                                      aria-hidden="true">
+                                        <i class="bi bi-check2"></i>
+                                    </span>
+                                </button>
+
+                                <button type="button"
+                                    class="yg-language-option js-customer-language @(currentLanguage == "en" ? "is-active" : "")"
+                                    data-culture="en"
+                                    aria-pressed="@(currentLanguage == "en" ? "true" : "false")">
+
+                                    <span class="yg-language-option-symbol yg-language-option-symbol--en"
+                                      aria-hidden="true">EN</span>
+
+                                    <span class="yg-language-option-copy">
+                                        <strong>English</strong>
+                                        <small>English</small>
+                                    </span>
+
+                                    <span class="yg-language-option-check"
+                                      aria-hidden="true">
+                                        <i class="bi bi-check2"></i>
+                                    </span>
+                                </button>
+                            </div>
+
+                            <div class="yg-language-menu-foot">
+                                <span class="yg-language-menu-foot-dot"
+                                  aria-hidden="true"></span>
+                                <span>YemenGuide</span>
+                            </div>
+                        </div>
+                    </div>
+                }
 
                 @if (User.Identity?.IsAuthenticated == true)
                 {
@@ -340,7 +452,7 @@
                        aria-label="العودة إلى الرئيسية">
 
                         <span class="customer-drawer-brand-emblem" aria-hidden="true">
-<img src="@logoPath"
+                            <img src="@logoPath"
                                  alt=""
                                  class="customer-drawer-brand-logo"
                                  onerror="this.src='/images/logo1.png'">
@@ -465,9 +577,157 @@
                         </ul>
                     </div>
 
+                    @*
+                    لغة الهاتف:
+                    سطر واحد داخل القائمة الجانبية للزائر والمسجل.
+                    لا توجد دائرة إضافية ولا Popup في الهاتف.
+                    *@
+                    <div class="yg-mobile-language-row"
+                         aria-label="@(currentLanguage == "ar" ? "لغة العرض" : "Display language")">
+
+                        <div class="yg-mobile-language-identity">
+                            <span class="yg-mobile-language-icon"
+                                  aria-hidden="true">
+                                <i class="bi bi-translate"></i>
+                            </span>
+
+                            <span class="yg-mobile-language-copy">
+                                <strong>
+                                    @(currentLanguage == "ar"
+                                        ? "لغة العرض"
+                                        : "Display language")
+                                </strong>
+
+                                <small>
+                                    @(currentLanguage == "ar"
+                                        ? "العربية"
+                                        : "English")
+                                </small>
+                            </span>
+                        </div>
+
+                        <div class="yg-mobile-language-segment"
+                             role="group"
+                             aria-label="@(currentLanguage == "ar" ? "اختيار اللغة" : "Choose language")">
+
+                            <button type="button"
+                                    class="yg-mobile-language-choice js-customer-language @(currentLanguage == "ar" ? "is-active" : "")"
+                                    data-culture="ar"
+                                    aria-pressed="@(currentLanguage == "ar" ? "true" : "false")">
+                                AR
+                            </button>
+
+                            <button type="button"
+                                    class="yg-mobile-language-choice js-customer-language @(currentLanguage == "en" ? "is-active" : "")"
+                                    data-culture="en"
+                                    aria-pressed="@(currentLanguage == "en" ? "true" : "false")">
+                                EN
+                            </button>
+                        </div>
+                    </div>
+
                     @if (User.Identity?.IsAuthenticated != true)
                     {
                         <div class="d-flex flex-column flex-lg-row align-items-lg-center gap-3 nav-actions mt-4 mt-lg-0">
+
+                            <div class="dropdown yg-language-switcher yg-language-switcher--guest"
+                             id="customerLanguageSwitcher">
+
+                                <button class="yg-language-trigger dropdown-toggle"
+                                    type="button"
+                                    id="customerLanguageDropdown"
+                                    data-bs-toggle="dropdown"
+                                    data-bs-auto-close="outside"
+                                    aria-expanded="false"
+                                    aria-label="@(currentLanguage == "ar" ? "تغيير اللغة" : "Change language")"
+                                    title="@(currentLanguage == "ar" ? "العربية / English" : "English / العربية")">
+
+                                    <span class="yg-language-trigger-globe"
+                                      aria-hidden="true">
+                                        <i class="bi bi-globe2"></i>
+                                        <span class="yg-language-orbit"></span>
+                                    </span>
+
+                                    <span class="yg-language-code"
+                                      aria-hidden="true">
+                                        @(currentLanguage == "ar" ? "AR" : "EN")
+                                    </span>
+
+                                    <span class="yg-language-spark"
+                                      aria-hidden="true"></span>
+                                </button>
+
+                                <div class="dropdown-menu dropdown-menu-end yg-language-menu"
+                                 aria-labelledby="customerLanguageDropdown">
+
+                                    <div class="yg-language-menu-head">
+                                        <span class="yg-language-menu-icon"
+                                          aria-hidden="true">
+                                            <i class="bi bi-translate"></i>
+                                        </span>
+
+                                        <div class="yg-language-menu-title">
+                                            <strong>
+                                                @(currentLanguage == "ar"
+                                                    ? "لغة العرض"
+                                                    : "Display language")
+                                            </strong>
+
+                                            <small>
+                                                @(currentLanguage == "ar"
+                                                    ? "اختر لغة واجهة دليلك اليمني"
+                                                    : "Choose your YemenGuide language")
+                                            </small>
+                                        </div>
+                                    </div>
+
+                                    <div class="yg-language-options">
+                                        <button type="button"
+                                            class="yg-language-option js-customer-language @(currentLanguage == "ar" ? "is-active" : "")"
+                                            data-culture="ar"
+                                            aria-pressed="@(currentLanguage == "ar" ? "true" : "false")">
+
+                                            <span class="yg-language-option-symbol yg-language-option-symbol--ar"
+                                              aria-hidden="true">ع</span>
+
+                                            <span class="yg-language-option-copy">
+                                                <strong>العربية</strong>
+                                                <small>العربية</small>
+                                            </span>
+
+                                            <span class="yg-language-option-check"
+                                              aria-hidden="true">
+                                                <i class="bi bi-check2"></i>
+                                            </span>
+                                        </button>
+
+                                        <button type="button"
+                                            class="yg-language-option js-customer-language @(currentLanguage == "en" ? "is-active" : "")"
+                                            data-culture="en"
+                                            aria-pressed="@(currentLanguage == "en" ? "true" : "false")">
+
+                                            <span class="yg-language-option-symbol yg-language-option-symbol--en"
+                                              aria-hidden="true">EN</span>
+
+                                            <span class="yg-language-option-copy">
+                                                <strong>English</strong>
+                                                <small>English</small>
+                                            </span>
+
+                                            <span class="yg-language-option-check"
+                                              aria-hidden="true">
+                                                <i class="bi bi-check2"></i>
+                                            </span>
+                                        </button>
+                                    </div>
+
+                                    <div class="yg-language-menu-foot">
+                                        <span class="yg-language-menu-foot-dot"
+                                          aria-hidden="true"></span>
+                                        <span>YemenGuide</span>
+                                    </div>
+                                </div>
+                            </div>
 
                             <a asp-controller="Account"
                            asp-action="Login"
@@ -490,3 +750,4 @@
         </div>
     </nav>
 </header>
+

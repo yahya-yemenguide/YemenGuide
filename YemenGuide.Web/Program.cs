@@ -18,6 +18,8 @@ using YemenGuide.Web.Services.Reports;
 using YemenGuide.Web.Services.ExchangeRates;
 using YemenGuide.Web.Maintenance;
 using YemenGuide.Core.Helpers;
+using YemenGuide.Web.Localization;
+using YemenGuide.Web.Infrastructure.Localization;
 
 
 // =============================================================
@@ -31,8 +33,23 @@ var builder = WebApplication.CreateBuilder(args);
 //  1.1. استدعاء قاعدة البيانات
 // =============================================================
 
-builder.Services.AddDbContext<YemenGuide.Data.AppDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+// نحتاج HttpContext داخل Interceptor حتى يرث الحساب الجديد لغة الزائر.
+builder.Services.AddHttpContextAccessor();
+
+builder.Services.AddScoped<
+    PreferredLanguageSaveChangesInterceptor>();
+
+builder.Services.AddDbContext<YemenGuide.Data.AppDbContext>(
+    (serviceProvider, options) =>
+    {
+        options.UseSqlServer(
+            builder.Configuration.GetConnectionString(
+                "DefaultConnection"));
+
+        options.AddInterceptors(
+            serviceProvider.GetRequiredService<
+                PreferredLanguageSaveChangesInterceptor>());
+    });
 
 
 // =============================================================
@@ -58,16 +75,104 @@ builder.Services.Configure<RequestLocalizationOptions>(options =>
 {
     var supportedCultures = new[]
     {
-        new CultureInfo("ar"),
-        new CultureInfo("en")
+        new CultureInfo(CustomerLocalization.ArabicCulture),
+        new CultureInfo(CustomerLocalization.EnglishCulture)
     };
 
-    options.DefaultRequestCulture = new RequestCulture("ar"); // اللغة الافتراضية
-    options.SupportedCultures = supportedCultures;
-    options.SupportedUICultures = supportedCultures;
+    // الزائر الجديد يبدأ دائمًا بالعربية.
+    options.DefaultRequestCulture =
+        new RequestCulture(
+            CustomerLocalization.DefaultCulture);
 
-    // جعل الأولوية الأولى للكوكيز لمعرفة لغة المستخدم الحالية
-    options.RequestCultureProviders.Insert(0, new CookieRequestCultureProvider());
+    options.SupportedCultures =
+        supportedCultures;
+
+    options.SupportedUICultures =
+        supportedCultures;
+
+    options.ApplyCurrentCultureToResponseHeaders =
+        true;
+
+    /*
+     * مصدر اللغة:
+     *
+     * 1) إذا كان المستخدم مسجلًا:
+     *    نقرأ PreferredLanguage من Claims الحساب.
+     *
+     * 2) إذا كان زائرًا:
+     *    نقرأ Cookie الخاصة بالموقع.
+     *
+     * 3) إذا لم يوجد أي اختيار:
+     *    نرجع إلى العربية الافتراضية.
+     *
+     * لا نعتمد على Accept-Language الخاص بالمتصفح.
+     */
+    options.RequestCultureProviders.Clear();
+
+    options.RequestCultureProviders.Add(
+        new CustomRequestCultureProvider(
+            context =>
+            {
+                string? resolvedCulture = null;
+
+                if (
+                    context.User?.Identity?.IsAuthenticated ==
+                    true
+                )
+                {
+                    var claimCulture =
+                        context.User.FindFirst(
+                            "PreferredLanguage"
+                        )?.Value;
+
+                    if (
+                        CustomerLocalization.TryNormalize(
+                            claimCulture,
+                            out var normalizedClaimCulture
+                        )
+                    )
+                    {
+                        resolvedCulture =
+                            normalizedClaimCulture;
+                    }
+                }
+
+                if (
+                    resolvedCulture == null &&
+                    context.Request.Cookies
+                        .TryGetValue(
+                            CustomerLocalization
+                                .CultureCookieName,
+                            out var cookieCulture
+                        ) &&
+                    CustomerLocalization.TryNormalize(
+                        cookieCulture,
+                        out var normalizedCookieCulture
+                    )
+                )
+                {
+                    resolvedCulture =
+                        normalizedCookieCulture;
+                }
+
+                if (resolvedCulture == null)
+                {
+                    return Task.FromResult<
+                        ProviderCultureResult?
+                    >(null);
+                }
+
+                return Task.FromResult<
+                    ProviderCultureResult?
+                >(
+                    new ProviderCultureResult(
+                        resolvedCulture,
+                        resolvedCulture
+                    )
+                );
+            }
+        )
+    );
 });
 
 
@@ -179,7 +284,6 @@ builder.Services.AddScoped<
     OwnerReportsService>();
 
 // تسجيل محرك صلاحيات موظفي الإدارة وسجل العمليات
-builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<
     IAdminPermissionService,
     AdminPermissionService>();
@@ -277,18 +381,28 @@ app.UseRouting();
 
 
 // =============================================================
-//  3.4. تفعيل وسيط التعريب (Localization Middleware)
-// =============================================================
-
-var localizationOptions = app.Services.GetService<Microsoft.Extensions.Options.IOptions<RequestLocalizationOptions>>().Value;
-app.UseRequestLocalization(localizationOptions);
-
-
-// =============================================================
-//  3.5. تفعيل وسيط المصادقة والتفويض (Authentication & Authorization)
+//  3.4. المصادقة ثم التعريب
+//
+// نحتاج المصادقة أولًا لكي يستطيع مزود اللغة قراءة
+// PreferredLanguage من Claims المستخدم المسجل.
 // =============================================================
 
 app.UseAuthentication();
+
+var localizationOptions =
+    app.Services
+        .GetRequiredService<
+            Microsoft.Extensions.Options.IOptions<
+                RequestLocalizationOptions>>()
+        .Value;
+
+app.UseRequestLocalization(
+    localizationOptions);
+
+
+// =============================================================
+//  3.5. تفعيل التفويض (Authorization)
+// =============================================================
 
 // محرك الصيانة تم تسجيله في الخدمات أعلاه.
 // سنفعّل السطر التالي بعد إنشاء MaintenanceController

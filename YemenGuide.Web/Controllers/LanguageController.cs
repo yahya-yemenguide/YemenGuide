@@ -1,103 +1,237 @@
 ﻿// =============================================================
-//  LanguageController.cs - التحكم في تعدد اللغات
+// LanguageController.cs
+// المحرك المركزي لتغيير لغة الموقع
 // =============================================================
 
-
-// =============================================================
-//  1. استيراد المكتبات المطلوبة (Using Directives)
-// =============================================================
-
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Localization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using System;
-using System.Security.Claims; // أضفنا هذا لقراءة هوية المستخدم الحالية
-using System.Linq; // للبحث في قاعدة البيانات
-using YemenGuide.Data; // للوصول إلى الجداول
-
-
-// =============================================================
-//  2. تعريف مسار التسمية والكلاس (Namespace & Class)
-// =============================================================
+using System.Collections.Generic;
+using System.Linq;
+using System.Security.Claims;
+using System.Threading.Tasks;
+using YemenGuide.Data;
+using YemenGuide.Web.Localization;
 
 namespace YemenGuide.Web.Controllers
 {
     public class LanguageController : Controller
     {
-        // 🔥 إضافة الاتصال بقاعدة البيانات
         private readonly AppDbContext _context;
 
-        public LanguageController(AppDbContext context)
+        public LanguageController(
+            AppDbContext context)
         {
             _context = context;
         }
 
         // =============================================================
-        //  3. دالة تغيير اللغة (SetLanguage) - POST
+        // تغيير اللغة
+        //
+        // الزائر:
+        //   نحفظ Cookie الخاصة بالموقع.
+        //
+        // المستخدم المسجل:
+        //   نحفظ Cookie + PreferredLanguage في قاعدة البيانات
+        //   ونحدّث Claim اللغة في جلسة الدخول الحالية.
         // =============================================================
 
         [HttpPost]
-        public IActionResult SetLanguage([FromBody] LanguageRequest model)
+        public async Task<IActionResult> SetLanguage(
+            [FromBody] LanguageRequest? model)
         {
-            if (model != null && !string.IsNullOrEmpty(model.Culture))
+            if (
+                !CustomerLocalization.TryNormalize(
+                    model?.Culture,
+                    out var culture
+                )
+            )
             {
-                // =============================================================
-                //  3.1. حفظ كوكيز اللغة العامة القياسية للمتصفح الحالي
-                // =============================================================
-
-                Response.Cookies.Append(
-                    CookieRequestCultureProvider.DefaultCookieName,
-                    CookieRequestCultureProvider.MakeCookieValue(new RequestCulture(model.Culture)),
-                    new CookieOptions
+                return BadRequest(
+                    new
                     {
-                        Expires = DateTimeOffset.UtcNow.AddYears(1),
-                        Path = "/",
-                        HttpOnly = true
-                    }
+                        success = false,
+                        message =
+                            "Unsupported language."
+                    });
+            }
+
+            /*
+             * Cookie اختيار الزائر.
+             * تبقى موجودة عند تسجيل الخروج لأنها مستقلة
+             * عن Cookie ASP.NET الافتراضية.
+             */
+            Response.Cookies.Append(
+                CustomerLocalization
+                    .CultureCookieName,
+                culture,
+                CreateCultureCookieOptions()
+            );
+
+            /*
+             * نكتب كذلك Cookie ASP.NET القياسية للتوافق
+             * مع أي كود قديم ما زال يعتمد عليها.
+             */
+            Response.Cookies.Append(
+                CookieRequestCultureProvider
+                    .DefaultCookieName,
+                CookieRequestCultureProvider
+                    .MakeCookieValue(
+                        new RequestCulture(
+                            culture
+                        )
+                    ),
+                CreateCultureCookieOptions()
+            );
+
+            var userIdText =
+                User.FindFirstValue(
+                    ClaimTypes.NameIdentifier
                 );
 
-                // =============================================================
-                //  3.2. ربط اللغة برقم حساب المستخدم الحالي (إذا كان مسجلاً للدخول)
-                // =============================================================
+            if (
+                User.Identity?.IsAuthenticated ==
+                    true &&
+                int.TryParse(
+                    userIdText,
+                    out var userId
+                ) &&
+                userId > 0
+            )
+            {
+                var user =
+                    await _context.Users
+                        .FirstOrDefaultAsync(
+                            item =>
+                                item.UserId ==
+                                userId
+                        );
 
-                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-                if (!string.IsNullOrEmpty(userId))
+                if (user != null)
                 {
-                    // إنشاء كوكيز فريدة مشتقة من الرقم التعريفي للمستخدم لكي لا تضيع بعد تسجيل الخروج
-                    Response.Cookies.Append(
-                        $"UserCulture_{userId}",
-                        model.Culture,
-                        new CookieOptions
-                        {
-                            Expires = DateTimeOffset.UtcNow.AddYears(1),
-                            Path = "/",
-                            HttpOnly = true
-                        }
+                    user.PreferredLanguage =
+                        culture;
+
+                    await _context
+                        .SaveChangesAsync();
+
+                    await RefreshLanguageClaimAsync(
+                        culture);
+                }
+            }
+
+            return Json(
+                new
+                {
+                    success = true,
+                    culture,
+                    direction =
+                        culture ==
+                        CustomerLocalization
+                            .ArabicCulture
+                            ? "rtl"
+                            : "ltr"
+                });
+        }
+
+        private CookieOptions
+            CreateCultureCookieOptions()
+        {
+            return new CookieOptions
+            {
+                Expires =
+                    DateTimeOffset.UtcNow
+                        .AddYears(1),
+
+                MaxAge =
+                    TimeSpan.FromDays(365),
+
+                Path = "/",
+
+                HttpOnly = true,
+
+                IsEssential = true,
+
+                SameSite =
+                    SameSiteMode.Lax,
+
+                Secure =
+                    Request.IsHttps
+            };
+        }
+
+        /// <summary>
+        /// عندما يغيّر مستخدم مسجل اللغة، نحدّث Claim اللغة
+        /// في Cookie تسجيل الدخول فورًا حتى يقرأها
+        /// RequestLocalization في الطلب التالي بدون الحاجة
+        /// إلى تسجيل خروج ودخول.
+        /// </summary>
+        private async Task
+            RefreshLanguageClaimAsync(
+                string culture)
+        {
+            var authResult =
+                await HttpContext
+                    .AuthenticateAsync(
+                        CookieAuthenticationDefaults
+                            .AuthenticationScheme
                     );
 
-                    // 🔥 التعديل الأهم: حفظ اللغة في قاعدة البيانات لكي لا تنحذف عند تسجيل الدخول القادم!
-                    int currentUserId = int.Parse(userId);
-                    var user = _context.Users.FirstOrDefault(u => u.UserId == currentUserId);
-                    if (user != null)
-                    {
-                        user.PreferredLanguage = model.Culture;
-                        _context.SaveChanges();
-                    }
-                }
-
-                return Json(new { success = true });
+            if (
+                !authResult.Succeeded ||
+                authResult.Principal == null
+            )
+            {
+                return;
             }
-            return Json(new { success = false, message = "ثقافة غير صالحة" });
+
+            var claims =
+                authResult.Principal.Claims
+                    .Where(
+                        claim =>
+                            !string.Equals(
+                                claim.Type,
+                                "PreferredLanguage",
+                                StringComparison.Ordinal
+                            )
+                    )
+                    .ToList();
+
+            claims.Add(
+                new Claim(
+                    "PreferredLanguage",
+                    culture
+                )
+            );
+
+            var identity =
+                new ClaimsIdentity(
+                    claims,
+                    CookieAuthenticationDefaults
+                        .AuthenticationScheme,
+                    ClaimTypes.Name,
+                    ClaimTypes.Role
+                );
+
+            await HttpContext.SignInAsync(
+                CookieAuthenticationDefaults
+                    .AuthenticationScheme,
+                new ClaimsPrincipal(identity),
+                authResult.Properties
+            );
         }
     }
 
-
-    // =============================================================
-    //  4. تعريف الكلاس الداخلي (LanguageRequest)
-    // =============================================================
-
     public class LanguageRequest
     {
-        public string Culture { get; set; }
+        public string? Culture
+        {
+            get;
+            set;
+        }
     }
 }

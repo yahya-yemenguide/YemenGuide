@@ -1,4 +1,4 @@
-@using System.Globalization
+﻿@using System.Globalization
 @using System.Linq
 @using System.Security.Claims
 @using Microsoft.EntityFrameworkCore
@@ -22,7 +22,7 @@
     string favicon = settings?.FaviconPath ?? "/favicon.ico";
 
     // -------------------------------------------------------------
-    // تحديد الصفحة الحالية أولاً لأن الرئيسية يجب أن تبقى RTL دائماً.
+    // تحديد الصفحة الحالية.
     // -------------------------------------------------------------
     string currentController =
         ViewContext.RouteData.Values["Controller"]?.ToString() ?? string.Empty;
@@ -35,19 +35,35 @@
         string.Equals(currentController, "Home", StringComparison.OrdinalIgnoreCase) &&
         string.Equals(currentAction, "Index", StringComparison.OrdinalIgnoreCase);
 
-    // اتجاه اللغة الحالية.
-    // الرئيسية العربية تبقى RTL للزائر والمسجل حتى لا تنقلب من اليمين إلى اليسار
-    // حسب Culture الضيف.
+    // -------------------------------------------------------------
+    // اللغة والاتجاه:
+    //
+    // ar => RTL + Bootstrap RTL
+    // en => LTR + Bootstrap العادي
+    //
+    // لا توجد أي صفحة مستثناة أو مجبرة على RTL.
+    // -------------------------------------------------------------
+    var currentUiCulture =
+        CultureInfo.CurrentUICulture;
+
+    var langCode =
+        string.Equals(
+            currentUiCulture.TwoLetterISOLanguageName,
+            "en",
+            StringComparison.OrdinalIgnoreCase)
+            ? "en"
+            : "ar";
+
     var isRtl =
-        isHomeIndex ||
-        CultureInfo.CurrentCulture.TextInfo.IsRightToLeft;
+        langCode == "ar";
 
-    var direction = isRtl ? "rtl" : "ltr";
-    var langCode = CultureInfo.CurrentCulture.Name;
+    var direction =
+        isRtl ? "rtl" : "ltr";
 
-    // اختيار ملف Bootstrap حسب الاتجاه
     var bootstrapCss =
-        isRtl ? "bootstrap.rtl.min.css" : "bootstrap.min.css";
+        isRtl
+            ? "bootstrap.rtl.min.css"
+            : "bootstrap.min.css";
 
     // -------------------------------------------------------------
     // تحديد صفحات لوحة العميل آلياً دون تعديل كل View على حدة.
@@ -99,6 +115,10 @@
     string bodyClass = isCustomerDashboardPage
         ? "customer-dashboard-page has-customer-bottom-nav customer-signature-ui"
         : "customer-public-page customer-signature-ui";
+
+    // كلاسات مساعدة سنستفيد منها لاحقًا أثناء الترجمة
+    // وضبط CSS الخاص بكل اتجاه.
+    bodyClass += $" lang-{langCode} dir-{direction}";
 }
 
 <!DOCTYPE html>
@@ -130,6 +150,10 @@
 
     <link rel="stylesheet"
           href="~/css/customer/customer-layout.css"
+          asp-append-version="true" />
+
+    <link rel="stylesheet"
+          href="~/css/customer/customer-language-switcher.css"
           asp-append-version="true" />
 
     @if (isAuthenticatedCustomer)
@@ -254,7 +278,9 @@
 <body class="@bodyClass @(showGooglePasswordSetup ? "auth-security-locked" : "")"
       data-customer-dashboard="@(isCustomerDashboardPage ? "true" : "false")"
       data-customer-controller="@currentController"
-      data-customer-action="@currentAction">
+      data-customer-action="@currentAction"
+      data-language="@langCode"
+      data-direction="@direction">
 
     @if (showGooglePasswordSetup)
     {
@@ -291,6 +317,9 @@
             asp-append-version="true"></script>
 
     <script src="~/js/customer/customer-layout.js"
+            asp-append-version="true"></script>
+
+    <script src="~/js/customer/customer-language-switcher.js"
             asp-append-version="true"></script>
 
     @if (showGooglePasswordSetup)
