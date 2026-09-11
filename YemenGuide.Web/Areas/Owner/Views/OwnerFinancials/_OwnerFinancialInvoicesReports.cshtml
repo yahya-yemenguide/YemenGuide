@@ -44,7 +44,6 @@
     }
 
     string Number(int value) => value.ToString("N0", numberCulture);
-
     string DateInput(DateTime? value) => value?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty;
 
     string DateText(DateTime? value, bool withTime = false)
@@ -163,10 +162,11 @@
       href="~/css/owner/financials/owner-financial-invoices-reports.css"
       asp-append-version="true" />
 
-<section class="@(isAdminOwnedPlace ? "admin-owned-financial-view" : "")" class="ofir-editorial"
+<section class="ofir-editorial @(isAdminOwnedPlace ? "admin-owned-financial-view" : string.Empty)"
          data-owner-financial-partial="reports"
          data-load-url="@Url.Content("~/Owner/Financials/InvoicesReports")"
          data-print-url="@Url.Content("~/Owner/Financials/InvoicesReports/Print")"
+         data-excel-url="@Url.Content("~/Owner/Financials/InvoicesReports/Excel")"
          data-active-report-type="@reportType"
          dir="rtl">
 
@@ -175,7 +175,6 @@
             <span class="ofir-editorial__mark" aria-hidden="true">
                 <i class="bi @ReportIcon(reportType)"></i>
             </span>
-
             <div>
                 <span class="ofir-editorial__kicker">مركز التقارير المالية</span>
                 <h2>@pageModel.ReportTitle</h2>
@@ -184,6 +183,17 @@
         </div>
 
         <div class="ofir-editorial__header-actions">
+            <button type="submit"
+                    form="ownerFinancialReportsFilterForm"
+                    formaction="@Url.Content("~/Owner/Financials/InvoicesReports/Excel")"
+                    formmethod="get"
+                    name="ExportFormat"
+                    value="Excel"
+                    class="ofir-editorial__action is-export">
+                <i class="bi bi-file-earmark-excel"></i>
+                <span>تصدير Excel</span>
+            </button>
+
             <button type="submit"
                     form="ownerFinancialReportsFilterForm"
                     formaction="@Url.Content("~/Owner/Financials/InvoicesReports/Print")"
@@ -206,16 +216,14 @@
                 continue;
             }
 
-            var optionValue = option.Value;
-            var selected = string.Equals(optionValue, reportType, StringComparison.OrdinalIgnoreCase);
-
+            var selected = string.Equals(option.Value, reportType, StringComparison.OrdinalIgnoreCase);
             <button type="button"
                 class="ofir-editorial__report-tab @(selected ? "is-active" : string.Empty)"
                 data-ofir-report-chip
-                data-report-type="@optionValue"
+                data-report-type="@option.Value"
                 aria-pressed="@(selected ? "true" : "false")">
-                <i class="bi @ReportIcon(optionValue)"></i>
-                <span>@ReportShortLabel(optionValue)</span>
+                <i class="bi @ReportIcon(option.Value)"></i>
+                <span>@ReportShortLabel(option.Value)</span>
             </button>
         }
     </nav>
@@ -239,7 +247,6 @@
                     <small>الفلاتر الظاهرة فقط هي الأكثر استخدامًا</small>
                 </div>
             </div>
-
             <div class="ofir-editorial__quick-periods" aria-label="اختصارات الفترة">
                 <button type="button" data-ofir-range="today">اليوم</button>
                 <button type="button" data-ofir-range="7days">7 أيام</button>
@@ -251,40 +258,22 @@
         <div class="ofir-editorial__filter-main">
             <label class="ofir-editorial__field">
                 <span>من</span>
-                <div>
-                    <i class="bi bi-calendar3"></i>
-                    <input type="date" name="FromDate" value="@DateInput(filter.FromDate)" data-ofir-from-date />
-                </div>
+                <div><i class="bi bi-calendar3"></i><input type="date" name="FromDate" value="@DateInput(filter.FromDate)" data-ofir-from-date /></div>
             </label>
-
             <label class="ofir-editorial__field">
                 <span>إلى</span>
-                <div>
-                    <i class="bi bi-calendar3"></i>
-                    <input type="date" name="ToDate" value="@DateInput(filter.ToDate)" data-ofir-to-date />
-                </div>
+                <div><i class="bi bi-calendar3"></i><input type="date" name="ToDate" value="@DateInput(filter.ToDate)" data-ofir-to-date /></div>
             </label>
 
             @if (capabilities.ShowSearch)
             {
                 <label class="ofir-editorial__field is-search">
                     <span>بحث سريع</span>
-                    <div>
-                        <i class="bi bi-search"></i>
-                        <input type="search"
-                           name="Search"
-                           value="@filter.Search"
-                           maxlength="100"
-                           autocomplete="off"
-                           placeholder="اسم العميل، رقم الحجز أو المرجع" />
-                    </div>
+                    <div><i class="bi bi-search"></i><input type="search" name="Search" value="@filter.Search" maxlength="100" autocomplete="off" placeholder="اسم العميل، رقم الحجز أو المرجع" /></div>
                 </label>
             }
 
-            <button type="submit" class="ofir-editorial__apply">
-                <i class="bi bi-arrow-repeat"></i>
-                تحديث التقرير
-            </button>
+            <button type="submit" class="ofir-editorial__apply"><i class="bi bi-arrow-repeat"></i>تحديث التقرير</button>
         </div>
 
         <div class="ofir-editorial__validation" data-ofir-validation-for="dateRange"></div>
@@ -292,14 +281,10 @@
 
         <details class="ofir-editorial__advanced" @(advancedFilterCount > 0 ? "open" : null)>
             <summary>
-                <span>
-                    <i class="bi bi-tune"></i>
-                    فلاتر متقدمة
-                    @if (advancedFilterCount > 0)
+                <span><i class="bi bi-tune"></i>فلاتر متقدمة @if (advancedFilterCount > 0)
                     {
                         <b>@advancedFilterCount</b>
-                    }
-                </span>
+                    }</span>
                 <i class="bi bi-chevron-down"></i>
             </summary>
 
@@ -309,8 +294,7 @@
                     <label class="ofir-editorial__field">
                         <span>التاريخ المعتمد</span>
                         <div class="is-select">
-                            <i class="bi bi-calendar-event"></i>
-                            <select name="DateScope">
+                            <i class="bi bi-calendar-event"></i><select name="DateScope">
                                 @foreach (var option in pageModel.DateScopeOptions)
                                 {
                                     <option value="@option.Value" selected="@(option.IsSelected ? "selected" : null)">@option.Label</option>
@@ -325,8 +309,7 @@
                     <label class="ofir-editorial__field">
                         <span>نوع المستند</span>
                         <div class="is-select">
-                            <i class="bi bi-file-earmark-text"></i>
-                            <select name="DocumentType">
+                            <i class="bi bi-file-earmark-text"></i><select name="DocumentType">
                                 <option value="">كل المستندات</option>
                                 @foreach (var option in pageModel.DocumentTypeOptions)
                                 {
@@ -342,8 +325,7 @@
                     <label class="ofir-editorial__field">
                         <span>قناة التحصيل</span>
                         <div class="is-select">
-                            <i class="bi bi-wallet2"></i>
-                            <select name="PaymentChannel">
+                            <i class="bi bi-wallet2"></i><select name="PaymentChannel">
                                 @foreach (var option in pageModel.PaymentChannelOptions)
                                 {
                                     <option value="@option.Value" selected="@(option.IsSelected ? "selected" : null)">@option.Label</option>
@@ -358,8 +340,7 @@
                     <label class="ofir-editorial__field">
                         <span>حالة الحجز</span>
                         <div class="is-select">
-                            <i class="bi bi-calendar2-check"></i>
-                            <select name="BookingState">
+                            <i class="bi bi-calendar2-check"></i><select name="BookingState">
                                 <option value="">كل الحالات</option>
                                 @foreach (var option in pageModel.BookingStateOptions)
                                 {
@@ -375,8 +356,7 @@
                     <label class="ofir-editorial__field">
                         <span>حالة الدفع</span>
                         <div class="is-select">
-                            <i class="bi bi-credit-card"></i>
-                            <select name="PaymentStatus">
+                            <i class="bi bi-credit-card"></i><select name="PaymentStatus">
                                 <option value="">كل الحالات</option>
                                 @foreach (var option in pageModel.PaymentStatusOptions)
                                 {
@@ -387,13 +367,12 @@
                     </label>
                 }
 
-                @if (capabilities.ShowCommissionStatus)
+                @if (!isAdminOwnedPlace && capabilities.ShowCommissionStatus)
                 {
                     <label class="ofir-editorial__field">
                         <span>حالة العمولة</span>
                         <div class="is-select">
-                            <i class="bi bi-percent"></i>
-                            <select name="CommissionStatus">
+                            <i class="bi bi-percent"></i><select name="CommissionStatus">
                                 <option value="">كل الحالات</option>
                                 @foreach (var option in pageModel.CommissionStatusOptions)
                                 {
@@ -409,8 +388,7 @@
                     <label class="ofir-editorial__field">
                         <span>حالة الاسترداد</span>
                         <div class="is-select">
-                            <i class="bi bi-arrow-counterclockwise"></i>
-                            <select name="RefundStatus">
+                            <i class="bi bi-arrow-counterclockwise"></i><select name="RefundStatus">
                                 <option value="">كل الحالات</option>
                                 @foreach (var option in pageModel.RefundStatusOptions)
                                 {
@@ -426,8 +404,7 @@
                     <label class="ofir-editorial__field">
                         <span>نوع الحركة</span>
                         <div class="is-select">
-                            <i class="bi bi-arrow-left-right"></i>
-                            <select name="TransactionType">
+                            <i class="bi bi-arrow-left-right"></i><select name="TransactionType">
                                 <option value="">كل الحركات</option>
                                 @foreach (var option in pageModel.TransactionTypeOptions)
                                 {
@@ -443,8 +420,7 @@
                     <label class="ofir-editorial__field">
                         <span>حالة الحركة</span>
                         <div class="is-select">
-                            <i class="bi bi-check2-circle"></i>
-                            <select name="TransactionStatus">
+                            <i class="bi bi-check2-circle"></i><select name="TransactionStatus">
                                 <option value="">كل الحالات</option>
                                 @foreach (var option in pageModel.TransactionStatusOptions)
                                 {
@@ -457,42 +433,21 @@
 
                 @if (capabilities.ShowBookingId)
                 {
-                    <label class="ofir-editorial__field">
-                        <span>رقم الحجز</span>
-                        <div>
-                            <i class="bi bi-hash"></i>
-                            <input type="number" min="1" name="BookingId" value="@(filter.BookingId?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)" />
-                        </div>
-                    </label>
+                    <label class="ofir-editorial__field"><span>رقم الحجز</span><div><i class="bi bi-hash"></i><input type="number" min="1" name="BookingId" value="@(filter.BookingId?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)" /></div></label>
                 }
-
                 @if (capabilities.ShowCustomerId)
                 {
-                    <label class="ofir-editorial__field">
-                        <span>رقم العميل</span>
-                        <div>
-                            <i class="bi bi-person"></i>
-                            <input type="number" min="1" name="CustomerId" value="@(filter.CustomerId?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)" />
-                        </div>
-                    </label>
+                    <label class="ofir-editorial__field"><span>رقم العميل</span><div><i class="bi bi-person"></i><input type="number" min="1" name="CustomerId" value="@(filter.CustomerId?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)" /></div></label>
                 }
-
                 @if (capabilities.ShowReferenceNumber)
                 {
-                    <label class="ofir-editorial__field">
-                        <span>المرجع المالي</span>
-                        <div>
-                            <i class="bi bi-upc-scan"></i>
-                            <input type="text" maxlength="80" name="ReferenceNumber" value="@filter.ReferenceNumber" />
-                        </div>
-                    </label>
+                    <label class="ofir-editorial__field"><span>المرجع المالي</span><div><i class="bi bi-upc-scan"></i><input type="text" maxlength="80" name="ReferenceNumber" value="@filter.ReferenceNumber" /></div></label>
                 }
 
                 <label class="ofir-editorial__field is-page-size">
                     <span>عدد النتائج</span>
                     <div class="is-select">
-                        <i class="bi bi-list-ol"></i>
-                        <select name="PageSize">
+                        <i class="bi bi-list-ol"></i><select name="PageSize">
                             <option value="10" selected="@(pageModel.PageSize == 10 ? "selected" : null)">10</option>
                             <option value="25" selected="@(pageModel.PageSize == 25 ? "selected" : null)">25</option>
                             <option value="50" selected="@(pageModel.PageSize == 50 ? "selected" : null)">50</option>
@@ -502,10 +457,7 @@
             </div>
 
             <footer class="ofir-editorial__advanced-footer">
-                <button type="button" data-ofir-clear-filters>
-                    <i class="bi bi-eraser"></i>
-                    مسح الفلاتر
-                </button>
+                <button type="button" data-ofir-clear-filters><i class="bi bi-eraser"></i>مسح الفلاتر</button>
             </footer>
         </details>
     </form>
@@ -516,31 +468,12 @@
             var tone = metric.Tone?.Trim().ToLowerInvariant() ?? "neutral";
             <article class="ofir-editorial__kpi is-@tone">
                 <div class="ofir-editorial__kpi-icon" aria-hidden="true">
-                    @if (tone == "success")
-                    {
-                        <i class="bi bi-graph-up-arrow"></i>
-                    }
-                    else if (tone == "warning")
-                    {
-                        <i class="bi bi-exclamation-circle"></i>
-                    }
-                    else if (tone == "primary")
-                    {
-                        <i class="bi bi-stars"></i>
-                    }
-                    else
-                    {
-                        <i class="bi bi-bar-chart-line"></i>
-                    }
+                    <i class="bi @(tone == "success" ? "bi-graph-up-arrow" : tone == "warning" ? "bi-exclamation-circle" : tone == "primary" ? "bi-stars" : "bi-bar-chart-line")"></i>
                 </div>
-                <div>
-                    <small>@metric.Label</small>
-                    <strong>@metric.Value</strong>
-                    @if (!string.IsNullOrWhiteSpace(metric.Hint))
+                <div><small>@metric.Label</small><strong>@metric.Value</strong>@if (!string.IsNullOrWhiteSpace(metric.Hint))
                     {
                         <span>@metric.Hint</span>
-                    }
-                </div>
+                    }</div>
             </article>
         }
     </section>
@@ -550,30 +483,14 @@
         <section class="ofir-editorial__reconciliation @(reconciliation.IsBalanced ? "is-balanced" : "has-issues")">
             <div class="ofir-editorial__reconciliation-state">
                 <span><i class="bi @(reconciliation.IsBalanced ? "bi-shield-check" : "bi-exclamation-triangle")"></i></span>
-                <div>
-                    <small>سلامة المطابقة المالية</small>
-                    <strong>@reconciliation.StatusLabel</strong>
-                </div>
+                <div><small>سلامة المطابقة المالية</small><strong>@reconciliation.StatusLabel</strong></div>
             </div>
-
             <div class="ofir-editorial__reconciliation-checks">
-                <span class="@(reconciliation.CollectionMismatchCount == 0 ? "is-ok" : "is-bad")">
-                    <i class="bi @(reconciliation.CollectionMismatchCount == 0 ? "bi-check2" : "bi-x-lg")"></i>
-                    التحصيل
-                </span>
-                <span class="@(reconciliation.RefundFundingMismatchCount == 0 ? "is-ok" : "is-bad")">
-                    <i class="bi @(reconciliation.RefundFundingMismatchCount == 0 ? "bi-check2" : "bi-x-lg")"></i>
-                    الاستردادات
-                </span>
-                <span class="@(reconciliation.PriceMismatchCount == 0 ? "is-ok" : "is-bad")">
-                    <i class="bi @(reconciliation.PriceMismatchCount == 0 ? "bi-check2" : "bi-x-lg")"></i>
-                    السعر والخصم
-                </span>
+                <span class="@(reconciliation.CollectionMismatchCount == 0 ? "is-ok" : "is-bad")"><i class="bi @(reconciliation.CollectionMismatchCount == 0 ? "bi-check2" : "bi-x-lg")"></i>التحصيل</span>
+                <span class="@(reconciliation.RefundFundingMismatchCount == 0 ? "is-ok" : "is-bad")"><i class="bi @(reconciliation.RefundFundingMismatchCount == 0 ? "bi-check2" : "bi-x-lg")"></i>الاستردادات</span>
+                <span class="@(reconciliation.PriceMismatchCount == 0 ? "is-ok" : "is-bad")"><i class="bi @(reconciliation.PriceMismatchCount == 0 ? "bi-check2" : "bi-x-lg")"></i>السعر والخصم</span>
             </div>
-
-            <small class="ofir-editorial__reconciliation-count">
-                @Number(reconciliation.CheckedRecords) سجل تم فحصه
-            </small>
+            <small class="ofir-editorial__reconciliation-count">@Number(reconciliation.CheckedRecords) سجل تم فحصه</small>
         </section>
     }
 
@@ -584,19 +501,16 @@
                 <div>
                     <small>النتائج التفصيلية</small>
                     <h3>@pageModel.ReportTitle</h3>
-                    <p>
-                        @if (pageModel.TotalCount > 0)
+                    <p>@if (pageModel.TotalCount > 0)
                         {
                             <text>عرض @pageModel.FirstItemNumber–@pageModel.LastItemNumber من @Number(pageModel.TotalCount)</text>
                         }
                         else
                         {
                             <text>لا توجد سجلات ضمن الفلاتر الحالية</text>
-                        }
-                    </p>
+                        }</p>
                 </div>
             </div>
-
             @if (totalPages > 0)
             {
                 <span class="ofir-editorial__page-label">صفحة @currentPage من @totalPages</span>
@@ -605,11 +519,7 @@
 
         @if (!pageModel.HasRows)
         {
-            <div class="ofir-editorial__empty">
-                <span><i class="bi bi-inbox"></i></span>
-                <h4>لا توجد نتائج مطابقة</h4>
-                <p>جرّب توسيع الفترة أو مسح بعض الفلاتر.</p>
-            </div>
+            <div class="ofir-editorial__empty"><span><i class="bi bi-inbox"></i></span><h4>لا توجد نتائج مطابقة</h4><p>جرّب توسيع الفترة أو مسح بعض الفلاتر.</p></div>
         }
         else if (isDocuments)
         {
@@ -624,37 +534,19 @@
                     <article class="ofir-editorial__document-card">
                         <header>
                             <span class="ofir-editorial__document-icon"><i class="bi @DocumentIcon(document.DocumentType)"></i></span>
-                            <div>
-                                <small>@document.DocumentTypeLabel</small>
-                                <strong dir="ltr">@document.DocumentNumber</strong>
-                            </div>
+                            <div><small>@document.DocumentTypeLabel</small><strong dir="ltr">@document.DocumentNumber</strong></div>
                             <span class="ofir-editorial__status @StatusClass(document.RecordStatus)">@document.RecordStatusLabel</span>
                         </header>
-
-                        <div class="ofir-editorial__document-amount">
-                            <small>قيمة المستند</small>
-                            <strong>@Money(document.PrimaryAmount)</strong>
-                        </div>
-
+                        <div class="ofir-editorial__document-amount"><small>قيمة المستند</small><strong>@Money(document.PrimaryAmount)</strong></div>
                         <dl>
                             <div><dt>العميل</dt><dd>@document.CustomerName</dd></div>
                             <div><dt>المنشأة</dt><dd>@document.PlaceName</dd></div>
                             <div><dt>التاريخ</dt><dd>@DateText(document.DocumentDate)</dd></div>
                             <div><dt>الحجز</dt><dd>@(document.BookingId.HasValue ? "#" + document.BookingId.Value : "—")</dd></div>
                         </dl>
-
                         <footer>
-                            <button type="button"
-                            data-ofir-open-document
-                            data-document-url="@documentUrl"
-                            data-document-title="@document.DocumentTypeLabel">
-                                <i class="bi bi-eye"></i>
-                                معاينة
-                            </button>
-                            <a href="@documentUrl" target="_blank" rel="noopener">
-                                <i class="bi bi-printer"></i>
-                                طباعة
-                            </a>
+                            <button type="button" data-ofir-open-document data-document-url="@documentUrl" data-document-title="@document.DocumentTypeLabel"><i class="bi bi-eye"></i>معاينة</button>
+                            <a href="@documentUrl" target="_blank" rel="noopener"><i class="bi bi-printer"></i>طباعة</a>
                         </footer>
                     </article>
                 }
@@ -802,25 +694,14 @@
         @if (totalPages > 1)
         {
             <nav class="ofir-editorial__pagination" aria-label="صفحات التقرير">
-                <button type="button" data-ofir-page="@(currentPage - 1)" disabled="@(currentPage <= 1 ? "disabled" : null)">
-                    <i class="bi bi-chevron-right"></i><span>السابق</span>
-                </button>
-
+                <button type="button" data-ofir-page="@(currentPage - 1)" disabled="@(currentPage <= 1 ? "disabled" : null)"><i class="bi bi-chevron-right"></i><span>السابق</span></button>
                 <div>
                     @for (var pageNumber = firstPage; pageNumber <= lastPage; pageNumber++)
                     {
-                        <button type="button"
-                        data-ofir-page="@pageNumber"
-                        class="@(pageNumber == currentPage ? "is-active" : string.Empty)"
-                        aria-current="@(pageNumber == currentPage ? "page" : null)">
-                            @pageNumber
-                        </button>
+                        <button type="button" data-ofir-page="@pageNumber" class="@(pageNumber == currentPage ? "is-active" : string.Empty)" aria-current="@(pageNumber == currentPage ? "page" : null)">@pageNumber</button>
                     }
                 </div>
-
-                <button type="button" data-ofir-page="@(currentPage + 1)" disabled="@(currentPage >= totalPages ? "disabled" : null)">
-                    <span>التالي</span><i class="bi bi-chevron-left"></i>
-                </button>
+                <button type="button" data-ofir-page="@(currentPage + 1)" disabled="@(currentPage >= totalPages ? "disabled" : null)"><span>التالي</span><i class="bi bi-chevron-left"></i></button>
             </nav>
         }
     </section>
@@ -828,27 +709,15 @@
     <dialog class="ofir-editorial__dialog" data-ofir-document-dialog aria-labelledby="ownerFinancialDocumentPreviewTitle">
         <div class="ofir-editorial__dialog-shell">
             <header>
-                <div>
-                    <span><i class="bi bi-file-earmark-check"></i></span>
-                    <div>
-                        <small>معاينة المستند</small>
-                        <h3 id="ownerFinancialDocumentPreviewTitle">المستند المالي</h3>
-                    </div>
-                </div>
+                <div><span><i class="bi bi-file-earmark-check"></i></span><div><small>معاينة المستند</small><h3 id="ownerFinancialDocumentPreviewTitle">المستند المالي</h3></div></div>
                 <button type="button" data-ofir-close-dialog aria-label="إغلاق"><i class="bi bi-x-lg"></i></button>
             </header>
-
             <div class="ofir-editorial__frame-wrap">
-                <div class="ofir-editorial__frame-loading" data-ofir-frame-loading>
-                    <span></span><p>جارٍ تجهيز المستند…</p>
-                </div>
+                <div class="ofir-editorial__frame-loading" data-ofir-frame-loading><span></span><p>جارٍ تجهيز المستند…</p></div>
                 <iframe title="معاينة المستند المالي" data-ofir-document-frame></iframe>
             </div>
-
             <footer>
-                <a href="#" target="_blank" rel="noopener" data-ofir-open-document-new-tab>
-                    <i class="bi bi-box-arrow-up-left"></i>فتح في نافذة مستقلة
-                </a>
+                <a href="#" target="_blank" rel="noopener" data-ofir-open-document-new-tab><i class="bi bi-box-arrow-up-left"></i>فتح في نافذة مستقلة</a>
                 <button type="button" data-ofir-close-dialog>إغلاق</button>
             </footer>
         </div>

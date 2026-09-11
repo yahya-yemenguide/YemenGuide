@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Linq;
+using Microsoft.EntityFrameworkCore;
 using YemenGuide.Data;
 using YemenGuide.Web.Services.ExchangeRates;
 
@@ -23,6 +24,15 @@ namespace YemenGuide.Web.Services
         private const decimal DefaultAdenSarRate = 500m;
 
         private readonly AppDbContext _context;
+
+        // الخدمة Scoped، لذلك يكفي تحميل أسعار النظام مرة واحدة داخل الطلب.
+        // هذا يمنع استعلام SystemSettings من التكرر عشرات المرات عند تحويل
+        // جدول مالي كامل للمالك.
+        private bool _ratesLoaded;
+        private decimal _sanaaUsdRate;
+        private decimal _sanaaSarRate;
+        private decimal _adenUsdRate;
+        private decimal _adenSarRate;
 
         public CurrencyService(AppDbContext context)
         {
@@ -97,6 +107,10 @@ namespace YemenGuide.Web.Services
         /// <summary>
         /// يرجع القيمة الرقمية بعد التحويل بحسب السوق.
         /// YER -> العملة المطلوبة.
+        ///
+        /// ملاحظة مالية مهمة: عند بقاء العملة YER نحافظ على خانتين عشريتين
+        /// في القيمة الرقمية ولا نقربها إلى عدد صحيح. التقريب إلى N0 إن أريد
+        /// يكون في التنسيق البصري فقط، حتى لا نفقد كسورًا محاسبية داخل DTOs.
         /// </summary>
         public decimal ConvertAmount(
             decimal priceInYer,
@@ -110,34 +124,24 @@ namespace YemenGuide.Web.Services
             if (string.IsNullOrWhiteSpace(currency) ||
                 currency == CurrencyDisplayService.YemeniRial)
             {
-                return Math.Round(
-                    priceInYer,
-                    0,
-                    MidpointRounding.AwayFromZero);
+                return RoundMoney(priceInYer);
             }
 
             var rates = GetRates(exchangeRateRegion);
 
             if (currency == CurrencyDisplayService.UsDollar)
             {
-                return Math.Round(
-                    priceInYer / rates.UsdRate,
-                    2,
-                    MidpointRounding.AwayFromZero);
+                return RoundMoney(
+                    priceInYer / rates.UsdRate);
             }
 
             if (currency == CurrencyDisplayService.SaudiRiyal)
             {
-                return Math.Round(
-                    priceInYer / rates.SarRate,
-                    2,
-                    MidpointRounding.AwayFromZero);
+                return RoundMoney(
+                    priceInYer / rates.SarRate);
             }
 
-            return Math.Round(
-                priceInYer,
-                0,
-                MidpointRounding.AwayFromZero);
+            return RoundMoney(priceInYer);
         }
 
         /// <summary>
@@ -185,34 +189,24 @@ namespace YemenGuide.Web.Services
             if (string.IsNullOrWhiteSpace(currency) ||
                 currency == CurrencyDisplayService.YemeniRial)
             {
-                return Math.Round(
-                    amountInSourceCurrency,
-                    0,
-                    MidpointRounding.AwayFromZero);
+                return RoundMoney(amountInSourceCurrency);
             }
 
             var rates = GetRates(exchangeRateRegion);
 
             if (currency == CurrencyDisplayService.UsDollar)
             {
-                return Math.Round(
-                    amountInSourceCurrency * rates.UsdRate,
-                    2,
-                    MidpointRounding.AwayFromZero);
+                return RoundMoney(
+                    amountInSourceCurrency * rates.UsdRate);
             }
 
             if (currency == CurrencyDisplayService.SaudiRiyal)
             {
-                return Math.Round(
-                    amountInSourceCurrency * rates.SarRate,
-                    2,
-                    MidpointRounding.AwayFromZero);
+                return RoundMoney(
+                    amountInSourceCurrency * rates.SarRate);
             }
 
-            return Math.Round(
-                amountInSourceCurrency,
-                0,
-                MidpointRounding.AwayFromZero);
+            return RoundMoney(amountInSourceCurrency);
         }
 
         /// <summary>
@@ -236,7 +230,7 @@ namespace YemenGuide.Web.Services
                 return $"{convertedAmount:N2} ر.س";
             }
 
-            return $"{Math.Round(convertedAmount, 0):N0} ر.ي";
+            return $"{Math.Round(convertedAmount, 0, MidpointRounding.AwayFromZero):N0} ر.ي";
         }
 
         private string? GetRegionByCityId(int cityId)
@@ -255,42 +249,70 @@ namespace YemenGuide.Web.Services
         private (decimal UsdRate, decimal SarRate) GetRates(
             string? exchangeRateRegion)
         {
-            var settings =
-                _context.SystemSettings
-                    .OrderBy(setting => setting.Id)
-                    .FirstOrDefault();
+            EnsureRatesLoaded();
 
             bool useAdenMarket =
                 string.Equals(
-                    exchangeRateRegion,
+                    exchangeRateRegion?.Trim(),
                     ExchangeRateRegionResolver.AdenMarket,
                     StringComparison.OrdinalIgnoreCase);
 
-            decimal usdRate =
-                useAdenMarket
-                    ? settings?.AdenUsdRate ?? DefaultAdenUsdRate
-                    : settings?.SanaaUsdRate ?? DefaultSanaaUsdRate;
+            return useAdenMarket
+                ? (_adenUsdRate, _adenSarRate)
+                : (_sanaaUsdRate, _sanaaSarRate);
+        }
 
-            decimal sarRate =
-                useAdenMarket
-                    ? settings?.AdenSarRate ?? DefaultAdenSarRate
-                    : settings?.SanaaSarRate ?? DefaultSanaaSarRate;
-
-            if (usdRate <= 0)
+        private void EnsureRatesLoaded()
+        {
+            if (_ratesLoaded)
             {
-                usdRate = useAdenMarket
-                    ? DefaultAdenUsdRate
-                    : DefaultSanaaUsdRate;
+                return;
             }
 
-            if (sarRate <= 0)
-            {
-                sarRate = useAdenMarket
-                    ? DefaultAdenSarRate
-                    : DefaultSanaaSarRate;
-            }
+            var settings =
+                _context.SystemSettings
+                    .AsNoTracking()
+                    .OrderBy(setting => setting.Id)
+                    .Select(setting => new
+                    {
+                        setting.SanaaUsdRate,
+                        setting.SanaaSarRate,
+                        setting.AdenUsdRate,
+                        setting.AdenSarRate
+                    })
+                    .FirstOrDefault();
 
-            return (usdRate, sarRate);
+            _sanaaUsdRate = PositiveOrDefault(
+                settings?.SanaaUsdRate,
+                DefaultSanaaUsdRate);
+            _sanaaSarRate = PositiveOrDefault(
+                settings?.SanaaSarRate,
+                DefaultSanaaSarRate);
+            _adenUsdRate = PositiveOrDefault(
+                settings?.AdenUsdRate,
+                DefaultAdenUsdRate);
+            _adenSarRate = PositiveOrDefault(
+                settings?.AdenSarRate,
+                DefaultAdenSarRate);
+
+            _ratesLoaded = true;
+        }
+
+        private static decimal PositiveOrDefault(
+            decimal? value,
+            decimal fallback)
+        {
+            return value.HasValue && value.Value > 0m
+                ? value.Value
+                : fallback;
+        }
+
+        private static decimal RoundMoney(decimal value)
+        {
+            return Math.Round(
+                value,
+                2,
+                MidpointRounding.AwayFromZero);
         }
     }
 }

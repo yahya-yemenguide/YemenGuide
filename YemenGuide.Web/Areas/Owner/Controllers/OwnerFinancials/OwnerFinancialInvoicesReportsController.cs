@@ -22,52 +22,27 @@ namespace YemenGuide.Web.Areas.Owner.Controllers.OwnerFinancials
     [ResponseCache(
         NoStore = true,
         Location = ResponseCacheLocation.None)]
-    public sealed class OwnerFinancialInvoicesReportsController
-        : Controller
+    public sealed class OwnerFinancialInvoicesReportsController : Controller
     {
         private const string PartialViewPath =
-            "~/Areas/Owner/Views/OwnerFinancials/" +
-            "_OwnerFinancialInvoicesReports.cshtml";
+            "~/Areas/Owner/Views/OwnerFinancials/_OwnerFinancialInvoicesReports.cshtml";
 
         private const string DocumentPrintViewPath =
-            "~/Areas/Owner/Views/OwnerFinancials/" +
-            "OwnerFinancialDocumentPrint.cshtml";
+            "~/Areas/Owner/Views/OwnerFinancials/OwnerFinancialDocumentPrint.cshtml";
 
         private const string ReportPrintViewPath =
-            "~/Areas/Owner/Views/OwnerFinancials/" +
-            "OwnerFinancialReportPrint.cshtml";
+            "~/Areas/Owner/Views/OwnerFinancials/OwnerFinancialReportPrint.cshtml";
 
-        private readonly IOwnerFinancialService
-            _ownerFinancialService;
-
-        private readonly ICommissionFinanceService
-            _commissionFinanceService;
-
-        private readonly ILogger<
-            OwnerFinancialInvoicesReportsController
-        > _logger;
+        private readonly IOwnerFinancialService _ownerFinancialService;
+        private readonly ILogger<OwnerFinancialInvoicesReportsController> _logger;
 
         public OwnerFinancialInvoicesReportsController(
             IOwnerFinancialService ownerFinancialService,
-            ICommissionFinanceService commissionFinanceService,
-            ILogger<
-                OwnerFinancialInvoicesReportsController
-            > logger)
+            ILogger<OwnerFinancialInvoicesReportsController> logger)
         {
-            _ownerFinancialService =
-                ownerFinancialService ??
-                throw new ArgumentNullException(
-                    nameof(ownerFinancialService));
-
-            _commissionFinanceService =
-                commissionFinanceService ??
-                throw new ArgumentNullException(
-                    nameof(commissionFinanceService));
-
-            _logger =
-                logger ??
-                throw new ArgumentNullException(
-                    nameof(logger));
+            _ownerFinancialService = ownerFinancialService ??
+                throw new ArgumentNullException(nameof(ownerFinancialService));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
         [HttpGet("")]
@@ -76,51 +51,34 @@ namespace YemenGuide.Web.Areas.Owner.Controllers.OwnerFinancials
             [FromQuery] FinancialReportFilterDto? filter,
             CancellationToken cancellationToken = default)
         {
-            filter ??=
-                new FinancialReportFilterDto();
-
-            NormalizeFilter(
-                filter);
-
-            filter.ExportFormat =
-                OwnerFinancialExportFormats.View;
+            filter ??= new FinancialReportFilterDto();
+            NormalizeFilter(filter);
+            filter.ExportFormat = OwnerFinancialExportFormats.View;
 
             if (!IsAjaxRequest())
             {
-                return Redirect(
-                    BuildFinancialPageUrl(
-                        filter));
+                return Redirect(BuildFinancialPageUrl(filter));
             }
 
-            if (!TryGetCurrentOwnerId(
-                    out var ownerId))
+            if (!TryGetCurrentOwnerId(out var ownerId))
             {
-                return Unauthorized(
-                    "تعذر تحديد حساب المالك الحالي.");
+                return Unauthorized("تعذر تحديد حساب المالك الحالي.");
             }
 
             try
             {
-                filter.PlaceId =
-                    await ResolveActivePlaceIdAsync(
-                        ownerId,
-                        cancellationToken);
+                filter.PlaceId = await ResolveActivePlaceIdAsync(
+                    ownerId,
+                    cancellationToken);
 
-                var model =
-                    await _ownerFinancialService
-                        .GetReportsAsync(
-                            ownerId,
-                            filter,
-                            cancellationToken);
+                var model = await _ownerFinancialService.GetReportsAsync(
+                    ownerId,
+                    filter,
+                    cancellationToken);
 
-                return PartialView(
-                    PartialViewPath,
-                    model);
+                return PartialView(PartialViewPath, model);
             }
-            catch (OperationCanceledException)
-                when (
-                    cancellationToken
-                        .IsCancellationRequested)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
                 return new EmptyResult();
             }
@@ -128,14 +86,12 @@ namespace YemenGuide.Web.Areas.Owner.Controllers.OwnerFinancials
             {
                 _logger.LogError(
                     exception,
-                    "تعذر تحميل الفواتير والتقارير " +
-                    "للمالك {OwnerId} ونوع التقرير {ReportType}.",
+                    "تعذر تحميل الفواتير والتقارير للمالك {OwnerId} ونوع التقرير {ReportType}.",
                     ownerId,
                     filter.ReportType);
 
                 return StatusCode(
-                    StatusCodes
-                        .Status500InternalServerError,
+                    StatusCodes.Status500InternalServerError,
                     "تعذر تحميل الفواتير والتقارير حاليًا.");
             }
         }
@@ -146,74 +102,52 @@ namespace YemenGuide.Web.Areas.Owner.Controllers.OwnerFinancials
             [FromQuery] int sourceId,
             CancellationToken cancellationToken = default)
         {
-            if (!TryGetCurrentOwnerId(
-                    out var ownerId))
+            if (!TryGetCurrentOwnerId(out var ownerId))
             {
                 return Unauthorized();
             }
 
-            documentType =
-                NormalizeText(
-                    documentType);
+            documentType = NormalizeText(documentType);
 
-            if (
-                string.IsNullOrWhiteSpace(
-                    documentType) ||
+            if (string.IsNullOrWhiteSpace(documentType) ||
                 sourceId <= 0 ||
-                !OwnerFinancialDocumentTypes.All
-                    .Any(value =>
-                        string.Equals(
-                            value,
-                            documentType,
-                            StringComparison.OrdinalIgnoreCase))
-            )
+                !OwnerFinancialDocumentTypes.All.Any(value =>
+                    string.Equals(
+                        value,
+                        documentType,
+                        StringComparison.OrdinalIgnoreCase)))
             {
-                return BadRequest(
-                    "بيانات المستند المالي غير صحيحة.");
+                return BadRequest("بيانات المستند المالي غير صحيحة.");
             }
 
             try
             {
-                var activePlaceId =
-                    await ResolveActivePlaceIdAsync(
-                        ownerId,
-                        cancellationToken);
+                var activePlaceId = await ResolveActivePlaceIdAsync(
+                    ownerId,
+                    cancellationToken);
 
                 if (!activePlaceId.HasValue)
                 {
-                    return NotFound(
-                        "لا توجد منشأة محددة لعرض المستند.");
+                    return NotFound("لا توجد منشأة محددة لعرض المستند.");
                 }
 
-                var document =
-                    await _commissionFinanceService
-                        .GetFinancialDocumentAsync(
-                            ownerId,
-                            documentType,
-                            sourceId,
-                            cancellationToken);
+                // مهم: نمر عبر OwnerFinancialService حتى تكون الطباعة بنفس
+                // عملة البروفايل وبنفس تحويل الشاشة، لا بالقيم الخام YER.
+                var document = await _ownerFinancialService.GetFinancialDocumentAsync(
+                    ownerId,
+                    documentType,
+                    sourceId,
+                    cancellationToken);
 
-                if (
-                    document == null ||
-                    document.PlaceId !=
-                    activePlaceId.Value
-                )
+                if (document == null || document.PlaceId != activePlaceId.Value)
                 {
-                    return NotFound(
-                        "المستند غير موجود أو لا تملك صلاحية عرضه.");
+                    return NotFound("المستند غير موجود أو لا تملك صلاحية عرضه.");
                 }
 
-                ViewData["Title"] =
-                    document.Title;
-
-                return View(
-                    DocumentPrintViewPath,
-                    document);
+                ViewData["Title"] = document.Title;
+                return View(DocumentPrintViewPath, document);
             }
-            catch (OperationCanceledException)
-                when (
-                    cancellationToken
-                        .IsCancellationRequested)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
                 return new EmptyResult();
             }
@@ -221,15 +155,13 @@ namespace YemenGuide.Web.Areas.Owner.Controllers.OwnerFinancials
             {
                 _logger.LogError(
                     exception,
-                    "تعذر فتح المستند {DocumentType} " +
-                    "للمصدر {SourceId} والمالك {OwnerId}.",
+                    "تعذر فتح المستند {DocumentType} للمصدر {SourceId} والمالك {OwnerId}.",
                     documentType,
                     sourceId,
                     ownerId);
 
                 return StatusCode(
-                    StatusCodes
-                        .Status500InternalServerError,
+                    StatusCodes.Status500InternalServerError,
                     "تعذر فتح المستند المالي حاليًا.");
             }
         }
@@ -239,46 +171,31 @@ namespace YemenGuide.Web.Areas.Owner.Controllers.OwnerFinancials
             [FromQuery] FinancialReportFilterDto? filter,
             CancellationToken cancellationToken = default)
         {
-            filter ??=
-                new FinancialReportFilterDto();
+            filter ??= new FinancialReportFilterDto();
+            NormalizeFilter(filter);
+            filter.ExportFormat = OwnerFinancialExportFormats.Print;
 
-            NormalizeFilter(
-                filter);
-
-            filter.ExportFormat =
-                OwnerFinancialExportFormats.Print;
-
-            if (!TryGetCurrentOwnerId(
-                    out var ownerId))
+            if (!TryGetCurrentOwnerId(out var ownerId))
             {
                 return Unauthorized();
             }
 
             try
             {
-                filter.PlaceId =
-                    await ResolveActivePlaceIdAsync(
-                        ownerId,
-                        cancellationToken);
+                filter.PlaceId = await ResolveActivePlaceIdAsync(
+                    ownerId,
+                    cancellationToken);
 
-                var report =
-                    await _commissionFinanceService
-                        .BuildFinancialReportExportAsync(
-                            ownerId,
-                            filter,
-                            cancellationToken);
+                // نفس مسار التحويل المستخدم في الشاشة وExcel.
+                var report = await _ownerFinancialService.BuildFinancialReportExportAsync(
+                    ownerId,
+                    filter,
+                    cancellationToken);
 
-                ViewData["Title"] =
-                    report.Title;
-
-                return View(
-                    ReportPrintViewPath,
-                    report);
+                ViewData["Title"] = report.Title;
+                return View(ReportPrintViewPath, report);
             }
-            catch (OperationCanceledException)
-                when (
-                    cancellationToken
-                        .IsCancellationRequested)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
                 return new EmptyResult();
             }
@@ -286,297 +203,191 @@ namespace YemenGuide.Web.Areas.Owner.Controllers.OwnerFinancials
             {
                 _logger.LogError(
                     exception,
-                    "تعذر تجهيز التقرير المطبوع " +
-                    "للمالك {OwnerId} ونوع التقرير {ReportType}.",
+                    "تعذر تجهيز التقرير المطبوع للمالك {OwnerId} ونوع التقرير {ReportType}.",
                     ownerId,
                     filter.ReportType);
 
                 return StatusCode(
-                    StatusCodes
-                        .Status500InternalServerError,
+                    StatusCodes.Status500InternalServerError,
                     "تعذر تجهيز التقرير للطباعة حاليًا.");
             }
         }
 
-        private void NormalizeFilter(
-            FinancialReportFilterDto filter)
+        [HttpGet("Excel")]
+        public async Task<IActionResult> ExportExcel(
+            [FromQuery] FinancialReportFilterDto? filter,
+            CancellationToken cancellationToken = default)
         {
-            NormalizeDateRange(
-                filter);
+            filter ??= new FinancialReportFilterDto();
+            NormalizeFilter(filter);
+            filter.ExportFormat = OwnerFinancialExportFormats.Excel;
+
+            if (!TryGetCurrentOwnerId(out var ownerId))
+            {
+                return Unauthorized();
+            }
+
+            try
+            {
+                filter.PlaceId = await ResolveActivePlaceIdAsync(
+                    ownerId,
+                    cancellationToken);
+
+                var excel = await _ownerFinancialService.BuildFinancialExcelAsync(
+                    ownerId,
+                    filter,
+                    cancellationToken);
+
+                if (excel.Content == null || excel.Content.Length == 0)
+                {
+                    return StatusCode(
+                        StatusCodes.Status500InternalServerError,
+                        "تعذر إنشاء ملف Excel حاليًا.");
+                }
+
+                return File(
+                    excel.Content,
+                    excel.ContentType,
+                    excel.FileName);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                return new EmptyResult();
+            }
+            catch (Exception exception)
+            {
+                _logger.LogError(
+                    exception,
+                    "تعذر تصدير Excel للمالك {OwnerId} ونوع التقرير {ReportType}.",
+                    ownerId,
+                    filter.ReportType);
+
+                return StatusCode(
+                    StatusCodes.Status500InternalServerError,
+                    "تعذر تجهيز ملف Excel حاليًا.");
+            }
+        }
+
+        private void NormalizeFilter(FinancialReportFilterDto filter)
+        {
+            NormalizeDateRange(filter);
 
             filter.ReportType =
-                NormalizeText(
-                    filter.ReportType)
-                ??
+                NormalizeText(filter.ReportType) ??
                 OwnerFinancialReportTypes.Comprehensive;
 
-            filter.DocumentType =
-                NormalizeText(
-                    filter.DocumentType);
+            filter.DocumentType = NormalizeText(filter.DocumentType);
+            filter.DateScope = NormalizeText(filter.DateScope);
+            filter.PaymentChannel = NormalizeText(filter.PaymentChannel);
+            filter.BookingState = NormalizeText(filter.BookingState);
+            filter.PaymentStatus = NormalizeText(filter.PaymentStatus);
+            filter.CommissionStatus = NormalizeText(filter.CommissionStatus);
+            filter.RefundStatus = NormalizeText(filter.RefundStatus);
+            filter.TransactionType = NormalizeText(filter.TransactionType);
+            filter.TransactionStatus = NormalizeText(filter.TransactionStatus);
+            filter.ReferenceNumber = NormalizeText(filter.ReferenceNumber);
+            filter.Search = NormalizeText(filter.Search);
+            filter.PageNumber = Math.Max(1, filter.PageNumber);
 
-            filter.DateScope =
-                NormalizeText(
-                    filter.DateScope);
-
-            filter.PaymentChannel =
-                NormalizeText(
-                    filter.PaymentChannel);
-
-            filter.BookingState =
-                NormalizeText(
-                    filter.BookingState);
-
-            filter.PaymentStatus =
-                NormalizeText(
-                    filter.PaymentStatus);
-
-            filter.CommissionStatus =
-                NormalizeText(
-                    filter.CommissionStatus);
-
-            filter.RefundStatus =
-                NormalizeText(
-                    filter.RefundStatus);
-
-            filter.TransactionType =
-                NormalizeText(
-                    filter.TransactionType);
-
-            filter.TransactionStatus =
-                NormalizeText(
-                    filter.TransactionStatus);
-
-            filter.ReferenceNumber =
-                NormalizeText(
-                    filter.ReferenceNumber);
-
-            filter.Search =
-                NormalizeText(
-                    filter.Search);
-
-            filter.PageNumber =
-                Math.Max(
-                    1,
-                    filter.PageNumber);
-
-            if (
-                filter.PageSize != 10 &&
+            if (filter.PageSize != 10 &&
                 filter.PageSize != 25 &&
-                filter.PageSize != 50
-            )
+                filter.PageSize != 50)
             {
                 filter.PageSize = 25;
             }
         }
 
-        private void NormalizeDateRange(
-            FinancialReportFilterDto filter)
+        private void NormalizeDateRange(FinancialReportFilterDto filter)
         {
-            if (
-                !filter.FromDate.HasValue ||
+            if (!filter.FromDate.HasValue ||
                 !filter.ToDate.HasValue ||
-                filter.FromDate.Value.Date <=
-                filter.ToDate.Value.Date
-            )
+                filter.FromDate.Value.Date <= filter.ToDate.Value.Date)
             {
                 return;
             }
 
-            var temporaryDate =
-                filter.FromDate;
+            var temporaryDate = filter.FromDate;
+            filter.FromDate = filter.ToDate;
+            filter.ToDate = temporaryDate;
 
-            filter.FromDate =
-                filter.ToDate;
-
-            filter.ToDate =
-                temporaryDate;
-
-            ModelState.Remove(
-                nameof(
-                    FinancialReportFilterDto
-                        .FromDate));
-
-            ModelState.Remove(
-                nameof(
-                    FinancialReportFilterDto
-                        .ToDate));
+            ModelState.Remove(nameof(FinancialReportFilterDto.FromDate));
+            ModelState.Remove(nameof(FinancialReportFilterDto.ToDate));
         }
 
-        private static string? NormalizeText(
-            string? value)
+        private static string? NormalizeText(string? value)
         {
-            return string.IsNullOrWhiteSpace(
-                    value)
+            return string.IsNullOrWhiteSpace(value)
                 ? null
                 : value.Trim();
         }
 
-        private static string BuildFinancialPageUrl(
-            FinancialReportFilterDto filter)
+        private static string BuildFinancialPageUrl(FinancialReportFilterDto filter)
         {
-            var values =
-                BuildFilterQueryValues(
-                    filter);
-
+            var values = BuildFilterQueryValues(filter);
             values.Insert(
                 0,
-                new KeyValuePair<
-                    string,
-                    string?>(
-                    "financeTab",
-                    "reports"));
+                new KeyValuePair<string, string?>("financeTab", "reports"));
 
-            return
-                "/Owner/Financials" +
-                QueryString
-                    .Create(values)
-                    .ToUriComponent();
+            return "/Owner/Financials" +
+                QueryString.Create(values).ToUriComponent();
         }
 
-        private static List<
-            KeyValuePair<
-                string,
-                string?>>
-            BuildFilterQueryValues(
-                FinancialReportFilterDto filter)
+        private static List<KeyValuePair<string, string?>> BuildFilterQueryValues(
+            FinancialReportFilterDto filter)
         {
-            var values =
-                new List<
-                    KeyValuePair<
-                        string,
-                        string?>>();
+            var values = new List<KeyValuePair<string, string?>>();
 
-            AddInteger(
-                values,
-                "BookingId",
-                filter.BookingId);
-
-            AddInteger(
-                values,
-                "CustomerId",
-                filter.CustomerId);
-
-            AddText(
-                values,
-                "ReportType",
-                filter.ReportType);
-
-            AddText(
-                values,
-                "DocumentType",
-                filter.DocumentType);
-
-            AddText(
-                values,
-                "DateScope",
-                filter.DateScope);
-
-            AddText(
-                values,
-                "PaymentChannel",
-                filter.PaymentChannel);
-
-            AddText(
-                values,
-                "BookingState",
-                filter.BookingState);
-
-            AddText(
-                values,
-                "PaymentStatus",
-                filter.PaymentStatus);
-
-            AddText(
-                values,
-                "CommissionStatus",
-                filter.CommissionStatus);
-
-            AddText(
-                values,
-                "RefundStatus",
-                filter.RefundStatus);
-
-            AddText(
-                values,
-                "TransactionType",
-                filter.TransactionType);
-
-            AddText(
-                values,
-                "TransactionStatus",
-                filter.TransactionStatus);
-
-            AddText(
-                values,
-                "ReferenceNumber",
-                filter.ReferenceNumber);
-
-            AddText(
-                values,
-                "Search",
-                filter.Search);
-
-            AddDate(
-                values,
-                "FromDate",
-                filter.FromDate);
-
-            AddDate(
-                values,
-                "ToDate",
-                filter.ToDate);
+            AddInteger(values, "BookingId", filter.BookingId);
+            AddInteger(values, "CustomerId", filter.CustomerId);
+            AddText(values, "ReportType", filter.ReportType);
+            AddText(values, "DocumentType", filter.DocumentType);
+            AddText(values, "DateScope", filter.DateScope);
+            AddText(values, "PaymentChannel", filter.PaymentChannel);
+            AddText(values, "BookingState", filter.BookingState);
+            AddText(values, "PaymentStatus", filter.PaymentStatus);
+            AddText(values, "CommissionStatus", filter.CommissionStatus);
+            AddText(values, "RefundStatus", filter.RefundStatus);
+            AddText(values, "TransactionType", filter.TransactionType);
+            AddText(values, "TransactionStatus", filter.TransactionStatus);
+            AddText(values, "ReferenceNumber", filter.ReferenceNumber);
+            AddText(values, "Search", filter.Search);
+            AddDate(values, "FromDate", filter.FromDate);
+            AddDate(values, "ToDate", filter.ToDate);
 
             if (filter.PageNumber > 1)
             {
-                values.Add(
-                    new(
-                        "PageNumber",
-                        filter.PageNumber
-                            .ToString(
-                                CultureInfo.InvariantCulture)));
+                values.Add(new(
+                    "PageNumber",
+                    filter.PageNumber.ToString(CultureInfo.InvariantCulture)));
             }
 
             if (filter.PageSize != 25)
             {
-                values.Add(
-                    new(
-                        "PageSize",
-                        filter.PageSize
-                            .ToString(
-                                CultureInfo.InvariantCulture)));
+                values.Add(new(
+                    "PageSize",
+                    filter.PageSize.ToString(CultureInfo.InvariantCulture)));
             }
 
             return values;
         }
 
         private static void AddInteger(
-            ICollection<
-                KeyValuePair<
-                    string,
-                    string?>> values,
+            ICollection<KeyValuePair<string, string?>> values,
             string key,
             int? value)
         {
-            if (
-                !value.HasValue ||
-                value.Value <= 0
-            )
+            if (!value.HasValue || value.Value <= 0)
             {
                 return;
             }
 
-            values.Add(
-                new(
-                    key,
-                    value.Value.ToString(
-                        CultureInfo.InvariantCulture)));
+            values.Add(new(
+                key,
+                value.Value.ToString(CultureInfo.InvariantCulture)));
         }
 
         private static void AddDate(
-            ICollection<
-                KeyValuePair<
-                    string,
-                    string?>> values,
+            ICollection<KeyValuePair<string, string?>> values,
             string key,
             DateTime? value)
         {
@@ -585,69 +396,51 @@ namespace YemenGuide.Web.Areas.Owner.Controllers.OwnerFinancials
                 return;
             }
 
-            values.Add(
-                new(
-                    key,
-                    value.Value.ToString(
-                        "yyyy-MM-dd",
-                        CultureInfo.InvariantCulture)));
+            values.Add(new(
+                key,
+                value.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)));
         }
 
         private static void AddText(
-            ICollection<
-                KeyValuePair<
-                    string,
-                    string?>> values,
+            ICollection<KeyValuePair<string, string?>> values,
             string key,
             string? value)
         {
-            if (string.IsNullOrWhiteSpace(
-                    value))
+            if (string.IsNullOrWhiteSpace(value))
             {
                 return;
             }
 
-            values.Add(
-                new(
-                    key,
-                    value.Trim()));
+            values.Add(new(key, value.Trim()));
         }
 
-        private Task<int?>
-            ResolveActivePlaceIdAsync(
-                int ownerId,
-                CancellationToken cancellationToken)
+        private Task<int?> ResolveActivePlaceIdAsync(
+            int ownerId,
+            CancellationToken cancellationToken)
         {
-            return _ownerFinancialService
-                .ResolveActivePlaceIdAsync(
-                    ownerId,
-                    null,
-                    GetCookiePlaceId(ownerId),
-                    cancellationToken);
+            return _ownerFinancialService.ResolveActivePlaceIdAsync(
+                ownerId,
+                null,
+                GetCookiePlaceId(ownerId),
+                cancellationToken);
         }
 
-        private int? GetCookiePlaceId(
-            int ownerId)
+        private int? GetCookiePlaceId(int ownerId)
         {
-            var cookieName =
-                $"ownerActivePlace_{ownerId}";
+            var cookieName = $"ownerActivePlace_{ownerId}";
 
-            return int.TryParse(
-                       Request.Cookies[cookieName],
-                       out var placeId) &&
+            return int.TryParse(Request.Cookies[cookieName], out var placeId) &&
                    placeId > 0
                 ? placeId
                 : null;
         }
 
-        private bool TryGetCurrentOwnerId(
-            out int ownerId)
+        private bool TryGetCurrentOwnerId(out int ownerId)
         {
             ownerId = 0;
 
             return int.TryParse(
-                       User.FindFirstValue(
-                           ClaimTypes.NameIdentifier),
+                       User.FindFirstValue(ClaimTypes.NameIdentifier),
                        NumberStyles.Integer,
                        CultureInfo.InvariantCulture,
                        out ownerId) &&
@@ -656,11 +449,9 @@ namespace YemenGuide.Web.Areas.Owner.Controllers.OwnerFinancials
 
         private bool IsAjaxRequest()
         {
-            if (
-                !Request.Headers.TryGetValue(
+            if (!Request.Headers.TryGetValue(
                     "X-Requested-With",
-                    out var requestedWith)
-            )
+                    out var requestedWith))
             {
                 return false;
             }
@@ -672,3 +463,4 @@ namespace YemenGuide.Web.Areas.Owner.Controllers.OwnerFinancials
         }
     }
 }
+ 

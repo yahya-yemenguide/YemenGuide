@@ -57,6 +57,22 @@ namespace YemenGuide.Web.Services.Finance
             FinancialReportFilterDto filter,
             CancellationToken cancellationToken = default);
 
+        Task<FinancialDocumentDetailsDto?> GetFinancialDocumentAsync(
+            int ownerId,
+            string documentType,
+            int sourceId,
+            CancellationToken cancellationToken = default);
+
+        Task<FinancialReportExportDto> BuildFinancialReportExportAsync(
+            int ownerId,
+            FinancialReportFilterDto filter,
+            CancellationToken cancellationToken = default);
+
+        Task<FinancialExcelFileDto> BuildFinancialExcelAsync(
+            int ownerId,
+            FinancialReportFilterDto filter,
+            CancellationToken cancellationToken = default);
+
         Task<FinanceOperationResult> SubmitTopUpAsync(
             int ownerId,
             TopUpRequestDto request,

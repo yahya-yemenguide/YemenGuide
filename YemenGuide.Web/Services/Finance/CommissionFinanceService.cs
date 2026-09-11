@@ -1496,7 +1496,6 @@ namespace YemenGuide.Web.Services.Finance
                 var completedRefund = Math.Min(
                     paid,
                     CompletedRefundFor(bookingId));
-
                 return Math.Round(
                     Math.Max(0m, paid - completedRefund),
                     2);
@@ -2200,6 +2199,13 @@ namespace YemenGuide.Web.Services.Finance
                     .ToListAsync(
                         cancellationToken);
 
+            var pageRefunds =
+                await LoadBookingRefundAggregatesAsync(
+                    bookings
+                        .Select(booking => booking.BookingId)
+                        .ToArray(),
+                    cancellationToken);
+
             /*
              * تحويل الحجوزات إلى DTO.
              */
@@ -2209,6 +2215,20 @@ namespace YemenGuide.Web.Services.Finance
                     {
                         var financial =
                             booking.FinancialRecord;
+
+                        pageRefunds.TryGetValue(
+                            booking.BookingId,
+                            out var refundAggregate);
+
+                        var netPaidOnline =
+                            GetNetOnlineCollectedAmount(
+                                booking,
+                                refundAggregate);
+
+                        var remainingCustomerLiability =
+                            GetRemainingCustomerLiability(
+                                booking,
+                                financial);
 
                         var roomName =
                             BuildRoomName(
@@ -2394,14 +2414,10 @@ namespace YemenGuide.Web.Services.Finance
                                 0m,
 
                             AmountPaidOnline =
-                                financial?
-                                    .AmountPaidOnline ??
-                                0m,
+                                netPaidOnline,
 
                             AmountToPayAtProperty =
-                                financial?
-                                    .AmountToPayAtProperty ??
-                                booking.TotalPrice,
+                                remainingCustomerLiability,
 
                             AmountCollectedAtProperty =
                                 financial?
@@ -2497,7 +2513,6 @@ namespace YemenGuide.Web.Services.Finance
 
                 PageNumber =
                     filter.PageNumber,
-
                 PageSize =
                     filter.PageSize
             };
@@ -3273,7 +3288,7 @@ namespace YemenGuide.Web.Services.Finance
                 query =
                     query.Where(transaction =>
                         transaction.PlaceId ==
-                        selectedPlaceId);
+                            selectedPlaceId);
             }
 
             if (filter.BookingId.HasValue)
@@ -3496,7 +3511,6 @@ namespace YemenGuide.Web.Services.Finance
                                         (decimal?)transaction.Amount)
                                 ??
                                 0m,
-
                             CommissionHeldAmount =
                                 group
                                     .Where(transaction =>
@@ -4497,7 +4511,6 @@ namespace YemenGuide.Web.Services.Finance
                         };
                     })
                     .ToList();
-
             /*
              * إذا وجد سجل مالك مرتبط بشبكة حُذفت من SupportedWallets
              * نظهره أيضًا بدل أن يختفي من واجهة المالك.
@@ -5668,6 +5681,7 @@ namespace YemenGuide.Web.Services.Finance
 
         private static bool IsUnpaidReportRow(
             FinancialReportRowDto row) =>
+                !IsCancelledBookingState(row.BookingState) &&
                 row.TotalPrice > 0m &&
                 !IsFullyPaidReportRow(row) &&
                 !IsPartiallyPaidReportRow(row);
@@ -5677,6 +5691,56 @@ namespace YemenGuide.Web.Services.Finance
                 IsState(state, "Cancelled") ||
                 IsState(state, "Rejected") ||
                 IsState(state, "Expired");
+
+        /// <summary>
+        /// إجمالي الاسترداد الذي أصبح نهائيًا فقط. الطلبات المعلقة أو قيد
+        /// المعالجة لا تغيّر التحصيل الفعلي حتى يؤكد العميل الاستلام.
+        /// </summary>
+        private static decimal GetCompletedRefundAmount(
+            BookingRefundAggregate? refund) =>
+                Math.Round(
+                    Math.Max(0m, refund?.CompletedRefundAmount ?? 0m),
+                    2);
+
+        /// <summary>
+        /// المبلغ الإلكتروني الصافي الذي بقي فعليًا بعد الاستردادات المكتملة.
+        /// AmountPaidOnline في قاعدة البيانات يبقى كسجل تاريخي ولا يتم تصفيره.
+        /// </summary>
+        private static decimal GetNetOnlineCollectedAmount(
+            Booking booking,
+            BookingRefundAggregate? refund)
+        {
+            var grossPaidOnline = GetActualOnlineAmount(booking);
+            var completedRefund = Math.Min(
+                grossPaidOnline,
+                GetCompletedRefundAmount(refund));
+
+            return Math.Round(
+                Math.Max(0m, grossPaidOnline - completedRefund),
+                2);
+        }
+
+        /// <summary>
+        /// الالتزام الحقيقي المتبقي على العميل. بعد إلغاء/رفض/انتهاء الحجز
+        /// لا يوجد مبلغ مطلوب من العميل، حتى لو ظل AmountToPayAtProperty محفوظًا
+        /// تاريخيًا داخل FinancialRecord.
+        /// </summary>
+        private static decimal GetRemainingCustomerLiability(
+            Booking booking,
+            FinancialRecord? financial)
+        {
+            if (IsCancelledBookingState(booking.BookingState))
+            {
+                return 0m;
+            }
+
+            return Math.Round(
+                Math.Max(
+                    0m,
+                    financial?.AmountToPayAtProperty ??
+                    booking.TotalPrice),
+                2);
+        }
 
         private static bool IsFailedPaymentState(
             string? state) =>
@@ -5695,7 +5759,10 @@ namespace YemenGuide.Web.Services.Finance
                    IsState(booking.PaymentStatus, "Paid") ||
                    IsState(booking.PaymentStatus, "FullyPaid") ||
                    IsState(booking.PaymentStatus, "Completed") ||
-                   IsState(booking.PaymentStatus, "Confirmed");
+                   IsState(booking.PaymentStatus, "Confirmed") ||
+                   IsState(booking.PaymentStatus, "RefundPending") ||
+                   IsState(booking.PaymentStatus, "PartiallyRefunded") ||
+                   IsState(booking.PaymentStatus, "Refunded");
         }
 
         private static DateTime? GetFinancialSettlementDate(
@@ -6410,26 +6477,31 @@ namespace YemenGuide.Web.Services.Finance
             BookingCommissionMovementAggregate? commissionMovements)
         {
             var financial = booking.FinancialRecord;
-            var actualOnline = GetActualOnlineAmount(booking);
+            var grossOnline = GetActualOnlineAmount(booking);
             var actualProperty = GetActualPropertyAmount(booking);
-            var actualCollected = actualOnline + actualProperty;
-            var completedRefund =
-                Math.Max(0m, refund?.CompletedRefundAmount ?? 0m);
+            var completedRefund = GetCompletedRefundAmount(refund);
+            var actualOnline = Math.Round(
+                Math.Max(
+                    0m,
+                    grossOnline - Math.Min(grossOnline, completedRefund)),
+                2);
+            var actualCollected = Math.Round(
+                actualOnline + actualProperty,
+                2);
             var chargedCommission =
                 GetChargedCommissionAmount(
                     financial,
                     commissionMovements);
 
             /*
-             * الحجز الملغى قد يكون له غرامة احتفظت بها المنشأة.
-             * لذلك لا نصفر الإيراد لمجرد أن الحالة Cancelled؛ بل نطرح
-             * الاسترداد المكتمل والعمولة المخصومة من المبلغ المحصل فعليًا.
+             * ActualCollectedAmount هو التحصيل الصافي بعد الاسترداد المكتمل،
+             * لذلك لا نطرح الاسترداد مرة ثانية عند حساب صافي الإيراد.
              */
-            var actualRevenue = Math.Max(
-                0m,
-                actualCollected -
-                completedRefund -
-                chargedCommission);
+            var actualRevenue = Math.Round(
+                Math.Max(
+                    0m,
+                    actualCollected - chargedCommission),
+                2);
 
             return new FinancialReportRowDto
             {
@@ -6474,7 +6546,7 @@ namespace YemenGuide.Web.Services.Finance
                 ActualPaidOnline = actualOnline,
                 ActualCollectedAtProperty = actualProperty,
                 ActualCollectedAmount = actualCollected,
-                RemainingAmount = Math.Max(0m, financial?.AmountToPayAtProperty ?? booking.TotalPrice - actualCollected),
+                RemainingAmount = GetRemainingCustomerLiability(booking, financial),
                 ActualRevenue = actualRevenue,
                 PlatformCommission = Math.Max(0m, financial?.PlatformCommission ?? 0m),
                 CommissionHeld = GetHeldCommissionAmount(financial, commissionMovements),
@@ -6599,6 +6671,12 @@ namespace YemenGuide.Web.Services.Finance
                 .AsSplitQuery()
                 .ToListAsync(cancellationToken);
 
+            var refundMap = await LoadBookingRefundAggregatesAsync(
+                bookings
+                    .Select(booking => booking.BookingId)
+                    .ToArray(),
+                cancellationToken);
+
             var rows = new List<FinancialReportRowDto>();
 
             foreach (var booking in bookings)
@@ -6645,9 +6723,15 @@ namespace YemenGuide.Web.Services.Finance
                     continue;
                 }
 
+                refundMap.TryGetValue(
+                    booking.BookingId,
+                    out var refundAggregate);
+
                 var rawOnline = Math.Max(0m, financial.AmountPaidOnline);
                 var rawProperty = Math.Max(0m, financial.AmountCollectedAtProperty);
-                var actualOnline = GetActualOnlineAmount(booking);
+                var actualOnline = GetNetOnlineCollectedAmount(
+                    booking,
+                    refundAggregate);
                 var actualProperty = GetActualPropertyAmount(booking);
 
                 if (IsState(paymentChannel, OwnerFinancialPaymentChannels.Online))
@@ -6661,8 +6745,12 @@ namespace YemenGuide.Web.Services.Finance
                     actualOnline = 0m;
                 }
 
-                var actualTotal = actualOnline + actualProperty;
-                var remaining = Math.Max(0m, booking.TotalPrice - actualTotal);
+                var actualTotal = Math.Round(
+                    actualOnline + actualProperty,
+                    2);
+                var remaining = GetRemainingCustomerLiability(
+                    booking,
+                    financial);
 
                 rows.Add(new FinancialReportRowDto
                 {
@@ -7098,23 +7186,26 @@ namespace YemenGuide.Web.Services.Finance
                         out var commissionAggregate);
 
                     var financial = booking.FinancialRecord;
-                    var actualOnline = GetActualOnlineAmount(booking);
+                    var completedRefund = GetCompletedRefundAmount(
+                        refundAggregate);
+                    var actualOnline = GetNetOnlineCollectedAmount(
+                        booking,
+                        refundAggregate);
                     var actualProperty = GetActualPropertyAmount(booking);
-                    var actualCollected = actualOnline + actualProperty;
-                    var completedRefund = Math.Max(
-                        0m,
-                        refundAggregate?.CompletedRefundAmount ?? 0m);
+                    var actualCollected = Math.Round(
+                        actualOnline + actualProperty,
+                        2);
                     var chargedCommission = GetChargedCommissionAmount(
                         financial,
                         commissionAggregate);
                     var releasedCommission = GetReleasedCommissionAmount(
                         financial,
                         commissionAggregate);
-                    var netOwner = Math.Max(
-                        0m,
-                        actualCollected -
-                        completedRefund -
-                        chargedCommission);
+                    var netOwner = Math.Round(
+                        Math.Max(
+                            0m,
+                            actualCollected - chargedCommission),
+                        2);
 
                     return new FinancialReportRowDto
                     {
@@ -7170,7 +7261,7 @@ namespace YemenGuide.Web.Services.Finance
                         ActualPaidOnline = actualOnline,
                         ActualCollectedAtProperty = actualProperty,
                         ActualCollectedAmount = actualCollected,
-                        RemainingAmount = Math.Max(0m, financial?.AmountToPayAtProperty ?? booking.TotalPrice - actualCollected),
+                        RemainingAmount = GetRemainingCustomerLiability(booking, financial),
                         ActualRevenue = netOwner,
                         PlatformCommission = Math.Max(0m, financial?.PlatformCommission ?? 0m),
                         CommissionHeld = GetHeldCommissionAmount(financial, commissionAggregate),
@@ -7392,7 +7483,7 @@ namespace YemenGuide.Web.Services.Finance
                 DepositAmount = Math.Max(0m, financial?.DepositAmount ?? 0m),
                 AmountPaidOnline = paidOnline,
                 AmountCollectedAtProperty = collected,
-                RemainingAmount = Math.Max(0m, financial?.AmountToPayAtProperty ?? booking.TotalPrice - paidOnline - collected),
+                RemainingAmount = GetRemainingCustomerLiability(booking, financial),
                 PlatformCommission = chargedCommission,
                 RefundedAmount = refunded,
                 CancellationFee = Math.Max(0m, refund?.CompletedCancellationFee ?? 0m),
@@ -7601,7 +7692,11 @@ namespace YemenGuide.Web.Services.Finance
                         DepositAmount = Math.Max(0m, refund.DepositPaid),
                         AmountPaidOnline = Math.Max(0m, refund.Booking?.FinancialRecord?.AmountPaidOnline ?? 0m),
                         AmountCollectedAtProperty = Math.Max(0m, refund.Booking?.FinancialRecord?.AmountCollectedAtProperty ?? 0m),
-                        RemainingAmount = Math.Max(0m, refund.Booking?.FinancialRecord?.AmountToPayAtProperty ?? 0m),
+                        RemainingAmount = refund.Booking == null
+                            ? 0m
+                            : GetRemainingCustomerLiability(
+                                refund.Booking,
+                                refund.Booking.FinancialRecord),
                         PlatformCommission = Math.Max(0m, refund.PlatformCommission),
                         RefundedAmount = Math.Max(0m, refund.RefundAmount),
                         CancellationFee = Math.Max(0m, refund.CancellationFee),
@@ -7988,7 +8083,7 @@ namespace YemenGuide.Web.Services.Finance
 
                     var verifiedPaidOnline = Math.Max(
                         0m,
-                        row.ActualPaidOnline);
+                        row.AmountPaidOnline);
 
                     if (
                         requestedRefund > 0m &&
@@ -8285,8 +8380,9 @@ namespace YemenGuide.Web.Services.Finance
                 bookingId,
                 out var commissionMovements);
 
-            var remaining = Math.Max(0m, financial?.AmountToPayAtProperty ??
-                Math.Max(0m, booking.TotalPrice - paidOnline - collected));
+            var remaining = GetRemainingCustomerLiability(
+                booking,
+                financial);
             var commission = GetChargedCommissionAmount(
                 financial,
                 commissionMovements);
