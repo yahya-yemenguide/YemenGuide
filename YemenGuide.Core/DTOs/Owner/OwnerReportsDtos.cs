@@ -223,6 +223,14 @@ namespace YemenGuide.Core.DTOs.Owner
         public string? ReviewText { get; set; }
 
         public string? RequiredAction { get; set; }
+        public string? ResponseContentType { get; set; }
+        public string RowVersion { get; set; } = string.Empty;
+        public bool CanEdit { get; set; }
+        public bool CanWithdraw { get; set; }
+        public bool CanRequestReopen { get; set; }
+        public bool CanAddClarification { get; set; }
+        public string? OtherTypeDescription { get; set; }
+        public string? OtherCategoryDescription { get; set; }
         public bool NeedsOwnerResponse { get; set; }
         public DateTime? ReplyDeadline { get; set; }
         public bool IsReplyOverdue { get; set; }
@@ -235,9 +243,44 @@ namespace YemenGuide.Core.DTOs.Owner
 
     public sealed class OwnerReportResponseRequestDto
     {
-        [Required(ErrorMessage = "اكتب ردك على القضية.")]
-        [StringLength(4000, MinimumLength = 5, ErrorMessage = "الرد يجب أن يكون بين 5 و4000 حرف.")]
-        public string Message { get; set; } = string.Empty;
+        [StringLength(4000)]
+        public string? Message { get; set; }
+        public string? RowVersion { get; set; }
+    }
+
+    public sealed class OwnerReportEditRequestDto
+    {
+        [Required, StringLength(200, MinimumLength = 5)]
+        public string Title { get; set; } = string.Empty;
+        [Required, StringLength(4000, MinimumLength = 15)]
+        public string ReportReason { get; set; } = string.Empty;
+        [Required, StringLength(30)]
+        public string ReportType { get; set; } = ReportConstants.Types.Other;
+        [StringLength(50)]
+        public string? Category { get; set; }
+        [StringLength(50)]
+        public string? OtherTypeDescription { get; set; }
+        [StringLength(50)]
+        public string? OtherCategoryDescription { get; set; }
+        public bool RemoveEvidence { get; set; }
+        [Required]
+        public string RowVersion { get; set; } = string.Empty;
+    }
+
+    public sealed class OwnerReportWithdrawRequestDto
+    {
+        [Required, StringLength(500, MinimumLength = 3)]
+        public string Reason { get; set; } = string.Empty;
+        [Required]
+        public string RowVersion { get; set; } = string.Empty;
+    }
+
+    public sealed class OwnerReportReopenRequestDto
+    {
+        [Required, StringLength(4000, MinimumLength = 10)]
+        public string Reason { get; set; } = string.Empty;
+        [Required]
+        public string RowVersion { get; set; } = string.Empty;
     }
 
     public sealed class OwnerReportOperationResultDto

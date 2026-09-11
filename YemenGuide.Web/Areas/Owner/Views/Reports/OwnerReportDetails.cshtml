@@ -1,15 +1,24 @@
 @using System.IO
+@using YemenGuide.Core.Constants
 @using YemenGuide.Core.DTOs.Owner
 @model OwnerReportDetailsDto
 @{
     ViewData["Title"] = $"القضية {Model.ReportNumber}";
     Layout = "~/Areas/Owner/Views/Shared/_OwnerLayout.cshtml";
+    var responseType = Model.ResponseContentType;
+    var allowResponseText = responseType != "Image";
+    var allowResponseFile = responseType != "Text";
+    var requireResponseImage = responseType == "Image" || responseType == "TextAndImage";
+    var responseLabel = responseType == "Image" ? "صورة إثبات فقط" :
+                        responseType == "Text" ? "توضيح نصي فقط" :
+                        responseType == "TextAndImage" ? "توضيح نصي وصورة إثبات" :
+                        "توضيح أو مرفق بحسب طلب الإدارة";
     var customerInitial = string.IsNullOrWhiteSpace(Model.CustomerName) ? "ع" : Model.CustomerName.Trim().Substring(0, 1);
     var isImageEvidence = !string.IsNullOrWhiteSpace(Model.EvidenceImage) && new[] { ".jpg", ".jpeg", ".png", ".webp" }.Contains(System.IO.Path.GetExtension(Model.EvidenceImage).ToLowerInvariant());
 }
 
 @section Styles {
-    <link rel="stylesheet" href="@(Url.Content("~/css/owner/owner-reports.css"))?v=20260828-0105" />
+    <link rel="stylesheet" href="~/css/owner/owner-reports.css" asp-append-version="true" />
 }
 
 <div class="or-page" data-owner-reports-page="details" dir="rtl">
@@ -37,14 +46,22 @@
             </div>
         </header>
 
-        @if (Model.NeedsOwnerResponse)
+        @if (TempData["OwnerReportSuccess"] is string successMessage)
+        {
+            <div class="or-phase2-notice" role="status">@successMessage</div>
+        }
+        @if (TempData["OwnerReportError"] is string errorMessage)
+        {
+            <div class="or-phase2-notice is-error" role="alert">@errorMessage</div>
+        }
+        @if (Model.CanSubmitResponse)
         {
             <section class="or-next-action @(Model.IsReplyOverdue ? "is-overdue" : "")">
                 <span class="or-next-action__icon"><i class="bi bi-reply-fill"></i></span>
                 <div class="or-next-action__copy">
                     <small>الإجراء المطلوب منك الآن</small>
                     <h2>الإدارة تنتظر ردك على القضية</h2>
-                    <p>اكتب ردًا واضحًا وأرفق أي دليل يدعم موقفك. الرد يذهب للإدارة فقط ولا يفتح محادثة مباشرة مع العميل.</p>
+                    <p>المطلوب: @responseLabel. يُحفظ استكمالك في القضية ويصل إلى الإدارة فقط.</p>
                 </div>
                 <div class="or-next-action__side">
                     @if (Model.ReplyDeadline.HasValue)
@@ -59,7 +76,7 @@
         {
             <section class="or-result-banner tone-@Model.StatusTone">
                 <span><i class="bi bi-patch-check-fill"></i></span>
-                <div><small>نتيجة الإدارة</small><h2>@Model.Resolution</h2></div>
+                <div><small>آخر قرار مسجل من الإدارة</small><h2>@Model.Resolution</h2></div>
             </section>
         }
 
@@ -88,6 +105,7 @@
                     }
                 </section>
 
+                <partial name="~/Areas/Owner/Views/Reports/_OwnerReportActions.cshtml" model="Model" />
                 <section class="or-panel or-timeline-panel">
                     <header class="or-panel__head"><span><i class="bi bi-clock-history"></i></span><div><small>تحديثات القضية</small><h2>سجل القضية</h2></div></header>
                     @if (Model.Timeline.Count == 0)
@@ -181,14 +199,24 @@
             <div class="or-modal-backdrop" data-close-response></div>
             <section class="or-modal" role="dialog" aria-modal="true" aria-labelledby="responseTitle">
                 <header><div><span><i class="bi bi-reply-fill"></i></span><div><small>يرسل إلى الإدارة فقط</small><h2 id="responseTitle">ردك على القضية</h2></div></div><button type="button" data-close-response aria-label="إغلاق"><i class="bi bi-x-lg"></i></button></header>
-                <form asp-action="SubmitResponse" asp-route-id="@Model.ReportId" method="post" enctype="multipart/form-data" data-owner-report-form="response">
+                <form asp-action="SubmitResponse" asp-route-id="@Model.ReportId" method="post" enctype="multipart/form-data" data-owner-report-form="response" data-response-content-type="@responseType">
                     @Html.AntiForgeryToken()
-                    <div class="or-field"><label for="ownerResponse">الرد <b>*</b></label><textarea id="ownerResponse" name="Message" maxlength="4000" minlength="5" required placeholder="وضح موقفك، ماذا حدث، وما الإجراء الذي اتخذته إن وجد..."></textarea><small><span data-char-count>0</span> / 4000</small></div>
-                    <div class="or-upload" data-upload-zone>
-                        <input type="file" name="evidenceFile" id="responseEvidence" accept=".jpg,.jpeg,.png,.webp,.pdf" data-evidence-input />
-                        <label for="responseEvidence"><i class="bi bi-cloud-arrow-up-fill"></i><div><strong>إرفاق دليل</strong><small>JPG, PNG, WEBP أو PDF — حتى 5MB</small></div></label>
-                        <div class="or-upload-preview" data-upload-preview hidden></div>
-                    </div>
+                    <input type="hidden" name="RowVersion" value="@Model.RowVersion" />
+                    <p class="or-phase2-notice">المطلوب من الإدارة: @responseLabel</p>
+                    @if (allowResponseText)
+                    {
+                        <div class="or-field"><label for="ownerResponse">التوضيح</label><textarea id="ownerResponse" name="Message" maxlength="4000" required="@(responseType != null)" placeholder="اكتب التوضيح الذي طلبته الإدارة..."></textarea><small><span data-char-count>0</span> / 4000</small></div>
+                    }
+                    @if (allowResponseFile)
+                    {
+                        <div class="or-upload" data-upload-zone>
+                            <input type="file" name="evidenceFile" id="responseEvidence"
+                                   accept="@(requireResponseImage ? ".jpg,.jpeg,.png,.webp" : ".jpg,.jpeg,.png,.webp,.pdf")"
+                                   required="@requireResponseImage" data-evidence-input data-image-only="@requireResponseImage.ToString().ToLowerInvariant()" />
+                            <label for="responseEvidence"><i class="bi bi-cloud-arrow-up-fill"></i><div><strong>@(requireResponseImage ? "إرفاق صورة الإثبات المطلوبة" : "إرفاق دليل")</strong><small>@(requireResponseImage ? "JPG, PNG, WEBP — حتى 5MB" : "JPG, PNG, WEBP أو PDF — حتى 5MB")</small></div></label>
+                            <div class="or-upload-preview" data-upload-preview hidden></div>
+                        </div>
+                    }
                     <footer><button type="button" class="or-btn-ghost" data-close-response>إلغاء</button><button type="submit" class="or-primary-btn"><i class="bi bi-send-fill"></i><span>إرسال الرد للإدارة</span></button></footer>
                 </form>
             </section>
@@ -200,5 +228,5 @@
 </div>
 
 @section Scripts {
-    <script src="@(Url.Content("~/js/owner/owner-reports.js"))?v=20260828-0105"></script>
+    <script src="~/js/owner/owner-reports.js" asp-append-version="true"></script>
 }

@@ -169,6 +169,7 @@ namespace YemenGuide.Web.Services.Reports
                     Category = report.Category,
                     OtherCategoryDescription = report.OtherCategoryDescription,
                     RequiredAction = report.RequiredAction,
+                    ResponseContentType = report.ResponseContentType,
                     Title = report.Title,
                     ReportStatus = report.ReportStatus,
                     Priority = report.Priority,
@@ -420,6 +421,7 @@ namespace YemenGuide.Web.Services.Reports
                     Category = report.Category,
                     OtherCategoryDescription = report.OtherCategoryDescription,
                     RequiredAction = report.RequiredAction,
+                    ResponseContentType = report.ResponseContentType,
                     Title = report.Title,
                     ReportReason = report.ReportReason,
                     ReportStatus = report.ReportStatus,
@@ -508,6 +510,7 @@ namespace YemenGuide.Web.Services.Reports
                     row.Category,
                     row.OtherCategoryDescription),
                 RequiredAction = row.RequiredAction,
+                ResponseContentType = row.ResponseContentType,
                 Title = string.IsNullOrWhiteSpace(row.Title)
                     ? "شكوى أو بلاغ"
                     : row.Title.Trim(),
@@ -750,6 +753,17 @@ namespace YemenGuide.Web.Services.Reports
                     "case-completed");
             }
 
+            if (report.ReportStatus == ReportConstants.Statuses.WaitingForReporter &&
+                report.RequiredAction == ReportConstants.RequiredActions.Clarification)
+            {
+                var extension = evidenceFile == null ? "" : Path.GetExtension(evidenceFile.FileName).ToLowerInvariant();
+                var contentError = ReportConstants.ResponseContentTypes.Validate(
+                    report.ResponseContentType, message, evidenceFile != null && evidenceFile.Length > 0,
+                    extension == ".jpg" || extension == ".jpeg" || extension == ".png" || extension == ".webp");
+                if (contentError != null)
+                    return CustomerReportOperationResultDto.Fail(contentError, "requested-content-only");
+            }
+
             var adminId = await ResolveAdminReceiverAsync(
                 cancellationToken);
 
@@ -803,6 +817,7 @@ namespace YemenGuide.Web.Services.Reports
                 {
                     report.ReportStatus = ReportConstants.Statuses.InReview;
                     report.RequiredAction = null;
+                    report.ResponseContentType = null;
                     report.ReporterReplyDeadline = null;
                 }
 
@@ -945,6 +960,7 @@ namespace YemenGuide.Web.Services.Reports
             // العميل لا يغلق القضية بنفسه؛ يعيدها للإدارة لاتخاذ الإجراء النهائي.
             report.ReportStatus = ReportConstants.Statuses.InReview;
             report.RequiredAction = null;
+            report.ResponseContentType = null;
             report.ReporterReplyDeadline = null;
             report.UpdatedAt = now;
 
@@ -1075,6 +1091,7 @@ namespace YemenGuide.Web.Services.Reports
             report.ReporterReply = "طلب إعادة مراجعة من العميل:\n" + reason;
             report.ReporterReplyDate = now;
             report.RequiredAction = null;
+            report.ResponseContentType = null;
             report.ReporterReplyDeadline = null;
             report.ReportedPartyReplyDeadline = null;
             report.UpdatedAt = now;
@@ -1164,6 +1181,7 @@ namespace YemenGuide.Web.Services.Reports
             report.WithdrawnAt = now;
             report.WithdrawnReason = reason;
             report.RequiredAction = null;
+            report.ResponseContentType = null;
             report.ReporterReplyDeadline = null;
             report.ReportedPartyReplyDeadline = null;
             report.UpdatedAt = now;
@@ -1849,6 +1867,7 @@ namespace YemenGuide.Web.Services.Reports
                     row.Category,
                     row.OtherCategoryDescription),
                 RequiredAction = row.RequiredAction,
+                ResponseContentType = row.ResponseContentType,
                 Title = string.IsNullOrWhiteSpace(row.Title)
                     ? "شكوى أو بلاغ"
                     : row.Title.Trim(),
@@ -2204,6 +2223,7 @@ namespace YemenGuide.Web.Services.Reports
             public string? Category { get; set; }
             public string? OtherCategoryDescription { get; set; }
             public string? RequiredAction { get; set; }
+            public string? ResponseContentType { get; set; }
             public string? Title { get; set; }
             public string? ReportStatus { get; set; }
             public string? Priority { get; set; }
@@ -2228,6 +2248,7 @@ namespace YemenGuide.Web.Services.Reports
             public string? Category { get; set; }
             public string? OtherCategoryDescription { get; set; }
             public string? RequiredAction { get; set; }
+            public string? ResponseContentType { get; set; }
             public string? Title { get; set; }
             public string? ReportReason { get; set; }
             public string? ReportStatus { get; set; }

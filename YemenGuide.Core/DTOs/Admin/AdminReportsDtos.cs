@@ -269,6 +269,7 @@ namespace YemenGuide.Core.DTOs.Admin
         public string Priority { get; set; } = ReportConstants.Priorities.Normal;
         public string PriorityLabel { get; set; } = "عادية";
         public string? RequiredAction { get; set; }
+        public string? ResponseContentType { get; set; }
         public string RequiredActionLabel { get; set; } = string.Empty;
 
         public string Scenario { get; set; } = AdminReportValues.ScenarioGeneral;
@@ -320,12 +321,14 @@ namespace YemenGuide.Core.DTOs.Admin
         public string Priority { get; set; } = ReportConstants.Priorities.Normal;
         public string PriorityLabel { get; set; } = "عادية";
         public string? RequiredAction { get; set; }
+        public string? ResponseContentType { get; set; }
         public string RequiredActionLabel { get; set; } = string.Empty;
 
         public string Scenario { get; set; } = AdminReportValues.ScenarioGeneral;
         public string ScenarioLabel { get; set; } = "بلاغ عام";
         public string DirectionLabel { get; set; } = string.Empty;
         public bool IsCustomerAgainstOwner { get; set; }
+        public bool IsAdministrationProperty { get; set; }
         public bool IsOwnerAgainstCustomer { get; set; }
         public bool IsPlatformCase { get; set; }
 
@@ -450,6 +453,9 @@ namespace YemenGuide.Core.DTOs.Admin
 
     public sealed class AdminReportReplyRequestDto
     {
+        [Required, RegularExpression("^(Text|Image|TextAndImage)$")]
+        public string ResponseContentType { get; set; } = ReportConstants.ResponseContentTypes.Text;
+
         [Range(1, int.MaxValue)]
         public int ReportId { get; set; }
 
@@ -458,6 +464,14 @@ namespace YemenGuide.Core.DTOs.Admin
 
         [Required]
         public DateTime? Deadline { get; set; }
+    }
+
+    public sealed class AdminReportReporterMessageDto
+    {
+        [Range(1, int.MaxValue)]
+        public int ReportId { get; set; }
+        [Required, StringLength(4000, MinimumLength = 3)]
+        public string Message { get; set; } = string.Empty;
     }
 
     public sealed class AdminReportResolutionConfirmationRequestDto

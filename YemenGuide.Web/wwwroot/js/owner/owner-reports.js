@@ -28,11 +28,12 @@
         return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
     };
 
-    const validateFile = file => {
+    const validateFile = (file, imageOnly = false) => {
         if (!file) return null;
-        const allowed = ["jpg", "jpeg", "png", "webp", "pdf"];
+        const allowed = imageOnly ? ["jpg", "jpeg", "png", "webp"] : ["jpg", "jpeg", "png", "webp", "pdf"];
         const ext = (file.name.split(".").pop() || "").toLowerCase();
-        if (!allowed.includes(ext)) return "صيغة الملف غير مدعومة.";
+        if (!allowed.includes(ext)) return imageOnly ? "المطلوب صورة JPG أو PNG أو WEBP، وليس PDF." : "صيغة الملف غير مدعومة.";
+        if (file.size === 0) return "الملف فارغ. اختر ملفًا آخر.";
         if (file.size > 5 * 1024 * 1024) return "حجم الملف يجب ألا يتجاوز 5MB.";
         return null;
     };
@@ -43,7 +44,7 @@
         if (!preview) return;
         const file = input.files?.[0];
         if (!file) { preview.hidden = true; preview.innerHTML = ""; return; }
-        const error = validateFile(file);
+        const error = validateFile(file, input.dataset.imageOnly === "true");
         if (error) { input.value = ""; toast(error, true); preview.hidden = true; return; }
         const ext = (file.name.split(".").pop() || "").toLowerCase();
         preview.hidden = false;
@@ -65,10 +66,11 @@
         });
     });
 
+    let responseOpener = null;
     const modal = qs("[data-response-modal]");
-    const openModal = () => { if (!modal) return; modal.classList.add("is-open"); modal.setAttribute("aria-hidden", "false"); document.body.style.overflow = "hidden"; window.setTimeout(() => qs("textarea", modal)?.focus(), 60); };
-    const closeModal = () => { if (!modal) return; modal.classList.remove("is-open"); modal.setAttribute("aria-hidden", "true"); document.body.style.removeProperty("overflow"); };
-    qsa("[data-open-response]").forEach(button => button.addEventListener("click", openModal));
+    const openModal = () => { if (!modal) return; modal.classList.add("is-open"); modal.setAttribute("aria-hidden", "false"); document.body.style.overflow = "hidden"; window.setTimeout(() => qs("textarea, input[type=file], button[type=submit]", modal)?.focus(), 60); };
+    const closeModal = () => { if (!modal) return; modal.classList.remove("is-open"); modal.setAttribute("aria-hidden", "true"); document.body.style.removeProperty("overflow"); responseOpener?.focus(); };
+    qsa("[data-open-response]").forEach(button => button.addEventListener("click", () => { responseOpener = button; openModal(); }));
     qsa("[data-close-response]").forEach(button => button.addEventListener("click", closeModal));
     document.addEventListener("keydown", event => { if (event.key === "Escape") { closeModal(); closeImageViewer(); } });
 
@@ -84,25 +86,43 @@
     imageViewer?.addEventListener("click", event => { if (event.target === imageViewer) closeImageViewer(); });
 
     const submitAjaxForm = async form => {
+        if (form.dataset.submitting === "true") return;
+        form.dataset.submitting = "true";
+        let succeeded = false;
         const button = qs("button[type='submit']", form);
         const oldHtml = button?.innerHTML;
         if (button) { button.disabled = true; button.innerHTML = `<span class="spinner-border spinner-border-sm" aria-hidden="true"></span><span>جاري الحفظ...</span>`; }
         try {
             const response = await fetch(form.action, { method: "POST", body: new FormData(form), headers: { "X-Requested-With": "XMLHttpRequest", "Accept": "application/json" }, credentials: "same-origin" });
             const data = await safeJson(response);
-            if (!response.ok || data.success === false) { toast(data.message || "تعذر تنفيذ العملية.", true); return; }
+            if (!response.ok || data.success !== true) { toast(data.message || "تعذر تنفيذ العملية.", true); return; }
+            succeeded = true;
             toast(data.message || "تم الحفظ بنجاح.");
             if (data.redirectUrl) window.setTimeout(() => { window.location.href = data.redirectUrl; }, 500);
             else window.setTimeout(() => window.location.reload(), 500);
         } catch { toast("تعذر الاتصال بالخادم. حاول مرة أخرى.", true); }
-        finally { if (button) { button.disabled = false; button.innerHTML = oldHtml; } }
+        finally { if (!succeeded) { delete form.dataset.submitting; if (button) { button.disabled = false; button.innerHTML = oldHtml; } } }
     };
 
     qsa("[data-owner-report-form]").forEach(form => form.addEventListener("submit", event => {
         event.preventDefault();
+        if (form.dataset.submitting === "true") return;
+        const type = form.dataset.responseContentType;
+        const message = qs("textarea[name='Message']", form)?.value.trim() || "";
+        const file = qs("input[name='evidenceFile']", form)?.files?.[0];
+        if (form.dataset.ownerReportForm === "response") {
+            if ((type === "Text" || type === "TextAndImage") && !message) { toast("اكتب التوضيح المطلوب.", true); return; }
+            if ((type === "Image" || type === "TextAndImage") && !file) { toast("أرفق صورة الإثبات المطلوبة.", true); return; }
+            if (type === "Text" && file) { toast("المطلوب نص فقط دون مرفق.", true); return; }
+            if (type === "Image" && message) { toast("المطلوب صورة فقط دون نص.", true); return; }
+            if (!type && !message && !file) { toast("اكتب توضيحًا أو أرفق دليلًا.", true); return; }
+        }
         if (!form.reportValidity()) return;
+        if (form.dataset.ownerReportForm === "edit" && qs("input[name='RemoveEvidence']", form)?.checked && file) {
+            toast("اختر إزالة المرفق أو استبداله، وليس كليهما.", true); return;
+        }
         const fileInput = qs("[data-evidence-input]", form);
-        const fileError = validateFile(fileInput?.files?.[0]);
+        const fileError = validateFile(fileInput?.files?.[0], fileInput?.dataset.imageOnly === "true");
         if (fileError) { toast(fileError, true); return; }
         if (form.dataset.ownerReportForm === "create") {
             const refId = qs("[data-reference-id]", form)?.value;
@@ -110,6 +130,29 @@
         }
         submitAjaxForm(form);
     }));
+
+    qsa("[data-owner-report-form='edit']").forEach(form => {
+        const sync = () => {
+            [["[data-edit-type]", "[data-edit-other-type]"], ["[data-edit-category]", "[data-edit-other-category]"]].forEach(([select, box]) => {
+                const show = qs(select, form)?.value === "Other";
+                const wrapper = qs(box, form);
+                if (!wrapper) return;
+                wrapper.hidden = !show;
+                const input = qs("input", wrapper);
+                if (input) { input.required = show; input.disabled = !show; }
+            });
+        };
+        qsa("[data-edit-type], [data-edit-category]", form).forEach(select => select.addEventListener("change", sync));
+        sync();
+    });
+    document.addEventListener("keydown", event => {
+        if (event.key !== "Tab" || !modal?.classList.contains("is-open")) return;
+        const focusable = qsa("button:not([disabled]), textarea:not([disabled]), input:not([type=hidden]):not([disabled]), select", modal)
+            .filter(element => element.getClientRects().length > 0);
+        const first = focusable[0], last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    });
 
     const refTypeInput = qs("[data-reference-type]");
     const refIdInput = qs("[data-reference-id]");

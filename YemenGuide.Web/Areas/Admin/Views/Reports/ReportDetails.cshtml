@@ -38,7 +38,12 @@
 
     var statusTone = StatusTone(Model.Status);
     var priorityTone = PriorityTone(Model.Priority);
-    var hasPrimaryActions = Model.CanStartReview || Model.CanRequestReporterClarification ||
+    var canSendReporterMessage = Model.Status != ReportConstants.Statuses.Pending &&
+                                 !ReportConstants.Statuses.IsTerminal(Model.Status);
+    var responseContentLabel = Model.ResponseContentType == "Image" ? "صورة إثبات فقط" :
+                               Model.ResponseContentType == "Text" ? "توضيح نصي فقط" :
+                               Model.ResponseContentType == "TextAndImage" ? "توضيح نصي وصورة إثبات" : null;
+    var hasPrimaryActions = canSendReporterMessage || Model.CanStartReview || Model.CanRequestReporterClarification ||
                             Model.CanRequestOwnerResponse || Model.CanConfirmCustomerViolation ||
                             Model.CanDismissCustomerViolation || Model.CanResolve || Model.CanReject ||
                             Model.CanRequestResolutionConfirmation || Model.CanClose || Model.CanReopen;
@@ -158,8 +163,8 @@
             @if (Model.ReportedParty.UserId.HasValue)
             {
                 var previousAgainstCount =
-                    Model.ReportedParty.ReportsAgainstCount +
-                    Model.ReportedParty.ComplaintsAgainstCount;
+                Model.ReportedParty.ReportsAgainstCount +
+                Model.ReportedParty.ComplaintsAgainstCount;
 
                 <div class="ar-history-strip @(againstHasHistory ? "has-record" : "is-clean")">
                     <div class="ar-history-strip__head">
@@ -244,6 +249,14 @@
                 <span class="ar-action-center__pulse"><i class="bi bi-lightning-charge-fill"></i></span>
             </div>
 
+            @if (Model.IsAdministrationProperty)
+            {
+                <div class="ar-owner-customer-rule"><i class="bi bi-building-check"></i><div><strong>شكوى على منشأة تابعة للإدارة</strong><p>تُعالج داخل مركز البلاغات، ثم ترسل الإدارة ردًا للعميل. لا تُحال المنشأة إلى الإدارة نفسها لطلب رد مالك خارجي.</p></div></div>
+            }
+            @if (!string.IsNullOrWhiteSpace(responseContentLabel))
+            {
+                <div class="ar-owner-customer-rule"><i class="bi bi-paperclip"></i><div><strong>الاستكمال المطلوب حاليًا</strong><p>@responseContentLabel</p></div></div>
+            }
             @if (Model.IsOwnerAgainstCustomer)
             {
                 <div class="ar-owner-customer-rule"><i class="bi bi-shield-lock-fill"></i><div><strong>بلاغ مالك ضد عميل</strong><p>لا يُطلب من العميل الرد داخل القضية. الإدارة تراجع الأدلة وتثبت أو تنفي المخالفة.</p></div></div>
@@ -267,6 +280,12 @@
                         </button>
                     }
 
+                    @if (canSendReporterMessage)
+                    {
+                        <button type="button" class="ar-big-action" data-report-action="send-reporter-message" data-endpoint="@Url.Action("SendReporterMessage", "Reports", new { area = "Admin" })">
+                            <span><i class="bi bi-send"></i></span><div><strong>إرسال توضيح للمبلّغ</strong><small>اكتب الرد الذي سيظهر له، ويمكن توضيح سبب المالك بعد مراجعته</small></div><i class="bi bi-arrow-left"></i>
+                        </button>
+                    }
                     @if (Model.CanRequestOwnerResponse)
                     {
                         <button type="button" class="ar-big-action ar-big-action--orange-soft" data-report-action="request-owner-response" data-endpoint="@Url.Action("RequestOwnerResponse", "Reports", new { area = "Admin" })">

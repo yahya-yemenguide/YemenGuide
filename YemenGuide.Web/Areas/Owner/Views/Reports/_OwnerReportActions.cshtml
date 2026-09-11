@@ -1,0 +1,81 @@
+@using YemenGuide.Core.Constants
+@using YemenGuide.Core.DTOs.Owner
+@model OwnerReportDetailsDto
+@if (Model.IsOwnerCreated)
+{
+    <section class="or-panel or-case-actions">
+        <header class="or-panel__head"><span><i class="bi bi-sliders"></i></span><div><small>حسب حالة بلاغك</small><h2>إجراءات البلاغ</h2></div></header>
+        @if (Model.CanEdit)
+        {
+            <details class="or-case-disclosure">
+                <summary>تعديل البلاغ قبل بدء المعالجة</summary>
+                <form asp-action="EditReport" asp-route-id="@Model.ReportId" method="post" enctype="multipart/form-data" data-owner-report-form="edit">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="RowVersion" value="@Model.RowVersion" />
+                    <p class="or-phase2-help">يمكنك تعديل التفاصيل. العميل والحجز أو التقييم المرتبط بالبلاغ يبقيان كما هما.</p>
+                    <div class="or-field"><label for="editTitle">العنوان</label><input id="editTitle" name="Title" value="@Model.Title" required minlength="5" maxlength="200" /></div>
+                    <div class="or-field"><label for="editReason">وصف المشكلة</label><textarea id="editReason" name="ReportReason" required minlength="15" maxlength="4000">@Model.ReportReason</textarea></div>
+                    <div class="or-field"><label for="editType">نوع البلاغ</label><select id="editType" name="ReportType" data-edit-type required>
+                        @if (Model.BookingId.HasValue) { <option value="Booking" selected="@(Model.ReportType == "Booking")">حجز</option> }
+                        @if (Model.ReviewId.HasValue) { <option value="Review" selected="@(Model.ReportType == "Review")">تقييم</option> }
+                        <option value="Other" selected="@(Model.ReportType == "Other")">أخرى</option>
+                    </select></div>
+                    <div class="or-field" data-edit-other-type><label for="editOtherType">وصف النوع الآخر</label><input id="editOtherType" name="OtherTypeDescription" maxlength="50" value="@Model.OtherTypeDescription" /></div>
+                    <div class="or-field"><label for="editCategory">تصنيف المشكلة</label><select id="editCategory" name="Category" data-edit-category>
+                        <option value="">بدون تصنيف</option>
+                        @foreach (var category in ReportConstants.Categories.All)
+                        {
+                            <option value="@category" selected="@(Model.Category == category)">@ReportConstants.GetCategoryLabel(category)</option>
+                        }
+                    </select></div>
+                    <div class="or-field" data-edit-other-category><label for="editOtherCategory">وصف التصنيف الآخر</label><input id="editOtherCategory" name="OtherCategoryDescription" maxlength="50" value="@Model.OtherCategoryDescription" /></div>
+                    <div class="or-upload" data-upload-zone>
+                        <input type="file" id="editEvidence" name="evidenceFile" accept=".jpg,.jpeg,.png,.webp,.pdf" data-evidence-input />
+                        <label for="editEvidence"><i class="bi bi-paperclip"></i><div><strong>استبدال المرفق (اختياري)</strong><small>عدم اختيار ملف يُبقي المرفق الحالي — حتى 5MB</small></div></label>
+                        <div class="or-upload-preview" data-upload-preview hidden></div>
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(Model.EvidenceImage))
+                    {
+                        <label class="or-case-checkbox"><input type="checkbox" name="RemoveEvidence" value="true" /> إزالة المرفق الحالي مع بقائه في سجل التعديلات</label>
+                    }
+                    <button type="submit" class="or-primary-btn"><span>حفظ تعديل البلاغ</span></button>
+                </form>
+            </details>
+        }
+        else
+        {
+            <p class="or-phase2-help">تعديل البلاغ الأصلي مقفل بعد بدء المعالجة. يظهر الاستكمال الذي تطلبه الإدارة أعلى الصفحة.</p>
+        }
+        @if (Model.CanWithdraw)
+        {
+            <details class="or-case-disclosure">
+                <summary>إغلاق بلاغي وسحبه</summary>
+                <form asp-action="WithdrawReport" asp-route-id="@Model.ReportId" method="post" data-owner-report-form="withdraw">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="RowVersion" value="@Model.RowVersion" />
+                    <p class="or-phase2-help">تتوقف متابعة الإدارة لبلاغك، مع بقاء سجل القضية محفوظًا.</p>
+                    <div class="or-field"><label for="withdrawReason">سبب سحب البلاغ</label><textarea id="withdrawReason" name="Reason" required minlength="3" maxlength="500"></textarea></div>
+                    <button type="submit" class="or-primary-btn"><span>تأكيد سحب البلاغ وإغلاق متابعته</span></button>
+                </form>
+            </details>
+        }
+        @if (Model.CanRequestReopen)
+        {
+            <details class="or-case-disclosure">
+                <summary>طلب إعادة فتح البلاغ المرفوض</summary>
+                <form asp-action="ReopenReport" asp-route-id="@Model.ReportId" method="post" enctype="multipart/form-data" data-owner-report-form="reopen">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="RowVersion" value="@Model.RowVersion" />
+                    <p class="or-phase2-help">وضّح سبب إعادة المراجعة أو أرفق دليلًا جديدًا. يبقى رقم القضية وقرار الرفض السابق محفوظين.</p>
+                    <div class="or-field"><label for="reopenReason">سبب إعادة المراجعة</label><textarea id="reopenReason" name="Reason" required minlength="10" maxlength="4000"></textarea></div>
+                    <div class="or-upload" data-upload-zone>
+                        <input type="file" id="reopenEvidence" name="evidenceFile" accept=".jpg,.jpeg,.png,.webp,.pdf" data-evidence-input />
+                        <label for="reopenEvidence"><i class="bi bi-paperclip"></i><div><strong>دليل جديد (اختياري)</strong><small>JPG, PNG, WEBP أو PDF — حتى 5MB</small></div></label>
+                        <div class="or-upload-preview" data-upload-preview hidden></div>
+                    </div>
+                    <button type="submit" class="or-primary-btn"><span>إرسال طلب إعادة الفتح</span></button>
+                </form>
+            </details>
+        }
+    </section>
+}

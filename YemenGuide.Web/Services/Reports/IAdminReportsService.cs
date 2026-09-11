@@ -23,6 +23,11 @@ namespace YemenGuide.Web.Services.Reports
             int reportId,
             CancellationToken cancellationToken = default);
 
+        Task<AdminReportOperationResultDto> SendReporterMessageAsync(
+            AdminReportReporterMessageDto input, int currentAdminUserId,
+            AdminReportRequestContextDto requestContext,
+            CancellationToken cancellationToken = default);
+
         Task<AdminReportOperationResultDto> StartReviewAsync(
             AdminReportSimpleActionDto input,
             int currentAdminUserId,

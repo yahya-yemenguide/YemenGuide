@@ -438,6 +438,9 @@ namespace YemenGuide.Web.Services.Reports
 
             var customer = isMine ? report.AgainstUser : report.Reporter;
             var status = report.ReportStatus ?? ReportConstants.Statuses.Pending;
+            var needsReporterResponse = isMine &&
+                status == ReportConstants.Statuses.WaitingForReporter &&
+                report.RequiredAction == ReportConstants.RequiredActions.Clarification;
             var needsOwnerResponse =
                 isIncoming &&
                 status == ReportConstants.Statuses.WaitingForReportedParty &&
@@ -448,7 +451,7 @@ namespace YemenGuide.Web.Services.Reports
 
             var deadline = needsOwnerResponse
                 ? report.ReportedPartyReplyDeadline
-                : null;
+                : needsReporterResponse ? report.ReporterReplyDeadline : null;
 
             return new OwnerReportDetailsDto
             {
@@ -491,7 +494,15 @@ namespace YemenGuide.Web.Services.Reports
                 NeedsOwnerResponse = needsOwnerResponse,
                 ReplyDeadline = deadline,
                 IsReplyOverdue = deadline.HasValue && deadline.Value < DateTime.Now,
-                CanSubmitResponse = needsOwnerResponse,
+                CanSubmitResponse = needsOwnerResponse || needsReporterResponse,
+                CanAddClarification = needsReporterResponse,
+                CanEdit = isMine && status == ReportConstants.Statuses.Pending,
+                CanWithdraw = isMine && ReportConstants.Statuses.IsActive(status),
+                CanRequestReopen = isMine && status == ReportConstants.Statuses.Rejected,
+                ResponseContentType = report.ResponseContentType,
+                RowVersion = Convert.ToBase64String(report.RowVersion),
+                OtherTypeDescription = report.OtherReportTypeDescription,
+                OtherCategoryDescription = report.OtherCategoryDescription,
                 CreatedAt = report.CreatedAt ?? report.UpdatedAt,
                 UpdatedAt = report.UpdatedAt,
                 Timeline = BuildTimeline(report, messages, ownerId, isMine)
@@ -505,6 +516,10 @@ namespace YemenGuide.Web.Services.Reports
             CancellationToken cancellationToken = default)
         {
             EnsurePositiveUserId(ownerId);
+            if (await IsAdministrationOwnerAsync(ownerId, cancellationToken))
+                return OwnerReportOperationResultDto.Fail(
+                    "منشآت الإدارة تستخدم أدوات الإدارة لمعالجة الإساءة، ولا ترفع بلاغًا إلى نفسها.",
+                    "administration-property");
             request ??= new OwnerCreateReportRequestDto();
             NormalizeCreateRequest(request);
 
@@ -678,8 +693,13 @@ namespace YemenGuide.Web.Services.Reports
             if (report == null)
                 return OwnerReportOperationResultDto.Fail("القضية غير موجودة.", "not-found");
 
-            if (!IsRole(report.Reporter, "Customer") || !IsOwnerTarget(report, ownerId))
+            var isMine = report.ReporterId == ownerId &&
+                IsRole(report.Reporter, "Owner") && IsRole(report.AgainstUser, "Customer");
+            var isIncoming = IsRole(report.Reporter, "Customer") && IsOwnerTarget(report, ownerId);
+            if (!isMine && !isIncoming)
                 return OwnerReportOperationResultDto.Fail("لا تملك صلاحية الرد على هذه القضية.", "forbidden");
+            if (!MatchesVersion(report, request.RowVersion, required: false))
+                return OwnerReportOperationResultDto.Fail("تغيرت القضية. أعد تحميل الصفحة.", "concurrency");
 
             var wasInvited = await _db.Chats
                 .AsNoTracking()
@@ -693,16 +713,23 @@ namespace YemenGuide.Web.Services.Reports
             if (!wasInvited)
                 return OwnerReportOperationResultDto.Fail("لم تطلب الإدارة ردك على هذه القضية.", "response-not-requested");
 
-            if (report.ReportStatus != ReportConstants.Statuses.WaitingForReportedParty ||
-                !string.Equals(
-                    report.RequiredAction,
-                    ReportConstants.RequiredActions.ReportedPartyResponse,
-                    StringComparison.OrdinalIgnoreCase))
+            if (!(isMine
+                ? report.ReportStatus == ReportConstants.Statuses.WaitingForReporter &&
+                  report.RequiredAction == ReportConstants.RequiredActions.Clarification
+                : report.ReportStatus == ReportConstants.Statuses.WaitingForReportedParty &&
+                  report.RequiredAction == ReportConstants.RequiredActions.ReportedPartyResponse))
             {
                 return OwnerReportOperationResultDto.Fail(
                     "لا يوجد رد مطلوب منك في هذه القضية حاليًا.",
                     "response-not-requested");
             }
+
+            var contentError = ReportConstants.ResponseContentTypes.Validate(
+                report.ResponseContentType, request.Message,
+                evidenceFile != null && evidenceFile.Length > 0,
+                evidenceFile != null && IsImageEvidence(evidenceFile));
+            if (contentError != null)
+                return OwnerReportOperationResultDto.Fail(contentError, "requested-content-only");
 
             var adminId = await ResolveAdminReceiverForCaseAsync(
                 ownerId,
@@ -723,7 +750,7 @@ namespace YemenGuide.Web.Services.Reports
             {
                 SenderId = ownerId,
                 ReceiverId = adminId.Value,
-                MessageText = request.Message,
+                MessageText = string.IsNullOrWhiteSpace(request.Message) ? "أرفق المالك صورة الإثبات المطلوبة." : request.Message,
                 SendTime = now,
                 IsRead = false,
                 AttachmentUrl = upload.RelativePath,
@@ -742,10 +769,19 @@ namespace YemenGuide.Web.Services.Reports
                 _db.Chats.Add(chat);
 
                 // إبقاء حقول الرد القديمة متزامنة لدعم تفاصيل الإدارة الحالية.
-                report.OwnerReply = request.Message;
-                report.OwnerReplyDate = now;
+                if (isMine)
+                {
+                    report.ReporterReply = chat.MessageText;
+                    report.ReporterReplyDate = now;
+                }
+                else
+                {
+                    report.OwnerReply = chat.MessageText;
+                    report.OwnerReplyDate = now;
+                }
                 report.ReportStatus = ReportConstants.Statuses.InReview;
                 report.RequiredAction = null;
+                report.ResponseContentType = null;
                 report.ReportedPartyReplyDeadline = null;
                 report.ReporterReplyDeadline = null;
                 report.UpdatedAt = now;
@@ -766,6 +802,18 @@ namespace YemenGuide.Web.Services.Reports
                     report.ReportId,
                     report.ReportNumber);
             }
+            catch (DbUpdateConcurrencyException)
+            {
+                await transaction.RollbackAsync(CancellationToken.None);
+                DeleteUploadedFile(upload.AbsolutePath);
+                return OwnerReportOperationResultDto.Fail("تغير طلب الإدارة أثناء الإرسال. أعد تحميل الصفحة.", "concurrency");
+            }
+            catch (OperationCanceledException)
+            {
+                await transaction.RollbackAsync(CancellationToken.None);
+                DeleteUploadedFile(upload.AbsolutePath);
+                throw;
+            }
             catch (Exception exception)
             {
                 await transaction.RollbackAsync(cancellationToken);
@@ -780,6 +828,220 @@ namespace YemenGuide.Web.Services.Reports
                 return OwnerReportOperationResultDto.Fail(
                     "تعذر حفظ الرد الآن. حاول مرة أخرى.",
                     "save-failed");
+            }
+        }
+
+
+        public async Task<OwnerReportOperationResultDto> EditAsync(
+            int ownerId, int reportId, OwnerReportEditRequestDto request,
+            IFormFile? evidenceFile, CancellationToken cancellationToken = default)
+        {
+            EnsurePositiveUserId(ownerId);
+            if (request == null)
+                return OwnerReportOperationResultDto.Fail("بيانات التعديل مطلوبة.", "validation");
+            var report = await LoadOwnReportAsync(ownerId, reportId, cancellationToken);
+            if (report == null)
+                return OwnerReportOperationResultDto.Fail("البلاغ غير موجود أو لا يتبع منشأتك المختارة.", "not-found");
+            if (report.ReportStatus != ReportConstants.Statuses.Pending)
+                return OwnerReportOperationResultDto.Fail("بدأت الإدارة المعالجة؛ يمكنك استكمال ما تطلبه فقط.", "edit-locked");
+            if (!MatchesVersion(report, request.RowVersion))
+                return OwnerReportOperationResultDto.Fail("تغير البلاغ. أعد تحميل الصفحة قبل التعديل.", "concurrency");
+            // Keep the accused customer and linked booking/review immutable.
+            var form = new OwnerCreateReportRequestDto
+            {
+                Title = request.Title, ReportReason = request.ReportReason,
+                ReportType = request.ReportType, Category = request.Category,
+                OtherTypeDescription = request.OtherTypeDescription,
+                OtherCategoryDescription = request.OtherCategoryDescription,
+                ReferenceType = report.ReviewId.HasValue ? OwnerReportValues.ReferenceReview : OwnerReportValues.ReferenceBooking,
+                ReferenceId = report.ReviewId ?? report.BookingId ?? 0
+            };
+            if (!ReportConstants.Types.IsValid(form.ReportType) ||
+                !ReportConstants.Categories.IsValid(form.Category))
+                return OwnerReportOperationResultDto.Fail("نوع البلاغ أو التصنيف غير صالح.", "validation");
+            NormalizeCreateRequest(form);
+            var error = ValidateCreateRequest(form);
+            if (error != null)
+                return OwnerReportOperationResultDto.Fail(error, "validation");
+            if (request.RemoveEvidence && evidenceFile != null && evidenceFile.Length > 0)
+                return OwnerReportOperationResultDto.Fail("اختر إزالة المرفق أو استبداله، وليس كليهما.", "validation");
+            var adminId = await ResolveAdminReceiverForCaseAsync(ownerId, reportId, cancellationToken);
+            if (!adminId.HasValue)
+                return OwnerReportOperationResultDto.Fail("لا يوجد حساب إدارة لاستقبال سجل التعديل.", "admin-unavailable");
+            var upload = await SaveEvidenceAsync(ownerId, evidenceFile, cancellationToken);
+            if (!upload.Success) return OwnerReportOperationResultDto.Fail(upload.Message, "invalid-evidence");
+            var now = DateTime.Now;
+            var previous = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                report.Title, report.ReportReason, report.ReportType, report.Category,
+                report.OtherReportTypeDescription, report.OtherCategoryDescription, report.EvidenceImage
+            });
+            var history = NewOwnerCaseMessage(ownerId, adminId.Value, reportId,
+                "تعديل المالك للبلاغ. البيانات السابقة:\n" + previous, report.EvidenceImage, now);
+            report.Title = form.Title;
+            report.ReportReason = form.ReportReason;
+            report.ReportType = form.ReportType;
+            report.Category = form.Category;
+            report.OtherReportTypeDescription = form.ReportType == ReportConstants.Types.Other ? form.OtherTypeDescription : null;
+            report.OtherCategoryDescription = form.Category == ReportConstants.Categories.Other ? form.OtherCategoryDescription : null;
+            if (upload.RelativePath != null) report.EvidenceImage = upload.RelativePath;
+            else if (request.RemoveEvidence) report.EvidenceImage = null;
+            // Do not delete old evidence: it is part of the case history.
+            report.UpdatedAt = now;
+            return await SaveOwnerActionAsync(report, history, upload,
+                "تم تعديل البلاغ قبل بدء المعالجة.", cancellationToken);
+        }
+
+        public async Task<OwnerReportOperationResultDto> WithdrawAsync(
+            int ownerId, int reportId, OwnerReportWithdrawRequestDto request,
+            CancellationToken cancellationToken = default)
+        {
+            EnsurePositiveUserId(ownerId);
+            var reason = request?.Reason?.Trim();
+            if (string.IsNullOrWhiteSpace(reason) || reason.Length < 3 || reason.Length > 500)
+                return OwnerReportOperationResultDto.Fail("سبب السحب يجب أن يكون بين 3 و500 حرف.", "validation");
+            var report = await LoadOwnReportAsync(ownerId, reportId, cancellationToken);
+            if (report == null)
+                return OwnerReportOperationResultDto.Fail("البلاغ غير موجود أو ليس بلاغك.", "not-found");
+            if (!ReportConstants.Statuses.IsActive(report.ReportStatus))
+                return OwnerReportOperationResultDto.Fail("لا يمكن سحب بلاغ منتهٍ.", "invalid-status");
+            if (!MatchesVersion(report, request!.RowVersion))
+                return OwnerReportOperationResultDto.Fail("تغير البلاغ. أعد تحميل الصفحة.", "concurrency");
+            var adminId = await ResolveAdminReceiverForCaseAsync(ownerId, reportId, cancellationToken);
+            if (!adminId.HasValue)
+                return OwnerReportOperationResultDto.Fail("تعذر الوصول إلى الإدارة.", "admin-unavailable");
+            var now = DateTime.Now;
+            report.ReportStatus = ReportConstants.Statuses.Withdrawn;
+            report.WithdrawnAt = now;
+            report.WithdrawnReason = reason;
+            ClearOwnerWaitingState(report);
+            report.UpdatedAt = now;
+            return await SaveOwnerActionAsync(report,
+                NewOwnerCaseMessage(ownerId, adminId.Value, reportId, "سحب المالك بلاغه. السبب:\n" + reason, null, now),
+                UploadResult.Ok(), "تم سحب البلاغ وإيقاف متابعته دون حذفه.", cancellationToken);
+        }
+
+        public async Task<OwnerReportOperationResultDto> RequestReopenAsync(
+            int ownerId, int reportId, OwnerReportReopenRequestDto request,
+            IFormFile? evidenceFile, CancellationToken cancellationToken = default)
+        {
+            EnsurePositiveUserId(ownerId);
+            var reason = request?.Reason?.Trim();
+            if (string.IsNullOrWhiteSpace(reason) || reason.Length < 10 || reason.Length > 4000)
+                return OwnerReportOperationResultDto.Fail("سبب إعادة المراجعة يجب أن يكون بين 10 و4000 حرف.", "validation");
+            var report = await LoadOwnReportAsync(ownerId, reportId, cancellationToken);
+            if (report == null)
+                return OwnerReportOperationResultDto.Fail("البلاغ غير موجود أو ليس بلاغك.", "not-found");
+            if (report.ReportStatus != ReportConstants.Statuses.Rejected)
+                return OwnerReportOperationResultDto.Fail("إعادة المراجعة متاحة هنا للبلاغ المرفوض فقط.", "invalid-status");
+            if (!MatchesVersion(report, request!.RowVersion))
+                return OwnerReportOperationResultDto.Fail("تغير البلاغ. أعد تحميل الصفحة.", "concurrency");
+            var adminId = await ResolveAdminReceiverForCaseAsync(ownerId, reportId, cancellationToken);
+            if (!adminId.HasValue)
+                return OwnerReportOperationResultDto.Fail("تعذر الوصول إلى الإدارة.", "admin-unavailable");
+            var upload = await SaveEvidenceAsync(ownerId, evidenceFile, cancellationToken);
+            if (!upload.Success) return OwnerReportOperationResultDto.Fail(upload.Message, "invalid-evidence");
+            var now = DateTime.Now;
+            var message = "طلب إعادة مراجعة من المالك:\n" + reason +
+                "\nالقرار السابق: " + report.Resolution;
+            // Preserve prior resolution and its date; subsequent decisions are also recorded in audit logs.
+            report.ReportStatus = ReportConstants.Statuses.Escalated;
+            report.EscalatedAt = now;
+            report.ClosedAt = null;
+            report.ReporterReply = reason;
+            report.ReporterReplyDate = now;
+            ClearOwnerWaitingState(report);
+            report.UpdatedAt = now;
+            return await SaveOwnerActionAsync(report,
+                NewOwnerCaseMessage(ownerId, adminId.Value, reportId, message, upload.RelativePath, now),
+                upload, "تم إرسال طلب إعادة المراجعة داخل نفس القضية.", cancellationToken);
+        }
+
+        private async Task<Report?> LoadOwnReportAsync(int ownerId, int reportId, CancellationToken cancellationToken)
+        {
+            var placeId = await ResolveActivePlaceIdAsync(ownerId, cancellationToken);
+            if (!placeId.HasValue || reportId <= 0) return null;
+            return await BuildMineQuery(ownerId, placeId.Value)
+                .Include(r => r.Place)
+                .Include(r => r.Booking).ThenInclude(b => b!.Place)
+                .Include(r => r.Review).ThenInclude(r => r!.Place)
+                .FirstOrDefaultAsync(r => r.ReportId == reportId &&
+                    ((r.Place != null && r.Place.OwnerId == ownerId) ||
+                     (r.Booking != null && r.Booking.Place.OwnerId == ownerId) ||
+                     (r.Review != null && r.Review.Place.OwnerId == ownerId)), cancellationToken);
+        }
+
+        private async Task<bool> IsAdministrationOwnerAsync(int ownerId, CancellationToken cancellationToken)
+        {
+            return await _db.Users.AsNoTracking().AnyAsync(
+                u => u.UserId == ownerId && u.Role == "Admin", cancellationToken) ||
+                await _db.SystemSettings.AsNoTracking().AnyAsync(
+                    setting => setting.PlatformOwnerUserId == ownerId, cancellationToken);
+        }
+
+        private static bool MatchesVersion(Report report, string? version, bool required = true)
+        {
+            if (string.IsNullOrWhiteSpace(version)) return !required;
+            try { return Convert.FromBase64String(version).SequenceEqual(report.RowVersion); }
+            catch (FormatException) { return false; }
+        }
+
+        private static bool IsImageEvidence(IFormFile file)
+        {
+            var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+            return extension == ".jpg" || extension == ".jpeg" || extension == ".png" || extension == ".webp";
+        }
+
+        private static void ClearOwnerWaitingState(Report report)
+        {
+            report.RequiredAction = null;
+            report.ResponseContentType = null;
+            report.ReporterReplyDeadline = null;
+            report.ReportedPartyReplyDeadline = null;
+            report.AdminComment = null;
+        }
+
+        private static Chat NewOwnerCaseMessage(int ownerId, int adminId, int reportId,
+            string message, string? attachment, DateTime now) => new Chat
+        {
+            SenderId = ownerId, ReceiverId = adminId, ReportId = reportId,
+            IsReportMessage = true, PlaceId = null, MessageText = message,
+            AttachmentUrl = attachment, SendTime = now, IsRead = false,
+            IsDeletedForSender = false, IsDeletedForReceiver = false, IsEdited = false
+        };
+
+        private async Task<OwnerReportOperationResultDto> SaveOwnerActionAsync(
+            Report report, Chat message, UploadResult upload, string successMessage,
+            CancellationToken cancellationToken)
+        {
+            await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
+            try
+            {
+                _db.Chats.Add(message);
+                await QueueAdminNotificationsAsync(report.ReportId, "تحديث على بلاغ المالك",
+                    $"تم تحديث القضية {report.ReportNumber}.", AdminPermissionKeys.Cases.Manage, cancellationToken);
+                await _db.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                return OwnerReportOperationResultDto.Ok(successMessage, report.ReportId, report.ReportNumber);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                await transaction.RollbackAsync(CancellationToken.None);
+                DeleteUploadedFile(upload.AbsolutePath);
+                return OwnerReportOperationResultDto.Fail("تغيرت القضية من طرف آخر. أعد تحميل الصفحة.", "concurrency");
+            }
+            catch (OperationCanceledException)
+            {
+                await transaction.RollbackAsync(CancellationToken.None);
+                DeleteUploadedFile(upload.AbsolutePath);
+                throw;
+            }
+            catch (Exception exception)
+            {
+                await transaction.RollbackAsync(CancellationToken.None);
+                DeleteUploadedFile(upload.AbsolutePath);
+                _logger.LogError(exception, "تعذر تحديث بلاغ المالك {ReportId}.", report.ReportId);
+                return OwnerReportOperationResultDto.Fail("تعذر حفظ الإجراء. حاول مرة أخرى.", "save-failed");
             }
         }
 
@@ -839,8 +1101,10 @@ namespace YemenGuide.Web.Services.Reports
             return statusGroup switch
             {
                 OwnerReportValues.StatusNeedsResponse => query.Where(report =>
-                    report.ReportStatus == ReportConstants.Statuses.WaitingForReportedParty &&
-                    report.RequiredAction == ReportConstants.RequiredActions.ReportedPartyResponse),
+                    (report.ReportStatus == ReportConstants.Statuses.WaitingForReportedParty &&
+                     report.RequiredAction == ReportConstants.RequiredActions.ReportedPartyResponse) ||
+                    (report.ReportStatus == ReportConstants.Statuses.WaitingForReporter &&
+                     report.RequiredAction == ReportConstants.RequiredActions.Clarification)),
 
                 OwnerReportValues.StatusActive => query.Where(report =>
                     report.ReportStatus != ReportConstants.Statuses.Resolved &&
@@ -875,15 +1139,14 @@ namespace YemenGuide.Web.Services.Reports
             var isMine = scope == OwnerReportValues.ScopeMine;
             var customer = isMine ? report.AgainstUser : report.Reporter;
             var status = report.ReportStatus ?? ReportConstants.Statuses.Pending;
-            var needsResponse =
-                !isMine &&
-                status == ReportConstants.Statuses.WaitingForReportedParty &&
-                string.Equals(
-                    report.RequiredAction,
-                    ReportConstants.RequiredActions.ReportedPartyResponse,
-                    StringComparison.OrdinalIgnoreCase);
-
-            var deadline = needsResponse ? report.ReportedPartyReplyDeadline : null;
+            var needsResponse = isMine
+                ? status == ReportConstants.Statuses.WaitingForReporter &&
+                  report.RequiredAction == ReportConstants.RequiredActions.Clarification
+                : status == ReportConstants.Statuses.WaitingForReportedParty &&
+                  report.RequiredAction == ReportConstants.RequiredActions.ReportedPartyResponse;
+            var deadline = needsResponse
+                ? (isMine ? report.ReporterReplyDeadline : report.ReportedPartyReplyDeadline)
+                : null;
 
             return new OwnerReportListItemDto
             {
@@ -1001,6 +1264,13 @@ namespace YemenGuide.Web.Services.Reports
                     IsAdminMessage = true
                 });
             }
+
+            if (isMine && report.WithdrawnAt.HasValue)
+                timeline.Add(new OwnerReportTimelineItemDto
+                {
+                    Date = report.WithdrawnAt.Value, Title = "سحبت البلاغ",
+                    Description = report.WithdrawnReason, Actor = "أنت", IsOwnerMessage = true
+                });
 
             return timeline
                 .OrderBy(item => item.Date)

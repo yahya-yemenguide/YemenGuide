@@ -30,6 +30,13 @@
     var isClarificationRequested = Model.NeedsCustomerAction &&
         string.Equals(Model.RequiredAction, ReportConstants.RequiredActions.Clarification, StringComparison.OrdinalIgnoreCase);
 
+    var responseType = isClarificationRequested ? Model.ResponseContentType : null;
+    var allowClarificationText = responseType != "Image";
+    var allowClarificationFile = responseType != "Text";
+    var requireClarificationImage = responseType == "Image" || responseType == "TextAndImage";
+    var responseLabel = responseType == "Image" ? "صورة إثبات فقط" :
+                        responseType == "Text" ? "توضيح نصي فقط" :
+                        responseType == "TextAndImage" ? "توضيح نصي وصورة إثبات" : "توضيح أو مرفق";
     var isResolutionConfirmation = Model.CanConfirmResolution &&
         string.Equals(Model.RequiredAction, ReportConstants.RequiredActions.ResolutionConfirmation, StringComparison.OrdinalIgnoreCase);
 
@@ -47,27 +54,30 @@
     <link rel="stylesheet" href="~/css/customer/customer-reports.css" asp-append-version="true" />
 }
 
-<div class="customer-dashboard-layout">
-    <partial name="_CustomerSidebar" />
+    <div class="customer-dashboard-layout">
+        <partial name="_CustomerSidebar" />
 
-    <main class="customer-main-content customer-reports-main">
-        <div class="cr-shell cr-shell--details" data-customer-reports-page="details" data-report-id="@Model.ReportId" dir="rtl">
+        <main class="customer-main-content customer-reports-main">
+            <div class="cr-shell cr-shell--details" data-customer-reports-page="details" data-report-id="@Model.ReportId" dir="rtl">
 
-            <div class="cr-details-topline">
-                <a asp-controller="Reports" asp-action="MyReports" class="cr-back-link"><i class="bi bi-arrow-right"></i> العودة إلى بلاغاتي</a>
-                <button type="button" class="cr-copy-number" data-copy-report-number="@Model.ReportNumber"><i class="bi bi-copy"></i> نسخ رقم القضية</button>
-            </div>
+                <div class="cr-details-topline">
+                    <a asp-controller="Reports" asp-action="MyReports" class="cr-back-link"><i class="bi bi-arrow-right"></i> العودة إلى بلاغاتي</a>
+                    <button type="button" class="cr-copy-number" data-copy-report-number="@Model.ReportNumber"><i class="bi bi-copy"></i> نسخ رقم القضية</button>
+                </div>
 
-            <header class="cr-case-hero">
-                <div class="cr-case-hero__main">
-                    <div class="cr-case-hero__badges">
-                        <span class="cr-status is-@Model.StatusTone"><i class="bi bi-circle-fill"></i>@Model.StatusLabel</span>
-                        <span class="cr-case-number"><i class="bi bi-hash"></i>@Model.ReportNumber</span>
-                        <span class="cr-case-kind"><i class="bi bi-shield-exclamation"></i>@typeLabel</span>
-                    </div>
-                    <h1>@Model.Title</h1>
-                    <div class="cr-case-hero__meta">
-                        @if (!string.IsNullOrWhiteSpace(categoryLabel)) { <span><i class="bi bi-tag"></i>@categoryLabel</span> }
+                <header class="cr-case-hero">
+                    <div class="cr-case-hero__main">
+                        <div class="cr-case-hero__badges">
+                            <span class="cr-status is-@Model.StatusTone"><i class="bi bi-circle-fill"></i>@Model.StatusLabel</span>
+                            <span class="cr-case-number"><i class="bi bi-hash"></i>@Model.ReportNumber</span>
+                            <span class="cr-case-kind"><i class="bi bi-shield-exclamation"></i>@typeLabel</span>
+                        </div>
+                        <h1>@Model.Title</h1>
+                        <div class="cr-case-hero__meta">
+                        @if (!string.IsNullOrWhiteSpace(categoryLabel))
+                        {
+                            <span><i class="bi bi-tag"></i>@categoryLabel</span>
+                        }
                         <span><i class="bi bi-calendar3"></i> أنشئت @(Model.CreatedAt?.ToString("yyyy/MM/dd - hh:mm tt") ?? "—")</span>
                         <span><i class="bi bi-clock-history"></i> آخر تحديث @Model.UpdatedAt.ToString("yyyy/MM/dd - hh:mm tt")</span>
                     </div>
@@ -83,8 +93,8 @@
                                 @(isResolutionConfirmation
                                     ? "تأكيد هل تم حل المشكلة"
                                     : isClarificationRequested
-                                        ? "إرسال توضيح للإدارة"
-                                        : "مراجعة آخر تحديث والرد")
+                                    ? "إرسال توضيح للإدارة"
+                                    : "مراجعة آخر تحديث والرد")
                             </strong>
                             @if (Model.ReporterReplyDeadline.HasValue)
                             {
@@ -116,9 +126,11 @@
                     <div>
                         <small>تحتاج ردك</small>
                         <h2>@(isResolutionConfirmation ? "الإدارة تريد معرفة: هل حُلّت المشكلة؟" : "الإدارة تحتاج توضيحًا منك")</h2>
-                        <p>@(isResolutionConfirmation
-                            ? "اختر نعم إذا انتهت المشكلة، أو لا واكتب ما الذي ما زال غير محلول ويمكنك إرفاق دليل جديد."
-                            : "اكتب الرد المطلوب أو أرفق دليلًا جديدًا. سيُضاف ردك إلى نفس القضية.")</p>
+                        <p>
+                            @(isResolutionConfirmation
+                                ? "اختر نعم إذا انتهت المشكلة، أو لا واكتب ما الذي ما زال غير محلول ويمكنك إرفاق دليل جديد."
+                                : "اكتب الرد المطلوب أو أرفق دليلًا جديدًا. سيُضاف ردك إلى نفس القضية.")
+                        </p>
                     </div>
                     <a href="#case-actions"><i class="bi bi-arrow-down"></i> تنفيذ الإجراء</a>
                 </section>
@@ -176,7 +188,10 @@
                                                 <div><strong>@item.Title</strong><span>@item.Actor</span></div>
                                                 <time>@item.Date.ToString("yyyy/MM/dd - hh:mm tt")</time>
                                             </div>
-                                            @if (!string.IsNullOrWhiteSpace(item.Description)) { <p>@item.Description</p> }
+                                            @if (!string.IsNullOrWhiteSpace(item.Description))
+                                            {
+                                                <p>@item.Description</p>
+                                            }
                                             @if (!string.IsNullOrWhiteSpace(item.AttachmentUrl))
                                             {
                                                 <a href="@item.AttachmentUrl" target="_blank" rel="noopener" class="cr-timeline-item__attachment"><i class="bi bi-paperclip"></i> فتح المرفق</a>
@@ -193,13 +208,33 @@
                     <section class="cr-panel cr-reference-card">
                         <header class="cr-mini-head"><span><i class="bi bi-link-45deg"></i></span><div><small>مرجع القضية</small><h2>مرتبطة بـ</h2></div></header>
                         <div class="cr-reference-list">
-                            @if (!string.IsNullOrWhiteSpace(Model.PlaceName)) { <div><span><i class="bi bi-building"></i></span><p><small>المنشأة</small><strong>@Model.PlaceName</strong></p></div> }
-                            @if (Model.BookingId.HasValue) { <div><span><i class="bi bi-calendar2-check"></i></span><p><small>الحجز</small><strong>#@Model.BookingId</strong>@if (Model.BookingStartDate.HasValue){<em>@Model.BookingStartDate.Value.ToString("yyyy/MM/dd")</em>}</p></div> }
-                            @if (Model.ReviewId.HasValue) { <div><span><i class="bi bi-star"></i></span><p><small>التقييم</small><strong>#@Model.ReviewId</strong></p></div> }
-                            @if (Model.PromotionId.HasValue) { <div><span><i class="bi bi-tags"></i></span><p><small>العرض</small><strong>#@Model.PromotionId</strong></p></div> }
-                            @if (Model.AdvertisementId.HasValue) { <div><span><i class="bi bi-megaphone"></i></span><p><small>الإعلان</small><strong>#@Model.AdvertisementId</strong></p></div> }
+                            @if (!string.IsNullOrWhiteSpace(Model.PlaceName))
+                            {
+                                <div><span><i class="bi bi-building"></i></span><p><small>المنشأة</small><strong>@Model.PlaceName</strong></p></div>
+                            }
+                            @if (Model.BookingId.HasValue)
+                            {
+                                <div><span><i class="bi bi-calendar2-check"></i></span><p><small>الحجز</small><strong>#@Model.BookingId</strong>@if (Model.BookingStartDate.HasValue)
+                                        {
+                                            <em>@Model.BookingStartDate.Value.ToString("yyyy/MM/dd")</em>
+                                        }</p></div>
+                            }
+                            @if (Model.ReviewId.HasValue)
+                            {
+                                <div><span><i class="bi bi-star"></i></span><p><small>التقييم</small><strong>#@Model.ReviewId</strong></p></div>
+                            }
+                            @if (Model.PromotionId.HasValue)
+                            {
+                                <div><span><i class="bi bi-tags"></i></span><p><small>العرض</small><strong>#@Model.PromotionId</strong></p></div>
+                            }
+                            @if (Model.AdvertisementId.HasValue)
+                            {
+                                <div><span><i class="bi bi-megaphone"></i></span><p><small>الإعلان</small><strong>#@Model.AdvertisementId</strong></p></div>
+                            }
                             @if (string.IsNullOrWhiteSpace(Model.PlaceName) && !Model.BookingId.HasValue && !Model.ReviewId.HasValue && !Model.PromotionId.HasValue && !Model.AdvertisementId.HasValue)
-                            { <div><span><i class="bi bi-headset"></i></span><p><small>الجهة</small><strong>إدارة المنصة</strong></p></div> }
+                            {
+                                <div><span><i class="bi bi-headset"></i></span><p><small>الجهة</small><strong>إدارة المنصة</strong></p></div>
+                            }
                         </div>
                     </section>
 
@@ -207,9 +242,18 @@
                     {
                         <section class="cr-panel cr-admin-card">
                             <header class="cr-mini-head"><span><i class="bi bi-shield-check"></i></span><div><small>من الإدارة</small><h2>آخر نتيجة مسجلة</h2></div></header>
-                            @if (!string.IsNullOrWhiteSpace(Model.AdminComment)) { <div class="cr-admin-card__item"><small>ملاحظة الإدارة</small><p>@Model.AdminComment</p></div> }
-                            @if (!string.IsNullOrWhiteSpace(Model.Resolution)) { <div class="cr-admin-card__item is-highlight"><small>الحل / النتيجة</small><p>@Model.Resolution</p></div> }
-                            @if (!string.IsNullOrWhiteSpace(Model.ResolutionAction)) { <div class="cr-admin-card__item"><small>الإجراء المسجل</small><p>@Model.ResolutionAction</p></div> }
+                            @if (!string.IsNullOrWhiteSpace(Model.AdminComment))
+                            {
+                                <div class="cr-admin-card__item"><small>ملاحظة الإدارة</small><p>@Model.AdminComment</p></div>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(Model.Resolution))
+                            {
+                                <div class="cr-admin-card__item is-highlight"><small>الحل / النتيجة</small><p>@Model.Resolution</p></div>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(Model.ResolutionAction))
+                            {
+                                <div class="cr-admin-card__item"><small>الإجراء المسجل</small><p>@Model.ResolutionAction</p></div>
+                            }
                         </section>
                     }
 
@@ -222,7 +266,7 @@
                                 <div class="cr-resolution-box__title"><i class="bi bi-patch-question-fill"></i><div><strong>هل تم حل المشكلة؟</strong><small>اختر النتيجة التي تعكس الواقع الآن.</small></div></div>
 
                                 <form asp-controller="Reports" asp-action="ConfirmResolution" asp-route-id="@Model.ReportId"
-                                      method="post" class="cr-action-form is-success" data-report-operation-form="resolution-confirmed">
+                                  method="post" class="cr-action-form is-success" data-report-operation-form="resolution-confirmed">
                                     @Html.AntiForgeryToken()
                                     <input type="hidden" name="IsResolved" value="true" />
                                     <textarea name="Note" maxlength="4000" rows="3" placeholder="ملاحظة اختيارية للإدارة..."></textarea>
@@ -230,7 +274,7 @@
                                 </form>
 
                                 <form asp-controller="Reports" asp-action="ConfirmResolution" asp-route-id="@Model.ReportId"
-                                      method="post" enctype="multipart/form-data" class="cr-action-form is-unresolved" data-report-operation-form="resolution-not-confirmed">
+                                  method="post" enctype="multipart/form-data" class="cr-action-form is-unresolved" data-report-operation-form="resolution-not-confirmed">
                                     @Html.AntiForgeryToken()
                                     <input type="hidden" name="IsResolved" value="false" />
                                     <textarea name="Note" maxlength="4000" rows="4" required placeholder="ما الذي ما زال غير محلول؟ اكتب السبب بوضوح..."></textarea>
@@ -244,10 +288,23 @@
                             <details class="cr-disclosure" @(isClarificationRequested ? "open" : null)>
                                 <summary><span><i class="bi bi-chat-square-text"></i> @(isClarificationRequested ? "إرسال التوضيح المطلوب" : "إضافة توضيح أو دليل")</span><i class="bi bi-chevron-down"></i></summary>
                                 <form asp-controller="Reports" asp-action="AddClarification" asp-route-id="@Model.ReportId"
-                                      method="post" enctype="multipart/form-data" class="cr-action-form" data-report-operation-form="clarification">
+                                  method="post" enctype="multipart/form-data" class="cr-action-form" data-report-operation-form="clarification" data-response-content-type="@responseType">
                                     @Html.AntiForgeryToken()
-                                    <textarea name="Message" maxlength="4000" rows="4" placeholder="اكتب توضيحك للإدارة..."></textarea>
-                                    <label class="cr-mini-upload"><input type="file" name="evidenceFile" accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf" /><i class="bi bi-paperclip"></i><span>إضافة مرفق اختياري</span></label>
+                                    <p>المطلوب: @responseLabel</p>
+                                    @if (allowClarificationText)
+                                    {
+                                        <label for="customerClarification">التوضيح للإدارة</label>
+                                        <textarea id="customerClarification" name="Message" maxlength="4000" rows="4" required="@(responseType != null)" placeholder="اكتب التوضيح الذي طلبته الإدارة..."></textarea>
+                                    }
+                                    @if (allowClarificationFile)
+                                    {
+                                        <label class="cr-mini-upload">
+                                            <input type="file" name="evidenceFile"
+                                           accept="@(requireClarificationImage ? ".jpg,.jpeg,.png,.webp" : ".jpg,.jpeg,.png,.webp,.pdf")"
+                                           data-image-only="@requireClarificationImage.ToString().ToLowerInvariant()" />
+                                            <i class="bi bi-paperclip"></i><span>@(requireClarificationImage ? "إرفاق صورة الإثبات المطلوبة — حتى 5MB" : "إضافة مرفق اختياري — حتى 5MB")</span>
+                                        </label>
+                                    }
                                     <button type="submit"><i class="bi bi-send-fill"></i> إرسال التوضيح</button>
                                 </form>
                             </details>
@@ -258,7 +315,7 @@
                             <details class="cr-disclosure is-reopen">
                                 <summary><span><i class="bi bi-arrow-counterclockwise"></i> طلب إعادة مراجعة</span><i class="bi bi-chevron-down"></i></summary>
                                 <form asp-controller="Reports" asp-action="RequestReopen" asp-route-id="@Model.ReportId"
-                                      method="post" enctype="multipart/form-data" class="cr-action-form" data-report-operation-form="reopen">
+                                  method="post" enctype="multipart/form-data" class="cr-action-form" data-report-operation-form="reopen">
                                     @Html.AntiForgeryToken()
                                     <p class="cr-action-hint"><i class="bi bi-info-circle"></i> لن يتم إنشاء بلاغ جديد؛ تعود نفس القضية ونفس الرقم للمراجعة.</p>
                                     <textarea name="Reason" minlength="10" maxlength="4000" rows="4" required placeholder="اكتب السبب أو المعلومة الجديدة التي تستحق إعادة المراجعة..."></textarea>
@@ -273,7 +330,7 @@
                             <details class="cr-disclosure is-withdraw">
                                 <summary><span><i class="bi bi-x-circle"></i> سحب القضية</span><i class="bi bi-chevron-down"></i></summary>
                                 <form asp-controller="Reports" asp-action="Withdraw" asp-route-id="@Model.ReportId"
-                                      method="post" class="cr-action-form" data-report-operation-form="withdraw">
+                                  method="post" class="cr-action-form" data-report-operation-form="withdraw">
                                     @Html.AntiForgeryToken()
                                     <p class="cr-action-hint"><i class="bi bi-exclamation-circle"></i> السحب ينهي متابعة هذه القضية. اكتب السبب قبل التأكيد.</p>
                                     <textarea name="Reason" maxlength="500" rows="3" required placeholder="سبب سحب القضية..."></textarea>

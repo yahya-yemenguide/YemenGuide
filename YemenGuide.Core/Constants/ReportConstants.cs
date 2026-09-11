@@ -16,6 +16,35 @@ namespace YemenGuide.Core.Constants
     public static class ReportConstants
     {
 
+        // Null is reserved for requests created before phase 1.
+        public static class ResponseContentTypes
+        {
+            public const string Text = "Text";
+            public const string Image = "Image";
+            public const string TextAndImage = "TextAndImage";
+
+            public static bool IsValid(string? value) =>
+                value == Text || value == Image || value == TextAndImage;
+
+            public static string? Validate(string? type, string? message, bool hasFile, bool isImage)
+            {
+                var hasText = !string.IsNullOrWhiteSpace(message);
+                if (message != null && message.Trim().Length > 4000)
+                    return "النص يجب ألا يتجاوز 4000 حرف.";
+                if (type == null)
+                    return hasText || hasFile ? null : "أرسل توضيحًا أو مرفقًا.";
+                if (!IsValid(type))
+                    return "نوع الاستكمال غير صالح؛ اطلب من الإدارة تجديد الطلب.";
+                if (type == Text && (!hasText || hasFile))
+                    return "طلبت الإدارة توضيحًا نصيًا فقط، دون مرفق.";
+                if (type == Image && (hasText || !hasFile || !isImage))
+                    return "طلبت الإدارة صورة إثبات فقط، دون نص أو ملف PDF.";
+                if (type == TextAndImage && (!hasText || !hasFile || !isImage))
+                    return "طلبت الإدارة توضيحًا نصيًا وصورة إثبات معًا.";
+                return null;
+            }
+        }
+
         public static class RequestKinds
         {
             public const string Report = "Report";

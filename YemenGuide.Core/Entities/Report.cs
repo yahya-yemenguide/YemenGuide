@@ -36,6 +36,7 @@ namespace YemenGuide.Core.Entities
         public string? OtherReportTypeDescription { get; set; }
         public string? OtherCategoryDescription { get; set; }
         public string? RequiredAction { get; set; }
+        public string? ResponseContentType { get; set; }
         public string Priority { get; set; } = null!;
         public int? BookingId { get; set; }
         public int? PromotionId { get; set; }

@@ -1893,7 +1893,7 @@ namespace YemenGuide.Data
                 entity.Property(e => e.ReportNumber).HasMaxLength(30);
 
                 entity.Property(e => e.ReportStatus)
-                    .HasMaxLength(20)
+                    .HasMaxLength(30)
                     .HasDefaultValueSql("(N'Pending')");
 
                 entity.Property(e => e.ReportType)
@@ -1913,6 +1913,7 @@ namespace YemenGuide.Data
                     .HasDefaultValueSql("(N'Report')");
 
                 entity.Property(e => e.RequiredAction).HasMaxLength(30);
+                entity.Property(e => e.ResponseContentType).HasMaxLength(20);
 
                 entity.Property(e => e.ResolutionAction).HasMaxLength(100);
 

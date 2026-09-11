@@ -101,6 +101,13 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 return Challenge();
 
             SetNoStoreHeaders();
+            if (await IsCurrentAdminAccountAsync(ownerId, cancellationToken))
+            {
+                const string message = "منشآت الإدارة تعالج الإساءة بأدوات الإدارة، ولا ترفع بلاغًا إلى نفسها.";
+                if (ExpectsJson()) return BadRequest(new { success = false, message, errorCode = "administration-property" });
+                TempData["OwnerReportError"] = message;
+                return RedirectToAction(nameof(OwnerReports));
+            }
 
             var form = new OwnerCreateReportRequestDto
             {
@@ -133,6 +140,13 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 return Challenge();
 
             SetNoStoreHeaders();
+            if (await IsCurrentAdminAccountAsync(ownerId, cancellationToken))
+            {
+                const string message = "منشآت الإدارة تعالج الإساءة بأدوات الإدارة، ولا ترفع بلاغًا إلى نفسها.";
+                if (ExpectsJson()) return BadRequest(new { success = false, message, errorCode = "administration-property" });
+                TempData["OwnerReportError"] = message;
+                return RedirectToAction(nameof(OwnerReports));
+            }
 
             if (!ModelState.IsValid)
             {
@@ -224,6 +238,44 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             return FinishDetailsOperation(id, result);
         }
 
+        [HttpPost("/Owner/Reports/OwnerReportDetails/{id:int}/Edit")]
+        [ValidateAntiForgeryToken]
+        [RequestSizeLimit(6 * 1024 * 1024)]
+        public async Task<IActionResult> EditReport(int id,
+            [FromForm] OwnerReportEditRequestDto request, [FromForm] IFormFile? evidenceFile,
+            CancellationToken cancellationToken = default)
+        {
+            if (!TryGetOwnerId(out var ownerId)) return Challenge();
+            if (id <= 0) return NotFound();
+            if (!ModelState.IsValid) return OperationValidationFailure(id, "راجع بيانات التعديل.");
+            return FinishDetailsOperation(id, await _reportsService.EditAsync(ownerId, id, request, evidenceFile, cancellationToken));
+        }
+
+        [HttpPost("/Owner/Reports/OwnerReportDetails/{id:int}/Withdraw")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> WithdrawReport(int id,
+            [FromForm] OwnerReportWithdrawRequestDto request,
+            CancellationToken cancellationToken = default)
+        {
+            if (!TryGetOwnerId(out var ownerId)) return Challenge();
+            if (id <= 0) return NotFound();
+            if (!ModelState.IsValid) return OperationValidationFailure(id, "اكتب سبب سحب البلاغ.");
+            return FinishDetailsOperation(id, await _reportsService.WithdrawAsync(ownerId, id, request, cancellationToken));
+        }
+
+        [HttpPost("/Owner/Reports/OwnerReportDetails/{id:int}/Reopen")]
+        [ValidateAntiForgeryToken]
+        [RequestSizeLimit(6 * 1024 * 1024)]
+        public async Task<IActionResult> ReopenReport(int id,
+            [FromForm] OwnerReportReopenRequestDto request, [FromForm] IFormFile? evidenceFile,
+            CancellationToken cancellationToken = default)
+        {
+            if (!TryGetOwnerId(out var ownerId)) return Challenge();
+            if (id <= 0) return NotFound();
+            if (!ModelState.IsValid) return OperationValidationFailure(id, "اكتب سبب إعادة المراجعة.");
+            return FinishDetailsOperation(id, await _reportsService.RequestReopenAsync(ownerId, id, request, evidenceFile, cancellationToken));
+        }
+
         [HttpGet("/Owner/Reports/SearchBookings")]
         public async Task<IActionResult> SearchBookings(
             [FromQuery] string? q = null,
@@ -310,16 +362,13 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             });
         }
 
-        private Task<bool> IsCurrentAdminAccountAsync(
-            int userId,
-            CancellationToken cancellationToken)
+        private async Task<bool> IsCurrentAdminAccountAsync(
+            int userId, CancellationToken cancellationToken)
         {
-            return _context.Users
-                .AsNoTracking()
-                .AnyAsync(user =>
-                    user.UserId == userId &&
-                    user.Role == SystemRoles.Admin,
-                    cancellationToken);
+            return await _context.Users.AsNoTracking().AnyAsync(
+                user => user.UserId == userId && user.Role == SystemRoles.Admin, cancellationToken) ||
+                await _context.SystemSettings.AsNoTracking().AnyAsync(
+                    setting => setting.PlatformOwnerUserId == userId, cancellationToken);
         }
 
         private bool TryGetOwnerId(out int ownerId)

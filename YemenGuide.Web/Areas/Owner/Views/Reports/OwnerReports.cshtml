@@ -13,7 +13,7 @@
 }
 
 @section Styles {
-    <link rel="stylesheet" href="@(Url.Content("~/css/owner/owner-reports.css"))?v=20260828-0105" />
+    <link rel="stylesheet" href="@(Url.Content("~/css/owner/owner-reports.css"))?v=reports-phase2-20260911" />
 }
 
 <div class="or-page" data-owner-reports-page="list" dir="rtl">
@@ -27,12 +27,25 @@
                     : "تابع القضايا التي أحالتها الإدارة إليك، وبلاغاتك المرسلة ضد العملاء من مكان واحد.")</p>
             </div>
             <div class="or-hero__actions">
-                <a asp-area="Owner" asp-controller="Reports" asp-action="CreateOwnerReport" class="or-primary-btn">
-                    <i class="bi bi-plus-lg"></i><span>@(isAdminAccount ? "تسجيل مخالفة عميل" : "بلاغ جديد ضد عميل")</span>
-                </a>
+                @if (!isAdminAccount)
+                {
+                    <a asp-area="Owner" asp-controller="Reports" asp-action="CreateOwnerReport" class="or-primary-btn"><i class="bi bi-plus-lg"></i><span>بلاغ جديد ضد عميل</span></a>
+                }
+                else if (User.IsInRole("Admin"))
+                {
+                    <a href="/Admin/Reports" class="or-primary-btn"><i class="bi bi-shield-check"></i><span>فتح مركز بلاغات الإدارة</span></a>
+                }
             </div>
         </header>
 
+        @if (isAdminAccount)
+        {
+            <div class="or-phase2-notice" role="status">هذه منشأة تابعة للإدارة. شكاوى العملاء تصل إلى مركز بلاغات الإدارة، ولا تحتاج المنشأة إلى رفع بلاغ للإدارة نفسها.</div>
+        }
+        @if (TempData["OwnerReportError"] is string reportError)
+        {
+            <div class="or-phase2-notice is-error" role="alert">@reportError</div>
+        }
         <nav class="or-main-tabs" aria-label="المسارات الرئيسية">
             <a asp-area="Owner" asp-controller="Reports" asp-action="OwnerReports"
                asp-route-scope="@OwnerReportValues.ScopeIncoming" asp-route-statusGroup="all"
@@ -97,7 +110,7 @@
                     : (isAdminAccount ? "بلاغات المنشأة المرسلة" : "بلاغاتك المرسلة"))</strong>
                 <span>@Model.FilteredCount نتيجة</span>
             </div>
-            @if (!isIncoming)
+            @if (!isIncoming && !isAdminAccount)
             {
                 <div class="or-summary-pills">
                     <span><b>@Model.Summary.MineActiveCount</b> نشطة</span>
@@ -118,7 +131,7 @@
                         ? "عندما توجد قضية تتطلب رد المنشأة ستظهر هنا مباشرة."
                         : "عندما تحتاج الإدارة ردك على قضية ستظهر هنا مباشرة.")
                     : (isAdminAccount
-                        ? "يمكنك تسجيل مخالفة عميل مرتبطة بحجز أو تقييم حقيقي في المنشأة."
+                        ? "شكاوى العملاء على منشآت الإدارة تُتابع من مركز بلاغات الإدارة."
                         : "يمكنك إنشاء بلاغ جديد ضد عميل مرتبط بحجز أو تقييم حقيقي في منشآتك."))</p>
                 @if (!isIncoming)
                 {
@@ -208,5 +221,5 @@
 </div>
 
 @section Scripts {
-    <script src="@(Url.Content("~/js/owner/owner-reports.js"))?v=20260828-0105"></script>
+    <script src="@(Url.Content("~/js/owner/owner-reports.js"))?v=reports-phase2-20260911"></script>
 }

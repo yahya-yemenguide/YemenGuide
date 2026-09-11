@@ -106,6 +106,14 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                     context,
                     cancellationToken));
 
+        [HttpPost("SendReporterMessage")]
+        [ValidateAntiForgeryToken]
+        [RequireAdminPermission(AdminPermissionKeys.Cases.Manage)]
+        public Task<IActionResult> SendReporterMessage(
+            [FromForm] AdminReportReporterMessageDto input, CancellationToken cancellationToken) =>
+            ExecuteOperationAsync(input,
+                (adminId, context) => _reportsService.SendReporterMessageAsync(input, adminId, context, cancellationToken));
+
         [HttpPost("RequestClarification")]
         [ValidateAntiForgeryToken]
         [RequireAdminPermission(AdminPermissionKeys.Cases.Manage)]

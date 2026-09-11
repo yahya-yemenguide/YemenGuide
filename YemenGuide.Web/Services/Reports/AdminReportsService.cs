@@ -282,7 +282,8 @@ namespace YemenGuide.Web.Services.Reports
                     report.ReportType != ReportConstants.Types.Platform &&
                     report.ReportType != ReportConstants.Types.Technical &&
                     (
-                        (report.AgainstUser != null && report.AgainstUser.Role == "Owner") ||
+                        (report.AgainstUser != null &&
+                         (report.AgainstUser.Role == "Owner" || report.AgainstUser.Role == "Admin")) ||
                         (
                             report.AgainstUserId == null &&
                             (
@@ -442,6 +443,9 @@ namespace YemenGuide.Web.Services.Reports
             var isCompleted = IsCompleted(report.ReportStatus);
             var confirmationState = GetCustomerResolutionConfirmationState(report.ReporterReply);
 
+            var isAdministrationProperty = IsRole(effectiveAgainstUser, "Admin") ||
+                (effectiveAgainstUser != null && await _db.SystemSettings.AsNoTracking()
+                    .AnyAsync(setting => setting.PlatformOwnerUserId == effectiveAgainstUser.UserId, cancellationToken));
             var isCustomerAgainstOwner = scenario == AdminReportValues.ScenarioCustomerAgainstOwner;
             var isOwnerAgainstCustomer = scenario == AdminReportValues.ScenarioOwnerAgainstCustomer;
             var isPlatformCase = scenario == AdminReportValues.ScenarioPlatform;
@@ -468,11 +472,13 @@ namespace YemenGuide.Web.Services.Reports
                 Priority = report.Priority,
                 PriorityLabel = AdminReportValues.GetPriorityLabel(report.Priority),
                 RequiredAction = report.RequiredAction,
+                ResponseContentType = report.ResponseContentType,
                 RequiredActionLabel = AdminReportValues.GetRequiredActionLabel(report.RequiredAction),
                 Scenario = scenario,
                 ScenarioLabel = AdminReportValues.GetScenarioLabel(scenario),
                 DirectionLabel = BuildDirectionLabel(report.Reporter, effectiveAgainstUser, scenario),
                 IsCustomerAgainstOwner = isCustomerAgainstOwner,
+                IsAdministrationProperty = isAdministrationProperty,
                 IsOwnerAgainstCustomer = isOwnerAgainstCustomer,
                 IsPlatformCase = isPlatformCase,
                 CurrentStepLabel = GetCurrentStepLabel(report, scenario),
@@ -513,7 +519,7 @@ namespace YemenGuide.Web.Services.Reports
                 CanRequestReporterClarification = CanRequestExternalInput(report.ReportStatus),
 
                 CanRequestOwnerResponse =
-                    isCustomerAgainstOwner &&
+                    isCustomerAgainstOwner && !isAdministrationProperty &&
                     CanRequestExternalInput(report.ReportStatus) &&
                     effectiveAgainstUser != null &&
                     IsRole(effectiveAgainstUser, "Owner"),
@@ -734,6 +740,32 @@ namespace YemenGuide.Web.Services.Reports
            إجراءات الإدارة
            ===================================================================== */
 
+        // A deliberate admin-to-reporter message; never automatically forwards private owner replies.
+        public Task<AdminReportOperationResultDto> SendReporterMessageAsync(
+            AdminReportReporterMessageDto input, int currentAdminUserId,
+            AdminReportRequestContextDto requestContext,
+            CancellationToken cancellationToken = default)
+        {
+            var message = input.Message?.Trim();
+            if (string.IsNullOrWhiteSpace(message) || message.Length < 3 || message.Length > 4000)
+                return Task.FromResult(AdminReportOperationResultDto.Fail("الرسالة يجب أن تكون بين 3 و4000 حرف.", "validation"));
+            return ExecuteMutationAsync(input.ReportId, currentAdminUserId, requestContext, report =>
+            {
+                if (report.ReportStatus == ReportConstants.Statuses.Pending ||
+                    ReportConstants.Statuses.IsTerminal(report.ReportStatus))
+                    return Task.FromResult(AdminReportOperationResultDto.Fail("ابدأ المراجعة أولًا؛ لا يمكن مراسلة قضية مغلقة أو مسحوبة أو مرفوضة.", "invalid-status"));
+                var now = DateTime.Now;
+                AddReportChat(currentAdminUserId, report.ReporterId, report, message, now);
+                report.UpdatedAt = now;
+                AddAuditLog(currentAdminUserId, "ReportReporterMessage", report.ReportId,
+                    "أرسلت الإدارة توضيحًا للمبلّغ.", null, new { Message = message }, requestContext);
+                QueueNotification(report.ReporterId, "رسالة من الإدارة",
+                    $"وصل توضيح من الإدارة بشأن القضية {report.ReportNumber}.",
+                    NotificationTypes.ReportReply, ReporterDetailsUrl(report.ReportId, report.Reporter.Role), report.ReportId);
+                return Task.FromResult(AdminReportOperationResultDto.Ok("تم إرسال التوضيح للمبلّغ.", report.ReportId));
+            }, cancellationToken);
+        }
+
         public Task<AdminReportOperationResultDto> StartReviewAsync(
             AdminReportSimpleActionDto input,
             int currentAdminUserId,
@@ -783,6 +815,9 @@ namespace YemenGuide.Web.Services.Reports
             CancellationToken cancellationToken = default)
         {
             input.Message = NormalizeRequired(input.Message);
+            if (input.Message.Length < 5 || input.Message.Length > 4000 ||
+                !ReportConstants.ResponseContentTypes.IsValid(input.ResponseContentType))
+                return Task.FromResult(AdminReportOperationResultDto.Fail("راجع نص الطلب ونوع الاستكمال المطلوب.", "validation"));
             var deadlineError = ValidateDeadline(input.Deadline);
             if (deadlineError != null)
                 return Task.FromResult(AdminReportOperationResultDto.Fail(deadlineError, "invalid-deadline"));
@@ -804,10 +839,12 @@ namespace YemenGuide.Web.Services.Reports
                     var oldStatus = report.ReportStatus;
                     var oldAction = report.RequiredAction;
 
-                    AddReportChat(currentAdminUserId, report.ReporterId, report, input.Message, now);
+                    AddReportChat(currentAdminUserId, report.ReporterId, report,
+                        input.Message + "\nنوع الاستكمال المطلوب: " + input.ResponseContentType, now);
 
                     report.ReportStatus = ReportConstants.Statuses.WaitingForReporter;
                     report.RequiredAction = ReportConstants.RequiredActions.Clarification;
+                    report.ResponseContentType = input.ResponseContentType;
                     report.ReporterReplyDeadline = input.Deadline;
                     report.ReportedPartyReplyDeadline = null;
                     report.AdminComment = Truncate(input.Message, MaximumAdminCommentLength, string.Empty);
@@ -819,7 +856,7 @@ namespace YemenGuide.Web.Services.Reports
                         report.ReportId,
                         $"تم طلب توضيح من المبلّغ حتى {input.Deadline!.Value:yyyy/MM/dd hh:mm tt}.",
                         new { Status = oldStatus, RequiredAction = oldAction },
-                        new { Status = report.ReportStatus, report.RequiredAction, Deadline = input.Deadline },
+                        new { Status = report.ReportStatus, report.RequiredAction, report.ResponseContentType, Deadline = input.Deadline },
                         requestContext);
 
                     QueueNotification(
@@ -844,6 +881,9 @@ namespace YemenGuide.Web.Services.Reports
             CancellationToken cancellationToken = default)
         {
             input.Message = NormalizeRequired(input.Message);
+            if (input.Message.Length < 5 || input.Message.Length > 4000 ||
+                !ReportConstants.ResponseContentTypes.IsValid(input.ResponseContentType))
+                return Task.FromResult(AdminReportOperationResultDto.Fail("راجع نص الطلب ونوع الاستكمال المطلوب.", "validation"));
             var deadlineError = ValidateDeadline(input.Deadline);
             if (deadlineError != null)
                 return Task.FromResult(AdminReportOperationResultDto.Fail(deadlineError, "invalid-deadline"));
@@ -852,29 +892,35 @@ namespace YemenGuide.Web.Services.Reports
                 input.ReportId,
                 currentAdminUserId,
                 requestContext,
-                report =>
+                async report =>
                 {
                     if (!CanRequestExternalInput(report.ReportStatus))
                     {
-                        return Task.FromResult(AdminReportOperationResultDto.Fail(
+                        return AdminReportOperationResultDto.Fail(
                             "القضية ليست في حالة تسمح بطلب رد المالك الآن.",
-                            "invalid-status"));
+                            "invalid-status");
                     }
 
                     if (!IsRole(report.Reporter, "Customer"))
                     {
-                        return Task.FromResult(AdminReportOperationResultDto.Fail(
+                        return AdminReportOperationResultDto.Fail(
                             "طلب رد المالك متاح فقط عندما يكون المبلّغ عميلًا.",
-                            "not-customer-report"));
+                            "not-customer-report");
                     }
 
                     var owner = GetEffectiveAgainstUser(report);
                     if (owner == null || !IsRole(owner, "Owner"))
                     {
-                        return Task.FromResult(AdminReportOperationResultDto.Fail(
+                        return AdminReportOperationResultDto.Fail(
                             "لا يوجد مالك محدد يمكن طلب الرد منه في هذه القضية.",
-                            "owner-missing"));
+                            "owner-missing");
                     }
+
+                    if (await _db.SystemSettings.AsNoTracking().AnyAsync(
+                        setting => setting.PlatformOwnerUserId == owner.UserId, cancellationToken))
+                        return AdminReportOperationResultDto.Fail(
+                            "هذه منشأة للإدارة؛ عالج الشكوى داخليًا ثم أرسل التوضيح للعميل.",
+                            "administration-property");
 
                     var now = DateTime.Now;
                     var oldStatus = report.ReportStatus;
@@ -886,10 +932,12 @@ namespace YemenGuide.Web.Services.Reports
                         report.AgainstUserId = owner.UserId;
                     }
 
-                    AddReportChat(currentAdminUserId, owner.UserId, report, input.Message, now);
+                    AddReportChat(currentAdminUserId, owner.UserId, report,
+                        input.Message + "\nنوع الاستكمال المطلوب: " + input.ResponseContentType, now);
 
                     report.ReportStatus = ReportConstants.Statuses.WaitingForReportedParty;
                     report.RequiredAction = ReportConstants.RequiredActions.ReportedPartyResponse;
+                    report.ResponseContentType = input.ResponseContentType;
                     report.ReportedPartyReplyDeadline = input.Deadline;
                     report.ReporterReplyDeadline = null;
                     report.AdminComment = Truncate(input.Message, MaximumAdminCommentLength, string.Empty);
@@ -901,7 +949,7 @@ namespace YemenGuide.Web.Services.Reports
                         report.ReportId,
                         $"تم طلب رد من المالك حتى {input.Deadline!.Value:yyyy/MM/dd hh:mm tt}.",
                         new { Status = oldStatus, RequiredAction = oldAction },
-                        new { Status = report.ReportStatus, report.RequiredAction, OwnerUserId = owner.UserId, Deadline = input.Deadline },
+                        new { Status = report.ReportStatus, report.RequiredAction, report.ResponseContentType, OwnerUserId = owner.UserId, Deadline = input.Deadline },
                         requestContext);
 
                     QueueNotification(
@@ -912,9 +960,9 @@ namespace YemenGuide.Web.Services.Reports
                         ReporterDetailsUrl(report.ReportId, owner.Role),
                         report.ReportId);
 
-                    return Task.FromResult(AdminReportOperationResultDto.Ok(
+                    return AdminReportOperationResultDto.Ok(
                         "تم إرسال طلب الرد إلى المالك.",
-                        report.ReportId));
+                        report.ReportId);
                 },
                 cancellationToken);
         }
@@ -961,6 +1009,7 @@ namespace YemenGuide.Web.Services.Reports
 
                     report.ReportStatus = ReportConstants.Statuses.WaitingForReporter;
                     report.RequiredAction = ReportConstants.RequiredActions.ResolutionConfirmation;
+                    report.ResponseContentType = null;
                     report.ReporterReplyDeadline = input.Deadline;
                     report.ReportedPartyReplyDeadline = null;
                     report.AdminComment = Truncate(message, MaximumAdminCommentLength, string.Empty);
@@ -1784,7 +1833,8 @@ namespace YemenGuide.Web.Services.Reports
             if (IsRole(report.Reporter, "Owner") && IsRole(effectiveAgainstUser, "Customer"))
                 return AdminReportValues.ScenarioOwnerAgainstCustomer;
 
-            if (IsRole(report.Reporter, "Customer") && IsRole(effectiveAgainstUser, "Owner"))
+            if (IsRole(report.Reporter, "Customer") &&
+                (IsRole(effectiveAgainstUser, "Owner") || IsRole(effectiveAgainstUser, "Admin")))
                 return AdminReportValues.ScenarioCustomerAgainstOwner;
 
             if (ReportConstants.EqualsState(report.ReportType, ReportConstants.Types.Platform) ||
@@ -1840,6 +1890,7 @@ namespace YemenGuide.Web.Services.Reports
         private static void ClearWaitingState(Report report)
         {
             report.RequiredAction = null;
+            report.ResponseContentType = null;
             report.ReporterReplyDeadline = null;
             report.ReportedPartyReplyDeadline = null;
             report.AdminComment = null;
@@ -2116,6 +2167,7 @@ namespace YemenGuide.Web.Services.Reports
                 Priority = report.Priority,
                 PriorityLabel = AdminReportValues.GetPriorityLabel(report.Priority),
                 RequiredAction = report.RequiredAction,
+                ResponseContentType = report.ResponseContentType,
                 RequiredActionLabel = AdminReportValues.GetRequiredActionLabel(report.RequiredAction),
                 Scenario = scenario,
                 ScenarioLabel = AdminReportValues.GetScenarioLabel(scenario),

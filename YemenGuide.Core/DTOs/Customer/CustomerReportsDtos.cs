@@ -62,6 +62,7 @@ namespace YemenGuide.Core.DTOs.Customer
         public string? CategoryLabel { get; set; }
         public string? OtherCategoryDescription { get; set; }
         public string? RequiredAction { get; set; }
+        public string? ResponseContentType { get; set; }
         public string Title { get; set; } = string.Empty;
         public string ReportStatus { get; set; } = ReportConstants.Statuses.Pending;
         public string StatusLabel { get; set; } = "جديد";
@@ -181,6 +182,7 @@ namespace YemenGuide.Core.DTOs.Customer
         public string? CategoryLabel { get; set; }
         public string? OtherCategoryDescription { get; set; }
         public string? RequiredAction { get; set; }
+        public string? ResponseContentType { get; set; }
         public string Title { get; set; } = string.Empty;
         public string ReportReason { get; set; } = string.Empty;
         public string ReportStatus { get; set; } = ReportConstants.Statuses.Pending;

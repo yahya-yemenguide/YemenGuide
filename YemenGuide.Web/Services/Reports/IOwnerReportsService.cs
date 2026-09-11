@@ -43,6 +43,16 @@ namespace YemenGuide.Web.Services.Reports
             IFormFile? evidenceFile,
             CancellationToken cancellationToken = default);
 
+        Task<OwnerReportOperationResultDto> EditAsync(
+            int ownerId, int reportId, OwnerReportEditRequestDto request,
+            IFormFile? evidenceFile, CancellationToken cancellationToken = default);
+        Task<OwnerReportOperationResultDto> WithdrawAsync(
+            int ownerId, int reportId, OwnerReportWithdrawRequestDto request,
+            CancellationToken cancellationToken = default);
+        Task<OwnerReportOperationResultDto> RequestReopenAsync(
+            int ownerId, int reportId, OwnerReportReopenRequestDto request,
+            IFormFile? evidenceFile, CancellationToken cancellationToken = default);
+
         Task<OwnerReportOperationResultDto> SubmitResponseAsync(
             int ownerId,
             int reportId,

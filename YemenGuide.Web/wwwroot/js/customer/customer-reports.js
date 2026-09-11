@@ -198,7 +198,7 @@
             let payload = null;
             try { payload = await response.json(); } catch { /* ignored */ }
 
-            if (!response.ok || payload?.success === false) {
+            if (!response.ok || payload?.success !== true) {
                 throw new Error(payload?.message || "تعذر تنفيذ العملية الآن. حاول مرة أخرى.");
             }
 
@@ -971,6 +971,7 @@
         qsa("[data-report-operation-form]", page).forEach(form => {
             form.addEventListener("submit", async event => {
                 event.preventDefault();
+                if (state.requests.has(form) || form.dataset.confirming === "true") return;
                 const operation = form.getAttribute("data-report-operation-form") || "";
                 const validation = validateDetailsForm(form, operation);
                 if (!validation.valid) {
@@ -980,7 +981,10 @@
                 }
 
                 const config = operationConfirmation(operation);
-                const confirmed = await confirmDialog(config);
+                form.dataset.confirming = "true";
+                let confirmed;
+                try { confirmed = await confirmDialog(config); }
+                finally { delete form.dataset.confirming; }
                 if (!confirmed) return;
                 await submitAjaxForm(form);
             });
@@ -994,7 +998,9 @@
             const original = span?.textContent || "إضافة مرفق";
             input.addEventListener("change", () => {
                 const file = input.files?.[0];
-                const validation = validateFile(file);
+                const validation = input.dataset.imageOnly === "true" && file && !/\.(jpe?g|png|webp)$/i.test(file.name)
+                    ? { valid: false, message: "المطلوب صورة JPG أو PNG أو WEBP، وليس PDF." }
+                    : validateFile(file);
                 if (!validation.valid) {
                     input.value = "";
                     label?.classList.remove("has-file");
@@ -1034,7 +1040,14 @@
         if (operation === "clarification") {
             const field = qs("textarea[name='Message']", form);
             const value = field?.value.trim() || "";
-            if (!value && !fileInput?.files?.length) return invalid("اكتب توضيحًا أو أرفق دليلًا جديدًا.", field || fileInput);
+            const type = form.dataset.responseContentType;
+            const file = fileInput?.files?.[0];
+            if ((type === "Text" || type === "TextAndImage") && !value) return invalid("اكتب التوضيح الذي طلبته الإدارة.", field);
+            if ((type === "Image" || type === "TextAndImage") && !file) return invalid("أرفق صورة الإثبات المطلوبة.", fileInput);
+            if ((type === "Image" || type === "TextAndImage") && file && !/\.(jpe?g|png|webp)$/i.test(file.name)) return invalid("المطلوب صورة، وليس PDF.", fileInput);
+            if (type === "Text" && file) return invalid("طلبت الإدارة نصًا فقط دون مرفق.", fileInput);
+            if (type === "Image" && value) return invalid("طلبت الإدارة صورة فقط دون نص.", field);
+            if (!value && !file) return invalid("اكتب توضيحًا أو أرفق دليلًا جديدًا.", field || fileInput);
             if (value.length > 4000) return invalid("التوضيح يجب ألا يتجاوز 4000 حرف.", field);
         }
 
@@ -1081,6 +1094,7 @@
 
     function validateFile(file) {
         if (!file) return { valid: true, message: "" };
+        if (file.size === 0) return { valid: false, message: "الملف فارغ. اختر ملفًا آخر." };
         if (file.size > MAX_FILE_SIZE) return { valid: false, message: "حجم المرفق يجب ألا يتجاوز 5 MB." };
 
         const extension = (file.name.split(".").pop() || "").toLowerCase();

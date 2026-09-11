@@ -455,6 +455,7 @@
         const antiForgery = qs('#reportAntiForgeryForm input[name="__RequestVerificationToken"]')?.value || '';
         const reportId = Number(root.dataset.reportId || 0);
         let endpoint = '';
+        let busy = false;
         let lastFocused = null;
 
         const toLocalInputValue = (hoursAhead = 24) => {
@@ -475,7 +476,20 @@
             return `<label class="ar-modal-field"><span>${escapeHtml(label)}</span><input type="${encodeAttr(type)}" name="${encodeAttr(name)}" ${required} ${min} ${max} ${placeholder} ${options.value ? `value="${encodeAttr(options.value)}"` : ''} />${hint}</label>`;
         };
 
+        const responseContentField = () => `
+            <label class="ar-modal-field"><span>ما الذي تسمح بإرساله؟</span>
+                <select name="ResponseContentType" required>
+                    <option value="Text">توضيح نصي فقط</option>
+                    <option value="Image">صورة إثبات فقط</option>
+                    <option value="TextAndImage">توضيح نصي وصورة إثبات</option>
+                </select><small>سيظهر للمستلم نموذج الاستكمال المختار فقط.</small>
+            </label>`;
         const configs = {
+            'send-reporter-message': {
+                title: 'إرسال توضيح للمبلّغ', eyebrow: 'رد الإدارة', icon: 'bi-send', submit: 'إرسال التوضيح',
+                description: 'اكتب ما تريد إظهاره للمبلّغ. يمكنك توضيح سبب المالك، ولن يتم نسخ رده أو مرفقاته الخاصة تلقائيًا.',
+                fields: () => field('نص التوضيح الذي سيظهر للمبلّغ', 'Message', 'textarea', { minLength: 3, maxLength: 4000 })
+            },
             'start-review': {
                 title: 'بدء مراجعة القضية', eyebrow: 'الخطوة الأولى', icon: 'bi-play-circle-fill', submit: 'ابدأ المراجعة',
                 description: 'ستتحول القضية من جديدة إلى قيد المتابعة وتبدأ الإدارة مراجعتها رسميًا.',
@@ -484,13 +498,13 @@
             'request-clarification': {
                 title: 'طلب توضيح من المبلّغ', eyebrow: 'معلومة ناقصة', icon: 'bi-chat-left-text-fill', submit: 'إرسال طلب التوضيح',
                 description: 'اكتب بالضبط ما الذي تحتاجه من المبلّغ حتى يعرف ماذا يرسل لك.',
-                fields: () => field('ما التوضيح المطلوب؟', 'Message', 'textarea', { minLength: 5, maxLength: 4000, placeholder: 'مثال: يرجى توضيح المبلغ وإرفاق إثبات الدفع...' }) +
+                fields: () => responseContentField() + field('ما التوضيح المطلوب؟', 'Message', 'textarea', { minLength: 5, maxLength: 4000, placeholder: 'حدد التوضيح أو الإثبات المطلوب بما يتوافق مع اختيارك أعلاه...' }) +
                     field('مهلة الرد', 'Deadline', 'datetime-local', { value: toLocalInputValue(24), hint: 'بعد انتهاء المهلة ستظهر القضية كمتأخرة.' })
             },
             'request-owner-response': {
                 title: 'طلب رد من المالك', eyebrow: 'إحالة للمالك', icon: 'bi-building-fill', submit: 'إرسال الطلب للمالك',
                 description: 'سيصل للمالك إشعار بالقضية ويستطيع إرسال توضيحه ودليله داخل نفس القضية.',
-                fields: () => field('ماذا تريد من المالك أن يوضح؟', 'Message', 'textarea', { minLength: 5, maxLength: 4000, placeholder: 'اكتب سؤال الإدارة للمالك بوضوح...' }) +
+                fields: () => responseContentField() + field('ماذا تريد من المالك أن يوضح؟', 'Message', 'textarea', { minLength: 5, maxLength: 4000, placeholder: 'اكتب سؤال الإدارة للمالك بوضوح...' }) +
                     field('مهلة رد المالك', 'Deadline', 'datetime-local', { value: toLocalInputValue(24) })
             },
             'request-resolution-confirmation': {
@@ -573,6 +587,7 @@
         };
 
         const openModal = (button) => {
+            if (busy) return;
             const action = button.dataset.reportAction;
             const config = configs[action];
             if (!config) return;
@@ -593,6 +608,7 @@
         };
 
         const closeModal = () => {
+            if (busy) return;
             modalLayer.hidden = true;
             modalLayer.setAttribute('aria-hidden', 'true');
             document.body.style.overflow = '';
@@ -640,8 +656,9 @@
 
         form.addEventListener('submit', async event => {
             event.preventDefault();
-            if (!endpoint || !reportId) return;
-            if (!form.reportValidity()) return;
+            if (busy || !endpoint || !reportId) return;
+            busy = true;
+            if (!form.reportValidity()) { busy = false; return; }
 
             errorBox.hidden = true;
             errorBox.textContent = '';
@@ -670,18 +687,20 @@
                 }
 
                 showToast(payload.message || 'تم تنفيذ الإجراء بنجاح.');
+                busy = false;
                 closeModal();
+                busy = true;
                 window.setTimeout(() => {
                     if (payload.redirectUrl) window.location.href = payload.redirectUrl;
                     else window.location.reload();
                 }, 520);
             } catch (error) {
+                busy = false;
                 errorBox.textContent = error?.message || 'تعذر تنفيذ الإجراء.';
                 errorBox.hidden = false;
                 showToast(errorBox.textContent, true);
             } finally {
-                submit.disabled = false;
-                submit.classList.remove('is-loading');
+                if (!busy) { submit.disabled = false; submit.classList.remove('is-loading'); }
             }
         });
     }
