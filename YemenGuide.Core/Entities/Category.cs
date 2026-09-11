@@ -13,6 +13,7 @@ namespace YemenGuide.Core.Entities
 
         public int CategoryId { get; set; }
         public string CategoryName { get; set; } = null!;
+        public string? CategoryNameEn { get; set; }
         public string? IconClass { get; set; }
         public bool HasBookingSystem { get; set; }
         public string? ThemeColor { get; set; }

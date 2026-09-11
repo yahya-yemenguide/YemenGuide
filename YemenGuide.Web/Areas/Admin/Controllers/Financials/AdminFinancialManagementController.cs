@@ -306,6 +306,25 @@ namespace YemenGuide.Web.Areas.Admin.Controllers.Financials
                 ? null
                 : request.Instructions.Trim();
 
+            request.InstructionsEn = string.IsNullOrWhiteSpace(request.InstructionsEn)
+                ? null
+                : request.InstructionsEn.Trim();
+
+            if (!string.IsNullOrWhiteSpace(request.Instructions) &&
+                string.IsNullOrWhiteSpace(request.InstructionsEn))
+            {
+                ModelState.AddModelError(
+                    nameof(request.InstructionsEn),
+                    "اكتب تعليمات التحويل بالإنجليزية أيضاً.");
+            }
+
+            if (ContainsArabicCharacters(request.InstructionsEn))
+            {
+                ModelState.AddModelError(
+                    nameof(request.InstructionsEn),
+                    "تعليمات التحويل الإنجليزية لا يجب أن تحتوي على أحرف عربية.");
+            }
+
             if (request.PlatformWalletId.HasValue &&
                 request.PlatformWalletId.Value <= 0)
             {
@@ -326,6 +345,13 @@ namespace YemenGuide.Web.Areas.Admin.Controllers.Financials
                 ModelState.AddModelError(
                     nameof(request.Instructions),
                     "تعليمات التحويل يجب ألا تتجاوز 2000 حرف.");
+            }
+
+            if (request.InstructionsEn?.Length > 2000)
+            {
+                ModelState.AddModelError(
+                    nameof(request.InstructionsEn),
+                    "تعليمات التحويل الإنجليزية يجب ألا تتجاوز 2000 حرف.");
             }
 
             if (!ModelState.IsValid)
@@ -598,6 +624,27 @@ namespace YemenGuide.Web.Areas.Admin.Controllers.Financials
                     FinancialSettingsRegion);
         }
 
+        private static bool ContainsArabicCharacters(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return false;
+            }
+
+            foreach (char character in value)
+            {
+                if ((character >= '؀' && character <= 'ۿ') ||
+                    (character >= 'ݐ' && character <= 'ݿ') ||
+                    (character >= 'ࢠ' && character <= 'ࣿ'))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+                
         private static bool TryNormalizeAccountNumber(
             string? value,
             out string normalized)

@@ -94,6 +94,7 @@
         const number = form.querySelector("[data-platform-wallet-number]");
         const beneficiary = form.querySelector("[data-platform-wallet-beneficiary]");
         const instructions = form.querySelector("[data-platform-wallet-instructions]");
+        const instructionsEn = form.querySelector("[data-platform-wallet-instructions-en]");
         const active = form.querySelector("[data-platform-wallet-active]");
         const primary = form.querySelector("[data-platform-wallet-primary]");
         const title = currentRoot.querySelector("[data-platform-wallet-modal-title]");
@@ -112,6 +113,7 @@
         if (number) number.value = card.dataset.walletAccountNumber || "";
         if (beneficiary) beneficiary.value = card.dataset.walletBeneficiary || "";
         if (instructions) instructions.value = card.dataset.walletInstructions || "";
+        if (instructionsEn) instructionsEn.value = card.dataset.walletInstructionsEn || "";
         if (active) active.checked = card.dataset.walletActive === "true";
         if (primary) primary.checked = card.dataset.walletPrimary === "true";
         if (title) title.textContent = "تعديل حساب المنصة";

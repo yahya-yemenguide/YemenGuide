@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Linq;
 using YemenGuide.Data;
@@ -276,14 +276,97 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                             "/images/" + faviconFileName;
                     }
 
+                    if (!TryPrepareEnglishText(
+                            formData.SiteNameEn,
+                            "اسم المنصة بالإنجليزية",
+                            200,
+                            required: true,
+                            out string? siteNameEn,
+                            out string siteNameEnError))
+                    {
+                        return Json(new
+                        {
+                            success = false,
+                            message = siteNameEnError
+                        });
+                    }
+
+                    if (!TryPrepareEnglishText(
+                            formData.SiteDescriptionEn,
+                            "وصف المنصة بالإنجليزية",
+                            1000,
+                            required: !string.IsNullOrWhiteSpace(formData.SiteDescription),
+                            out string? siteDescriptionEn,
+                            out string siteDescriptionEnError))
+                    {
+                        return Json(new
+                        {
+                            success = false,
+                            message = siteDescriptionEnError
+                        });
+                    }
+
+                    if (!TryPrepareEnglishText(
+                            formData.HeroTitleMainEn,
+                            "العنوان الرئيسي بالإنجليزية",
+                            300,
+                            required: true,
+                            out string? heroTitleMainEn,
+                            out string heroTitleMainEnError))
+                    {
+                        return Json(new
+                        {
+                            success = false,
+                            message = heroTitleMainEnError
+                        });
+                    }
+
+                    if (!TryPrepareEnglishText(
+                            formData.HeroTitleSubEn,
+                            "الكلمة المساعدة بالإنجليزية",
+                            200,
+                            required: true,
+                            out string? heroTitleSubEn,
+                            out string heroTitleSubEnError))
+                    {
+                        return Json(new
+                        {
+                            success = false,
+                            message = heroTitleSubEnError
+                        });
+                    }
+
+                    if (!TryPrepareEnglishText(
+                            formData.BannerTextEn,
+                            "نص البنر بالإنجليزية",
+                            500,
+                            required:
+                                formData.IsBannerActive == true ||
+                                !string.IsNullOrWhiteSpace(formData.BannerText),
+                            out string? bannerTextEn,
+                            out string bannerTextEnError))
+                    {
+                        return Json(new
+                        {
+                            success = false,
+                            message = bannerTextEnError
+                        });
+                    }
+
                     settings.SiteName =
                         string.IsNullOrWhiteSpace(
                             formData.SiteName)
                             ? "دليلك اليمني"
                             : formData.SiteName.Trim();
 
+                    settings.SiteNameEn =
+                        siteNameEn;
+
                     settings.SiteDescription =
                         formData.SiteDescription?.Trim();
+
+                    settings.SiteDescriptionEn =
+                        siteDescriptionEn;
 
                     settings.HeroTitleMain =
                         string.IsNullOrWhiteSpace(
@@ -291,11 +374,17 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                             ? "دليلك اليمني بين يديك.."
                             : formData.HeroTitleMain.Trim();
 
+                    settings.HeroTitleMainEn =
+                        heroTitleMainEn;
+
                     settings.HeroTitleSub =
                         string.IsNullOrWhiteSpace(
                             formData.HeroTitleSub)
                             ? "اكتشف"
                             : formData.HeroTitleSub.Trim();
+
+                    settings.HeroTitleSubEn =
+                        heroTitleSubEn;
 
                     settings.SeasonTheme =
                         string.IsNullOrWhiteSpace(
@@ -308,6 +397,9 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
 
                     settings.BannerText =
                         formData.BannerText?.Trim();
+
+                    settings.BannerTextEn =
+                        bannerTextEn;
                 }
 
                 // ==============================================================
@@ -597,17 +689,53 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                     settings.MaintenanceMode =
                         formData.MaintenanceMode;
 
+                    if (!TryPrepareEnglishText(
+                            formData.MaintenanceTitleEn,
+                            "عنوان الصيانة بالإنجليزية",
+                            200,
+                            required: formData.MaintenanceMode,
+                            out string? maintenanceTitleEn,
+                            out string maintenanceTitleEnError))
+                    {
+                        return Json(new
+                        {
+                            success = false,
+                            message = maintenanceTitleEnError
+                        });
+                    }
+
+                    if (!TryPrepareEnglishText(
+                            formData.MaintenanceMessageEn,
+                            "رسالة الصيانة بالإنجليزية",
+                            1000,
+                            required: formData.MaintenanceMode,
+                            out string? maintenanceMessageEn,
+                            out string maintenanceMessageEnError))
+                    {
+                        return Json(new
+                        {
+                            success = false,
+                            message = maintenanceMessageEnError
+                        });
+                    }
+
                     settings.MaintenanceTitle =
                         string.IsNullOrWhiteSpace(
                             formData.MaintenanceTitle)
                             ? "نعود إليكم قريبًا"
                             : formData.MaintenanceTitle.Trim();
 
+                    settings.MaintenanceTitleEn =
+                        maintenanceTitleEn;
+
                     settings.MaintenanceMessage =
                         string.IsNullOrWhiteSpace(
                             formData.MaintenanceMessage)
                             ? "المنصة تحت الصيانة حاليًا، نعمل على تحسين الخدمة وسنعود قريبًا."
                             : formData.MaintenanceMessage.Trim();
+
+                    settings.MaintenanceMessageEn =
+                        maintenanceMessageEn;
 
                     settings.MaintenanceType =
                         maintenanceType;
@@ -1021,14 +1149,40 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
             {
                 if (string.IsNullOrWhiteSpace(walletData.WalletName))
                 {
-                    return Json(new { success = false, message = "يجب كتابة اسم المحفظة أو البنك أولاً." });
+                    return Json(new { success = false, message = "يجب كتابة اسم المحفظة أو البنك بالعربية أولاً." });
                 }
 
-                // منع التكرار البرمجي لاسم المحفظة
-                bool isExist = await _context.SupportedWallets.AnyAsync(w => w.WalletName == walletData.WalletName.Trim());
+                if (!TryPrepareEnglishText(
+                        walletData.WalletNameEn,
+                        "اسم المحفظة أو البنك بالإنجليزية",
+                        150,
+                        required: true,
+                        out string? walletNameEn,
+                        out string walletNameEnError))
+                {
+                    return Json(new
+                    {
+                        success = false,
+                        message = walletNameEnError
+                    });
+                }
+
+                string walletNameAr =
+                    walletData.WalletName.Trim();
+
+                bool isExist = await _context.SupportedWallets
+                    .AnyAsync(w =>
+                        w.WalletName == walletNameAr ||
+                        (w.WalletNameEn != null &&
+                         w.WalletNameEn.ToLower() == walletNameEn!.ToLower()));
+
                 if (isExist)
                 {
-                    return Json(new { success = false, message = "عذراً، هذه المحفظة أو الشبكة مسجلة مسبقاً في النظام." });
+                    return Json(new
+                    {
+                        success = false,
+                        message = "عذراً، اسم المحفظة أو الشبكة مستخدم مسبقاً بالعربية أو الإنجليزية."
+                    });
                 }
 
                 // رفع وحفظ الشعار المالي للشبكة
@@ -1111,7 +1265,8 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                     walletData.LogoPath = null;
                 }
 
-                walletData.WalletName = walletData.WalletName.Trim();
+                walletData.WalletName = walletNameAr;
+                walletData.WalletNameEn = walletNameEn;
                 walletData.IsActive = true;
                 walletData.CreatedAt = DateTime.Now;
 
@@ -1126,7 +1281,101 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
             }
         }
 
-        // ج. تحويل وتحديث الحالة التشغيلية للمحفظة لحظياً (أجاكس - POST)
+        // ج. تعديل الاسم العربي والإنجليزي لشبكة الدفع.
+[HttpPost]
+[ValidateAntiForgeryToken]
+[RequireAdminPermission(AdminPermissionKeys.Settings.ManagePaymentNetworks)]
+public async Task<IActionResult> EditSupportedWalletNames(
+    [FromForm] int id,
+    [FromForm] string WalletName,
+    [FromForm] string WalletNameEn)
+{
+    try
+    {
+        if (id <= 0 ||
+            string.IsNullOrWhiteSpace(WalletName))
+        {
+            return Json(new
+            {
+                success = false,
+                message = "اسم الشبكة بالعربية مطلوب."
+            });
+        }
+
+        if (!TryPrepareEnglishText(
+                WalletNameEn,
+                "اسم الشبكة بالإنجليزية",
+                150,
+                required: true,
+                out string? normalizedEnglishName,
+                out string englishNameError))
+        {
+            return Json(new
+            {
+                success = false,
+                message = englishNameError
+            });
+        }
+
+        string normalizedArabicName =
+            WalletName.Trim();
+
+        bool duplicate = await _context.SupportedWallets
+            .AsNoTracking()
+            .AnyAsync(w =>
+                w.WalletId != id &&
+                (w.WalletName == normalizedArabicName ||
+                 (w.WalletNameEn != null &&
+                  w.WalletNameEn.ToLower() ==
+                  normalizedEnglishName!.ToLower())));
+
+        if (duplicate)
+        {
+            return Json(new
+            {
+                success = false,
+                message = "يوجد بنك أو محفظة أخرى بالاسم نفسه بالعربية أو الإنجليزية."
+            });
+        }
+
+        var wallet = await _context.SupportedWallets
+            .FirstOrDefaultAsync(w => w.WalletId == id);
+
+        if (wallet == null)
+        {
+            return Json(new
+            {
+                success = false,
+                message = "شبكة الدفع المطلوبة غير موجودة."
+            });
+        }
+
+        wallet.WalletName =
+            normalizedArabicName;
+
+        wallet.WalletNameEn =
+            normalizedEnglishName;
+
+        await _context.SaveChangesAsync();
+
+        return Json(new
+        {
+            success = true,
+            message = "تم تحديث اسمي شبكة الدفع بالعربية والإنجليزية بنجاح."
+        });
+    }
+    catch (Exception ex)
+    {
+        return Json(new
+        {
+            success = false,
+            message = "تعذر تحديث أسماء شبكة الدفع: " +
+                      GetUsefulErrorMessage(ex)
+        });
+    }
+}
+
+// د. تحويل وتحديث الحالة التشغيلية للمحفظة لحظياً (أجاكس - POST)
         [HttpPost]
         [ValidateAntiForgeryToken]
         [RequireAdminPermission(AdminPermissionKeys.Settings.ManagePaymentNetworks)]
@@ -1220,6 +1469,7 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                     id = s.HeroSlideId,
                     imagePath = s.ImagePath,
                     typingText = s.TypingText,
+                    typingTextEn = s.TypingTextEn,
                     mainTextColor = s.MainTextColor,
                     accentColor = s.AccentColor,
                     isActive = s.IsActive
@@ -1234,12 +1484,38 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
         [ValidateAntiForgeryToken]
         [RequireAdminPermission(AdminPermissionKeys.Settings.ManageHeroSlides)]
         [RequestSizeLimit(31457280)] // ✨ السماح للطلب بالوصول إلى 30 ميجابايت كحد أقصى لمنع السيرفر من إسقاط الملف مبكراً
-        public async Task<IActionResult> AddHeroSlide([FromForm] string TypingText, [FromForm] string MainTextColor, [FromForm] string AccentColor, IFormFile ImageUpload)
+        public async Task<IActionResult> AddHeroSlide(
+            [FromForm] string TypingText,
+            [FromForm] string TypingTextEn,
+            [FromForm] string MainTextColor,
+            [FromForm] string AccentColor,
+            IFormFile ImageUpload)
         {
             try
             {
                 if (string.IsNullOrWhiteSpace(TypingText) || ImageUpload == null)
-                    return Json(new { success = false, message = "النص والصورة/الفيديو مطلوبان." });
+                {
+                    return Json(new
+                    {
+                        success = false,
+                        message = "النص العربي والصورة/الفيديو مطلوبان."
+                    });
+                }
+
+                if (!TryPrepareEnglishText(
+                        TypingTextEn,
+                        "النص التفاعلي بالإنجليزية",
+                        250,
+                        required: true,
+                        out string? normalizedTypingTextEn,
+                        out string typingTextEnError))
+                {
+                    return Json(new
+                    {
+                        success = false,
+                        message = typingTextEnError
+                    });
+                }
 
                 long maxSizeInBytes =
                     20 * 1024L * 1024L;
@@ -1286,6 +1562,7 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                 var newSlide = new HeroSlide
                 {
                     TypingText = TypingText.Trim(),
+                    TypingTextEn = normalizedTypingTextEn,
                     ImagePath = "/uploads/hero/" + uniqueFileName,
                     MainTextColor = string.IsNullOrWhiteSpace(MainTextColor) ? "#ffffff" : MainTextColor.Trim(),
                     AccentColor = string.IsNullOrWhiteSpace(AccentColor) ? "#ff5a5f" : AccentColor.Trim(),
@@ -1323,16 +1600,56 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
         [HttpPost]
         [ValidateAntiForgeryToken]
         [RequireAdminPermission(AdminPermissionKeys.Settings.ManageHeroSlides)]
-        public async Task<IActionResult> EditHeroSlideText([FromForm] int id, [FromForm] string newText)
+        public async Task<IActionResult> EditHeroSlideText(
+            [FromForm] int id,
+            [FromForm] string newText,
+            [FromForm] string newTextEn)
         {
             var slide = await _context.HeroSlides.FindAsync(id);
-            if (slide == null) return Json(new { success = false, message = "السلايد غير موجود." });
 
-            if (string.IsNullOrWhiteSpace(newText)) return Json(new { success = false, message = "النص لا يمكن أن يكون فارغاً." });
+            if (slide == null)
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = "السلايد غير موجود."
+                });
+            }
+
+            if (string.IsNullOrWhiteSpace(newText))
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = "النص العربي لا يمكن أن يكون فارغاً."
+                });
+            }
+
+            if (!TryPrepareEnglishText(
+                    newTextEn,
+                    "النص التفاعلي بالإنجليزية",
+                    250,
+                    required: true,
+                    out string? normalizedTextEn,
+                    out string normalizedTextEnError))
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = normalizedTextEnError
+                });
+            }
 
             slide.TypingText = newText.Trim();
+            slide.TypingTextEn = normalizedTextEn;
+
             await _context.SaveChangesAsync();
-            return Json(new { success = true });
+
+            return Json(new
+            {
+                success = true,
+                message = "تم تحديث النص العربي والإنجليزي للسلايد."
+            });
         }
 
         // هـ. ترتيب السلايدرات للأعلى أو الأسفل (الأسهم)
@@ -1498,6 +1815,60 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                 DateTimeKind.Utc);
         }
 
+        private static bool TryPrepareEnglishText(
+            string? value,
+            string fieldLabel,
+            int maxLength,
+            bool required,
+            out string? normalized,
+            out string error)
+        {
+            normalized =
+                string.IsNullOrWhiteSpace(value)
+                    ? null
+                    : value.Trim();
+
+            error = string.Empty;
+
+            if (required &&
+                string.IsNullOrWhiteSpace(normalized))
+            {
+                error =
+                    $"{fieldLabel} مطلوب.";
+
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                return true;
+            }
+
+            if (normalized.Length > maxLength)
+            {
+                error =
+                    $"{fieldLabel} يجب ألا يتجاوز {maxLength} حرفاً.";
+
+                return false;
+            }
+
+            foreach (char character in normalized)
+            {
+                if ((character >= '؀' && character <= 'ۿ') ||
+                    (character >= 'ݐ' && character <= 'ݿ') ||
+                    (character >= 'ࢠ' && character <= 'ࣿ'))
+                {
+                    error =
+                        $"{fieldLabel} يجب أن يحتوي على النص الإنجليزي فقط.";
+
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+                
         private static string GetDefaultWalletLogoPath(
             SystemSetting? settings)
         {

@@ -1,0 +1,415 @@
+﻿@using System.Globalization
+@using System.Text.Json
+@using Microsoft.Extensions.Localization
+@using Microsoft.EntityFrameworkCore
+@inject IStringLocalizer<YemenGuide.Web.SharedResource> L
+@inject YemenGuide.Data.AppDbContext _context
+
+@{
+    var homeLanguage =
+        string.Equals(
+            CultureInfo.CurrentUICulture.TwoLetterISOLanguageName,
+            "en",
+            StringComparison.OrdinalIgnoreCase)
+            ? "en"
+            : "ar";
+
+    var exact = new Dictionary<string, string>
+    {
+        ["ادارة الفئات"] = L["Categories"].Value,
+        ["لوحة التحكم"] = L["Dashboard"].Value,
+        ["الرئيسية"] = L["Home"].Value,
+        ["تسجيل خروج"] = L["Logout"].Value,
+        ["البيانات الشخصية"] = L["PersonalInfo"].Value,
+        ["الأماكن"] = L["Places"].Value,
+        ["البلاغات"] = L["Reports"].Value,
+        ["الحجوزات"] = L["Reservations"].Value,
+        ["إعدادات النظام"] = L["sssss"].Value,
+        ["المستخدمون"] = L["Users"].Value,
+        ["تنبيه"] = L["Common_Alert"].Value,
+        ["حسناً"] = L["Common_OK"].Value,
+        ["خطأ"] = L["Common_Error"].Value,
+        ["غير مدعوم"] = L["Common_NotSupported"].Value,
+        ["ممول"] = L["Common_Sponsored"].Value,
+        ["إعلان ممول"] = L["Common_SponsoredAd"].Value,
+        ["لغة العرض"] = L["Common_DisplayLanguage"].Value,
+        ["اختيار اللغة"] = L["Common_ChooseLanguage"].Value,
+        ["تغيير اللغة"] = L["Common_ChangeLanguage"].Value,
+        ["اختر لغة واجهة دليلك اليمني"] = L["Common_ChooseYGLanguage"].Value,
+        ["العربية"] = L["Common_Arabic"].Value,
+        ["العودة إلى الصفحة الرئيسية"] = L["Header_BackToHome"].Value,
+        ["فتح الإشعارات"] = L["Header_OpenNotifications"].Value,
+        ["آخر التنبيهات"] = L["Header_LatestAlerts"].Value,
+        ["الإشعارات"] = L["Header_Notifications"].Value,
+        ["جديد"] = L["Header_New"].Value,
+        ["قراءة الكل"] = L["Header_ReadAll"].Value,
+        ["عرض جميع الإشعارات"] = L["Header_ViewAllNotifications"].Value,
+        ["ملخص الحساب"] = L["Header_AccountSummary"].Value,
+        ["فتح ملخص الحساب"] = L["Header_OpenAccountSummary"].Value,
+        ["أكمل بيانات حسابك"] = L["Header_CompleteAccount"].Value,
+        ["أكمل بياناتك"] = L["Header_CompleteProfile"].Value,
+        ["فتح قائمة الموقع"] = L["Header_OpenMenu"].Value,
+        ["العودة إلى الرئيسية"] = L["Header_BackHome"].Value,
+        ["اكتشف اليمن بطريقتك"] = L["Header_DiscoverYemen"].Value,
+        ["إغلاق القائمة"] = L["Header_CloseMenu"].Value,
+        ["استكشف"] = L["Header_Explore"].Value,
+        ["لا توجد فئات حالياً"] = L["Header_NoCategories"].Value,
+        ["عروض حصرية"] = L["Header_ExclusiveOffers"].Value,
+        ["تواصل معنا"] = L["Header_Contact"].Value,
+        ["تسجيل الدخول"] = L["Header_Login"].Value,
+        ["أضف منشأتك"] = L["Header_AddPlace"].Value,
+        ["الرئيسية"] = L["Home_PageTitle"].Value,
+        ["إغلاق"] = L["Home_Close"].Value,
+        ["دليلك اليمني بين يديك"] = L["Home_HeroMainDefault"].Value,
+        ["اكتشف"] = L["Home_HeroSubDefault"].Value,
+        ["أجمل الوجهات"] = L["Home_HeroTypedDefault"].Value,
+        ["أجمل المطاعم"] = L["Home_FinestRestaurants"].Value,
+        ["أروع الشاليهات"] = L["Home_BestChalets"].Value,
+        ["أجمل القاعات"] = L["Home_FinestHalls"].Value,
+        ["أفضل الفنادق"] = L["Home_BestHotels"].Value,
+        ["اكتشف الأماكن الأقرب إليك"] = L["Home_ExploreNearest"].Value,
+        ["اكتشف الأماكن القريبة منك"] = L["Home_ExploreNearby"].Value,
+        ["اضغط لتحديد موقعك"] = L["Home_TapToLocate"].Value,
+        ["ميزات المنصة"] = L["Home_PlatformFeatures"].Value,
+        ["منشأة موثوقة"] = L["Home_VerifiedPlace"].Value,
+        ["منشآت موثوقة"] = L["Home_VerifiedPlaces"].Value,
+        ["تقييمات حقيقية"] = L["Home_GenuineReviews"].Value,
+        ["حجز آمن"] = L["Home_SecureBooking"].Value,
+        ["الوقت والتاريخ الحالي"] = L["Home_CurrentDateTime"].Value,
+        ["جارِ التحميل..."] = L["Home_Loading"].Value,
+        ["عن ماذا تبحث؟"] = L["Home_WhatSearch"].Value,
+        ["أين تريد أن تكون؟"] = L["Home_SearchPlaceholder"].Value,
+        ["ابحث الآن"] = L["Home_SearchNow"].Value,
+        ["اختر المدينة"] = L["Home_ChooseCity"].Value,
+        ["كل المدن"] = L["Home_AllCities"].Value,
+        ["اختر الفئة"] = L["Home_ChooseCategory"].Value,
+        ["كل الفئات"] = L["Home_AllCategories"].Value,
+        ["اكتشف القريب منك"] = L["Home_DiscoverNearYou"].Value,
+        ["أماكن مختارة، تجارب موثوقة، وحجز أسهل في كل مدينة."] = L["Home_SelectedExperiences"].Value,
+        ["اكتشف وجهتك التالية"] = L["Home_DiscoverNext"].Value,
+        ["التنقل بين صور الواجهة"] = L["Home_HeroNavigation"].Value,
+        ["بوابتك إلى الأفضل"] = L["Home_GatewayBest"].Value,
+        ["ماذا تبحث عنه"] = L["Home_WhatLookingFor"].Value,
+        ["اليوم؟"] = L["Home_Today"].Value,
+        ["اختر الفئة واستكشف أفضل الخيارات المتاحة"] = L["Home_CategoryIntro"].Value,
+        ["استكشف الفئة"] = L["Home_ExploreCategory"].Value,
+        ["الفئة السابقة"] = L["Home_PreviousCategory"].Value,
+        ["الفئة التالية"] = L["Home_NextCategory"].Value,
+        ["اختيار الفئة"] = L["Home_CategorySelection"].Value,
+        ["ستظهر الفئات هنا قريبًا"] = L["Home_NoCategories"].Value,
+        ["أضف الفئات من لوحة الإدارة لتظهر تلقائيًا."] = L["Home_NoCategoriesAdmin"].Value,
+        ["مختارة من تجارب موثقة"] = L["Home_FeaturedEyebrow"].Value,
+        ["أماكن تستحق أن تكون"] = L["Home_FeaturedHeading"].Value,
+        ["مميزة"] = L["Home_FeaturedAccent"].Value,
+        ["وجهات حققت تقييمًا قويًا من عملاء لديهم حجوزات مكتملة وتجارب حقيقية."] = L["Home_FeaturedDescription"].Value,
+        ["عدد الأماكن المميزة"] = L["Home_FeaturedCountAria"].Value,
+        ["وجهات مختارة"] = L["Home_SelectedDestinations"].Value,
+        ["عرض الأماكن السابقة"] = L["Home_PreviousPlaces"].Value,
+        ["عرض المزيد من الأماكن"] = L["Home_MorePlaces"].Value,
+        ["وجهة مميزة"] = L["Home_FeaturedDefaultCategory"].Value,
+        ["اليمن"] = L["Home_Yemen"].Value,
+        ["مميز"] = L["Home_FeaturedBadge"].Value,
+        ["إضافة للمفضلة"] = L["Home_AddFavorite"].Value,
+        ["عرض متاح"] = L["Home_OfferAvailable"].Value,
+        ["اكتشف الخصم"] = L["Home_DiscoverDiscount"].Value,
+        ["موصى به"] = L["Home_Recommended"].Value,
+        ["من تجارب حقيقية"] = L["Home_FromRealExperiences"].Value,
+        ["اكتشف المكان"] = L["Home_ExplorePlace"].Value,
+        ["فرص مختارة لفترة محدودة"] = L["Home_OffersEyebrow"].Value,
+        ["عروض"] = L["Home_OffersPrefix"].Value,
+        ["حصرية"] = L["Home_OffersAccent"].Value,
+        ["تستحق اللحظة"] = L["Home_OffersSmall"].Value,
+        ["خصومات حقيقية من منشآت موثوقة، بأسعار واضحة ومدة محددة وشروط تظهر قبل إتمام الحجز."] = L["Home_OffersDescription"].Value,
+        ["عروض نشطة"] = L["Home_ActiveOffers"].Value,
+        ["عرض العروض السابقة"] = L["Home_PreviousOffers"].Value,
+        ["عرض المزيد من العروض"] = L["Home_MoreOffers"].Value,
+        ["خصم"] = L["Home_Discount"].Value,
+        ["وفر"] = L["Home_Save"].Value,
+        ["ينتهي اليوم"] = L["Home_EndsToday"].Value,
+        ["ينتهي خلال"] = L["Home_EndsWithin"].Value,
+        ["يتكرر العرض لكل مجموعة مكتملة"] = L["Home_RepeatOffer"].Value,
+        ["فرصة لفترة محدودة. افتح التفاصيل لمعرفة جميع الشروط والاستفادة من العرض المناسب لحجزك."] = L["Home_DefaultOfferDescription"].Value,
+        ["يطبق تلقائيًا"] = L["Home_AppliedAutomatically"].Value,
+        ["يتطلب كود خصم"] = L["Home_PromoCodeRequired"].Value,
+        ["السعر بعد العرض"] = L["Home_PriceAfterOffer"].Value,
+        ["خصم على الحجوزات المؤهلة"] = L["Home_EligibleDiscount"].Value,
+        ["عرض موثوق"] = L["Home_VerifiedOffer"].Value,
+        ["استفد من العرض"] = L["Home_GetOffer"].Value,
+        ["السعر والأهلية النهائية للعرض يتم التحقق منهما مرة أخرى عند إتمام الحجز."] = L["Home_OfferFinalCheck"].Value,
+        ["انتهى العرض"] = L["Home_OfferEnded"].Value,
+        ["استكشاف ذكي حولك"] = L["Home_NearbyEyebrow"].Value,
+        ["اكتشف الأماكن"] = L["Home_NearbyHeadingPrefix"].Value,
+        ["القريبة منك"] = L["Home_NearbyHeadingAccent"].Value,
+        ["وجهتك الأقرب تبدأ من موقعك؛ دع البوصلة تقودك إلى أفضل الخيارات المجاورة."] = L["Home_NearbyDescription"].Value,
+        ["حدّد موقعي الآن"] = L["Home_LocateMe"].Value,
+        ["نبحث لك عن الأقرب والأفضل"] = L["Home_SearchingNearest"].Value,
+        ["مزايا البحث القريب"] = L["Home_NearbyBenefits"].Value,
+        ["موقع دقيق"] = L["Home_AccurateLocation"].Value,
+        ["نتائج فورية"] = L["Home_InstantResults"].Value,
+        ["خريطة الأماكن القريبة"] = L["Home_NearbyMap"].Value,
+        ["الخريطة بانتظار موقعك"] = L["Home_MapWaiting"].Value,
+        ["اضغط على البوصلة لبدء الاستكشاف"] = L["Home_TapCompassStart"].Value,
+        ["أوضاع عرض الخريطة"] = L["Home_MapViewModes"].Value,
+        ["طريقة العرض"] = L["Home_ViewMode"].Value,
+        ["خريطة"] = L["Home_Map"].Value,
+        ["قمر صناعي"] = L["Home_Satellite"].Value,
+        ["تضاريس"] = L["Home_Terrain"].Value,
+        ["تخصيص الخريطة والنتائج"] = L["Home_MapCustomization"].Value,
+        ["الأسماء"] = L["Home_Labels"].Value,
+        ["المنشآت"] = L["Home_PlacesLabel"].Value,
+        ["المرور"] = L["Home_Traffic"].Value,
+        ["المسافة"] = L["Home_Distance"].Value,
+        ["نطاق البحث بالكيلومتر"] = L["Home_SearchRadius"].Value,
+        ["فلترة حسب الفئة"] = L["Home_FilterCategory"].Value,
+        ["عليها عروض"] = L["Home_OffersOnly"].Value,
+        ["متاحة للحجز"] = L["Home_Bookable"].Value,
+        ["ترتيب النتائج"] = L["Home_SortResults"].Value,
+        ["الأقرب أولاً"] = L["Home_NearestFirst"].Value,
+        ["الأعلى تقييماً"] = L["Home_HighestRated"].Value,
+        ["الأرخص أولاً"] = L["Home_LowestPrice"].Value,
+        ["الأغلى أولاً"] = L["Home_HighestPrice"].Value,
+        ["الأقرب إليك"] = L["Home_NearestToYou"].Value,
+        ["ستظهر النتائج هنا"] = L["Home_ResultsHere"].Value,
+        ["خيارات موثوقة"] = L["Home_TrustedChoices"].Value,
+        ["مرتبة حسب المسافة"] = L["Home_SortedDistance"].Value,
+        ["وجهتك التالية"] = L["Home_NextDestination"].Value,
+        ["على بُعد ضغطة واحدة"] = L["Home_OneTapAway"].Value,
+        ["جارٍ فلترة المنشآت القريبة..."] = L["Home_NearbyFiltering"].Value,
+        ["لا توجد نتائج في هذا النطاق"] = L["Home_NoResultsRange"].Value,
+        ["وسّع المسافة أو اختر كل الفئات"] = L["Home_ExpandOrAllCategories"].Value,
+        ["لا توجد منشآت مطابقة ضمن النطاق المختار"] = L["Home_NoMatchingNearby"].Value,
+        ["لا توجد نتائج"] = L["Home_NoResults"].Value,
+        ["جرّب توسيع نطاق البحث أو اختيار فئة أخرى."] = L["Home_TryExpand"].Value,
+        ["منشأة موثقة"] = L["Home_VerifiedProperty"].Value,
+        ["استكشف المنشأة"] = L["Home_ExploreProperty"].Value,
+        ["ننقلك إلى الخريطة ونجهّز تحديد موقعك..."] = L["Home_MapLaunch"].Value,
+        ["جارٍ تحديد موقعك من الخريطة..."] = L["Home_LocatingFromMap"].Value,
+        ["جارٍ تحديد موقعك وتجهيز الأماكن القريبة..."] = L["Home_LocatingNearby"].Value,
+        ["الاستكشاف القريب جاهز"] = L["Home_NearbyReady"].Value,
+        ["تعذر تحديث النتائج"] = L["Home_UpdateResultsFailed"].Value,
+        ["حاول مرة أخرى."] = L["Home_TryAgain"].Value,
+        ["جارٍ تحديد موقعك وتجهيز النتائج..."] = L["Home_LocatingResults"].Value,
+        ["تم تحديد موقعك — جارٍ تشغيل الخريطة..."] = L["Home_LocationFoundStartingMap"].Value,
+        ["تم تحديد موقعك — نرتب الأقرب الآن"] = L["Home_LocationFoundSorting"].Value,
+        ["موقعك الحالي"] = L["Home_CurrentLocation"].Value,
+        ["الخريطة تعمل، لكن تعذر جلب بيانات المنشآت"] = L["Home_MapWorksPlacesFailed"].Value,
+        ["تعذر تحميل المنشآت"] = L["Home_LoadPlacesFailed"].Value,
+        ["الخريطة تعمل، لكن الخادم لم يُرجع بيانات المنشآت بصورة صحيحة."] = L["Home_ServerPlacesInvalid"].Value,
+        ["تعذّر تشغيل الخريطة — تحقق من مفتاح Google Maps"] = L["Home_MapKeyErrorStatus"].Value,
+        ["الخريطة غير متاحة"] = L["Home_MapUnavailable"].Value,
+        ["تعذّر تحميل خرائط Google. تأكد من مفتاح GoogleMaps:ApiKey واتصال الإنترنت ثم حاول مرة أخرى."] = L["Home_GoogleMapsLoadFailed"].Value,
+        ["تعذر تحديد موقعك الفعلي."] = L["Home_LocationUnavailable"].Value,
+        ["تم رفض صلاحية الموقع."] = L["Home_LocationPermissionDenied"].Value,
+        ["تأكد من تفعيل خدمة الـ GPS في جهازك."] = L["Home_EnableGps"].Value,
+        ["انتهى وقت الطلب لضعف الشبكة."] = L["Home_LocationTimeout"].Value,
+        ["متصفحك لا يدعم تحديد الموقع."] = L["Home_GeolocationUnsupported"].Value,
+        ["عرض المزيد"] = L["Home_ShowMore"].Value,
+        ["إخفاء"] = L["Home_Hide"].Value,
+        ["رحلة بسيطة وواضحة"] = L["Home_JourneyEyebrow"].Value,
+        ["كيف تعمل"] = L["Home_HowDoes"].Value,
+        ["المنصة؟"] = L["Home_Platform"].Value,
+        ["ثلاث خطوات تفصلك عن وجهتك المثالية"] = L["Home_ThreeSteps"].Value,
+        ["ابحث عن وجهتك بين أفضل المنشآت الموثوقة."] = L["Home_ExploreStep"].Value,
+        ["اختر واحجز"] = L["Home_ChooseBook"].Value,
+        ["اختر ما يناسبك وأكمل حجزك بسهولة وأمان."] = L["Home_ChooseBookStep"].Value,
+        ["استمتع"] = L["Home_Enjoy"].Value,
+        ["توجّه إلى وجهتك وعِش تجربة تستحق التكرار."] = L["Home_EnjoyStep"].Value,
+        ["منصة"] = L["Home_TrustPrefix"].Value,
+        ["يثق بها الجميع"] = L["Home_TrustAccent"].Value,
+        ["ثقتكم هي أساس نجاحنا"] = L["Home_TrustDescription"].Value,
+        ["حجز ناجح"] = L["Home_SuccessfulBookings"].Value,
+        ["موثوق وآمن"] = L["Home_TrustedSecure"].Value,
+        ["عميل سعيد"] = L["Home_HappyCustomers"].Value,
+        ["مدن مغطاة"] = L["Home_CitiesCovered"].Value,
+        ["يرجى تسجيل الدخول أولاً لتتمكن من إضافة الأماكن إلى مفضلتك."] = L["Home_LoginFavorite"].Value,
+        ["يرجى تسجيل الدخول أولاً لإضافة المكان للمفضلة."] = L["Home_LoginFavoriteServer"].Value,
+        ["تم إضافة المكان إلى مفضلتك بنجاح! ❤️"] = L["Home_FavoriteAddedServer"].Value,
+        ["تم إزالة المكان من المفضلة."] = L["Home_FavoriteRemovedServer"].Value,
+        ["حدث خطأ في السيرفر أثناء تعديل المفضلة."] = L["Home_FavoriteServerError"].Value,
+        ["حدث خطأ في الاتصال، يرجى المحاولة لاحقاً."] = L["Home_ConnectionError"].Value,
+        ["اكتشف أرقى الوجهات وأفضل الأماكن في اليمن، واحجز بثقة وسهولة."] = L["Footer_DefaultDescription"].Value,
+        ["تذييل دليلك اليمني"] = L["Footer_Aria"].Value,
+        ["رحلة الحجز"] = L["Footer_BookingJourney"].Value,
+        ["اختر"] = L["Footer_Choose"].Value,
+        ["احجز"] = L["Footer_Book"].Value,
+        ["روابط التذييل"] = L["Footer_Links"].Value,
+        ["وجهتك تبدأ من هنا"] = L["Footer_StartHere"].Value,
+        ["العروض"] = L["Footer_Offers"].Value,
+        ["كن جزءًا من الدليل"] = L["Footer_BePart"].Value,
+        ["لأصحاب المنشآت"] = L["Footer_ForOwners"].Value,
+        ["شبكات التواصل"] = L["Footer_Social"].Value,
+        ["فيسبوك"] = L["Footer_Facebook"].Value,
+        ["إكس"] = L["Footer_X"].Value,
+        ["إنستقرام"] = L["Footer_Instagram"].Value,
+        ["واتساب"] = L["Footer_WhatsApp"].Value,
+        ["نحن هنا"] = L["Footer_WeAreHere"].Value,
+        ["صنعاء، الجمهورية اليمنية"] = L["Footer_Sanaa"].Value,
+        ["اتصل بنا"] = L["Footer_CallUs"].Value,
+        ["راسلنا"] = L["Footer_EmailUs"].Value,
+        ["جميع الحقوق محفوظة."] = L["Footer_AllRights"].Value,
+        ["الدعم والمساعدة"] = L["Footer_Support"].Value,
+    };
+
+
+    /*
+     * ================================================================
+     * المرحلة الثانية — البيانات العامة الديناميكية التابعة للمنصة
+     * ================================================================
+     * لا نترجم بيانات المالك/العميل تلقائياً.
+     * هنا فقط نربط الحقول التي يملكها الأدمن بنسختها الإنجليزية
+     * التي أضفناها في المرحلة الأولى.
+     */
+    if (homeLanguage == "en")
+    {
+        void AddPlatformTranslation(
+            string? arabicValue,
+            string? englishValue)
+        {
+            var ar = arabicValue?.Trim();
+            var en = englishValue?.Trim();
+
+            if (!string.IsNullOrWhiteSpace(ar) &&
+                !string.IsNullOrWhiteSpace(en))
+            {
+                exact[ar] = en;
+            }
+        }
+
+        var bilingualSettings =
+            await _context.SystemSettings
+                .AsNoTracking()
+                .OrderBy(setting => setting.Id)
+                .Select(setting => new
+                {
+                    setting.SiteName,
+                    setting.SiteNameEn,
+                    setting.SiteDescription,
+                    setting.SiteDescriptionEn,
+                    setting.HeroTitleMain,
+                    setting.HeroTitleMainEn,
+                    setting.HeroTitleSub,
+                    setting.HeroTitleSubEn,
+                    setting.BannerText,
+                    setting.BannerTextEn
+                })
+                .FirstOrDefaultAsync();
+
+        if (bilingualSettings != null)
+        {
+            AddPlatformTranslation(
+                bilingualSettings.SiteName,
+                bilingualSettings.SiteNameEn);
+
+            AddPlatformTranslation(
+                bilingualSettings.SiteDescription,
+                bilingualSettings.SiteDescriptionEn);
+
+            AddPlatformTranslation(
+                bilingualSettings.HeroTitleMain,
+                bilingualSettings.HeroTitleMainEn);
+
+            AddPlatformTranslation(
+                bilingualSettings.HeroTitleSub,
+                bilingualSettings.HeroTitleSubEn);
+
+            AddPlatformTranslation(
+                bilingualSettings.BannerText,
+                bilingualSettings.BannerTextEn);
+        }
+
+        var bilingualHeroSlides =
+            await _context.HeroSlides
+                .AsNoTracking()
+                .Where(slide => slide.IsActive == true)
+                .Select(slide => new
+                {
+                    slide.TypingText,
+                    slide.TypingTextEn
+                })
+                .ToListAsync();
+
+        foreach (var slide in bilingualHeroSlides)
+        {
+            AddPlatformTranslation(
+                slide.TypingText,
+                slide.TypingTextEn);
+        }
+
+        var bilingualCategories =
+            await _context.Categories
+                .AsNoTracking()
+                .Select(category => new
+                {
+                    category.CategoryName,
+                    category.CategoryNameEn
+                })
+                .ToListAsync();
+
+        foreach (var category in bilingualCategories)
+        {
+            AddPlatformTranslation(
+                category.CategoryName,
+                category.CategoryNameEn);
+        }
+
+        var bilingualCities =
+            await _context.Cities
+                .AsNoTracking()
+                .Select(city => new
+                {
+                    city.CityName,
+                    city.CityNameEn
+                })
+                .ToListAsync();
+
+        foreach (var city in bilingualCities)
+        {
+            AddPlatformTranslation(
+                city.CityName,
+                city.CityNameEn);
+        }
+    }
+
+    var formats = new Dictionary<string, string>
+    {
+        ["View"] = L["Home_Format_View"].Value,
+        ["ExploreCategory"] = L["Home_Format_ExploreCategory"].Value,
+        ["ShowCategory"] = L["Home_Format_ShowCategory"].Value,
+        ["ViewDetails"] = L["Home_Format_ViewDetails"].Value,
+        ["MorePhotos"] = L["Home_Format_MorePhotos"].Value,
+        ["AdditionalPhoto"] = L["Home_Format_AdditionalPhoto"].Value,
+        ["AddFavorite"] = L["Home_Format_AddFavorite"].Value,
+        ["OfferAt"] = L["Home_Format_OfferAt"].Value,
+        ["VerifiedReviews"] = L["Home_Format_VerifiedReviews"].Value,
+        ["RemainingDays"] = L["Home_Format_RemainingDays"].Value,
+        ["Until"] = L["Home_Format_Until"].Value,
+        ["MinNights"] = L["Home_Format_MinNights"].Value,
+        ["MinPeople"] = L["Home_Format_MinPeople"].Value,
+        ["FromLocation"] = L["Home_Format_FromLocation"].Value,
+        ["StartsFrom"] = L["Home_Format_StartsFrom"].Value,
+        ["FoundPlaces"] = L["Home_Format_FoundPlaces"].Value,
+        ["DiscoveredPlaces"] = L["Home_Format_DiscoveredPlaces"].Value,
+        ["ShowSlide"] = L["Home_Format_ShowSlide"].Value,
+        ["Km"] = L["Home_Format_Km"].Value,
+        ["Meters"] = L["Home_Format_Meters"].Value,
+        ["CountdownDays"] = L["Home_Format_CountdownDays"].Value,
+        ["Logo"] = L["Home_Format_Logo"].Value,
+        ["TrustedSafe"] = L["Home_Format_TrustedSafe"].Value,
+        ["UpToDiscount"] = L["Home_Format_UpToDiscount"].Value,
+    };
+
+    var payload = new
+    {
+        language = homeLanguage,
+        locale = homeLanguage == "en" ? "en-US" : "ar-YE",
+        direction = homeLanguage == "en" ? "ltr" : "rtl",
+        exact,
+        formats
+    };
+
+    var json = JsonSerializer.Serialize(payload);
+}
+
+<script id="yemenGuideHomeI18nData">
+    window.YemenGuideHomeI18n = @Html.Raw(json);
+</script>

@@ -13,6 +13,7 @@ namespace YemenGuide.Core.Entities
 
         public int CityId { get; set; }
         public string CityName { get; set; } = null!;
+        public string? CityNameEn { get; set; }
         public string? ThemeColor { get; set; }
         public string? ExchangeRateRegion { get; set; }
 

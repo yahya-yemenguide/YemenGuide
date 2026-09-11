@@ -1,51 +1,32 @@
 ﻿@using YemenGuide.Core.DTOs.Admin
-@using YemenGuide.Web.Services.ExchangeRates
-@using System.Globalization
 @model AdminFinancialManagementPageDto
 
 @{
     var canManageSettings =
-        ViewData["CanManageSettings"] is bool settingsAllowed && settingsAllowed;
+        ViewData["CanManageSettings"] is bool settingsAllowed &&
+        settingsAllowed;
 
     var canManageWallets =
-        ViewData["CanManagePlatformWallets"] is bool walletsAllowed && walletsAllowed;
+        ViewData["CanManagePlatformWallets"] is bool walletsAllowed &&
+        walletsAllowed;
 
     var settingsPage = Model?.Settings ?? new AdminFinancialSettingsPageDto();
     var settings = settingsPage.Settings ?? new AdminFinancialSettingsDto();
     var wallets = Model?.PlatformWallets ?? new AdminPlatformWalletPageDto();
-
     var currency = string.IsNullOrWhiteSpace(Model?.Currency)
-        ? CurrencyDisplayService.YemeniRial
-        : CurrencyDisplayService.NormalizeCurrency(Model.Currency);
-
-    if (string.IsNullOrWhiteSpace(currency))
-    {
-        currency = CurrencyDisplayService.YemeniRial;
-    }
-
-    // القيم المالية في هذه النافذة تعرض بعملة بروفايل الأدمن.
-    // DefaultCurrency أدناه يظل إعدادًا عامًا للنظام ولا يغير عملة العرض الحالية.
-    var settingsCurrency = currency;
-    var settingsCurrencySymbol = CurrencyDisplayService.GetCurrencySymbol(currency);
-
-    string MoneyNumber(decimal value) =>
-        currency == CurrencyDisplayService.YemeniRial
-            ? Math.Round(value, 0, MidpointRounding.AwayFromZero).ToString("N0")
-            : value.ToString("N2");
-
-    var defaultManagementTab = canManageSettings ? "general" : "wallets";
+        ? "ريال يمني"
+        : Model.Currency;
 }
 
-<div class="afm afm--tabs"
-     data-financial-management-root
-     data-afm-default-tab="@defaultManagementTab"
-     data-display-currency="@currency"
-     data-display-currency-symbol="@settingsCurrencySymbol">
-
-    <header class="afm-header afm-header--compact">
+<div class="afm" data-financial-management-root>
+    <header class="afm-header">
         <div class="afm-header__identity">
             <span class="afm-header__mark"><i class="bi bi-sliders2"></i></span>
-            <div><h2>إدارة المالية</h2></div>
+            <div>
+                <span class="afm-header__eyebrow">إدارة النظام المالي</span>
+                <h2>إدارة المالية</h2>
+                <p>الإعدادات العامة وحسابات استقبال شحنات الضمان.</p>
+            </div>
         </div>
 
         <button type="button"
@@ -56,76 +37,28 @@
         </button>
     </header>
 
-    <nav class="afm-tabs"
-         role="tablist"
-         aria-label="أقسام إدارة المالية"
-         data-afm-tabs>
+    <div class="afm-body">
         @if (canManageSettings)
         {
-            <button type="button"
-                    role="tab"
-                    aria-selected="true"
-                    tabindex="0"
-                    class="afm-tab is-active"
-                    data-afm-tab="general">
-                <i class="bi bi-gear"></i>
-                <span>الإعدادات</span>
-            </button>
-
-            <button type="button"
-                    role="tab"
-                    aria-selected="false"
-                    tabindex="-1"
-                    class="afm-tab"
-                    data-afm-tab="trial">
-                <i class="bi bi-gift"></i>
-                <span>التجربة والضمان</span>
-            </button>
-
-            <button type="button"
-                    role="tab"
-                    aria-selected="false"
-                    tabindex="-1"
-                    class="afm-tab"
-                    data-afm-tab="categories">
-                <i class="bi bi-percent"></i>
-                <span>عمولات الفئات</span>
-            </button>
-        }
-
-        @if (canManageWallets)
-        {
-            <button type="button"
-                    role="tab"
-                    aria-selected="@(!canManageSettings ? "true" : "false")"
-                    tabindex="@(!canManageSettings ? "0" : "-1")"
-                    class="afm-tab @(!canManageSettings ? "is-active" : null)"
-                    data-afm-tab="wallets">
-                <i class="bi bi-wallet2"></i>
-                <span>حسابات الاستقبال</span>
-            </button>
-        }
-    </nav>
-
-    <div class="afm-body afm-body--tabbed">
-        @if (canManageSettings)
-        {
-            <form method="post"
-                  action="@Url.Action("SaveSettings", "AdminFinancialManagement", new { area = "Admin" })"
-                  class="afm-settings-form afm-settings-form--tabbed afm-section--settings"
-                  data-finance-settings-form>
-                @Html.AntiForgeryToken()
-
-                <section class="afm-tab-panel is-active"
-                         role="tabpanel"
-                         data-afm-panel="general">
-                    <div class="afm-panel-title">
+            <section class="afm-section afm-section--settings">
+                <div class="afm-section__head">
+                    <div>
+                        <span class="afm-section__icon"><i class="bi bi-gear"></i></span>
                         <div>
-                            <h3>الإعدادات العامة</h3>
-                            <p>القيم الافتراضية التي تتحكم في دورة العمولة والرصيد.</p>
-                            <small>المبالغ المالية معروضة الآن بعملة بروفايلك: <strong>@currency</strong>، وتُحفظ داخليًا بالريال اليمني.</small>
+                            <small>السياسات العامة</small>
+                            <h3>إعدادات المالية</h3>
+                            <p>هذه القيم تطبق كافتراضي على حسابات المنشآت.</p>
                         </div>
                     </div>
+
+                    <span class="afm-section__badge">صلاحية إعدادات</span>
+                </div>
+
+                <form method="post"
+                      action="@Url.Action("SaveSettings", "AdminFinancialManagement", new { area = "Admin" })"
+                      class="afm-settings-form"
+                      data-finance-settings-form>
+                    @Html.AntiForgeryToken()
 
                     <div class="afm-settings-grid">
                         <div class="afm-field afm-field--featured">
@@ -137,7 +70,7 @@
                                        min="0"
                                        max="100"
                                        step="0.01"
-                                       value="@(settings.CommissionPercentage.ToString("0.##", CultureInfo.InvariantCulture))"
+                                       value="@settings.CommissionPercentage"
                                        required />
                                 <span>%</span>
                             </div>
@@ -145,14 +78,13 @@
                         </div>
 
                         <div class="afm-field">
-                            <label for="defaultCurrency">العملة الافتراضية للنظام</label>
+                            <label for="defaultCurrency">العملة</label>
                             <input id="defaultCurrency"
                                    type="text"
                                    name="DefaultCurrency"
                                    maxlength="50"
                                    value="@settings.DefaultCurrency"
                                    required />
-                            <small>هذه القيمة تخص الإعداد الافتراضي للنظام، وليست عملة العرض المختارة في بروفايلك.</small>
                         </div>
 
                         <div class="afm-field">
@@ -163,9 +95,9 @@
                                        name="MinimumCommissionTopUp"
                                        min="0"
                                        step="0.01"
-                                       value="@(settings.MinimumCommissionTopUp.ToString("0.##", CultureInfo.InvariantCulture))"
+                                       value="@settings.MinimumCommissionTopUp"
                                        required />
-                                <span>@settingsCurrency</span>
+                                <span>@currency</span>
                             </div>
                         </div>
 
@@ -177,9 +109,9 @@
                                        name="DefaultLowBalanceThreshold"
                                        min="0"
                                        step="0.01"
-                                       value="@(settings.DefaultLowBalanceThreshold.ToString("0.##", CultureInfo.InvariantCulture))"
+                                       value="@settings.DefaultLowBalanceThreshold"
                                        required />
-                                <span>@settingsCurrency</span>
+                                <span>@currency</span>
                             </div>
                         </div>
 
@@ -191,9 +123,9 @@
                                        name="DefaultCommissionDebtLimit"
                                        min="0"
                                        step="0.01"
-                                       value="@(settings.DefaultCommissionDebtLimit.ToString("0.##", CultureInfo.InvariantCulture))"
+                                       value="@settings.DefaultCommissionDebtLimit"
                                        required />
-                                <span>@settingsCurrency</span>
+                                <span>@currency</span>
                             </div>
                         </div>
 
@@ -245,141 +177,10 @@
                             </span>
                         </label>
                     </div>
-                </section>
-
-                <section class="afm-tab-panel"
-                         role="tabpanel"
-                         data-afm-panel="trial"
-                         hidden>
-                    <div class="afm-panel-title">
-                        <div>
-                            <h3>التجربة والضمان</h3>
-                            <p>سياسة تشغيل الملاك الجدد والرصيد المطلوب بعد انتهاء التجربة.</p>
-                        </div>
-                    </div>
-
-                    <section class="afm-trial-policy @(settings.OwnerFreeTrialEnabled ? "is-enabled" : "is-disabled")"
-                             data-trial-policy-card>
-                        <div class="afm-trial-policy__glow" aria-hidden="true"></div>
-
-                        <div class="afm-trial-policy__head">
-                            <div class="afm-trial-policy__identity">
-                                <span class="afm-trial-policy__mark">
-                                    <i class="bi bi-gift"></i>
-                                </span>
-                                <div>
-                                    <span class="afm-trial-policy__eyebrow">سياسة انضمام الملاك</span>
-                                    <h4>التجربة المجانية وضمان التفعيل</h4>
-                                    <p>حدد فترة التشغيل المجانية والرصيد المطلوب لاستمرار استقبال الحجوزات بعدها.</p>
-                                </div>
-                            </div>
-
-                            <span class="afm-trial-policy__status" data-trial-policy-status>
-                                <i class="bi @(settings.OwnerFreeTrialEnabled ? "bi-check-circle-fill" : "bi-pause-circle-fill")"></i>
-                                <span>@(settings.OwnerFreeTrialEnabled ? "التجربة مفعّلة" : "التجربة متوقفة")</span>
-                            </span>
-                        </div>
-
-                        <div class="afm-trial-policy__body">
-                            <label class="afm-trial-switch">
-                                <input type="checkbox"
-                                       name="OwnerFreeTrialEnabled"
-                                       value="true"
-                                       data-trial-enabled
-                                       checked="@(settings.OwnerFreeTrialEnabled ? "checked" : null)" />
-                                <span class="afm-trial-switch__control" aria-hidden="true"><span></span></span>
-                                <span class="afm-trial-switch__copy">
-                                    <strong>تفعيل الفترة التجريبية للملاك الجدد</strong>
-                                    <small>تُمنح مرة واحدة للمالك عند بدء تشغيل أول منشأة مؤهلة للحجوزات.</small>
-                                </span>
-                            </label>
-
-                            <div class="afm-trial-policy__fields">
-                                <div class="afm-trial-field" data-trial-days-field>
-                                    <div class="afm-trial-field__label">
-                                        <span class="afm-trial-field__icon"><i class="bi bi-calendar2-week"></i></span>
-                                        <div>
-                                            <label for="ownerFreeTrialDays">مدة التجربة</label>
-                                            <small>عدد الأيام المجانية</small>
-                                        </div>
-                                    </div>
-                                    <div class="afm-trial-field__input">
-                                        <input id="ownerFreeTrialDays"
-                                               type="number"
-                                               name="OwnerFreeTrialDays"
-                                               min="0"
-                                               max="3650"
-                                               step="1"
-                                               value="@settings.OwnerFreeTrialDays"
-                                               data-trial-days
-                                               readonly="@(!settings.OwnerFreeTrialEnabled ? "readonly" : null)" />
-                                        <span>يوم</span>
-                                    </div>
-                                </div>
-
-                                <div class="afm-trial-field afm-trial-field--guarantee">
-                                    <div class="afm-trial-field__label">
-                                        <span class="afm-trial-field__icon"><i class="bi bi-shield-check"></i></span>
-                                        <div>
-                                            <label for="requiredCommissionGuaranteeBalance">رصيد ضمان التفعيل</label>
-                                            <small>المطلوب بعد انتهاء التجربة</small>
-                                        </div>
-                                    </div>
-                                    <div class="afm-trial-field__input">
-                                        <input id="requiredCommissionGuaranteeBalance"
-                                               type="number"
-                                               name="RequiredCommissionGuaranteeBalance"
-                                               min="0"
-                                               step="0.01"
-                                               value="@(settings.RequiredCommissionGuaranteeBalance.ToString("0.##", CultureInfo.InvariantCulture))"
-                                               required />
-                                        <span>@settingsCurrency</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="afm-trial-policy__flow" aria-label="تسلسل سياسة التجربة والضمان">
-                                <div class="afm-trial-flow-step">
-                                    <span>1</span>
-                                    <div><strong>بدء التشغيل</strong><small>تبدأ التجربة عند أول منشأة مؤهلة</small></div>
-                                </div>
-                                <i class="bi bi-chevron-left" aria-hidden="true"></i>
-                                <div class="afm-trial-flow-step">
-                                    <span>2</span>
-                                    <div><strong>الفترة المجانية</strong><small>تشغيل دون إلزام برصيد الضمان</small></div>
-                                </div>
-                                <i class="bi bi-chevron-left" aria-hidden="true"></i>
-                                <div class="afm-trial-flow-step">
-                                    <span>3</span>
-                                    <div><strong>بعد الانتهاء</strong><small>يُشترط بلوغ رصيد ضمان التفعيل</small></div>
-                                </div>
-                            </div>
-
-                            <div class="afm-trial-policy__note">
-                                <i class="bi bi-info-circle"></i>
-                                <p>
-                                    <strong>رصيد ضمان التفعيل</strong> مختلف عن <strong>الحد الأدنى للشحن</strong>؛
-                                    الأول يحدد الرصيد المطلوب لاستمرار الحجوزات، والثاني يحدد أقل مبلغ لطلب شحن واحد.
-                                </p>
-                            </div>
-                        </div>
-                    </section>
-                </section>
-
-                <section class="afm-tab-panel"
-                         role="tabpanel"
-                         data-afm-panel="categories"
-                         hidden>
-                    <div class="afm-panel-title">
-                        <div>
-                            <h3>عمولات الفئات</h3>
-                            <p>استثناءات النسبة العامة حسب فئة المنشأة.</p>
-                        </div>
-                    </div>
 
                     @if (settingsPage.CategoryCommissions.Count > 0)
                     {
-                        <section class="afm-category-commissions afm-category-commissions--tab">
+                        <section class="afm-category-commissions">
                             <div class="afm-subsection-head">
                                 <div>
                                     <span>استثناءات حسب الفئة</span>
@@ -416,8 +217,8 @@
                                                    min="0"
                                                    max="100"
                                                    step="0.01"
-                                                   value="@(category.CommissionPercentage?.ToString("0.##", CultureInfo.InvariantCulture))"
-                                                   placeholder="@(category.EffectiveCommissionPercentage.ToString("0.##", CultureInfo.InvariantCulture))" />
+                                                   value="@(category.CommissionPercentage?.ToString("0.##"))"
+                                                   placeholder="@category.EffectiveCommissionPercentage.ToString("0.##")" />
                                             <span>%</span>
                                         </div>
                                     </div>
@@ -425,25 +226,15 @@
                             </div>
                         </section>
                     }
-                    else
-                    {
-                        <div class="afm-empty afm-empty--inside-tab">
-                            <span class="afm-empty__icon"><i class="bi bi-percent"></i></span>
-                            <h4>لا توجد عمولات خاصة بالفئات</h4>
-                            <p>سيتم استخدام نسبة العمولة العامة لكل الفئات.</p>
-                        </div>
-                    }
-                </section>
 
-                <div class="afm-settings-footer">
                     <div class="afm-field afm-field--reason">
                         <label for="financialSettingsReason">سبب التعديل</label>
                         <textarea id="financialSettingsReason"
                                   name="ChangeReason"
-                                  rows="2"
+                                  rows="3"
                                   maxlength="500"
                                   required
-                                  placeholder="سبب مختصر لتوثيق التعديل..."></textarea>
+                                  placeholder="اكتب سببًا مختصرًا لتوثيق تغيير الإعدادات..."></textarea>
                     </div>
 
                     <div class="afm-form-actions">
@@ -452,20 +243,21 @@
                             حفظ الإعدادات
                         </button>
                     </div>
-                </div>
-            </form>
+                </form>
+            </section>
         }
 
         @if (canManageWallets)
         {
-            <section class="afm-tab-panel afm-section afm-section--wallets @(!canManageSettings ? "is-active" : null)"
-                     role="tabpanel"
-                     data-afm-panel="wallets"
-                     hidden="@(canManageSettings ? "hidden" : null)">
-                <div class="afm-wallets-head">
+            <section class="afm-section afm-section--wallets">
+                <div class="afm-section__head">
                     <div>
-                        <h3>حسابات الاستقبال</h3>
-                        <p>الحسابات التي يحول إليها الملاك طلبات شحن رصيد الضمان.</p>
+                        <span class="afm-section__icon"><i class="bi bi-wallet2"></i></span>
+                        <div>
+                            <small>حسابات الاستلام</small>
+                            <h3>حسابات المنصة</h3>
+                            <p>الحسابات التي يحول إليها الملاك طلبات شحن رصيد الضمان.</p>
+                        </div>
                     </div>
 
                     <button type="button"
@@ -476,11 +268,11 @@
                     </button>
                 </div>
 
-                <div class="afm-wallet-summary afm-wallet-summary--compact">
+                <div class="afm-wallet-summary">
                     <div><small>الإجمالي</small><strong>@wallets.Summary.TotalCount</strong></div>
                     <div><small>نشطة</small><strong>@wallets.Summary.ActiveCount</strong></div>
                     <div><small>طلبات معلقة</small><strong>@wallets.Summary.PendingTopUpsCount</strong></div>
-                    <div><small>الشحنات المعتمدة</small><strong>@MoneyNumber(wallets.Summary.CompletedTopUpsAmount) @currency</strong></div>
+                    <div><small>مبلغ الشحنات المعتمدة</small><strong>@wallets.Summary.CompletedTopUpsAmount.ToString("N0") @currency</strong></div>
                 </div>
 
                 @if (wallets.Wallets.Count == 0)
@@ -502,6 +294,7 @@
                                      data-wallet-account-number="@wallet.AccountNumber"
                                      data-wallet-beneficiary="@wallet.BeneficiaryName"
                                      data-wallet-instructions="@wallet.Instructions"
+                                     data-wallet-instructions-en="@wallet.InstructionsEn"
                                      data-wallet-active="@wallet.IsActive.ToString().ToLowerInvariant()"
                                      data-wallet-primary="@wallet.IsPrimary.ToString().ToLowerInvariant()">
 
@@ -637,7 +430,9 @@
                                     <option value="">اختر الحساب المدعوم</option>
                                     @foreach (var supported in wallets.SupportedWallets.Where(x => x.IsActive))
                                     {
-                                        <option value="@supported.WalletId">@supported.WalletName</option>
+                                        <option value="@supported.WalletId">
+                                            @supported.WalletName
+                                        </option>
                                     }
                                 </select>
                             </div>
@@ -662,13 +457,25 @@
                                        data-platform-wallet-beneficiary />
                             </div>
 
-                            <div class="afm-field">
-                                <label for="platformWalletInstructions">تعليمات التحويل</label>
-                                <textarea id="platformWalletInstructions"
-                                          name="Instructions"
-                                          rows="4"
-                                          maxlength="2000"
-                                          data-platform-wallet-instructions></textarea>
+                            <div class="afm-settings-grid">
+                                <div class="afm-field">
+                                    <label for="platformWalletInstructions">تعليمات التحويل — عربي</label>
+                                    <textarea id="platformWalletInstructions"
+                                              name="Instructions"
+                                              rows="4"
+                                              maxlength="2000"
+                                              data-platform-wallet-instructions></textarea>
+                                </div>
+                            
+                                <div class="afm-field" dir="ltr">
+                                    <label for="platformWalletInstructionsEn">Transfer instructions — English</label>
+                                    <textarea id="platformWalletInstructionsEn"
+                                              name="InstructionsEn"
+                                              rows="4"
+                                              maxlength="2000"
+                                              dir="ltr"
+                                              data-platform-wallet-instructions-en></textarea>
+                                </div>
                             </div>
 
                             <div class="afm-modal__toggles">

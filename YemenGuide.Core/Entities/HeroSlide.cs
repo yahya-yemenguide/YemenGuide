@@ -8,6 +8,7 @@ namespace YemenGuide.Core.Entities
         public int HeroSlideId { get; set; }
         public string ImagePath { get; set; } = null!;
         public string TypingText { get; set; } = null!;
+        public string? TypingTextEn { get; set; }
         public int DisplayOrder { get; set; }
         public bool? IsActive { get; set; }
         public DateTime? CreatedAt { get; set; }

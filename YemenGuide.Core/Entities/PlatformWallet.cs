@@ -18,6 +18,7 @@ namespace YemenGuide.Core.Entities
         public bool? IsActive { get; set; }
         public bool IsPrimary { get; set; }
         public string? Instructions { get; set; }
+        public string? InstructionsEn { get; set; }
         public DateTime? CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
 

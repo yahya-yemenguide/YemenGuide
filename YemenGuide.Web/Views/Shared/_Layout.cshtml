@@ -217,6 +217,25 @@
                     }
     </style>
 
+    @*
+    =============================================================
+    CUSTOMER DIRECTION LAYER
+    =============================================================
+    يجب أن يبقى هذا الملف بعد Styles الخاصة بكل صفحة حتى تكون
+    قواعد RTL/LTR هي آخر كلمة في الاتجاه، بدون تعديل تصاميم الصفحات.
+    =============================================================
+    *@
+    <link rel="stylesheet"
+          href="~/css/customer/customer-direction.css"
+          asp-append-version="true" />
+
+    @if (isHomeIndex)
+    {
+        <link rel="stylesheet"
+              href="~/css/customer/home-localization.css"
+              asp-append-version="true" />
+    }
+
     @if (!isHomeIndex)
     {
         <link rel="stylesheet" href="~/lib/leaflet/leaflet.css" />
@@ -332,6 +351,14 @@
     {
         <script src="~/js/customer/customer-bottom-nav.js"
             asp-append-version="true"></script>
+    }
+
+    @if (isHomeIndex)
+    {
+        <partial name="_HomeLocalizationData" />
+
+        <script src="~/js/customer/home-localization.js"
+                asp-append-version="true"></script>
     }
 
     @await RenderSectionAsync("Scripts", required: false)

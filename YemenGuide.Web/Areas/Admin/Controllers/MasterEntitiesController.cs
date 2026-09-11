@@ -1,4 +1,4 @@
-// =============================================================
+﻿// =============================================================
 // MasterEntitiesController.cs
 // إدارة الفئات والمدن - النسخة المحدثة
 // =============================================================
@@ -92,16 +92,29 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
             [FromForm] Category obj,
             IFormFile? imageFile)
         {
-            if (obj == null || string.IsNullOrWhiteSpace(obj.CategoryName))
+            if (obj == null ||
+                string.IsNullOrWhiteSpace(obj.CategoryName) ||
+                string.IsNullOrWhiteSpace(obj.CategoryNameEn))
             {
                 return Json(new
                 {
                     success = false,
-                    message = "يرجى التأكد من إدخال اسم الفئة."
+                    message = "اسم الفئة بالعربية والإنجليزية مطلوبان."
                 });
             }
 
             obj.CategoryName = obj.CategoryName.Trim();
+            obj.CategoryNameEn = obj.CategoryNameEn.Trim();
+
+            if (ContainsArabicCharacters(obj.CategoryNameEn))
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = "اسم الفئة بالإنجليزية يجب ألا يحتوي على أحرف عربية."
+                });
+            }
+
             obj.ThemeColor = NormalizeColor(obj.ThemeColor);
             obj.IconClass = string.IsNullOrWhiteSpace(obj.IconClass)
                 ? "bi-star"
@@ -126,6 +139,28 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                 {
                     success = false,
                     message = "عفواً، هذه الفئة موجودة مسبقاً!"
+                });
+            }
+
+            var normalizedEnglishInput =
+                NormalizeName(obj.CategoryNameEn);
+
+            var existingEnglishNames =
+                await _context.Categories
+                    .AsNoTracking()
+                    .Where(c => c.CategoryNameEn != null)
+                    .Select(c => c.CategoryNameEn!)
+                    .ToListAsync();
+
+            if (existingEnglishNames.Any(
+                    name =>
+                        NormalizeName(name) ==
+                        normalizedEnglishInput))
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = "اسم الفئة بالإنجليزية مستخدم مسبقاً."
                 });
             }
 
@@ -187,12 +222,25 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
         {
             if (obj == null ||
                 obj.CategoryId <= 0 ||
-                string.IsNullOrWhiteSpace(obj.CategoryName))
+                string.IsNullOrWhiteSpace(obj.CategoryName) ||
+                string.IsNullOrWhiteSpace(obj.CategoryNameEn))
             {
                 return Json(new
                 {
                     success = false,
-                    message = "بيانات الفئة غير صالحة."
+                    message = "اسم الفئة بالعربية والإنجليزية مطلوبان."
+                });
+            }
+
+            obj.CategoryName = obj.CategoryName.Trim();
+            obj.CategoryNameEn = obj.CategoryNameEn.Trim();
+
+            if (ContainsArabicCharacters(obj.CategoryNameEn))
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = "اسم الفئة بالإنجليزية يجب ألا يحتوي على أحرف عربية."
                 });
             }
 
@@ -226,7 +274,32 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                     });
                 }
 
-                existingCategory.CategoryName = obj.CategoryName.Trim();
+                var normalizedEnglishInput =
+                    NormalizeName(obj.CategoryNameEn);
+
+                var otherEnglishNames =
+                    await _context.Categories
+                        .AsNoTracking()
+                        .Where(c =>
+                            c.CategoryId != obj.CategoryId &&
+                            c.CategoryNameEn != null)
+                        .Select(c => c.CategoryNameEn!)
+                        .ToListAsync();
+
+                if (otherEnglishNames.Any(
+                        name =>
+                            NormalizeName(name) ==
+                            normalizedEnglishInput))
+                {
+                    return Json(new
+                    {
+                        success = false,
+                        message = "توجد فئة أخرى بالاسم الإنجليزي نفسه."
+                    });
+                }
+
+                existingCategory.CategoryName = obj.CategoryName;
+                existingCategory.CategoryNameEn = obj.CategoryNameEn;
                 existingCategory.IconClass = string.IsNullOrWhiteSpace(obj.IconClass)
                     ? "bi-star"
                     : obj.IconClass.Trim();
@@ -304,16 +377,29 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
         [RequireAdminPermission(AdminPermissionKeys.MasterData.ManageCities)]
         public async Task<IActionResult> AddCity([FromBody] City obj)
         {
-            if (obj == null || string.IsNullOrWhiteSpace(obj.CityName))
+            if (obj == null ||
+                string.IsNullOrWhiteSpace(obj.CityName) ||
+                string.IsNullOrWhiteSpace(obj.CityNameEn))
             {
                 return Json(new
                 {
                     success = false,
-                    message = "يرجى إدخال اسم المدينة."
+                    message = "اسم المدينة بالعربية والإنجليزية مطلوبان."
                 });
             }
 
             obj.CityName = obj.CityName.Trim();
+            obj.CityNameEn = obj.CityNameEn.Trim();
+
+            if (ContainsArabicCharacters(obj.CityNameEn))
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = "اسم المدينة بالإنجليزية يجب ألا يحتوي على أحرف عربية."
+                });
+            }
+
             obj.ThemeColor = NormalizeColor(obj.ThemeColor);
 
             // تحديد سوق الصرف تلقائياً من اسم المدينة داخل السيرفر.
@@ -333,6 +419,28 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                 {
                     success = false,
                     message = "عفواً، هذه المدينة مضافة مسبقاً!"
+                });
+            }
+
+            var normalizedEnglishInput =
+                NormalizeName(obj.CityNameEn);
+
+            var existingEnglishNames =
+                await _context.Cities
+                    .AsNoTracking()
+                    .Where(c => c.CityNameEn != null)
+                    .Select(c => c.CityNameEn!)
+                    .ToListAsync();
+
+            if (existingEnglishNames.Any(
+                    name =>
+                        NormalizeName(name) ==
+                        normalizedEnglishInput))
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = "اسم المدينة بالإنجليزية مستخدم مسبقاً."
                 });
             }
 
@@ -387,12 +495,25 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
         {
             if (obj == null ||
                 obj.CityId <= 0 ||
-                string.IsNullOrWhiteSpace(obj.CityName))
+                string.IsNullOrWhiteSpace(obj.CityName) ||
+                string.IsNullOrWhiteSpace(obj.CityNameEn))
             {
                 return Json(new
                 {
                     success = false,
-                    message = "بيانات المدينة غير صالحة."
+                    message = "اسم المدينة بالعربية والإنجليزية مطلوبان."
+                });
+            }
+
+            obj.CityName = obj.CityName.Trim();
+            obj.CityNameEn = obj.CityNameEn.Trim();
+
+            if (ContainsArabicCharacters(obj.CityNameEn))
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = "اسم المدينة بالإنجليزية يجب ألا يحتوي على أحرف عربية."
                 });
             }
 
@@ -426,7 +547,32 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                     });
                 }
 
-                existingCity.CityName = obj.CityName.Trim();
+                var normalizedEnglishInput =
+                    NormalizeName(obj.CityNameEn);
+
+                var otherEnglishNames =
+                    await _context.Cities
+                        .AsNoTracking()
+                        .Where(c =>
+                            c.CityId != obj.CityId &&
+                            c.CityNameEn != null)
+                        .Select(c => c.CityNameEn!)
+                        .ToListAsync();
+
+                if (otherEnglishNames.Any(
+                        name =>
+                            NormalizeName(name) ==
+                            normalizedEnglishInput))
+                {
+                    return Json(new
+                    {
+                        success = false,
+                        message = "توجد مدينة أخرى بالاسم الإنجليزي نفسه."
+                    });
+                }
+
+                existingCity.CityName = obj.CityName;
+                existingCity.CityNameEn = obj.CityNameEn;
                 existingCity.ThemeColor = NormalizeColor(obj.ThemeColor);
 
                 // عند تغيير اسم المدينة يعاد تحديد سوق الصرف تلقائياً أيضاً.
@@ -515,7 +661,28 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
             return "/images/categories/" + uniqueFileName;
         }
 
-        private static string NormalizeName(string? value)
+        private static bool ContainsArabicCharacters(string? value)
+{
+    if (string.IsNullOrWhiteSpace(value))
+    {
+        return false;
+    }
+
+    foreach (char character in value)
+    {
+        if ((character >= '؀' && character <= 'ۿ') ||
+            (character >= 'ݐ' && character <= 'ݿ') ||
+            (character >= 'ࢠ' && character <= 'ࣿ'))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+
+private static string NormalizeName(string? value)
         {
             return (value ?? string.Empty)
                 .Trim()

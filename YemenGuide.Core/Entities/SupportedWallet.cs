@@ -14,6 +14,7 @@ namespace YemenGuide.Core.Entities
 
         public int WalletId { get; set; }
         public string WalletName { get; set; } = null!;
+        public string? WalletNameEn { get; set; }
         public string? LogoPath { get; set; }
         public bool? IsActive { get; set; }
         public DateTime? CreatedAt { get; set; }

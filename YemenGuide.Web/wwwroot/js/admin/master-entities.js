@@ -464,13 +464,26 @@ document.addEventListener('DOMContentLoaded', () => {
         const submitButton = qs('button[type="submit"]', form);
         const categoryId = Number.parseInt(document.getElementById('categoryId')?.value || '0', 10);
         const categoryName = qs('.category-name-input', form)?.value.trim() || '';
+        const categoryNameEn = qs('.category-name-en-input', form)?.value.trim() || '';
         const bookingSystemId = Number.parseInt(document.getElementById('bookingSystemId')?.value || '0', 10);
         const imageInput = document.getElementById('categoryImageInput');
         const ownerCanAdd = qs('input[name="OwnerCanAddPlacesChoice"]:checked', form)?.value !== 'false';
 
         if (!categoryName) {
-            showWarning('اسم الفئة مطلوب', 'اكتب اسم الفئة قبل الحفظ.');
+            showWarning('اسم الفئة مطلوب', 'اكتب اسم الفئة بالعربية قبل الحفظ.');
             qs('.category-name-input', form)?.focus();
+            return;
+        }
+
+        if (!categoryNameEn) {
+            showWarning('الاسم الإنجليزي مطلوب', 'اكتب اسم الفئة بالإنجليزية قبل الحفظ.');
+            qs('.category-name-en-input', form)?.focus();
+            return;
+        }
+
+        if (/[؀-ۿ]/.test(categoryNameEn)) {
+            showWarning('راجع الاسم الإنجليزي', 'حقل اسم الفئة بالإنجليزية لا يجب أن يحتوي على أحرف عربية.');
+            qs('.category-name-en-input', form)?.focus();
             return;
         }
 
@@ -482,6 +495,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const formData = new FormData();
         formData.append('CategoryId', String(categoryId));
         formData.append('CategoryName', categoryName);
+        formData.append('CategoryNameEn', categoryNameEn);
         formData.append('ThemeColor', selectedCategoryColor || DEFAULT_COLOR);
         formData.append('IconClass', selectedCategoryIcon || DEFAULT_CATEGORY_ICON);
         formData.append('BookingSystemId', String(bookingSystemId));
@@ -519,10 +533,23 @@ document.addEventListener('DOMContentLoaded', () => {
         const submitButton = qs('button[type="submit"]', form);
         const cityId = Number.parseInt(document.getElementById('cityId')?.value || '0', 10);
         const cityName = qs('.city-name-input', form)?.value.trim() || '';
+        const cityNameEn = qs('.city-name-en-input', form)?.value.trim() || '';
 
         if (!cityName) {
-            showWarning('اسم المدينة مطلوب', 'اكتب اسم المدينة قبل الحفظ.');
+            showWarning('اسم المدينة مطلوب', 'اكتب اسم المدينة بالعربية قبل الحفظ.');
             qs('.city-name-input', form)?.focus();
+            return;
+        }
+
+        if (!cityNameEn) {
+            showWarning('الاسم الإنجليزي مطلوب', 'اكتب اسم المدينة بالإنجليزية قبل الحفظ.');
+            qs('.city-name-en-input', form)?.focus();
+            return;
+        }
+
+        if (/[؀-ۿ]/.test(cityNameEn)) {
+            showWarning('راجع الاسم الإنجليزي', 'حقل اسم المدينة بالإنجليزية لا يجب أن يحتوي على أحرف عربية.');
+            qs('.city-name-en-input', form)?.focus();
             return;
         }
 
@@ -539,6 +566,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({
                     CityId: cityId,
                     CityName: cityName,
+                    CityNameEn: cityNameEn,
                     ThemeColor: selectedCityColor || DEFAULT_COLOR
                 })
             });
@@ -609,6 +637,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             document.getElementById('categoryId').value = String(data.categoryId);
             qs('.category-name-input', form).value = data.categoryName || '';
+            qs('.category-name-en-input', form).value = data.categoryNameEn || '';
             document.getElementById('addCategoryLabel').textContent = 'تعديل الفئة';
             qs('.btn-save-entity-text', form).textContent = 'حفظ التعديلات';
 
@@ -657,6 +686,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             document.getElementById('cityId').value = String(data.cityId);
             qs('.city-name-input', form).value = data.cityName || '';
+            qs('.city-name-en-input', form).value = data.cityNameEn || '';
             document.getElementById('addCityLabel').textContent = 'تعديل المدينة';
             qs('.btn-save-entity-text', form).textContent = 'حفظ التعديلات';
 

@@ -1,0 +1,525 @@
+﻿/* ==========================================================================
+   YEMENGUIDE — CUSTOMER DIRECTION FOUNDATION
+   Phase 1: RTL / LTR only — NO TRANSLATION
+
+   الهدف:
+   - العربية: التصميم الحالي يبقى RTL كما هو.
+   - الإنجليزية: كل واجهات العميل تتبع LTR فعليًا.
+   - الملف يُحمّل أخيرًا بعد CSS كل صفحة حتى يصحح أي RTL قديم ثابت.
+   ========================================================================== */
+
+
+/* ==========================================================================
+   01) ENGLISH — GLOBAL CUSTOMER DIRECTION
+   ========================================================================== */
+
+/*
+ * بعض ملفات العميل القديمة تحتوي direction: rtl أو dir="rtl" داخل Razor.
+ * عند اختيار English نلغي هذا الإرث فقط داخل واجهة العميل.
+ *
+ * لا نطبق هذا على العربي حتى لا نغيّر التصميم العربي الحالي.
+ */
+html[dir="ltr"] body.customer-public-page .site-wrapper,
+html[dir="ltr"] body.customer-dashboard-page .site-wrapper,
+html[dir="ltr"] body.customer-public-page .site-wrapper *,
+html[dir="ltr"] body.customer-dashboard-page .site-wrapper * {
+    direction: ltr !important;
+}
+
+
+/* العناصر التي يجب أن تبقى LTR بطبيعتها في اللغتين */
+html[dir="ltr"] .phone-wrapper-ltr,
+html[dir="ltr"] .phone-wrapper-ltr *,
+html[dir="ltr"] .iti,
+html[dir="ltr"] .iti *,
+html[dir="ltr"] input[type="tel"],
+html[dir="ltr"] .booking-payment-countdown,
+html[dir="ltr"] .bd2-booking-number strong,
+html[dir="ltr"] .payment-booking-number strong,
+html[dir="ltr"] [data-ltr],
+html[dir="ltr"] [dir="ltr"] {
+    direction: ltr !important;
+}
+
+
+/*
+ * خيار العربية داخل قائمة اللغات يظل عربيًا بصريًا حتى لو
+ * واجهة الموقع نفسها إنجليزية.
+ */
+html[dir="ltr"] .yg-language-option[data-culture="ar"],
+html[dir="ltr"] .yg-language-option[data-culture="ar"] .yg-language-option-copy,
+html[dir="ltr"] .yg-language-option[data-culture="ar"] .yg-language-option-copy * {
+    direction: rtl !important;
+    text-align: right !important;
+}
+
+
+/* ==========================================================================
+   02) HEADER / DRAWER / FOOTER
+   ========================================================================== */
+
+html[dir="ltr"] .custom-navbar .container-fluid,
+html[dir="ltr"] .customer-signature-header .container-fluid,
+html[dir="ltr"] .customer-public-navigation,
+html[dir="ltr"] .customer-signature-nav-shell,
+html[dir="ltr"] #customerSignatureNav,
+html[dir="ltr"] .customer-header-actions,
+html[dir="ltr"] .nav-actions,
+html[dir="ltr"] #offcanvasNavbar,
+html[dir="ltr"] #offcanvasNavbar .offcanvas-body,
+html[dir="ltr"] footer {
+    direction: ltr !important;
+}
+
+
+/* Dropdowns follow their page direction instead of old RTL assumptions */
+html[dir="ltr"] .dropdown-menu,
+html[dir="ltr"] .modern-dropdown {
+    text-align: start !important;
+}
+
+
+/* ==========================================================================
+   03) CUSTOMER DASHBOARD SHELL + SIDEBAR
+   ========================================================================== */
+
+html[dir="ltr"] .customer-dashboard-layout {
+    direction: ltr !important;
+}
+
+html[dir="ltr"] .customer-sidebar,
+html[dir="ltr"] .customer-main-content,
+html[dir="ltr"] .custom-sidebar-nav,
+html[dir="ltr"] .logout-wrapper {
+    direction: ltr !important;
+}
+
+
+/*
+ * في English يصبح الـSidebar أول عنصر على اليسار تلقائيًا لأن
+ * Flex container صار LTR. هذه القاعدة تحافظ على خط الفصل داخليًا.
+ */
+html[dir="ltr"] .customer-sidebar {
+    border-inline-end: 1px solid rgba(5, 32, 60, 0.07) !important;
+    border-inline-start: 0 !important;
+}
+
+
+/* ==========================================================================
+   04) HOME — MAIN SECTIONS
+   ========================================================================== */
+
+html[dir="ltr"] .dlx-copy,
+html[dir="ltr"] .dlx-search,
+html[dir="ltr"] .dlx-filter-row,
+html[dir="ltr"] .dlx-place-label,
+html[dir="ltr"] .qamariya-categories,
+html[dir="ltr"] .nearby-v10-copy,
+html[dir="ltr"] .nearby-v10-explorer,
+html[dir="ltr"] .nearby-v10-map-toolbar,
+html[dir="ltr"] .nearby-v10-map-controls,
+html[dir="ltr"] .journey-v10-stage {
+    direction: ltr !important;
+}
+
+
+/*
+ * هذه الأجزاء كانت تحتوي text-align:right صريحًا.
+ * start يجعلها يمينًا في العربي ويسارًا في الإنجليزي.
+ */
+html[dir="ltr"] .dlx-title,
+html[dir="ltr"] .dlx-title-main,
+html[dir="ltr"] .dlx-title-accent,
+html[dir="ltr"] .dlx-place-label,
+html[dir="ltr"] .dlx-place-label > span,
+html[dir="ltr"] .nearby-v10-copy,
+html[dir="ltr"] .nearby-v10-compass-text,
+html[dir="ltr"] .nearby-v10-result-copy,
+html[dir="ltr"] .journey-v10-step {
+    text-align: start !important;
+}
+
+
+/* روابط "عرض المزيد" تتحرك باتجاه قراءة English */
+html[dir="ltr"] .elegant-link:hover {
+    transform: translateX(5px);
+}
+
+
+/* ==========================================================================
+   05) OVERVIEW
+   ========================================================================== */
+
+html[dir="ltr"] .overview-wrapper,
+html[dir="ltr"] .overview-shell,
+html[dir="ltr"] .overview-hero,
+html[dir="ltr"] .overview-security-alert,
+html[dir="ltr"] .overview-quick-section,
+html[dir="ltr"] .overview-offers-section {
+    direction: ltr !important;
+}
+
+
+/*
+ * في التصميم العربي لوح الهوية مفصول من اليسار.
+ * عند English يصبح هو اللوح الأيسر، فينتقل الفاصل إلى اليمين.
+ */
+html[dir="ltr"] .overview-identity-panel {
+    border-left: 0 !important;
+    border-right: 1px solid rgba(5, 32, 60, 0.055) !important;
+}
+
+
+/* موضع زر تعديل الصورة يتبع الطرف النهائي بدل فرض RTL */
+html[dir="ltr"] .overview-avatar-edit {
+    right: auto !important;
+    left: 10px !important;
+}
+
+
+/* ==========================================================================
+   06) BOOKINGS — MY BOOKINGS
+   ========================================================================== */
+
+html[dir="ltr"] .bookings-wrapper,
+html[dir="ltr"] .customer-bookings-header,
+html[dir="ltr"] .customer-bookings-search-section,
+html[dir="ltr"] .customer-bookings-filters,
+html[dir="ltr"] .filters-scroll-container,
+html[dir="ltr"] .customer-bookings-list,
+html[dir="ltr"] .customer-booking-row {
+    direction: ltr !important;
+}
+
+
+/* الخط الجانبي في Header الحجوزات */
+html[dir="ltr"] .customer-bookings-header::after {
+    right: auto !important;
+    left: 0 !important;
+    border-radius: 0 5px 5px 0 !important;
+}
+
+
+/* البحث: أيقونة البداية يسار، زر المسح في النهاية يمين */
+html[dir="ltr"] .search-icon-position {
+    right: auto !important;
+    left: 19px !important;
+}
+
+html[dir="ltr"] .clear-booking-search {
+    left: auto !important;
+    right: 13px !important;
+}
+
+html[dir="ltr"] .customer-bookings-search-input {
+    padding: 0 55px 0 64px !important;
+    text-align: start !important;
+}
+
+
+/* تدرج نهاية شريط التبويبات */
+html[dir="ltr"] .customer-bookings-filters::after {
+    left: auto !important;
+    right: 0 !important;
+    transform: scaleX(-1);
+}
+
+
+/* نصوص كانت مجبرة على right */
+html[dir="ltr"] .customer-booking-state,
+html[dir="ltr"] .customer-booking-total,
+html[dir="ltr"] .customer-booking-total.has-promotion {
+    text-align: start !important;
+}
+
+
+/*
+ * أرقام العد التنازلي تظل LTR، لكن حاويتها تتبع الواجهة.
+ */
+html[dir="ltr"] .customer-payment-timer {
+    direction: ltr !important;
+}
+
+
+/* ==========================================================================
+   07) CHAT / MESSAGES
+   ========================================================================== */
+
+html[dir="ltr"] .owner-chat-shell,
+html[dir="ltr"] .owner-chat-shell .chat-container,
+html[dir="ltr"] .owner-chat-shell .chat-workspace,
+html[dir="ltr"] .owner-chat-shell .chat-sidebar,
+html[dir="ltr"] .owner-chat-shell .chat-main-area {
+    direction: ltr !important;
+}
+
+
+/*
+ * الـGrid يضع قائمة المحادثات في اليسار عند English.
+ * border-inline-end يبقى صحيحًا في الاتجاهين.
+ */
+html[dir="ltr"] .owner-chat-shell .chat-sidebar {
+    border-right: 1px solid var(--chat-line) !important;
+    border-left: 0 !important;
+}
+
+
+/* حقول وقوائم كانت text-align:right صريحة */
+html[dir="ltr"] .owner-chat-shell :where(
+    input,
+    textarea,
+    .chat-actions-menu .dropdown-item,
+    .message-action-item,
+    .message-reply-quote,
+    .active-booking-open,
+    .quick-reply-button
+) {
+    text-align: start !important;
+}
+
+
+/*
+ * سهم الرجوع في الهاتف كان bi-arrow-right لأنه صُمم للعربي.
+ * نقلب الرسم في English فقط بدون تغيير الـHTML.
+ */
+html[dir="ltr"] .owner-chat-shell .mobile-chat-back i {
+    transform: scaleX(-1) !important;
+}
+
+
+/*
+ * قوائم الإجراءات: ترتبط ببداية/نهاية الرسالة بدل اليمين الثابت.
+ */
+html[dir="ltr"] .owner-chat-shell .message-actions-popover {
+    right: auto !important;
+    left: 0 !important;
+}
+
+html[dir="ltr"] .owner-chat-shell .chat-message-row.is-customer .message-actions-popover {
+    left: auto !important;
+    right: 0 !important;
+}
+
+
+/* Dropdown أدوات الكتابة يفتح إلى داخل مساحة المحادثة */
+html[dir="ltr"] .owner-chat-shell .chat-tool-dropdown > .dropdown-menu {
+    right: auto !important;
+    left: 0 !important;
+}
+
+
+/* ==========================================================================
+   08) REPORTS / COMPLAINTS
+   ========================================================================== */
+
+html[dir="ltr"] .customer-reports-main,
+html[dir="ltr"] .cr-shell,
+html[dir="ltr"] .cr-dialog,
+html[dir="ltr"] .cr-reference-main,
+html[dir="ltr"] .cr-reference-aside {
+    direction: ltr !important;
+}
+
+html[dir="ltr"] .cr-shell :where(
+    input,
+    textarea,
+    select,
+    button,
+    .cr-menu-item,
+    .cr-booking-item,
+    .cr-booking-compact-item
+),
+html[dir="ltr"] .cr-dialog {
+    text-align: start !important;
+}
+
+
+/* Back link motion follows LTR */
+html[dir="ltr"] .cr-back-link:hover {
+    transform: translateX(-3px);
+}
+
+
+/* ==========================================================================
+   09) PROFILE
+   ========================================================================== */
+
+html[dir="ltr"] .owner-profile-page,
+html[dir="ltr"] .profile-container,
+html[dir="ltr"] .owner-profile-page .profile-premium-tabs,
+html[dir="ltr"] .owner-profile-page .profile-tab-content {
+    direction: ltr !important;
+}
+
+
+/*
+ * owner-profile.css مستعمل مباشرة داخل بروفايل العميل،
+ * وقوائم select فيه مصممة بموضع سهم عربي ثابت.
+ */
+html[dir="ltr"] .owner-profile-page .premium-select {
+    padding-left: 18px !important;
+    padding-right: 44px !important;
+    background-position: right 1rem center !important;
+}
+
+html[dir="ltr"] .owner-profile-page .premium-select-inline {
+    padding-left: 0 !important;
+    padding-right: 20px !important;
+    background-position: right center !important;
+}
+
+
+/* Bootstrap utilities القديمة في Hero لا تمنع المحاذاة الإنجليزية */
+html[dir="ltr"] .owner-profile-page .profile-identity-wrapper,
+html[dir="ltr"] .owner-profile-page .profile-identity-info,
+html[dir="ltr"] .owner-profile-page .profile-name-row,
+html[dir="ltr"] .owner-profile-page .customer-meta-info,
+html[dir="ltr"] .owner-profile-page .premium-section-title {
+    text-align: start !important;
+}
+
+
+/* يبقى الهاتف نفسه LTR في العربي والإنجليزي */
+html[dir="ltr"] .owner-profile-page .phone-wrapper-ltr,
+html[dir="ltr"] .owner-profile-page .phone-wrapper-ltr * {
+    direction: ltr !important;
+}
+
+
+/* ==========================================================================
+   10) SEARCH / PLACES / DETAILS / AVAILABLE ROOMS
+   ========================================================================== */
+
+html[dir="ltr"] .search-luxury-page,
+html[dir="ltr"] .place-details-page,
+html[dir="ltr"] .available-rooms-page {
+    direction: ltr !important;
+}
+
+
+/* إعلان صفحة البحث كان يفرض RTL */
+html[dir="ltr"] .search-ad-signature,
+html[dir="ltr"] .search-ad-signature__content {
+    direction: ltr !important;
+}
+
+
+/* ==========================================================================
+   11) BOOKING FLOW — DETAILS / CHECKOUT / PAYMENT
+   ========================================================================== */
+
+html[dir="ltr"] .bd2-page,
+html[dir="ltr"] .checkout-page,
+html[dir="ltr"] .payment-page {
+    direction: ltr !important;
+}
+
+
+/* Booking Details كان يفرض RTL على الصفحة كاملة */
+html[dir="ltr"] .bd2-booking-number {
+    align-items: flex-start !important;
+}
+
+
+/*
+ * الأرقام/المراجع تبقى LTR مهما كانت لغة الواجهة.
+ */
+html[dir="ltr"] .bd2-booking-number strong,
+html[dir="ltr"] .payment-booking-number strong,
+html[dir="ltr"] .booking-reference,
+html[dir="ltr"] .payment-reference {
+    direction: ltr !important;
+    unicode-bidi: isolate;
+}
+
+
+/* ==========================================================================
+   12) BOOKING INVOICE
+   ========================================================================== */
+
+html[dir="ltr"] .booking-invoice-overlay,
+html[dir="ltr"] .booking-invoice-sheet,
+html[dir="ltr"] .booking-invoice-document {
+    direction: ltr !important;
+}
+
+html[dir="ltr"] .booking-invoice-launcher {
+    text-align: start !important;
+}
+
+html[dir="ltr"] .booking-invoice-launcher:hover .booking-invoice-launcher-arrow {
+    transform: translateX(4px) !important;
+}
+
+
+/* ==========================================================================
+   13) FAVORITES + NOTIFICATIONS + BOTTOM NAV
+   ========================================================================== */
+
+html[dir="ltr"] .favorites-luxury-shell,
+html[dir="ltr"] .favorites-main-content,
+html[dir="ltr"] .notification-center-page,
+html[dir="ltr"] .customer-bottom-nav {
+    direction: ltr !important;
+}
+
+
+/* النصوص في الإشعارات */
+html[dir="ltr"] .customer-notification-item-main,
+html[dir="ltr"] .notification-center-page :where(
+    h1,h2,h3,h4,h5,h6,p,small,strong
+) {
+    text-align: start !important;
+}
+
+
+/* ==========================================================================
+   14) GENERIC CUSTOMER FORM / MODAL SAFETY
+   ========================================================================== */
+
+/*
+ * أي Form أو Modal داخل واجهة العميل يأخذ محاذاة البداية الصحيحة.
+ * لا نستعمل text-align:left عالميًا حتى لا نفسد العناصر centered.
+ */
+html[dir="ltr"] body.customer-public-page :where(
+    .form-label,
+    .form-text,
+    .modal-body,
+    .modal-header,
+    .offcanvas-body
+),
+html[dir="ltr"] body.customer-dashboard-page :where(
+    .form-label,
+    .form-text,
+    .modal-body,
+    .modal-header,
+    .offcanvas-body
+) {
+    text-align: start;
+}
+
+
+/* ==========================================================================
+   15) ARABIC SAFETY
+   لا نعيد تصميم العربي؛ فقط نثبت أن المصدر الأعلى RTL.
+   ========================================================================== */
+
+html[dir="rtl"] body.customer-public-page,
+html[dir="rtl"] body.customer-dashboard-page,
+html[dir="rtl"] body.customer-public-page .site-wrapper,
+html[dir="rtl"] body.customer-dashboard-page .site-wrapper {
+    direction: rtl;
+}
+
+
+/* ==========================================================================
+   16) ACCESSIBILITY / REDUCED MOTION
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+    html[dir="ltr"] .elegant-link:hover,
+    html[dir="ltr"] .cr-back-link:hover,
+    html[dir="ltr"] .booking-invoice-launcher:hover .booking-invoice-launcher-arrow {
+        transform: none !important;
+    }
+}

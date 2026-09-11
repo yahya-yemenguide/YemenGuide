@@ -7,7 +7,9 @@ namespace YemenGuide.Core.Entities
     {
         public int Id { get; set; }
         public string SiteName { get; set; } = null!;
+        public string? SiteNameEn { get; set; }
         public string? SiteDescription { get; set; }
+        public string? SiteDescriptionEn { get; set; }
         public string? LogoPath { get; set; }
         public string? FaviconPath { get; set; }
         public int MaxImageSize { get; set; }
@@ -23,7 +25,9 @@ namespace YemenGuide.Core.Entities
         public string? WhatsAppNumber { get; set; }
         public bool MaintenanceMode { get; set; }
         public string? MaintenanceMessage { get; set; }
+        public string? MaintenanceMessageEn { get; set; }
         public string MaintenanceTitle { get; set; } = null!;
+        public string? MaintenanceTitleEn { get; set; }
         public string MaintenanceType { get; set; } = null!;
         public bool? MaintenanceAffectOwners { get; set; }
         public DateTime? MaintenanceStartAt { get; set; }
@@ -44,10 +48,13 @@ namespace YemenGuide.Core.Entities
         public string ExchangeRateLastStatus { get; set; } = null!;
         public string? ExchangeRateLastError { get; set; }
         public string? HeroTitleMain { get; set; }
+        public string? HeroTitleMainEn { get; set; }
         public string? HeroTitleSub { get; set; }
+        public string? HeroTitleSubEn { get; set; }
         public string? SeasonTheme { get; set; }
         public bool? IsBannerActive { get; set; }
         public string? BannerText { get; set; }
+        public string? BannerTextEn { get; set; }
         public decimal SanaaUsdRate { get; set; }
         public decimal AdenUsdRate { get; set; }
         public decimal SanaaSarRate { get; set; }
