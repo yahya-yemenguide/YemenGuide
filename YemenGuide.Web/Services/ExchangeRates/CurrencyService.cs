@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Linq;
 using YemenGuide.Data;
+using YemenGuide.Core.Constants;
 using YemenGuide.Web.Services.ExchangeRates;
 
 namespace YemenGuide.Web.Services
@@ -103,41 +104,14 @@ namespace YemenGuide.Web.Services
             string targetCurrency,
             string? exchangeRateRegion)
         {
-            string currency =
-                CurrencyDisplayService.NormalizeCurrency(
-                    targetCurrency);
-
-            if (string.IsNullOrWhiteSpace(currency) ||
-                currency == CurrencyDisplayService.YemeniRial)
-            {
-                return Math.Round(
-                    priceInYer,
-                    0,
-                    MidpointRounding.AwayFromZero);
-            }
-
+            var currency = CurrencyDisplayService.NormalizeCurrency(targetCurrency);
+            if (string.IsNullOrEmpty(currency))
+                throw new ArgumentException("عملة العرض غير مدعومة.", nameof(targetCurrency));
+            if (currency == CurrencyDisplayService.YemeniRial)
+                return BookingMoneyPolicy.Round(priceInYer);
             var rates = GetRates(exchangeRateRegion);
-
-            if (currency == CurrencyDisplayService.UsDollar)
-            {
-                return Math.Round(
-                    priceInYer / rates.UsdRate,
-                    2,
-                    MidpointRounding.AwayFromZero);
-            }
-
-            if (currency == CurrencyDisplayService.SaudiRiyal)
-            {
-                return Math.Round(
-                    priceInYer / rates.SarRate,
-                    2,
-                    MidpointRounding.AwayFromZero);
-            }
-
-            return Math.Round(
-                priceInYer,
-                0,
-                MidpointRounding.AwayFromZero);
+            return FinancialCurrencyPolicy.FromYer(priceInYer,
+                currency == CurrencyDisplayService.UsDollar ? rates.UsdRate : rates.SarRate);
         }
 
         /// <summary>
@@ -178,41 +152,14 @@ namespace YemenGuide.Web.Services
             string sourceCurrency,
             string? exchangeRateRegion)
         {
-            string currency =
-                CurrencyDisplayService.NormalizeCurrency(
-                    sourceCurrency);
-
-            if (string.IsNullOrWhiteSpace(currency) ||
-                currency == CurrencyDisplayService.YemeniRial)
-            {
-                return Math.Round(
-                    amountInSourceCurrency,
-                    0,
-                    MidpointRounding.AwayFromZero);
-            }
-
+            var currency = CurrencyDisplayService.NormalizeCurrency(sourceCurrency);
+            if (string.IsNullOrEmpty(currency))
+                throw new ArgumentException("عملة المبلغ غير مدعومة.", nameof(sourceCurrency));
+            if (currency == CurrencyDisplayService.YemeniRial)
+                return BookingMoneyPolicy.Round(amountInSourceCurrency);
             var rates = GetRates(exchangeRateRegion);
-
-            if (currency == CurrencyDisplayService.UsDollar)
-            {
-                return Math.Round(
-                    amountInSourceCurrency * rates.UsdRate,
-                    2,
-                    MidpointRounding.AwayFromZero);
-            }
-
-            if (currency == CurrencyDisplayService.SaudiRiyal)
-            {
-                return Math.Round(
-                    amountInSourceCurrency * rates.SarRate,
-                    2,
-                    MidpointRounding.AwayFromZero);
-            }
-
-            return Math.Round(
-                amountInSourceCurrency,
-                0,
-                MidpointRounding.AwayFromZero);
+            return FinancialCurrencyPolicy.ToYer(amountInSourceCurrency,
+                currency == CurrencyDisplayService.UsDollar ? rates.UsdRate : rates.SarRate);
         }
 
         /// <summary>
@@ -236,7 +183,7 @@ namespace YemenGuide.Web.Services
                 return $"{convertedAmount:N2} ر.س";
             }
 
-            return $"{Math.Round(convertedAmount, 0):N0} ر.ي";
+            return $"{convertedAmount:N2} ر.ي";
         }
 
         private string? GetRegionByCityId(int cityId)
@@ -266,31 +213,15 @@ namespace YemenGuide.Web.Services
                     ExchangeRateRegionResolver.AdenMarket,
                     StringComparison.OrdinalIgnoreCase);
 
-            decimal usdRate =
-                useAdenMarket
-                    ? settings?.AdenUsdRate ?? DefaultAdenUsdRate
-                    : settings?.SanaaUsdRate ?? DefaultSanaaUsdRate;
-
-            decimal sarRate =
-                useAdenMarket
-                    ? settings?.AdenSarRate ?? DefaultAdenSarRate
-                    : settings?.SanaaSarRate ?? DefaultSanaaSarRate;
-
-            if (usdRate <= 0)
-            {
-                usdRate = useAdenMarket
-                    ? DefaultAdenUsdRate
-                    : DefaultSanaaUsdRate;
-            }
-
-            if (sarRate <= 0)
-            {
-                sarRate = useAdenMarket
-                    ? DefaultAdenSarRate
-                    : DefaultSanaaSarRate;
-            }
+            if (settings == null)
+                throw new InvalidOperationException("إعدادات أسعار الصرف غير موجودة.");
+            decimal usdRate = useAdenMarket ? settings.AdenUsdRate : settings.SanaaUsdRate;
+            decimal sarRate = useAdenMarket ? settings.AdenSarRate : settings.SanaaSarRate;
+            if (usdRate <= 0m || sarRate <= 0m)
+                throw new InvalidOperationException("أسعار الصرف المحفوظة غير صحيحة؛ راجع إعدادات الإدارة.");
 
             return (usdRate, sarRate);
         }
     }
 }
+

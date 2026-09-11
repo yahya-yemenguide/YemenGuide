@@ -6,6 +6,7 @@ namespace YemenGuide.Core.Entities
     public partial class FinancialRecord
     {
         public int RecordId { get; set; }
+        public bool? ReturnCommissionOnCancellationSnapshot { get; set; }
         public int BookingId { get; set; }
         public decimal DepositAmount { get; set; }
         public decimal PlatformCommission { get; set; }
@@ -27,3 +28,4 @@ namespace YemenGuide.Core.Entities
         public virtual Booking Booking { get; set; } = null!;
     }
 }
+

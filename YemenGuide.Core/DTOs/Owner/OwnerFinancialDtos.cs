@@ -426,6 +426,10 @@ namespace YemenGuide.Core.DTOs.Owner
         public decimal TotalPrice { get; set; }
 
         public decimal FinalTotalPrice => TotalPrice;
+        public decimal GrossPaidOnline { get; set; }
+        public decimal RefundedAmount { get; set; }
+        public decimal PendingRefundAmount { get; set; }
+        public decimal EffectiveBookingValue { get; set; }
 
         // =========================================================
         // لقطة العرض/الخصم المحفوظة وقت إنشاء الحجز
@@ -546,11 +550,8 @@ namespace YemenGuide.Core.DTOs.Owner
                 0m,
                 AmountCollectedAtProperty);
 
-        public decimal OwnerNetAmount =>
-            Math.Max(
-                0m,
-                TotalCollectedAmount -
-                PlatformCommission);
+        public decimal OwnerNetAmount => TotalCollectedAmount -
+            (string.Equals(CommissionStatus, "Charged", StringComparison.OrdinalIgnoreCase) ? PlatformCommission : 0m);
 
         public bool IsFullyCollected =>
             TotalCollectedAmount >=

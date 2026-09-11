@@ -301,13 +301,8 @@ namespace YemenGuide.Web.Services.ExchangeRates
             decimal convertedAmount,
             string? currency)
         {
-            return NormalizeCurrency(currency) == YemeniRial
-                ? Math.Round(
-                        convertedAmount,
-                        0,
-                        MidpointRounding.AwayFromZero)
-                    .ToString("N0")
-                : convertedAmount.ToString("N2");
+            return convertedAmount.ToString("N2");
         }
     }
 }
+

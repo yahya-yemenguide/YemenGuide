@@ -3238,7 +3238,11 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                  * حتى لو كانت العمولة قد خُصمت سابقًا نرجعها إلى حساب
                  * ضمان المالك بحركة CommissionRelease عكسية.
                  */
-                if (financialRecord != null)
+                var returnCommission = financialRecord?.ReturnCommissionOnCancellationSnapshot ??
+                    await _context.SystemSettings.OrderBy(x => x.Id)
+                        .Select(x => (bool?)x.ReturnCommissionOnCancellation).FirstOrDefaultAsync() ?? true;
+                if (financialRecord != null) financialRecord.ReturnCommissionOnCancellationSnapshot = returnCommission;
+                if (financialRecord != null && returnCommission)
                 {
                     var releaseResult =
                         await _commissionFinanceService
@@ -3262,6 +3266,16 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     }
                 }
 
+                if (financialRecord != null && !returnCommission)
+                {
+                    if (IsState(financialRecord.CommissionStatus, OwnerBookingCommissionStatuses.Calculated))
+                    {
+                        var held = await _commissionFinanceService.HoldBookingCommissionAsync(booking.BookingId, ownerId, HttpContext.RequestAborted);
+                        if (!held.Success) { await transaction.RollbackAsync(); return Json(new { success = false, message = held.Message }); }
+                    }
+                    var charged = await _commissionFinanceService.ChargeBookingCommissionAsync(booking.BookingId, ownerId, HttpContext.RequestAborted);
+                    if (!charged.Success) { await transaction.RollbackAsync(); return Json(new { success = false, message = charged.Message }); }
+                }
                 var refundRequest =
                     paidOnline > 0m
                         ? CreateRefundRequest(
@@ -3269,8 +3283,8 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                             paidOnline,
                             paidOnline,
                             0m,
-                            0m,
-                            originalCommission,
+                            returnCommission ? 0m : financialRecord?.PlatformCommission ?? 0m,
+                            returnCommission ? originalCommission : 0m,
                             $"استرداد كامل بسبب إلغاء المالك للحجز. السبب: {reason}",
                             now)
                         : null;
@@ -3350,3 +3364,4 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
         }
     }
 }
+

@@ -66,6 +66,7 @@ namespace YemenGuide.Core.Entities
         public int CommissionDebtGraceDays { get; set; }
         public bool? SuspendBookingWhenBalanceInsufficient { get; set; }
         public bool HidePlaceWhenCommissionSuspended { get; set; }
+        public bool ReturnCommissionOnCancellation { get; set; } = true;
         public bool OwnerFreeTrialEnabled { get; set; }
         public int OwnerFreeTrialDays { get; set; }
         public decimal RequiredCommissionGuaranteeBalance { get; set; }
@@ -74,3 +75,4 @@ namespace YemenGuide.Core.Entities
         public virtual User? PlatformOwnerUser { get; set; }
     }
 }
+

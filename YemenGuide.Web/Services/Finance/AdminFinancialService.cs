@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using YemenGuide.Core.DTOs.Admin;
 using YemenGuide.Core.Entities;
+using YemenGuide.Core.Constants;
 using YemenGuide.Data;
 
 namespace YemenGuide.Web.Services.Finance
@@ -203,11 +204,7 @@ namespace YemenGuide.Web.Services.Finance
                 .FirstOrDefaultAsync(cancellationToken);
         }
 
-        private static string GetCurrency(
-            SystemSetting? settings) =>
-                string.IsNullOrWhiteSpace(settings?.DefaultCurrency)
-                    ? "ريال يمني"
-                    : settings.DefaultCurrency.Trim();
+        private static string GetCurrency(SystemSetting? settings) => "ريال يمني";
 
         private static decimal EffectiveDebtLimit(
             PlaceCommissionAccount account,
@@ -2962,6 +2959,18 @@ namespace YemenGuide.Web.Services.Finance
                 .FirstOrDefaultAsync(cancellationToken) ??
                 new AdminBookingCommissionSummaryDto();
 
+            var effectiveValues = await query.Select(record => new
+            {
+                record.Booking.BookingState,
+                record.Booking.TotalPrice,
+                Paid = record.AmountPaidOnline + record.AmountCollectedAtProperty,
+                Refunds = record.Booking.RefundRequests
+                    .Where(refund => refund.Status == "Pending" || refund.Status == "Processing" || refund.Status == "Completed")
+                    .Sum(refund => (decimal?)refund.RefundAmount) ?? 0m
+            }).ToListAsync(cancellationToken);
+            summary.TotalBookingValue = effectiveValues.Sum(item => BookingMoneyPolicy.EffectiveValue(
+                item.BookingState, item.TotalPrice, item.Paid, item.Refunds, 0m));
+
             summary.NeedsReviewCount = await query.CountAsync(record =>
                 record.CommissionStatus ==
                     AdminBookingCommissionStatuses.Calculated ||
@@ -4675,6 +4684,10 @@ namespace YemenGuide.Web.Services.Finance
                             settings?.SuspendBookingWhenBalanceInsufficient ??
                             true,
 
+                        OwnerFreeTrialEnabled = settings?.OwnerFreeTrialEnabled ?? false,
+                        OwnerFreeTrialDays = settings?.OwnerFreeTrialDays ?? 0,
+                        RequiredCommissionGuaranteeBalance = settings?.RequiredCommissionGuaranteeBalance ?? 0m,
+                        ReturnCommissionOnCancellation = settings?.ReturnCommissionOnCancellation ?? true,
                         HidePlaceWhenCommissionSuspended =
                             settings?.HidePlaceWhenCommissionSuspended ??
                             false
@@ -4707,6 +4720,9 @@ namespace YemenGuide.Web.Services.Finance
             int adminUserId,
             CancellationToken cancellationToken = default)
         {
+            if (request != null && (request.OwnerFreeTrialDays < 0 || request.OwnerFreeTrialDays > 3650 ||
+                (request.OwnerFreeTrialEnabled && request.OwnerFreeTrialDays == 0) || request.RequiredCommissionGuaranteeBalance < 0m))
+                return FinanceOperationResult.Failed("مدة الفترة المجانية أو مبلغ ضمان العمولات غير صحيح.");
             if (request == null)
             {
                 return FinanceOperationResult.Failed(
@@ -4945,8 +4961,12 @@ namespace YemenGuide.Web.Services.Finance
                 settings.SuspendBookingWhenBalanceInsufficient =
                     request.SuspendBookingWhenBalanceInsufficient;
 
-                settings.HidePlaceWhenCommissionSuspended =
-                    request.HidePlaceWhenCommissionSuspended;
+                settings.HidePlaceWhenCommissionSuspended = request.HidePlaceWhenCommissionSuspended;
+                settings.OwnerFreeTrialEnabled = request.OwnerFreeTrialEnabled;
+                settings.OwnerFreeTrialDays = request.OwnerFreeTrialDays;
+                settings.RequiredCommissionGuaranteeBalance = Math.Round(request.RequiredCommissionGuaranteeBalance, 2, MidpointRounding.AwayFromZero);
+                if (request.ReturnCommissionOnCancellation.HasValue)
+                    settings.ReturnCommissionOnCancellation = request.ReturnCommissionOnCancellation.Value;
 
                 var categoryRequestById =
                     categoryRequests
@@ -7325,3 +7345,4 @@ namespace YemenGuide.Web.Services.Finance
         }
     }
 }
+

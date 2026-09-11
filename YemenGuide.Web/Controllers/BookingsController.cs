@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
@@ -373,6 +373,23 @@ namespace YemenGuide.Web.Controllers
                         0m,
                         0m,
                         0m);
+            }
+
+            var returnCommission = financial.ReturnCommissionOnCancellationSnapshot ??
+                await _context.SystemSettings.OrderBy(x => x.Id)
+                    .Select(x => (bool?)x.ReturnCommissionOnCancellation).FirstOrDefaultAsync() ?? true;
+            financial.ReturnCommissionOnCancellationSnapshot = returnCommission;
+            if (!returnCommission)
+            {
+                if (IsState(financial.CommissionStatus, OwnerBookingCommissionStatuses.Calculated))
+                {
+                    var held = await _commissionFinanceService.HoldBookingCommissionAsync(booking.BookingId, performedByUserId, HttpContext.RequestAborted);
+                    if (!held.Success) return CustomerCancellationCommissionResult.Failed(held.Message);
+                }
+                var charged = await _commissionFinanceService.ChargeBookingCommissionAsync(booking.BookingId, performedByUserId, HttpContext.RequestAborted);
+                if (!charged.Success) return CustomerCancellationCommissionResult.Failed(charged.Message);
+                return CustomerCancellationCommissionResult.Succeeded(financial.PlatformCommission, 0m,
+                    Math.Max(0m, quote.CancellationFee - financial.PlatformCommission));
             }
 
             /* الإلغاء المجاني أو حجز بلا مبلغ محتفظ به. */
@@ -2146,6 +2163,8 @@ namespace YemenGuide.Web.Controllers
                 });
             }
 
+            await using var receiptTransaction = await _context.Database.BeginTransactionAsync(
+                System.Data.IsolationLevel.Serializable, HttpContext.RequestAborted);
             var refund = await _context.RefundRequests
                 .Include(item => item.Booking)
                     .ThenInclude(booking => booking.Place)
@@ -2224,6 +2243,7 @@ namespace YemenGuide.Web.Controllers
             }
 
             await _context.SaveChangesAsync();
+            await receiptTransaction.CommitAsync(HttpContext.RequestAborted);
 
             return Json(new
             {
@@ -2812,3 +2832,4 @@ namespace YemenGuide.Web.Controllers
         }
     }
 }
+

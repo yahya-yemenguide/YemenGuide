@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -740,10 +740,7 @@ namespace YemenGuide.Web.Services.Finance
                 .OrderByDescending(setting => setting.Id)
                 .FirstOrDefaultAsync(cancellationToken);
 
-        private static string GetCurrency(SystemSetting? settings) =>
-            string.IsNullOrWhiteSpace(settings?.DefaultCurrency)
-                ? "ريال يمني"
-                : settings.DefaultCurrency.Trim();
+        private static string GetCurrency(SystemSetting? settings) => "ريال يمني";
 
         private IQueryable<Place> OwnerPlaces(int ownerId) =>
             _context.Places.Where(place => place.OwnerId == ownerId);
@@ -1484,7 +1481,7 @@ namespace YemenGuide.Web.Services.Finance
                 return overviewRefunds.TryGetValue(
                            bookingId,
                            out var aggregate)
-                    ? Math.Max(0m, aggregate.CompletedRefundAmount)
+                    ? Math.Max(0m, aggregate.CashRefundAmount)
                     : 0m;
             }
 
@@ -1524,15 +1521,11 @@ namespace YemenGuide.Web.Services.Finance
                         ? Math.Max(0m, platformCommission)
                         : 0m;
 
-                return Math.Round(
-                    Math.Max(
-                        0m,
-                        netOnline +
-                        propertyCollected -
-                        chargedCommission),
-                    2);
+                return BookingMoneyPolicy.Round(netOnline + propertyCollected - chargedCommission);
             }
 
+            var overviewCollectedByBooking = records.ToDictionary(r => r.BookingId,
+                r => Math.Max(0m, r.AmountPaidOnline) + Math.Max(0m, r.AmountCollectedAtProperty));
             model.Summary = new FinancialOverviewDto
             {
                 TotalBookingsCount = bookings.Count,
@@ -1542,7 +1535,11 @@ namespace YemenGuide.Web.Services.Finance
                     IsState(item.BookingState, "Cancelled") ||
                     IsState(item.BookingState, "Rejected") ||
                     IsState(item.BookingState, "Expired")),
-                TotalBookingValue = bookings.Sum(item => item.TotalPrice),
+                TotalBookingValue = bookings.Sum(item => BookingMoneyPolicy.EffectiveValue(
+                    item.BookingState, item.TotalPrice,
+                    overviewCollectedByBooking.TryGetValue(item.BookingId, out var collected) ? collected : 0m,
+                    CompletedRefundFor(item.BookingId),
+                    overviewRefunds.TryGetValue(item.BookingId, out var refund) ? refund.PendingRefundAmount : 0m)),
                 TotalDepositRequired = records.Sum(item => item.DepositAmount),
                 TotalPaidOnline = records.Sum(item =>
                     NetOnlineCollected(
@@ -2075,6 +2072,8 @@ namespace YemenGuide.Web.Services.Finance
                 .Select(booking => new
                 {
                     booking.BookingId,
+                    booking.TotalPrice,
+                    AmountCollectedAtProperty = booking.FinancialRecord != null ? booking.FinancialRecord.AmountCollectedAtProperty : 0m,
                     BookingState =
                         booking.BookingState,
                     AmountPaidOnline =
@@ -2103,6 +2102,12 @@ namespace YemenGuide.Web.Services.Finance
                         .ToArray(),
                     cancellationToken);
 
+            summary.TotalBookingValue = bookingSummaryRows.Sum(item =>
+                BookingMoneyPolicy.EffectiveValue(item.BookingState, item.TotalPrice,
+                    item.AmountPaidOnline + item.AmountCollectedAtProperty,
+                    bookingSummaryRefunds.TryGetValue(item.BookingId, out var r) ? r.CashRefundAmount : 0m,
+                    r?.PendingRefundAmount ?? 0m));
+
             summary.TotalPaidOnline =
                 bookingSummaryRows.Sum(item =>
                 {
@@ -2113,7 +2118,7 @@ namespace YemenGuide.Web.Services.Finance
                             out var aggregate)
                             ? Math.Max(
                                 0m,
-                                aggregate.CompletedRefundAmount)
+                                aggregate.CashRefundAmount)
                             : 0m;
 
                     return Math.Round(
@@ -2263,8 +2268,16 @@ namespace YemenGuide.Web.Services.Finance
                                     .LogoImage,
                                 galleryImage);
 
+                        bookingSummaryRefunds.TryGetValue(booking.BookingId, out var rowRefund);
+                        var rawPaid = Math.Max(0m, financial?.AmountPaidOnline ?? 0m);
+                        var refunded = rowRefund?.CashRefundAmount ?? 0m;
                         return new BookingFinancialItemDto
                         {
+                            GrossPaidOnline = rawPaid,
+                            RefundedAmount = refunded,
+                            PendingRefundAmount = rowRefund?.PendingRefundAmount ?? 0m,
+                            EffectiveBookingValue = BookingMoneyPolicy.EffectiveValue(booking.BookingState, booking.TotalPrice,
+                                rawPaid + Math.Max(0m, financial?.AmountCollectedAtProperty ?? 0m), refunded, rowRefund?.PendingRefundAmount ?? 0m),
                             RecordId =
                                 financial?.RecordId ??
                                 0,
@@ -2393,15 +2406,10 @@ namespace YemenGuide.Web.Services.Finance
                                     .DepositAmount ??
                                 0m,
 
-                            AmountPaidOnline =
-                                financial?
-                                    .AmountPaidOnline ??
-                                0m,
+                            AmountPaidOnline = BookingMoneyPolicy.NetPaid(rawPaid, refunded),
 
-                            AmountToPayAtProperty =
-                                financial?
-                                    .AmountToPayAtProperty ??
-                                booking.TotalPrice,
+                            AmountToPayAtProperty = BookingMoneyPolicy.Remaining(booking.BookingState,
+                                financial?.AmountToPayAtProperty ?? booking.TotalPrice),
 
                             AmountCollectedAtProperty =
                                 financial?
@@ -4914,6 +4922,8 @@ namespace YemenGuide.Web.Services.Finance
         private sealed class BookingRefundAggregate
         {
             public decimal CompletedRefundAmount { get; set; }
+            public decimal TransferredRefundAmount { get; set; }
+            public decimal CashRefundAmount => CompletedRefundAmount + TransferredRefundAmount;
             public decimal CompletedCancellationFee { get; set; }
             public decimal CompletedOwnerShare { get; set; }
             public decimal CompletedPlatformCommission { get; set; }
@@ -4923,7 +4933,7 @@ namespace YemenGuide.Web.Services.Finance
             public int PendingCount { get; set; }
 
             /* توافق مع منشئ تفاصيل المستندات الحالي. */
-            public decimal RefundAmount => CompletedRefundAmount;
+            public decimal RefundAmount => CashRefundAmount;
             public decimal CancellationFee => CompletedCancellationFee;
             public decimal OwnerShare => CompletedOwnerShare;
             public decimal PlatformCommission => CompletedPlatformCommission;
@@ -6138,6 +6148,7 @@ namespace YemenGuide.Web.Services.Finance
                         new
                         {
                             refund.BookingId,
+                            refund.TransferredAt,
                             refund.Status,
                             refund.RefundAmount,
                             refund.CancellationFee,
@@ -6178,8 +6189,10 @@ namespace YemenGuide.Web.Services.Finance
                         IsState(refund.Status, FinancialRefundStatuses.Pending) ||
                         IsState(refund.Status, FinancialRefundStatuses.Processing))
                     {
-                        aggregate.PendingRefundAmount +=
-                            Math.Max(0m, refund.RefundAmount);
+                        if (IsState(refund.Status, FinancialRefundStatuses.Processing) && refund.TransferredAt.HasValue)
+                            aggregate.TransferredRefundAmount += Math.Max(0m, refund.RefundAmount);
+                        else
+                            aggregate.PendingRefundAmount += Math.Max(0m, refund.RefundAmount);
 
                         aggregate.PendingCount += 1;
                     }
@@ -6414,7 +6427,7 @@ namespace YemenGuide.Web.Services.Finance
             var actualProperty = GetActualPropertyAmount(booking);
             var actualCollected = actualOnline + actualProperty;
             var completedRefund =
-                Math.Max(0m, refund?.CompletedRefundAmount ?? 0m);
+                Math.Max(0m, refund?.CashRefundAmount ?? 0m);
             var chargedCommission =
                 GetChargedCommissionAmount(
                     financial,
@@ -6425,11 +6438,7 @@ namespace YemenGuide.Web.Services.Finance
              * لذلك لا نصفر الإيراد لمجرد أن الحالة Cancelled؛ بل نطرح
              * الاسترداد المكتمل والعمولة المخصومة من المبلغ المحصل فعليًا.
              */
-            var actualRevenue = Math.Max(
-                0m,
-                actualCollected -
-                completedRefund -
-                chargedCommission);
+            var actualRevenue = BookingMoneyPolicy.Round(actualCollected - completedRefund - chargedCommission);
 
             return new FinancialReportRowDto
             {
@@ -6474,7 +6483,7 @@ namespace YemenGuide.Web.Services.Finance
                 ActualPaidOnline = actualOnline,
                 ActualCollectedAtProperty = actualProperty,
                 ActualCollectedAmount = actualCollected,
-                RemainingAmount = Math.Max(0m, financial?.AmountToPayAtProperty ?? booking.TotalPrice - actualCollected),
+                RemainingAmount = BookingMoneyPolicy.Remaining(booking.BookingState, financial?.AmountToPayAtProperty ?? booking.TotalPrice - actualCollected),
                 ActualRevenue = actualRevenue,
                 PlatformCommission = Math.Max(0m, financial?.PlatformCommission ?? 0m),
                 CommissionHeld = GetHeldCommissionAmount(financial, commissionMovements),
@@ -7103,7 +7112,7 @@ namespace YemenGuide.Web.Services.Finance
                     var actualCollected = actualOnline + actualProperty;
                     var completedRefund = Math.Max(
                         0m,
-                        refundAggregate?.CompletedRefundAmount ?? 0m);
+                        refundAggregate?.CashRefundAmount ?? 0m);
                     var chargedCommission = GetChargedCommissionAmount(
                         financial,
                         commissionAggregate);
@@ -7170,7 +7179,7 @@ namespace YemenGuide.Web.Services.Finance
                         ActualPaidOnline = actualOnline,
                         ActualCollectedAtProperty = actualProperty,
                         ActualCollectedAmount = actualCollected,
-                        RemainingAmount = Math.Max(0m, financial?.AmountToPayAtProperty ?? booking.TotalPrice - actualCollected),
+                        RemainingAmount = BookingMoneyPolicy.Remaining(booking.BookingState, financial?.AmountToPayAtProperty ?? booking.TotalPrice - actualCollected),
                         ActualRevenue = netOwner,
                         PlatformCommission = Math.Max(0m, financial?.PlatformCommission ?? 0m),
                         CommissionHeld = GetHeldCommissionAmount(financial, commissionAggregate),
@@ -7354,15 +7363,13 @@ namespace YemenGuide.Web.Services.Finance
             var financial = booking.FinancialRecord;
             var paidOnline = GetActualOnlineAmount(booking);
             var collected = GetActualPropertyAmount(booking);
-            var refunded = Math.Max(0m, refund?.CompletedRefundAmount ?? 0m);
+            var refunded = Math.Max(0m, refund?.CashRefundAmount ?? 0m);
             var chargedCommission =
                 financial != null &&
                 IsState(financial.CommissionStatus, FinancialCommissionStatuses.Charged)
                     ? Math.Max(0m, financial.PlatformCommission)
                     : 0m;
-            var netOwner = Math.Max(
-                0m,
-                paidOnline + collected - refunded - chargedCommission);
+            var netOwner = BookingMoneyPolicy.Round(paidOnline + collected - refunded - chargedCommission);
 
             return new FinancialDocumentItemDto
             {
@@ -7392,7 +7399,7 @@ namespace YemenGuide.Web.Services.Finance
                 DepositAmount = Math.Max(0m, financial?.DepositAmount ?? 0m),
                 AmountPaidOnline = paidOnline,
                 AmountCollectedAtProperty = collected,
-                RemainingAmount = Math.Max(0m, financial?.AmountToPayAtProperty ?? booking.TotalPrice - paidOnline - collected),
+                RemainingAmount = BookingMoneyPolicy.Remaining(booking.BookingState, financial?.AmountToPayAtProperty ?? booking.TotalPrice - paidOnline - collected),
                 PlatformCommission = chargedCommission,
                 RefundedAmount = refunded,
                 CancellationFee = Math.Max(0m, refund?.CompletedCancellationFee ?? 0m),
@@ -7512,7 +7519,7 @@ namespace YemenGuide.Web.Services.Finance
                             0m,
                             GetActualOnlineAmount(booking) +
                             GetActualPropertyAmount(booking) -
-                            Math.Max(0m, aggregate?.CompletedRefundAmount ?? 0m) -
+                            Math.Max(0m, aggregate?.CashRefundAmount ?? 0m) -
                             (IsState(financial.CommissionStatus, FinancialCommissionStatuses.Charged)
                                 ? Math.Max(0m, financial.PlatformCommission)
                                 : 0m));
@@ -9739,24 +9746,26 @@ namespace YemenGuide.Web.Services.Finance
                 }
 
                 /*
-                 * بمجرد وجود أي تاريخ للتجربة نعتبر أن المالك سبق أن دخل
-                 * دورة التجربة. لا نعيد ضبط التواريخ عند اعتماد منشأة ثانية
+                 * بمجرد وجود أي تاريخ للتجربة نعتبر أن المنشأة سبق أن دخلت
+                 * دورة التجربة لهذه المنشأة. لا نعيد ضبط التواريخ عند اعتماد المنشأة
                  * أو عند إعادة تنشيط منشأة قديمة.
                  */
-                if (owner.FreeTrialStartedAt.HasValue ||
-                    owner.FreeTrialEndsAt.HasValue)
+                if (place.FreeTrialEvaluatedAt.HasValue || place.FreeTrialStartedAt.HasValue ||
+                    place.FreeTrialEndsAt.HasValue)
                 {
                     await CommitIfOwnedAsync(databaseTransaction, cancellationToken);
                     return FinanceOperationResult.Succeeded(
-                        "تم تحديد دورة التجربة لهذا المالك مسبقًا.",
+                        "تم تحديد دورة التجربة لهذه المنشأة مسبقًا.",
                         place.PlaceId);
                 }
 
-                var trialDays = Math.Max(0, settings?.OwnerFreeTrialDays ?? 0);
+                place.FreeTrialEvaluatedAt = DateTime.Now;
+                var trialDays = Math.Clamp(settings?.OwnerFreeTrialDays ?? 0, 0, 3650);
                 var trialEnabled = settings?.OwnerFreeTrialEnabled == true;
 
                 if (!trialEnabled || trialDays <= 0)
                 {
+                    await _context.SaveChangesAsync(cancellationToken);
                     await CommitIfOwnedAsync(databaseTransaction, cancellationToken);
                     return FinanceOperationResult.Succeeded(
                         "الفترة التجريبية غير مفعلة للملاك الجدد حاليًا.",
@@ -9765,14 +9774,14 @@ namespace YemenGuide.Web.Services.Finance
 
                 var now = DateTime.Now;
 
-                owner.FreeTrialStartedAt = now;
-                owner.FreeTrialEndsAt = now.AddDays(trialDays);
+                place.FreeTrialStartedAt = now;
+                place.FreeTrialEndsAt = now.AddDays(trialDays);
 
                 await _context.SaveChangesAsync(cancellationToken);
                 await CommitIfOwnedAsync(databaseTransaction, cancellationToken);
 
                 return FinanceOperationResult.Succeeded(
-                    $"بدأت الفترة التجريبية للمالك لمدة {trialDays} يومًا.",
+                    $"بدأت الفترة التجريبية للمنشأة لمدة {trialDays} يومًا.",
                     place.PlaceId);
             }
             catch (DbUpdateConcurrencyException exception)
@@ -9834,6 +9843,16 @@ namespace YemenGuide.Web.Services.Finance
                 return result;
             }
 
+            if (!place.FreeTrialEvaluatedAt.HasValue && !place.FreeTrialStartedAt.HasValue && IsOperationalPlace(place))
+            {
+                var trialResult = await TryStartOwnerFreeTrialForPlaceAsync(place.PlaceId, cancellationToken);
+                if (!trialResult.Success) { result.Message = trialResult.Message; return result; }
+                var trial = await _context.Places.AsNoTracking().Where(p => p.PlaceId == place.PlaceId)
+                    .Select(p => new { p.FreeTrialStartedAt, p.FreeTrialEndsAt, p.FreeTrialEvaluatedAt }).SingleAsync(cancellationToken);
+                place.FreeTrialStartedAt = trial.FreeTrialStartedAt;
+                place.FreeTrialEndsAt = trial.FreeTrialEndsAt;
+                place.FreeTrialEvaluatedAt = trial.FreeTrialEvaluatedAt;
+            }
             result.IsBookingCategory =
                 IsBookingEnabledCategory(place.Category);
 
@@ -9878,11 +9897,7 @@ namespace YemenGuide.Web.Services.Finance
             var owner = await _context.Users
                 .AsNoTracking()
                 .Where(item => item.UserId == place.OwnerId.Value)
-                .Select(item => new
-                {
-                    item.FreeTrialStartedAt,
-                    item.FreeTrialEndsAt
-                })
+                .Select(item => new { item.UserId })
                 .FirstOrDefaultAsync(cancellationToken);
 
             if (owner == null)
@@ -9891,20 +9906,17 @@ namespace YemenGuide.Web.Services.Finance
                 return result;
             }
 
-            result.FreeTrialStartedAt = owner.FreeTrialStartedAt;
-            result.FreeTrialEndsAt = owner.FreeTrialEndsAt;
+            result.FreeTrialStartedAt = place.FreeTrialStartedAt;
+            result.FreeTrialEndsAt = place.FreeTrialEndsAt;
 
             var now = DateTime.Now;
             var trialActive =
-                owner.FreeTrialStartedAt.HasValue &&
-                owner.FreeTrialEndsAt.HasValue &&
-                owner.FreeTrialStartedAt.Value <= now &&
-                owner.FreeTrialEndsAt.Value > now;
+                BookingMoneyPolicy.InTrial(place.FreeTrialStartedAt, place.FreeTrialEndsAt, now);
 
             if (trialActive)
             {
                 var remaining =
-                    owner.FreeTrialEndsAt!.Value - now;
+                    place.FreeTrialEndsAt!.Value - now;
 
                 result.IsFreeTrialActive = true;
                 result.RemainingTrialDays =
@@ -9972,8 +9984,8 @@ namespace YemenGuide.Web.Services.Finance
 
             result.CanAcceptNewBookings = true;
             result.Message =
-                owner.FreeTrialEndsAt.HasValue &&
-                owner.FreeTrialEndsAt.Value <= now
+                place.FreeTrialEndsAt.HasValue &&
+                place.FreeTrialEndsAt.Value <= now
                     ? "انتهت الفترة التجريبية ورصيد الضمان المطلوب متوفر."
                     : "رصيد ضمان العمولة المطلوب متوفر.";
 
@@ -10022,6 +10034,16 @@ namespace YemenGuide.Web.Services.Finance
                 return result;
             }
 
+            if (!place.FreeTrialEvaluatedAt.HasValue && !place.FreeTrialStartedAt.HasValue && IsOperationalPlace(place))
+            {
+                var trialResult = await TryStartOwnerFreeTrialForPlaceAsync(place.PlaceId, cancellationToken);
+                if (!trialResult.Success) { result.Message = trialResult.Message; return result; }
+                var trial = await _context.Places.AsNoTracking().Where(p => p.PlaceId == place.PlaceId)
+                    .Select(p => new { p.FreeTrialStartedAt, p.FreeTrialEndsAt, p.FreeTrialEvaluatedAt }).SingleAsync(cancellationToken);
+                place.FreeTrialStartedAt = trial.FreeTrialStartedAt;
+                place.FreeTrialEndsAt = trial.FreeTrialEndsAt;
+                place.FreeTrialEvaluatedAt = trial.FreeTrialEvaluatedAt;
+            }
             result.IsBookingCategory =
                 IsBookingEnabledCategory(place.Category);
 
@@ -10065,11 +10087,7 @@ namespace YemenGuide.Web.Services.Finance
             var owner = await _context.Users
                 .AsNoTracking()
                 .Where(item => item.UserId == place.OwnerId.Value)
-                .Select(item => new
-                {
-                    item.FreeTrialStartedAt,
-                    item.FreeTrialEndsAt
-                })
+                .Select(item => new { item.UserId })
                 .FirstOrDefaultAsync(cancellationToken);
 
             if (owner == null)
@@ -10078,8 +10096,8 @@ namespace YemenGuide.Web.Services.Finance
                 return result;
             }
 
-            result.FreeTrialStartedAt = owner.FreeTrialStartedAt;
-            result.FreeTrialEndsAt = owner.FreeTrialEndsAt;
+            result.FreeTrialStartedAt = place.FreeTrialStartedAt;
+            result.FreeTrialEndsAt = place.FreeTrialEndsAt;
 
             var now = DateTime.Now;
             var referenceAt =
@@ -10088,15 +10106,12 @@ namespace YemenGuide.Web.Services.Finance
                     : commissionReferenceAt;
 
             var freeTrialApplies =
-                owner.FreeTrialStartedAt.HasValue &&
-                owner.FreeTrialEndsAt.HasValue &&
-                referenceAt >= owner.FreeTrialStartedAt.Value &&
-                referenceAt < owner.FreeTrialEndsAt.Value;
+                BookingMoneyPolicy.InTrial(place.FreeTrialStartedAt, place.FreeTrialEndsAt, referenceAt);
 
             if (freeTrialApplies)
             {
                 var remaining =
-                    owner.FreeTrialEndsAt!.Value - now;
+                    place.FreeTrialEndsAt!.Value - now;
 
                 result.IsFreeTrialActive = true;
                 result.RemainingTrialDays =
@@ -10388,6 +10403,8 @@ namespace YemenGuide.Web.Services.Finance
                 }
 
                 var now = DateTime.Now;
+                financial.ReturnCommissionOnCancellationSnapshot ??=
+                    (await GetSettingsAsync(cancellationToken))?.ReturnCommissionOnCancellation ?? true;
 
                 /*
                  * الحجز الذي أُنشئ أثناء الفترة التجريبية المجانية يكون
@@ -10403,26 +10420,14 @@ namespace YemenGuide.Web.Services.Finance
                 if (booking.Place?.OwnerId.HasValue == true &&
                     booking.Place.OwnerId.Value > 0)
                 {
-                    var ownerTrial = await _context.Users
-                        .AsNoTracking()
-                        .Where(user =>
-                            user.UserId == booking.Place.OwnerId.Value)
-                        .Select(user => new
-                        {
-                            user.FreeTrialStartedAt,
-                            user.FreeTrialEndsAt
-                        })
-                        .FirstOrDefaultAsync(cancellationToken);
+                    var ownerTrial = booking.Place;
 
                     var commissionReferenceAt =
                         booking.CreatedAt ?? now;
 
                     var freeTrialApplies =
-                        ownerTrial != null &&
-                        ownerTrial.FreeTrialStartedAt.HasValue &&
-                        ownerTrial.FreeTrialEndsAt.HasValue &&
-                        commissionReferenceAt >= ownerTrial.FreeTrialStartedAt.Value &&
-                        commissionReferenceAt < ownerTrial.FreeTrialEndsAt.Value;
+                        ownerTrial != null && BookingMoneyPolicy.InTrial(ownerTrial.FreeTrialStartedAt,
+                            ownerTrial.FreeTrialEndsAt, commissionReferenceAt);
 
                     if (freeTrialApplies)
                     {
@@ -11523,3 +11528,4 @@ namespace YemenGuide.Web.Services.Finance
 
     }
 }
+

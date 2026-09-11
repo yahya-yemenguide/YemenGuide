@@ -27,6 +27,9 @@ namespace YemenGuide.Core.Entities
         }
 
         public int PlaceId { get; set; }
+        public DateTime? FreeTrialStartedAt { get; set; }
+        public DateTime? FreeTrialEndsAt { get; set; }
+        public DateTime? FreeTrialEvaluatedAt { get; set; }
         public int? OwnerId { get; set; }
         public int CategoryId { get; set; }
         public int CityId { get; set; }
@@ -82,3 +85,4 @@ namespace YemenGuide.Core.Entities
         public virtual ICollection<Room> Rooms { get; set; }
     }
 }
+

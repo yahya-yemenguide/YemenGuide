@@ -1016,6 +1016,7 @@ namespace YemenGuide.Data
 
             modelBuilder.Entity<FinancialRecord>(entity =>
             {
+                entity.Property(e => e.ReturnCommissionOnCancellationSnapshot).HasColumnType("bit");
                 entity.HasKey(e => e.RecordId);
 
                 entity.HasIndex(e => e.BookingId, "UQ_FinancialRecords_BookingID")
@@ -1179,6 +1180,9 @@ namespace YemenGuide.Data
 
             modelBuilder.Entity<Place>(entity =>
             {
+                entity.Property(e => e.FreeTrialStartedAt).HasColumnType("datetime2");
+                entity.Property(e => e.FreeTrialEndsAt).HasColumnType("datetime2");
+                entity.Property(e => e.FreeTrialEvaluatedAt).HasColumnType("datetime2");
                 entity.Property(e => e.PlaceId).HasColumnName("PlaceID");
 
                 entity.Property(e => e.AddressDetail).HasMaxLength(500);
@@ -2139,6 +2143,7 @@ namespace YemenGuide.Data
 
             modelBuilder.Entity<SystemSetting>(entity =>
             {
+                entity.Property(e => e.ReturnCommissionOnCancellation).HasColumnType("bit");
                 entity.Property(e => e.AdenSarRate)
                     .HasColumnType("decimal(18, 2)")
                     .HasDefaultValueSql("((500.00))");
@@ -2428,3 +2433,4 @@ namespace YemenGuide.Data
         partial void OnModelCreatingPartial(ModelBuilder modelBuilder);
     }
 }
+

@@ -1105,6 +1105,9 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                         }
                     }
 
+                    var trialService = HttpContext.RequestServices.GetRequiredService<YemenGuide.Web.Services.Finance.ICommissionFinanceService>();
+                    var trialResult = await trialService.TryStartOwnerFreeTrialForPlaceAsync(place.PlaceId, HttpContext.RequestAborted);
+                    if (!trialResult.Success) throw new InvalidOperationException(trialResult.Message);
                     await transaction.CommitAsync();
                     return Json(new { success = true, message = "تم الحفظ بنجاح", placeId = place.PlaceId });
                 }
@@ -1141,3 +1144,4 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
         }
     }
 }
+

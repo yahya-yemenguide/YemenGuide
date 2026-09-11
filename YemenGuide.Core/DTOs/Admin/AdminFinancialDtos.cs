@@ -1866,6 +1866,8 @@ namespace YemenGuide.Core.DTOs.Admin
 
         public bool HidePlaceWhenCommissionSuspended { get; set; }
 
+        // Null in an older form means preserve the saved platform policy.
+        public bool? ReturnCommissionOnCancellation { get; set; }
         public bool OwnerFreeTrialEnabled { get; set; }
 
         public int OwnerFreeTrialDays { get; set; }
@@ -1920,6 +1922,8 @@ namespace YemenGuide.Core.DTOs.Admin
 
         public bool HidePlaceWhenCommissionSuspended { get; set; }
 
+        // Null in an older form means preserve the saved platform policy.
+        public bool? ReturnCommissionOnCancellation { get; set; }
         public bool OwnerFreeTrialEnabled { get; set; }
 
         [Range(
@@ -1945,3 +1949,4 @@ namespace YemenGuide.Core.DTOs.Admin
     new();
     }
 }
+
