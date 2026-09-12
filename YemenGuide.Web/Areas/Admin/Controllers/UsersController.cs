@@ -5,7 +5,6 @@ using YemenGuide.Data;
 using System.Threading.Tasks;
 using System.Linq;
 using System;
-using System.Globalization;
 using YemenGuide.Core.Constants;
 using YemenGuide.Core.DTOs.Notifications;
 using YemenGuide.Web.Filters;
@@ -19,16 +18,6 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
     {
         private readonly AppDbContext _context;
         private readonly INotificationService _notificationService;
-
-        private static string L(string ar, string en)
-        {
-            return string.Equals(
-                CultureInfo.CurrentUICulture.TwoLetterISOLanguageName,
-                "ar",
-                StringComparison.OrdinalIgnoreCase)
-                ? ar
-                : en;
-        }
 
         public UsersController(
             AppDbContext context,
@@ -46,6 +35,11 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
         {
             var users = await _context.Users
                 .AsNoTracking()
+                .Include(u => u.AdminRole)
+                .Where(u =>
+                    u.Role == SystemRoles.Owner ||
+                    u.Role == SystemRoles.Customer ||
+                    u.Role == SystemRoles.Admin)
                 .OrderByDescending(u => u.CreatedAt)
                 .ToListAsync();
 
@@ -60,21 +54,51 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
         public async Task<IActionResult> UpdateState([FromBody] UserActionRequest request)
         {
             if (request == null || request.Id == 0)
-                return Json(new { success = false, message = L("بيانات غير صالحة", "Invalid request data") });
+                return Json(new { success = false, message = "بيانات غير صالحة" });
 
             var user = await _context.Users.FindAsync(request.Id);
             if (user == null)
-                return Json(new { success = false, message = L("المستخدم غير موجود", "User not found") });
+                return Json(new { success = false, message = "المستخدم غير موجود" });
+
+            if (string.Equals(user.Role, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase))
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = "حساب المدير الرئيسي محمي، والموظفون تتم إدارتهم من صفحة الموظفين والصلاحيات."
+                });
+            }
+
+            if (!string.Equals(user.Role, SystemRoles.Owner, StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(user.Role, SystemRoles.Customer, StringComparison.OrdinalIgnoreCase))
+            {
+                return Json(new { success = false, message = "نوع الحساب غير مدعوم في إدارة المستخدمين." });
+            }
+
+            var requestedState = (request.State ?? string.Empty).Trim();
+            var allowedStates = new[]
+            {
+                "Activate",
+                "Unblock",
+                "Suspended",
+                "Blocked",
+                "Rejected"
+            };
+
+            if (!allowedStates.Contains(requestedState, StringComparer.OrdinalIgnoreCase))
+            {
+                return Json(new { success = false, message = "الحالة المطلوبة غير مدعومة." });
+            }
 
             var previousAccountState = user.AccountState;
             var isNewOwnerApproval =
                 string.Equals(user.Role, "Owner", StringComparison.OrdinalIgnoreCase) &&
                 (string.Equals(previousAccountState, "Pending", StringComparison.OrdinalIgnoreCase) ||
                  string.Equals(previousAccountState, "Rejected", StringComparison.OrdinalIgnoreCase)) &&
-                (request.State == "Activate" || request.State == "Unblock");
+                (string.Equals(requestedState, "Activate", StringComparison.OrdinalIgnoreCase) || string.Equals(requestedState, "Unblock", StringComparison.OrdinalIgnoreCase));
 
             // 🎯 الفحص الذكي المطور:
-            if (request.State == "Activate" || request.State == "Unblock")
+            if (string.Equals(requestedState, "Activate", StringComparison.OrdinalIgnoreCase) || string.Equals(requestedState, "Unblock", StringComparison.OrdinalIgnoreCase))
             {
                 // 1️⃣ إذا كان المستخدم مالكاً جديداً وحالته الحالية قيد الانتظار أو الرفض
                 if (isNewOwnerApproval)
@@ -92,7 +116,7 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
             else
             {
                 // الاحتفاظ بالحالات الأخرى (Suspended, Blocked, Rejected) كما هي دون تغيير
-                user.AccountState = request.State;
+                user.AccountState = requestedState;
             }
 
             if (isNewOwnerApproval)
@@ -127,9 +151,23 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                 }
             }
 
+            QueueAccountStateNotification(
+                user,
+                previousAccountState);
+
             await _context.SaveChangesAsync();
 
-            return Json(new { success = true, message = L("تم تحديث حالة المستخدم بنجاح.", "User status updated successfully.") });
+            var successMessage = user.AccountState switch
+            {
+                "Suspended" => "تم توقيف الحساب مؤقتًا. يستطيع المستخدم تسجيل الدخول والتصفح فقط دون تنفيذ عمليات.",
+                "Blocked" => "تم حظر الحساب ومنعه من تسجيل الدخول.",
+                "Active" => "تم تنشيط الحساب وإعادة صلاحياته الطبيعية.",
+                "Accepted" => "تم قبول حساب المالك وأصبح جاهزًا لاستكمال خطوات التفعيل.",
+                "Rejected" => "تم رفض طلب انضمام المالك.",
+                _ => "تم تحديث حالة المستخدم بنجاح."
+            };
+
+            return Json(new { success = true, message = successMessage });
         }
 
         // =============================================================
@@ -144,7 +182,7 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                 .FirstOrDefaultAsync(u => u.UserId == userId);
 
             if (user == null)
-                return Json(new { success = false, message = L("المستخدم غير موجود.", "User not found.") });
+                return Json(new { success = false, message = "المستخدم غير موجود." });
 
             string idFront = "";
             string idBack = "";
@@ -181,18 +219,73 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
         public async Task<IActionResult> PermanentDelete([FromBody] UserActionRequest request)
         {
             if (request == null || request.Id == 0)
-                return Json(new { success = false, message = L("بيانات غير صالحة", "Invalid request data") });
+                return Json(new { success = false, message = "بيانات غير صالحة" });
 
             var user = await _context.Users.FindAsync(request.Id);
             if (user == null)
-                return Json(new { success = false, message = L("المستخدم غير موجود", "User not found") });
+                return Json(new { success = false, message = "المستخدم غير موجود" });
 
             // حذف الكائن كلياً وجذرياً من قاعدة البيانات في حالة الرفض النهائي فقط بطلب صريح
             _context.Users.Remove(user);
             await _context.SaveChangesAsync();
 
-            return Json(new { success = true, message = L("تم حذف الحساب نهائياً بنجاح.", "The account was permanently deleted successfully.") });
+            return Json(new { success = true, message = "تم حذف الحساب نهائياً وبنجاح من قاعدة البيانات!" });
         }
+
+        private void QueueAccountStateNotification(
+            YemenGuide.Core.Entities.User user,
+            string? previousAccountState)
+        {
+            if (!string.Equals(user.Role, SystemRoles.Owner, StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(user.Role, SystemRoles.Customer, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            var currentState = user.AccountState ?? string.Empty;
+            if (string.Equals(currentState, previousAccountState, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            string? title = null;
+            string? text = null;
+
+            if (string.Equals(currentState, "Suspended", StringComparison.OrdinalIgnoreCase))
+            {
+                title = "تم توقيف حسابك مؤقتًا";
+                text = string.Equals(user.Role, SystemRoles.Owner, StringComparison.OrdinalIgnoreCase)
+                    ? "يمكنك تسجيل الدخول وتصفح لوحة المالك وبياناتك، لكن جميع عمليات الإضافة والتعديل والحجز والدفع والمراسلة والتقييم متوقفة مؤقتًا حتى تعيد الإدارة تفعيل الحساب."
+                    : "يمكنك تسجيل الدخول وتصفح المنصة، لكن جميع العمليات مثل الحجز والدفع والإلغاء والمراسلة والتقييم وتعديل البيانات متوقفة مؤقتًا حتى تعيد الإدارة تفعيل الحساب.";
+            }
+            else if (string.Equals(currentState, "Active", StringComparison.OrdinalIgnoreCase) &&
+                     (string.Equals(previousAccountState, "Suspended", StringComparison.OrdinalIgnoreCase) ||
+                      string.Equals(previousAccountState, "Blocked", StringComparison.OrdinalIgnoreCase)))
+            {
+                title = "تم إعادة تفعيل حسابك";
+                text = "أعادت الإدارة تفعيل حسابك، ويمكنك الآن استخدام جميع العمليات المتاحة لحسابك بصورة طبيعية.";
+            }
+
+            if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(text))
+            {
+                return;
+            }
+
+            _notificationService.Queue(
+                new CreateNotificationDto
+                {
+                    UserId = user.UserId,
+                    NotificationTitle = title,
+                    NotificationText = text,
+                    NotificationType = NotificationTypes.Security,
+                    TargetUrl = string.Equals(user.Role, SystemRoles.Owner, StringComparison.OrdinalIgnoreCase)
+                        ? "/Owner/OwnerDashboard/DashboardOwner"
+                        : "/Home/Index",
+                    ReferenceType = NotificationReferenceTypes.User,
+                    ReferenceId = user.UserId
+                });
+        }
+
     }
 
     // =============================================================

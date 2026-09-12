@@ -52,7 +52,17 @@
         u.Role == "Owner" &&
         u.AccountState == "Rejected");
     var customersCount = Model.Count(u => u.Role == "Customer");
-    var adminsCount = Model.Count(u => u.Role == "Admin");
+
+    // الموظفون: كل حساب Admin أنشأته الإدارة وليس هو الدور النظامي المحمي.
+    var employeesCount = Model.Count(u =>
+        u.Role == "Admin" &&
+        (u.AdminRole == null || !u.AdminRole.IsSystemRole));
+
+    // مدير النظام: الحساب المرتبط بالدور النظامي المحمي فقط.
+    var adminsCount = Model.Count(u =>
+        u.Role == "Admin" &&
+        u.AdminRole != null &&
+        u.AdminRole.IsSystemRole);
 
     var usersPermissionClasses =
         $"{(!canViewVerificationDocuments ? "users-no-documents" : string.Empty)} " +
@@ -85,7 +95,7 @@
                 <h1>@L("إدارة المستخدمين", "User Management")</h1>
 
                 <p>
-                    @L("إدارة حسابات المُلّاك والعملاء، مراجعة طلبات الانضمام، ومتابعة الحسابات المرفوضة ومديري النظام من مكان واحد.", "Manage owner and customer accounts, review join requests, and follow rejected accounts and system administrators from one place.")
+                    @L("إدارة حسابات المُلّاك والعملاء، مراجعة طلبات الانضمام، ومتابعة الموظفين ومدير النظام من مكان واحد.", "Manage owner and customer accounts, review join requests, and view employees and the system administrator from one place.")
                 </p>
 
             </div>
@@ -176,13 +186,25 @@
 
             <button type="button"
                 class="tab-btn"
+                data-target="employees-tab"
+                role="tab"
+                aria-selected="false">
+                <span class="tab-icon">
+                    <i class="bi bi-person-badge" aria-hidden="true"></i>
+                </span>
+                <span class="tab-label">@L("الموظفون", "Employees")</span>
+                <span class="tab-count">@employeesCount</span>
+            </button>
+
+            <button type="button"
+                class="tab-btn"
                 data-target="admins-tab"
                 role="tab"
                 aria-selected="false">
                 <span class="tab-icon">
                     <i class="bi bi-shield-lock" aria-hidden="true"></i>
                 </span>
-                <span class="tab-label">@L("مديرو النظام", "System admins")</span>
+                <span class="tab-label">@L("مدير النظام", "System admin")</span>
                 <span class="tab-count">@adminsCount</span>
             </button>
 
@@ -981,7 +1003,7 @@
 
 
                 <p class="users-section-description text-muted small mb-0">
-                    @L("إدارة حسابات العملاء النشطة والمحظورة في المنصة.", "Manage active and blocked customer accounts on the platform.")
+                    @L("إدارة حسابات العملاء النشطة والموقوفة والمحظورة في المنصة.", "Manage active, suspended, and blocked customer accounts on the platform.")
                 </p>
 
             </div>
@@ -1084,10 +1106,14 @@
                                     <span class="badge users-status-badge
                                         @(item.AccountState == "Blocked"
                                             ? "bg-danger"
-                                            : "bg-success")">
+                                            : item.AccountState == "Suspended"
+                                                ? "bg-warning text-dark"
+                                                : "bg-success")">
 
                                         @(item.AccountState == "Blocked"
                                             ? L("محظور", "Blocked")
+                                            : item.AccountState == "Suspended"
+                                            ? L("موقوف مؤقتًا", "Suspended")
                                             : L("نشط", "Active"))
 
                                     </span>
@@ -1121,6 +1147,29 @@
                                         }
                                         else
                                         {
+                                            @if (item.AccountState == "Suspended")
+                                            {
+                                                <button type="button"
+                                            class="btn btn-success action-btn activate-btn px-3 me-2"
+                                            data-id="@item.UserId"
+                                            data-state="Activate">
+
+                                                    <i class="bi bi-play-circle-fill" aria-hidden="true"></i>
+                                                    <span>@L("تنشيط ورفع التعليق", "Reactivate")</span>
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <button type="button"
+                                            class="btn btn-warning action-btn suspend-btn px-3 me-2 text-dark"
+                                            data-id="@item.UserId"
+                                            data-state="Suspended">
+
+                                                    <i class="bi bi-pause-circle-fill" aria-hidden="true"></i>
+                                                    <span>@L("توقيف مؤقت", "Suspend")</span>
+                                                </button>
+                                            }
+
                                             <button type="button"
                                             class="btn btn-danger action-btn block-btn px-3"
                                             data-id="@item.UserId"
@@ -1181,7 +1230,208 @@
 
 
         @* =========================================================
-        5. تبويب مديري النظام
+        5. تبويب الموظفين
+        ========================================================= *@
+
+        <section class="tab-pane-content employees-tab users-tab-pane">
+
+            <div class="users-section-header mb-3">
+
+                <h5 class="users-section-title fw-bold mb-1">
+
+                    <i class="bi bi-person-badge-fill me-1 text-primary"
+                       aria-hidden="true"></i>
+
+                    @L("موظفو الإدارة", "Administration employees")
+
+                </h5>
+
+                <p class="users-section-description text-muted small mb-0">
+                    @L(
+                    "هنا تظهر حسابات الموظفين التي أضافها مدير النظام. إدارة الصلاحيات والتوقيف الوظيفي تبقى من صفحة الموظفين والصلاحيات.",
+                    "Employee accounts created by the system administrator appear here. Roles, permissions, and employment suspension remain managed from Employees & Permissions."
+                    )
+                </p>
+
+            </div>
+
+            <div class="table-responsive users-table-wrapper">
+
+                <table class="table custom-table users-responsive-table text-center align-middle mb-0">
+
+                    <thead>
+                        <tr>
+                            <th class="py-3">@L("الاسم", "Name")</th>
+                            <th class="py-3">@L("اسم المستخدم", "Username")</th>
+                            <th class="py-3">@L("الدور الوظيفي", "Role")</th>
+                            <th class="py-3">@L("الحالة", "Status")</th>
+                            <th class="py-3">@L("الإدارة", "Manage")</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+
+                        @foreach (
+                        var item in Model.Where(
+                        u => u.Role == "Admin" &&
+                        (u.AdminRole == null || !u.AdminRole.IsSystemRole)
+                        )
+                        )
+                        {
+                            var employeeIsSuspended =
+                            string.Equals(
+                            item.EmploymentStatus,
+                            "Suspended",
+                            StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(
+                            item.AccountState,
+                            "Suspended",
+                            StringComparison.OrdinalIgnoreCase);
+
+                            var employeeIsTerminated =
+                            string.Equals(
+                            item.EmploymentStatus,
+                            "Terminated",
+                            StringComparison.OrdinalIgnoreCase);
+
+                            var employeeIsActive =
+                            !employeeIsSuspended &&
+                            !employeeIsTerminated &&
+                            string.Equals(
+                            item.AccountState,
+                            "Active",
+                            StringComparison.OrdinalIgnoreCase);
+
+                            <tr class="border-bottom users-table-row users-mobile-card-row employee-user-row"
+                            data-user-id="@item.UserId">
+
+                                <td class="py-3 users-table-cell users-name-cell"
+                                data-label="@L("الاسم", "Name")">
+
+                                    <div class="user-identity">
+
+                                        <div class="user-avatar admin-user-avatar"
+                                         aria-hidden="true">
+                                            <i class="bi bi-person-badge"></i>
+                                        </div>
+
+                                        <div class="user-identity-text">
+                                            <strong class="user-full-name">
+                                                @item.FullName
+                                            </strong>
+
+                                            <small class="user-role-caption text-muted">
+                                                @L("موظف إدارة", "Admin employee")
+                                            </small>
+                                        </div>
+
+                                    </div>
+
+                                </td>
+
+                                <td class="py-3 users-table-cell users-username-cell"
+                                data-label="@L("اسم المستخدم", "Username")">
+                                    <span class="user-username" dir="ltr">
+                                        @item.Username
+                                    </span>
+                                </td>
+
+                                <td class="py-3 users-table-cell users-status-cell"
+                                data-label="@L("الدور الوظيفي", "Role")">
+
+                                    <span class="badge bg-primary-subtle text-primary users-status-badge">
+                                        <i class="bi bi-person-gear me-1" aria-hidden="true"></i>
+                                        @(item.AdminRole?.RoleName
+                                            ?? item.JobTitle
+                                            ?? L("موظف إدارة", "Admin employee"))
+                                    </span>
+
+                                </td>
+
+                                <td class="py-3 users-table-cell users-status-cell"
+                                data-label="@L("الحالة", "Status")">
+
+                                    <span class="badge users-status-badge
+                                        @(employeeIsTerminated
+                                            ? "bg-danger"
+                                            : employeeIsSuspended
+                                                ? "bg-warning text-dark"
+                                                : employeeIsActive
+                                                    ? "bg-success"
+                                                    : "bg-secondary")">
+
+                                        @(
+                                            employeeIsTerminated
+                                            ? L("منتهي", "Terminated")
+                                            : employeeIsSuspended
+                                            ? L("موقوف", "Suspended")
+                                            : employeeIsActive
+                                            ? L("نشط", "Active")
+                                            : L("غير نشط", "Inactive")
+                                            )
+
+                                    </span>
+
+                                </td>
+
+                                <td class="py-3 users-table-cell users-actions-cell"
+                                data-label="@L("الإدارة", "Manage")">
+
+                                    <a class="btn btn-outline-primary employee-manage-link px-3"
+                                   asp-area="Admin"
+                                   asp-controller="Employees"
+                                   asp-action="EmployeeManagement"
+                                   asp-route-tab="employees">
+                                        <i class="bi bi-sliders me-1" aria-hidden="true"></i>
+                                        <span>@L("إدارة الموظف", "Manage employee")</span>
+                                    </a>
+
+                                </td>
+
+                            </tr>
+                        }
+
+                        @if (!Model.Any(u =>
+                        u.Role == "Admin" &&
+                        (u.AdminRole == null || !u.AdminRole.IsSystemRole)))
+                        {
+                            <tr class="users-empty-row">
+                                <td colspan="5"
+                                class="text-muted py-5">
+
+                                    <div class="users-empty-state">
+
+                                        <i class="bi bi-person-badge display-6 text-muted opacity-50 d-block mb-2"
+                                       aria-hidden="true"></i>
+
+                                        <h6 class="fw-bold mb-1">
+                                            @L("لا يوجد موظفون حاليًا", "No employees yet")
+                                        </h6>
+
+                                        <p class="small mb-0">
+                                            @L(
+                                        "أي موظف يضيفه مدير النظام سيظهر هنا تلقائيًا.",
+                                        "Any employee created by the system administrator will appear here automatically."
+                                        )
+                                        </p>
+
+                                    </div>
+
+                                </td>
+                            </tr>
+                        }
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </section>
+
+
+        @* =========================================================
+        6. تبويب مدير النظام
         ========================================================= *@
 
         <section class="tab-pane-content admins-tab users-tab-pane">
@@ -1194,13 +1444,13 @@
                     <i class="bi bi-shield-lock-fill me-1 text-primary"
                        aria-hidden="true"></i>
 
-                    @L("مديرو النظام", "System admins")
+                    @L("مدير النظام", "System admin")
 
                 </h5>
 
 
                 <p class="users-section-description text-muted small mb-0">
-                    @L("الحسابات الإدارية التي تملك صلاحية الوصول إلى لوحة التحكم.", "Administrative accounts that can access the control panel.")
+                    @L("الحسابات الإدارية التي تملك صلاحية الوصول إلى لوحة التحكم.", "The protected primary administrator account with full system access.")
                 </p>
 
             </div>
@@ -1235,7 +1485,9 @@
 
                         @foreach (
                         var item in Model.Where(
-                        u => u.Role == "Admin"
+                        u => u.Role == "Admin" &&
+                        u.AdminRole != null &&
+                        u.AdminRole.IsSystemRole
                         )
                         )
                         {
@@ -1311,7 +1563,10 @@
                         }
 
 
-                        @if (!Model.Any(u => u.Role == "Admin"))
+                        @if (!Model.Any(u =>
+                        u.Role == "Admin" &&
+                        u.AdminRole != null &&
+                        u.AdminRole.IsSystemRole))
                         {
                             <tr class="users-empty-row">
 
@@ -1328,7 +1583,7 @@
                                         </h6>
 
                                         <p class="small mb-0">
-                                            @L("لا توجد حسابات مدير نظام ظاهرة حاليًا.", "No system administrator accounts are currently visible.")
+                                            @L("لا توجد حسابات مدير نظام ظاهرة حاليًا.", "No system administrator account is currently visible.")
                                         </p>
 
                                     </div>

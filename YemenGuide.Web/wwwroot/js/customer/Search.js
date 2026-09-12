@@ -1,4 +1,4 @@
-﻿/**
+/**
  * =============================================================================
  * SEARCH.JS — Luxury Cinematic 3D
  * يحافظ على البحث AJAX والمفضلة وحركة الصور، ويضيف 3D فقط للأجهزة ذات الماوس.
@@ -442,6 +442,66 @@
          حتى لا يصل نفس الحدث للخادم من ملفين مختلفين.
        ========================================================================= */
 
+    function ensureCenteredVideoAdvertisementButtonStyles() {
+        if (document.getElementById("searchVideoAdCtaFixStyles")) return;
+
+        const style = document.createElement("style");
+        style.id = "searchVideoAdCtaFixStyles";
+        style.textContent = `
+            .search-ad-signature__video-cta-centered {
+                position: absolute !important;
+                left: 50% !important;
+                right: auto !important;
+                bottom: 66px !important;
+                z-index: 42 !important;
+                max-width: min(330px, calc(100% - 132px)) !important;
+                margin: 0 !important;
+                transform: translateX(-50%) !important;
+                justify-content: center !important;
+                text-align: center !important;
+                pointer-events: auto !important;
+                white-space: normal !important;
+            }
+
+            .search-ad-signature__video-cta-centered:hover {
+                transform: translateX(-50%) translateY(-2px) !important;
+            }
+
+            @media (max-width: 820px) {
+                .search-ad-signature__video-cta-centered {
+                    bottom: 57px !important;
+                    max-width: calc(100% - 96px) !important;
+                }
+            }
+
+            @media (max-width: 480px) {
+                .search-ad-signature__video-cta-centered {
+                    bottom: 51px !important;
+                    max-width: calc(100% - 72px) !important;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    function centerVideoAdvertisementButton(slide) {
+        if (!slide?.querySelector(".search-ad-signature__media video")) return;
+
+        const stage = slide.querySelector(".search-ad-signature__stage");
+        const actions = slide.querySelector(".search-ad-signature__actions");
+        const cta = slide.querySelector(".search-ad-signature__cta");
+        if (!stage || !cta) return;
+
+        ensureCenteredVideoAdvertisementButtonStyles();
+
+        // ننقل زر الفيديو إلى مستوى الـstage نفسه حتى لا يتقيد بعرض صندوق النص الجانبي.
+        if (cta.parentElement !== stage) stage.appendChild(cta);
+        cta.classList.add("search-ad-signature__video-cta-centered");
+
+        // في الفيديو يبقى الزر وحده في المنتصف، بينما النص المساعد لا يزاحمه.
+        if (actions) actions.style.display = "none";
+    }
+
     let activeSearchAdCleanup = null;
 
     function initSearchAdvertisementSlider(root = document) {
@@ -455,6 +515,8 @@
 
         const slides = Array.from(slider.querySelectorAll("[data-search-ad-slide]"));
         if (!slides.length) return;
+
+        slides.forEach(centerVideoAdvertisementButton);
 
         const previousButton = slider.querySelector("[data-search-ad-prev]");
         const nextButton = slider.querySelector("[data-search-ad-next]");

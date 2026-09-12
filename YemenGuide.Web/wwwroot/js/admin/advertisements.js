@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
     "use strict";
 
     const app = document.getElementById("adminAdvertisementsApp");
@@ -19,6 +19,7 @@
         planStatus: app.dataset.planStatusUrl || "",
         deletePlan: app.dataset.deletePlanUrl || "",
         reviewPayment: app.dataset.reviewPaymentUrl || "",
+        reviewAll: app.dataset.reviewAllUrl || "",
         reviewAd: app.dataset.reviewAdUrl || "",
         controlAd: app.dataset.controlAdUrl || "",
         refundAd: app.dataset.refundAdUrl || "",
@@ -47,6 +48,105 @@
         });
         buildPaginationFromInitial();
         syncReportAdOptions();
+        upgradeAdminVideoImages(app);
+        void initializeAdvertisementDeepLink();
+    }
+
+    function adminGroupForAdvertisement(item) {
+        const status = String(item?.status || "").trim();
+        const paymentStatus = String(item?.paymentStatus || "").trim();
+        const refundPending = Boolean(item?.canRefund) ||
+            (status === "Cancelled" && paymentStatus === "Paid" && !item?.refundedAt);
+
+        if (refundPending) return "Closed";
+        if (status === "Active" || status === "Scheduled") return "Running";
+        if (status === "Paused") return "Paused";
+        if (status === "Expired" || status === "Cancelled") return "Closed";
+        return "NeedsAction";
+    }
+
+    async function initializeAdvertisementDeepLink() {
+        const params = new URLSearchParams(window.location.search);
+        const focusId = Number.parseInt(
+            params.get("focusAdvertisement") ||
+            params.get("advertisementId") ||
+            "0",
+            10
+        ) || 0;
+
+        const explicitGroup = String(params.get("group") || "").trim();
+        const allowedGroups = ["All", "Running", "NeedsAction", "Paused", "Closed"];
+
+        if (focusId <= 0 && !explicitGroup) return;
+
+        activateTab("ads", false);
+
+        let item = null;
+        let targetGroup = allowedGroups.includes(explicitGroup)
+            ? explicitGroup
+            : "";
+
+        if (focusId > 0 && urls.details) {
+            try {
+                item = await requestJson(`${urls.details}?id=${encodeURIComponent(focusId)}`);
+                if (!targetGroup) targetGroup = adminGroupForAdvertisement(item);
+            } catch (_) {
+                // لا نمنع فتح صفحة الإعلانات إذا تعذر جلب التفاصيل.
+            }
+        }
+
+        if (targetGroup) {
+            const form = document.getElementById("admxAdsFilter");
+            if (form) {
+                setField(form, "Status", targetGroup);
+                setField(form, "ExactStatus", "All");
+                setField(form, "Page", "1");
+
+                app.querySelectorAll("[data-ad-group]").forEach(button => {
+                    button.classList.toggle("is-active", button.dataset.adGroup === targetGroup);
+                });
+
+                await loadAds(1);
+            }
+        }
+
+        if (focusId > 0) {
+            window.setTimeout(() => highlightFocusedAdvertisement(focusId), 140);
+        }
+    }
+
+    function highlightFocusedAdvertisement(advertisementId) {
+        const id = Number.parseInt(String(advertisementId || "0"), 10) || 0;
+        if (id <= 0) return;
+
+        const row = app.querySelector(`[data-ad-card="${id}"]`);
+        if (!row) return;
+
+        row.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+            inline: "nearest"
+        });
+
+        const previousOutline = row.style.outline;
+        const previousOutlineOffset = row.style.outlineOffset;
+        const previousBoxShadow = row.style.boxShadow;
+        const previousTransform = row.style.transform;
+        const previousTransition = row.style.transition;
+
+        row.style.transition = "box-shadow .25s ease, outline-color .25s ease, transform .25s ease";
+        row.style.outline = "3px solid rgba(0,166,218,.9)";
+        row.style.outlineOffset = "4px";
+        row.style.boxShadow = "0 0 0 7px rgba(0,166,218,.12), 0 18px 45px rgba(5,32,60,.16)";
+        row.style.transform = "translateY(-2px)";
+
+        window.setTimeout(() => {
+            row.style.outline = previousOutline;
+            row.style.outlineOffset = previousOutlineOffset;
+            row.style.boxShadow = previousBoxShadow;
+            row.style.transform = previousTransform;
+            row.style.transition = previousTransition;
+        }, 4200);
     }
 
     function normalizeTab(value) {
@@ -207,10 +307,47 @@
     }
 
     function onInput(event) {
+        const numericField = event.target.closest?.(
+            '[data-digits-only], input[type="number"], [data-english-number]'
+        );
+
+        if (numericField) {
+            sanitizeAdvertisementNumericField(numericField);
+        }
+
         if (event.target.matches('#admxAdsFilter input[name="Search"]')) {
             window.clearTimeout(searchTimer);
             searchTimer = window.setTimeout(() => loadAds(1), 520);
         }
+    }
+
+    function sanitizeAdvertisementNumericField(field) {
+        if (!field) return;
+
+        let value = toEnglishDigits(String(field.value || ""));
+
+        const digitsOnly =
+            field.dataset.digitsOnly === "true" ||
+            field.dataset.englishNumber === "integer" ||
+            (field.type === "number" && String(field.step || "1") === "1");
+
+        if (digitsOnly) {
+            value = value.replace(/[^0-9]/g, "");
+        } else {
+            value = value
+                .replace(/,/g, ".")
+                .replace(/[^0-9.]/g, "");
+
+            const firstDot = value.indexOf(".");
+            if (firstDot >= 0) {
+                value =
+                    value.slice(0, firstDot + 1) +
+                    value.slice(firstDot + 1).replace(/\./g, "");
+            }
+        }
+
+        // جميع الحقول الرقمية في وحدة الإعلانات غير سالبة.
+        field.value = value;
     }
 
     function onChange(event) {
@@ -302,7 +439,7 @@
     }
 
     function adRowMarkup(item) {
-        const image = esc(item.imagePath || "/images/default-category.jpg");
+        const media = adminRowMediaMarkup(item.imagePath, item.title);
         const attention = item.needsAttention
             ? `<span class="admx-attention-dot" title="يحتاج إجراء"></span>`
             : "";
@@ -311,9 +448,9 @@
         const paymentStatusLabel = isRefundedCancellation ? "تم الاسترداد" : item.paymentStatusLabel;
 
         return `
-            <article class="admx-ad-row">
+            <article class="admx-ad-row" data-ad-card="${toInt(item.advertisementId)}">
                 <button type="button" class="admx-ad-row__media" data-admx-details="${toInt(item.advertisementId)}">
-                    <img src="${image}" alt="" onerror="this.src='/images/default-category.jpg'">
+                    ${media}
                     ${attention}
                 </button>
                 <div class="admx-ad-row__main">
@@ -334,6 +471,47 @@
                     <i class="bi bi-chevron-left"></i>
                 </button>
             </article>`;
+    }
+
+    function isVideoPath(path) {
+        return /\.(mp4|webm)(?:$|[?#])/i.test(String(path || ""));
+    }
+
+    function adminRowMediaMarkup(path, title = "") {
+        const source = String(path || "/images/default-category.jpg");
+        if (isVideoPath(source)) {
+            return `<video src="${esc(source)}" muted playsinline preload="metadata" aria-label="${esc(title || "فيديو الإعلان")}" style="width:100%;height:100%;object-fit:cover;background:#0f172a;pointer-events:none"></video>`;
+        }
+        return `<img src="${esc(source)}" alt="" onerror="this.src='/images/default-category.jpg'">`;
+    }
+
+    function adminReviewMediaMarkup(path, title = "") {
+        const source = String(path || "/images/default-category.jpg");
+        if (isVideoPath(source)) {
+            return `<video src="${esc(source)}" controls playsinline preload="metadata" aria-label="${esc(title || "فيديو الإعلان")}" style="width:100%;height:100%;max-height:460px;object-fit:contain;background:#050b16;position:relative;z-index:3"></video>`;
+        }
+        return `<img src="${esc(source)}" alt="" onerror="this.src='/images/default-category.jpg'">`;
+    }
+
+    function upgradeAdminVideoImages(root) {
+        if (!root) return;
+        root.querySelectorAll("img[src]").forEach(image => {
+            const path = image.getAttribute("src") || "";
+            if (!isVideoPath(path)) return;
+
+            const video = document.createElement("video");
+            video.src = path;
+            video.muted = true;
+            video.playsInline = true;
+            video.preload = "metadata";
+            video.setAttribute("aria-label", image.getAttribute("alt") || "فيديو الإعلان");
+            video.style.width = "100%";
+            video.style.height = "100%";
+            video.style.objectFit = "cover";
+            video.style.background = "#0f172a";
+            video.style.pointerEvents = "none";
+            image.replaceWith(video);
+        });
     }
 
     function selectAdGroup(group) {
@@ -435,29 +613,46 @@
         }
     }
 
+    function isContentEditReview(item) {
+        if (!item || item.paymentStatus !== "Paid" || item.status !== "Pending") return false;
+        const submitted = Date.parse(item.submittedAt || "");
+        const reviewed = Date.parse(item.reviewedAt || "");
+        return Number.isFinite(submitted) &&
+               Number.isFinite(reviewed) &&
+               reviewed < submitted;
+    }
+
     function showAdvertisementModal(item) {
         if (!item) return;
 
-        const media = esc(item.imagePath || "/images/default-category.jpg");
+        const mediaPath = item.imagePath || "/images/default-category.jpg";
+        const media = adminReviewMediaMarkup(mediaPath, item.title);
         const canReview = Boolean(item.canReview);
         const canControl = Boolean(item.canControl);
         const device = deviceLabel(item.deviceTarget);
-        const appearanceTime = item.startImmediately
+        const requestedStartDate = item.startImmediately
             ? "بعد موافقة الإدارة"
-            : (item.requestedStartAt ? `من ${dateTime(item.requestedStartAt)}` : "تاريخ مستقبلي محدد");
+            : dateOnly(item.requestedStartAt);
+        const requestedStartTime = item.startImmediately
+            ? "—"
+            : timeOnly(item.requestedStartAt);
         const isRefundedCancellation = item.status === "Cancelled" && item.paymentStatus === "Refunded";
         const statusLabel = isRefundedCancellation ? "ملغي" : item.statusLabel;
         const paymentStatusLabel = isRefundedCancellation ? "تم الاسترداد" : item.paymentStatusLabel;
+        const contentEditReview = isContentEditReview(item);
         const actions = [];
 
-        if (canReview && item.paymentStatus === "PendingReview") {
+        if (canReview && item.paymentStatus === "PendingReview" && item.status === "Pending") {
+            actions.push(`<button type="button" class="admx-swal-action is-success" data-ad-action="approve-all"><i class="bi bi-check2-all"></i> اعتماد الدفع والإعلان</button>`);
+            actions.push(`<button type="button" class="admx-swal-action is-danger" data-ad-action="payment-reject"><i class="bi bi-x-circle"></i> رفض الدفع</button>`);
+        } else if (canReview && item.paymentStatus === "PendingReview") {
             actions.push(`<button type="button" class="admx-swal-action is-success" data-ad-action="payment-approve"><i class="bi bi-check2-circle"></i> اعتماد الدفع</button>`);
             actions.push(`<button type="button" class="admx-swal-action is-danger" data-ad-action="payment-reject"><i class="bi bi-x-circle"></i> رفض الدفع</button>`);
         }
 
         if (canReview && item.status === "Pending" && item.paymentStatus === "Paid") {
-            actions.push(`<button type="button" class="admx-swal-action is-success" data-ad-action="content-approve"><i class="bi bi-patch-check"></i> اعتماد الإعلان</button>`);
-            actions.push(`<button type="button" class="admx-swal-action is-danger" data-ad-action="content-reject"><i class="bi bi-pencil-square"></i> طلب تعديل</button>`);
+            actions.push(`<button type="button" class="admx-swal-action is-success" data-ad-action="content-approve"><i class="bi bi-patch-check"></i> ${contentEditReview ? "اعتماد التعديلات" : "اعتماد الإعلان"}</button>`);
+            actions.push(`<button type="button" class="admx-swal-action is-danger" data-ad-action="content-reject"><i class="bi bi-pencil-square"></i> ${contentEditReview ? "طلب تعديل إضافي" : "طلب تعديل"}</button>`);
         }
 
         if (item.canRefund) {
@@ -484,7 +679,7 @@
         const html = `
             <div class="admx-luxury-review" data-current-ad="${toInt(item.advertisementId)}">
                 <section class="admx-luxury-review__visual">
-                    <img src="${media}" alt="" onerror="this.src='/images/default-category.jpg'">
+                    ${media}
                     <div class="admx-luxury-review__visual-content">
                         <span class="admx-luxury-review__sponsored"><i class="bi bi-megaphone-fill"></i> إعلان ممول</span>
                         <h3>${esc(item.title)}</h3>
@@ -514,9 +709,12 @@
                     <div class="admx-luxury-review__info">
                         <article><small>سعر اليوم</small><strong>${money(item.dailyPrice)}</strong></article>
                         <article><small>الإجمالي</small><strong>${money(item.totalAmount ?? item.price)}</strong></article>
-                        <article><small>وقت الظهور</small><strong>${esc(appearanceTime)}</strong></article>
-                        <article><small>بدء العرض الفعلي</small><strong>${dateTime(item.startAt)}</strong></article>
-                        <article><small>نهاية العرض</small><strong>${dateTime(item.endAt)}</strong></article>
+                        <article><small>تاريخ بدء العرض المطلوب</small><strong>${esc(requestedStartDate)}</strong></article>
+                        <article><small>وقت بدء العرض المطلوب</small><strong>${esc(requestedStartTime)}</strong></article>
+                        <article><small>تاريخ بدء العرض الفعلي</small><strong>${dateOnly(item.startAt)}</strong></article>
+                        <article><small>وقت بدء العرض الفعلي</small><strong>${timeOnly(item.startAt)}</strong></article>
+                        <article><small>تاريخ نهاية العرض</small><strong>${dateOnly(item.endAt)}</strong></article>
+                        <article><small>وقت نهاية العرض</small><strong>${timeOnly(item.endAt)}</strong></article>
                     </div>
 
                     <div class="admx-luxury-review__section-title"><i class="bi bi-graph-up-arrow"></i><span>الأداء</span></div>
@@ -531,6 +729,9 @@
                         <div><strong>إثبات الدفع</strong><small>${paymentMeta ? esc(item.referenceNumber || "") : "فتح الإثبات"}</small></div>
                         <i class="bi bi-box-arrow-up-left"></i>
                     </a>` : ""}
+
+                    ${contentEditReview ? `
+                    <div class="admx-luxury-review__note"><i class="bi bi-pencil-square"></i><div><strong>تعديل محتوى إعلان معتمد</strong><p>الدفع معتمد مسبقًا. راجع الصورة/الفيديو والعنوان ونص الزر ثم اعتمد التعديلات أو أعدها للمالك.</p></div></div>` : ""}
 
                     ${item.rejectionReason ? `
                     <div class="admx-luxury-review__note"><i class="bi bi-exclamation-circle"></i><div><strong>ملاحظة المراجعة</strong><p>${esc(item.rejectionReason)}</p></div></div>` : ""}
@@ -631,9 +832,9 @@
                 <div class="admx-swal-form-grid">
                     ${ownerSelectedRefundDestination ? "" : `
                     <label><span>وسيلة الاسترداد</span><select id="admxRefundWallet"><option value="">اختر الوسيلة</option>${walletOptions}</select></label>
-                    <label><span>رقم الحساب / المحفظة</span><input id="admxRefundAccount" type="text" maxlength="100" autocomplete="off"></label>
+                    <label><span>رقم الحساب / المحفظة</span><input id="admxRefundAccount" type="text" inputmode="numeric" pattern="[0-9]*" data-digits-only="true" maxlength="100" autocomplete="off"></label>
                     <label><span>اسم المستفيد</span><input id="admxRefundBeneficiary" type="text" maxlength="150" autocomplete="off"></label>`}
-                    <label><span>رقم مرجع الاسترداد</span><input id="admxRefundReference" type="text" maxlength="100" autocomplete="off"></label>
+                    <label><span>رقم مرجع الاسترداد</span><input id="admxRefundReference" type="text" inputmode="numeric" pattern="[0-9]*" data-digits-only="true" maxlength="100" autocomplete="off"></label>
                     <label class="is-wide"><span>صورة إثبات التحويل</span><input id="admxRefundProof" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"><small class="admx-refund-form__hint">JPG / PNG / WEBP — بحد أقصى 8 MB.</small></label>
                     <label class="is-wide"><span>ملاحظة للإسترداد <em>اختياري</em></span><textarea id="admxRefundNote" maxlength="500" placeholder="أي ملاحظة تساعد المالك على التحقق من العملية..."></textarea></label>
                 </div>
@@ -650,6 +851,14 @@
             reverseButtons: true,
             customClass: swalClasses("admx-swal-confirm admx-swal-refund"),
             didOpen: popup => {
+                popup.querySelectorAll('[data-digits-only], input[type="number"], [data-english-number]')
+                    .forEach(field => {
+                        const normalize = () => sanitizeAdvertisementNumericField(field);
+                        field.addEventListener("input", normalize);
+                        field.addEventListener("paste", () => window.setTimeout(normalize, 0));
+                        normalize();
+                    });
+
                 if (ownerSelectedRefundDestination) return;
                 const destination = popup.querySelector("#admxRefundDestination");
                 const wallet = popup.querySelector("#admxRefundWallet");
@@ -685,6 +894,7 @@
                 if (!account) { window.Swal?.showValidationMessage("اكتب رقم الحساب أو المحفظة التي رُد إليها المبلغ."); return false; }
                 if (!beneficiary) { window.Swal?.showValidationMessage("اكتب اسم المستفيد."); return false; }
                 if (reference.length < 3) { window.Swal?.showValidationMessage("اكتب رقم مرجع عملية الاسترداد."); return false; }
+                if (!/^[0-9]+$/.test(reference)) { window.Swal?.showValidationMessage("رقم مرجع الاسترداد يجب أن يحتوي أرقامًا فقط بدون حروف أو إشارة سالبة."); return false; }
                 if (!proof) { window.Swal?.showValidationMessage("ارفع صورة إثبات تحويل مبلغ الاسترداد."); return false; }
                 if (proof.size > 8 * 1024 * 1024) { window.Swal?.showValidationMessage("حجم الإثبات يجب ألا يتجاوز 8 ميجابايت."); return false; }
                 if (!/^image\/(jpeg|png|webp)$/i.test(proof.type || "")) { window.Swal?.showValidationMessage("الإثبات يجب أن يكون صورة JPG أو PNG أو WEBP."); return false; }
@@ -731,11 +941,61 @@
             return;
         }
 
+        if (action === "approve-all") {
+            if (!urls.reviewAll) {
+                await notify("error", "تعذر تنفيذ العملية", "مسار الاعتماد الموحد غير متاح.");
+                showAdvertisementModal(item);
+                return;
+            }
+
+            const result = await fire({
+                icon: "question",
+                title: "اعتماد الدفع والإعلان؟",
+                text: "سيتم اعتماد إثبات الدفع ومحتوى الإعلان في عملية واحدة.",
+                showCancelButton: true,
+                confirmButtonText: "اعتماد الكل",
+                cancelButtonText: "رجوع",
+                reverseButtons: true,
+                customClass: swalClasses("admx-swal-confirm")
+            });
+
+            if (!result?.isConfirmed) {
+                showAdvertisementModal(item);
+                return;
+            }
+
+            const body = new FormData();
+            body.append("AdvertisementId", String(item.advertisementId));
+            appendToken(body);
+
+            showLoading("جاري اعتماد الدفع والإعلان...");
+            try {
+                const response = await requestJson(urls.reviewAll, { method: "POST", body });
+                await notify("success", "تم الاعتماد", response?.message || "تم اعتماد الدفع والإعلان بنجاح.");
+                selectAdGroup("Running");
+                await refreshOverview(false);
+                await refreshReportsAfterMutation();
+            } catch (error) {
+                notify("error", "تعذر تنفيذ الاعتماد الموحد", error.message);
+            }
+            return;
+        }
+
         const map = {
             "payment-approve": { url: urls.reviewPayment, field: "Decision", value: "Approve", title: "اعتماد إثبات الدفع؟", reason: false, ok: "اعتماد الدفع" },
             "payment-reject": { url: urls.reviewPayment, field: "Decision", value: "Reject", title: "رفض إثبات الدفع؟", reason: true, ok: "رفض الدفع" },
-            "content-approve": { url: urls.reviewAd, field: "Decision", value: "Approve", title: "اعتماد محتوى الإعلان؟", reason: false, ok: "اعتماد الإعلان" },
-            "content-reject": { url: urls.reviewAd, field: "Decision", value: "Reject", title: "طلب تعديل الإعلان؟", reason: true, ok: "طلب تعديل" },
+            "content-approve": {
+                url: urls.reviewAd, field: "Decision", value: "Approve",
+                title: isContentEditReview(item) ? "اعتماد تعديلات المحتوى؟" : "اعتماد محتوى الإعلان؟",
+                reason: false,
+                ok: isContentEditReview(item) ? "اعتماد التعديلات" : "اعتماد الإعلان"
+            },
+            "content-reject": {
+                url: urls.reviewAd, field: "Decision", value: "Reject",
+                title: isContentEditReview(item) ? "إعادة التعديلات للمالك؟" : "طلب تعديل الإعلان؟",
+                reason: true,
+                ok: isContentEditReview(item) ? "طلب تعديل إضافي" : "طلب تعديل"
+            },
             "pause": { url: urls.controlAd, field: "Action", value: "Pause", title: "إيقاف الحملة مؤقتًا؟", reason: true, ok: "إيقاف" },
             "resume": { url: urls.controlAd, field: "Action", value: "Resume", title: "استئناف الحملة؟", reason: false, ok: "استئناف" },
             "cancel": { url: urls.controlAd, field: "Action", value: "Cancel", title: "إلغاء الحملة نهائيًا؟", reason: true, ok: "إلغاء الحملة" }
@@ -1320,6 +1580,29 @@
             cancelButton: "admx-swal-cancel-btn",
             closeButton: "admx-swal-close"
         };
+    }
+
+    function dateOnly(value) {
+        if (!value) return "—";
+        const d = new Date(value);
+        return Number.isNaN(d.getTime())
+            ? "—"
+            : d.toLocaleDateString("ar-YE", {
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit"
+            });
+    }
+
+    function timeOnly(value) {
+        if (!value) return "—";
+        const d = new Date(value);
+        return Number.isNaN(d.getTime())
+            ? "—"
+            : d.toLocaleTimeString("ar-YE", {
+                hour: "2-digit",
+                minute: "2-digit"
+            });
     }
 
     function dateTime(value) {

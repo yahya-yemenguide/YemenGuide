@@ -111,6 +111,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers.OwnerFinancials
                 var activePlaceId =
                     await ResolveActivePlaceIdAsync(
                         ownerId,
+                        filter.PlaceId,
                         cancellationToken);
 
                 filter.PlaceId =
@@ -216,6 +217,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers.OwnerFinancials
                 var activePlaceId =
                     await ResolveActivePlaceIdAsync(
                         ownerId,
+                        request.PlaceId,
                         cancellationToken);
 
                 if (!activePlaceId.HasValue)
@@ -635,12 +637,13 @@ namespace YemenGuide.Web.Areas.Owner.Controllers.OwnerFinancials
         private Task<int?>
             ResolveActivePlaceIdAsync(
                 int ownerId,
+                int? requestedPlaceId,
                 CancellationToken cancellationToken)
         {
             return _ownerFinancialService
                 .ResolveActivePlaceIdAsync(
                     ownerId,
-                    null,
+                    requestedPlaceId,
                     GetCookiePlaceId(ownerId),
                     cancellationToken);
         }

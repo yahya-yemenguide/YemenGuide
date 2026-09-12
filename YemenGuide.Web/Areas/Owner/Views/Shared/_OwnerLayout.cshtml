@@ -112,5 +112,223 @@
     <script src="https://maps.googleapis.com/maps/api/js?key=@Configuration["GoogleMaps:ApiKey"]&libraries=places&language=ar&region=YE"></script>
 
 
+    @* =============================================================
+    MAINTENANCE RESPONSE NAVIGATION — Full / ReadOnly / Partial
+    يعالج فقط استجابة 503 الخاصة بمحرك الصيانة.
+    لا يغيّر Google Maps ولا الترجمة ولا أي طلب ناجح.
+    ============================================================= *@
+    <script>
+        (() => {
+            "use strict";
+
+            const maintenanceStatus = 503;
+
+            const safeMaintenanceUrl = value => {
+                if (
+                    typeof value !== "string" ||
+                    !value.startsWith("/")
+                ) {
+                    return null;
+                }
+
+                try {
+                    const parsed =
+                        new URL(
+                            value,
+                            window.location.origin
+                        );
+
+                    return parsed.origin ===
+                        window.location.origin
+                        ? parsed.pathname +
+                        parsed.search +
+                        parsed.hash
+                        : null;
+                }
+                catch {
+                    return null;
+                }
+            };
+
+            const navigateForMaintenance = payload => {
+                if (
+                    !payload ||
+                    payload.maintenance !== true
+                ) {
+                    return false;
+                }
+
+                let redirectUrl =
+                    safeMaintenanceUrl(
+                        payload.redirectUrl
+                    );
+
+                if (
+                    !redirectUrl &&
+                    payload.type === "Full"
+                ) {
+                    redirectUrl =
+                        "/maintenance";
+                }
+
+                if (!redirectUrl) {
+                    return false;
+                }
+
+                const currentUrl =
+                    window.location.pathname +
+                    window.location.search +
+                    window.location.hash;
+
+                if (currentUrl !== redirectUrl) {
+                    window.location.assign(
+                        redirectUrl
+                    );
+                }
+
+                return true;
+            };
+
+            const inspectFetchResponse =
+                async response => {
+                    if (
+                        !response ||
+                        response.status !==
+                        maintenanceStatus
+                    ) {
+                        return;
+                    }
+
+                    try {
+                        const responseUrl =
+                            new URL(
+                                response.url,
+                                window.location.href
+                            );
+
+                        // نفس الموقع فقط؛ الطلبات الخارجية مثل Google Maps لا تتأثر.
+                        if (
+                            responseUrl.origin !==
+                            window.location.origin
+                        ) {
+                            return;
+                        }
+
+                        const contentType =
+                            response.headers.get(
+                                "content-type"
+                            ) || "";
+
+                        if (
+                            !contentType
+                                .toLowerCase()
+                                .includes(
+                                    "application/json"
+                                )
+                        ) {
+                            return;
+                        }
+
+                        const payload =
+                            await response
+                                .clone()
+                                .json();
+
+                        navigateForMaintenance(
+                            payload
+                        );
+                    }
+                    catch {
+                        // لا نغيّر سلوك الطلب الأصلي عند فشل قراءة النسخة.
+                    }
+                };
+
+            if (
+                typeof window.fetch ===
+                "function" &&
+                window.fetch
+                    .__yemenGuideMaintenanceWrapped !==
+                true
+            ) {
+                const originalFetch =
+                    window.fetch.bind(window);
+
+                const maintenanceAwareFetch =
+                    async (...args) => {
+                        const response =
+                            await originalFetch(
+                                ...args
+                            );
+
+                        void inspectFetchResponse(
+                            response
+                        );
+
+                        return response;
+                    };
+
+                maintenanceAwareFetch
+                    .__yemenGuideMaintenanceWrapped =
+                    true;
+
+                window.fetch =
+                    maintenanceAwareFetch;
+            }
+
+            if (
+                window.jQuery &&
+                document
+            ) {
+                window.jQuery(document)
+                    .off(
+                        "ajaxError.yemenGuideMaintenance"
+                    )
+                    .on(
+                        "ajaxError.yemenGuideMaintenance",
+                        (
+                            _event,
+                            xhr
+                        ) => {
+                            if (
+                                !xhr ||
+                                xhr.status !==
+                                maintenanceStatus
+                            ) {
+                                return;
+                            }
+
+                            let payload =
+                                xhr.responseJSON;
+
+                            if (
+                                !payload &&
+                                typeof xhr
+                                    .responseText ===
+                                "string" &&
+                                xhr.responseText
+                                    .trim()
+                            ) {
+                                try {
+                                    payload =
+                                        JSON.parse(
+                                            xhr.responseText
+                                        );
+                                }
+                                catch {
+                                    payload =
+                                        null;
+                                }
+                            }
+
+                            navigateForMaintenance(
+                                payload
+                            );
+                        }
+                    );
+            }
+        })();
+    </script>
+
+
 </body>
 </html>

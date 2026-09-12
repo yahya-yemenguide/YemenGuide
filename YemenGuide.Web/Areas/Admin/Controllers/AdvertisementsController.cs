@@ -201,6 +201,26 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ApprovePaymentAndAdvertisement(
+            int advertisementId,
+            CancellationToken cancellationToken = default)
+        {
+            var userId = CurrentUserId();
+            if (!await CanAsync(userId, AdminPermissionKeys.Advertisements.Review, cancellationToken))
+                return ForbiddenJson();
+
+            if (advertisementId <= 0)
+                return BadRequestJson("الإعلان غير صالح.");
+
+            return Operation(
+                await _service.ApprovePaymentAndAdvertisementAsync(
+                    advertisementId,
+                    userId,
+                    cancellationToken));
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> ReviewAdvertisement(
             AdminAdvertisementReviewDto request,
             CancellationToken cancellationToken = default)

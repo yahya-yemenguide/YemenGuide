@@ -65,6 +65,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers.OwnerFinancials
                 filter.PlaceId =
                     await ResolveActivePlaceIdAsync(
                         ownerId,
+                        filter.PlaceId,
                         cancellationToken);
 
                 var model =
@@ -97,6 +98,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers.OwnerFinancials
 
         private async Task<int?> ResolveActivePlaceIdAsync(
             int ownerId,
+            int? requestedPlaceId,
             CancellationToken cancellationToken)
         {
             var cookieName =
@@ -104,7 +106,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers.OwnerFinancials
 
             _ = int.TryParse(
                 Request.Cookies[cookieName],
-                out var requestedPlaceId);
+                out var cookiePlaceId);
 
             var ownedPlaceIds =
                 await _context.Places
@@ -126,10 +128,13 @@ namespace YemenGuide.Web.Areas.Owner.Controllers.OwnerFinancials
             }
 
             return
-                requestedPlaceId > 0 &&
-                ownedPlaceIds.Contains(requestedPlaceId)
-                    ? requestedPlaceId
-                    : ownedPlaceIds[0];
+                requestedPlaceId.HasValue &&
+                requestedPlaceId.Value > 0 &&
+                ownedPlaceIds.Contains(requestedPlaceId.Value)
+                    ? requestedPlaceId.Value
+                    : cookiePlaceId > 0 && ownedPlaceIds.Contains(cookiePlaceId)
+                        ? cookiePlaceId
+                        : ownedPlaceIds[0];
         }
 
         private bool TryGetCurrentOwnerId(

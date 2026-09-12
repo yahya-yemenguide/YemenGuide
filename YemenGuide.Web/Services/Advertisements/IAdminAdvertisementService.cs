@@ -17,6 +17,7 @@ namespace YemenGuide.Web.Services.Advertisements
         Task<AdminAdvertisementOperationResult> ChangePlanStatusAsync(AdminAdvertisementPlanStatusDto request, int adminUserId, CancellationToken cancellationToken = default);
         Task<AdminAdvertisementOperationResult> DeletePlanAsync(int advertisementPlanId, int adminUserId, CancellationToken cancellationToken = default);
         Task<AdminAdvertisementOperationResult> ReviewPaymentAsync(AdminAdvertisementPaymentReviewDto request, int adminUserId, CancellationToken cancellationToken = default);
+        Task<AdminAdvertisementOperationResult> ApprovePaymentAndAdvertisementAsync(int advertisementId, int adminUserId, CancellationToken cancellationToken = default);
         Task<AdminAdvertisementOperationResult> ReviewAdvertisementAsync(AdminAdvertisementReviewDto request, int adminUserId, CancellationToken cancellationToken = default);
         Task<AdminAdvertisementOperationResult> ChangeAdvertisementStatusAsync(AdminAdvertisementControlDto request, int adminUserId, CancellationToken cancellationToken = default);
         Task<AdminAdvertisementOperationResult> ProcessRefundAsync(AdminAdvertisementRefundDto request, int adminUserId, CancellationToken cancellationToken = default);

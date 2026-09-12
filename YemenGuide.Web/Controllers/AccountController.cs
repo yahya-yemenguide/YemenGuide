@@ -760,8 +760,7 @@ namespace YemenGuide.Web.Controllers
         [HttpGet]
         public IActionResult GoogleLogin(
             string? role = null,
-            string? returnUrl = null,
-            string? intent = null)
+            string? returnUrl = null)
         {
             RememberReturnUrl(
                 returnUrl);
@@ -770,25 +769,12 @@ namespace YemenGuide.Web.Controllers
                 ? SystemRoles.Owner
                 : SystemRoles.Customer;
 
-            string safeIntent = string.Equals(intent, "register", StringComparison.OrdinalIgnoreCase)
-                ? "register"
-                : "login";
-
-            var properties = new GoogleChallengeProperties
+            var properties = new AuthenticationProperties
             {
                 RedirectUri = Url.Action(nameof(GoogleResponse), "Account")
             };
 
-            // عند إنشاء حساب جديد نُجبر Google على عرض قائمة الحسابات،
-            // حتى يستطيع المستخدم اختيار "استخدام حساب آخر" بدلاً من
-            // إعادة استعمال الحساب المفتوح في المتصفح تلقائياً.
-            if (safeIntent == "register")
-            {
-                properties.Prompt = "select_account";
-            }
-
             properties.Items["registration_role"] = safeRole;
-            properties.Items["auth_intent"] = safeIntent;
 
             var pendingReturnUrl =
                 PeekReturnUrl();
@@ -832,45 +818,11 @@ namespace YemenGuide.Web.Controllers
             string email = NormalizeEmail(result.Principal.FindFirstValue(ClaimTypes.Email));
             string googleName = (result.Principal.FindFirstValue(ClaimTypes.Name) ?? string.Empty).Trim();
 
-            string authIntent =
-                result.Properties?.Items.TryGetValue("auth_intent", out var storedIntent) == true &&
-                string.Equals(storedIntent, "register", StringComparison.OrdinalIgnoreCase)
-                    ? "register"
-                    : "login";
-
             if (!IsValidEmail(email))
                 return RedirectToAction(nameof(Login));
 
             var user = await _context.Users
                 .FirstOrDefaultAsync(u => u.ContactInfo.ToLower() == email);
-
-            // تسجيل الدخول لا ينشئ حساباً جديداً بصمت.
-            if (authIntent == "login" && user == null)
-            {
-                await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-                TempData["LoginError"] =
-                    "لا يوجد حساب مرتبط بهذا البريد. انتقل إلى إنشاء حساب واستخدم Google لإنشاء حساب جديد.";
-
-                return RedirectToAction(nameof(Login));
-            }
-
-            // إنشاء الحساب لا يتحول إلى تسجيل دخول إذا كان البريد مستخدماً مسبقاً.
-            if (authIntent == "register" && user != null)
-            {
-                await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-                TempData["RegisterError"] =
-                    "هذا البريد مسجل مسبقاً. استخدم «تسجيل الدخول بواسطة Google» للدخول إلى حسابك.";
-
-                return RedirectToAction(
-                    nameof(Login),
-                    new
-                    {
-                        mode = "register",
-                        role = string.Equals(user.Role, SystemRoles.Owner, StringComparison.OrdinalIgnoreCase)
-                            ? "owner"
-                            : "customer"
-                    });
-            }
 
             bool isNewGoogleAccount = false;
 
@@ -940,7 +892,7 @@ namespace YemenGuide.Web.Controllers
                             user));
 
                 if (user.Role == SystemRoles.Owner &&
-                    !string.Equals(user.AccountState, "Active", StringComparison.OrdinalIgnoreCase))
+                    IsOwnerPreActivationState(user.AccountState))
                 {
                     return RedirectToAction(nameof(VerifyAccount));
                 }
@@ -971,8 +923,11 @@ namespace YemenGuide.Web.Controllers
             if (user == null || user.Role != SystemRoles.Owner)
                 return RedirectToAction(nameof(Login));
 
-            if (string.Equals(user.AccountState, "Active", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(user.AccountState, "Active", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(user.AccountState, "Suspended", StringComparison.OrdinalIgnoreCase))
+            {
                 return Redirect("/Owner/OwnerDashboard/DashboardOwner");
+            }
 
             bool isUploaded =
                 !string.IsNullOrWhiteSpace(user.CommercialRegisterDocument) &&
@@ -1922,14 +1877,22 @@ namespace YemenGuide.Web.Controllers
             }
         }
 
+        private static bool IsOwnerPreActivationState(string? accountState)
+        {
+            return
+                string.Equals(accountState, "Pending", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(accountState, "Rejected", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(accountState, "Accepted", StringComparison.OrdinalIgnoreCase);
+        }
+
         private async Task<string?> GetAccountAccessErrorAsync(User user)
         {
             if (string.Equals(user.AccountState, "Blocked", StringComparison.OrdinalIgnoreCase))
                 return "عذراً، هذا الحساب محظور من قِبل الإدارة ولا يمكنه تسجيل الدخول.";
 
-            if (string.Equals(user.AccountState, "Suspended", StringComparison.OrdinalIgnoreCase))
-                return "عذراً، تم تعليق حسابك مؤقتاً من قِبل الإدارة.";
-
+            // العميل والمالك الموقوفان مؤقتًا يستطيعان تسجيل الدخول والتصفح فقط.
+            // منع العمليات الكتابية يتم مركزيًا بواسطة AccountStateEnforcementFilter.
+            // موظفو الإدارة لا يعتمدون AccountState هنا؛ حالتهم الوظيفية يتم فحصها أدناه.
             if (user.Role == SystemRoles.Admin)
                 return await GetAdminEmployeeAccessErrorAsync(user);
 
@@ -1996,9 +1959,9 @@ namespace YemenGuide.Web.Controllers
 
             if (user.Role == SystemRoles.Owner)
             {
-                return string.Equals(user.AccountState, "Active", StringComparison.OrdinalIgnoreCase)
-                    ? "/Owner/OwnerDashboard/DashboardOwner"
-                    : "/Account/VerifyAccount";
+                return IsOwnerPreActivationState(user.AccountState)
+                    ? "/Account/VerifyAccount"
+                    : "/Owner/OwnerDashboard/DashboardOwner";
             }
 
             return "/Home/Index";

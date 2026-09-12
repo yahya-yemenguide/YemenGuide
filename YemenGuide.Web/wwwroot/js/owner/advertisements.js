@@ -1,4 +1,4 @@
-(() => {
+﻿(() => {
     "use strict";
 
     const app = document.querySelector("[data-owner-ads]");
@@ -7,6 +7,7 @@
     const $ = (selector, root = document) => root.querySelector(selector);
     const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
     const token = $('input[name="__RequestVerificationToken"]', app)?.value || "";
+    const isAdminPlace = detectAdminPlaceContext();
     const state = {
         currentTab: "overview",
         currentGroup: "All",
@@ -15,11 +16,233 @@
         selectedImageFile: null,
         selectedVideoFile: null,
         existingMedia: null,
-        currentDetails: null
+        currentDetails: null,
+        currentEditMode: "Full"
     };
 
     bind();
+    applyAdminPlaceMode();
+    upgradeOwnerVideoCards(app);
     initializeOverviewBookingChart();
+    void initializeNotificationDeepLink();
+    initializeAutomaticStatusRefresh();
+
+    function ownerGroupForAdvertisement(details) {
+        const status = String(details?.status || "").trim();
+        const paymentStatus = String(details?.paymentStatus || "").trim();
+
+        if (paymentStatus === "Rejected") return "NeedsAction";
+
+        return status === "Active" ? "Running"
+            : status === "Scheduled" ? "Scheduled"
+            : status === "Paused" ? "Paused"
+            : status === "Expired" ? "Expired"
+            : status === "Cancelled" ? "Cancelled"
+            : "NeedsAction";
+    }
+
+    function ownerAttentionText(item) {
+        const original = String(item?.attentionText || "").trim();
+        if (!isAdminPlace || !original) return original;
+
+        const status = String(item?.status || "").trim();
+        if (status === "Draft") return "الإعلان لم يتم تأكيده بعد.";
+        if (status === "AwaitingPayment" || status === "Pending") {
+            return "الإعلان يحتاج إلى تأكيد لإكمال تشغيله.";
+        }
+        if (status === "Rejected") return "راجع بيانات الإعلان ثم أعد تأكيده.";
+
+        return original
+            .replace(/إثبات الدفع[^.،]*/g, "بيانات الإعلان")
+            .replace(/الدفع/g, "التأكيد")
+            .replace(/المراجعة/g, "التأكيد")
+            .replace(/موافقة الإدارة/g, "التأكيد");
+    }
+
+    async function initializeNotificationDeepLink() {
+        const params = new URLSearchParams(window.location.search);
+        const rawTab = String(params.get("tab") || "").toLowerCase();
+        const focusId = Number.parseInt(
+            params.get("focusAdvertisement") ||
+            params.get("advertisementId") ||
+            "0",
+            10
+        ) || 0;
+
+        const explicitGroup = String(params.get("group") || "").trim();
+        const allowedGroups = [
+            "All", "Running", "Scheduled", "NeedsAction",
+            "Paused", "Expired", "Cancelled"
+        ];
+
+        if (rawTab === "ads" || rawTab === "advertisements" || focusId > 0 || explicitGroup) {
+            switchTab("ads");
+        }
+
+        let targetGroup = allowedGroups.includes(explicitGroup)
+            ? explicitGroup
+            : "";
+
+        if (focusId > 0 && !targetGroup && app.dataset.detailsUrl) {
+            try {
+                const response = await fetch(
+                    `${app.dataset.detailsUrl}?id=${encodeURIComponent(focusId)}`,
+                    {
+                        headers: { "X-Requested-With": "XMLHttpRequest" },
+                        cache: "no-store"
+                    }
+                );
+
+                if (response.ok) {
+                    const details = await response.json();
+                    targetGroup = ownerGroupForAdvertisement(details);
+                }
+            } catch (_) {
+                // إذا تعذر تحديد الحالة نعرض "الكل" ثم نفتح التفاصيل مباشرة.
+            }
+        }
+
+        if (targetGroup) {
+            state.currentGroup = targetGroup;
+            $$("[data-group]", app).forEach(button => {
+                button.classList.toggle("active", button.dataset.group === targetGroup);
+            });
+
+            const form = $("[data-filter-form]", app);
+            if (form) {
+                if (form.elements.Group) form.elements.Group.value = targetGroup;
+                if (form.elements.Page) form.elements.Page.value = "1";
+                await loadAds(form, true);
+            }
+        }
+
+        if (focusId > 0) {
+            window.setTimeout(() => highlightFocusedAdvertisement(focusId), 140);
+        }
+    }
+
+    function highlightFocusedAdvertisement(advertisementId) {
+        const id = Number.parseInt(String(advertisementId || "0"), 10) || 0;
+        if (id <= 0) return;
+
+        const card = app.querySelector(`[data-ad-card="${id}"]`);
+        if (!card) return;
+
+        card.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+            inline: "nearest"
+        });
+
+        const previousOutline = card.style.outline;
+        const previousOutlineOffset = card.style.outlineOffset;
+        const previousBoxShadow = card.style.boxShadow;
+        const previousTransform = card.style.transform;
+        const previousTransition = card.style.transition;
+
+        card.style.transition = "box-shadow .25s ease, outline-color .25s ease, transform .25s ease";
+        card.style.outline = "3px solid rgba(0,166,218,.9)";
+        card.style.outlineOffset = "4px";
+        card.style.boxShadow = "0 0 0 7px rgba(0,166,218,.12), 0 18px 45px rgba(5,32,60,.16)";
+        card.style.transform = "translateY(-2px)";
+
+        window.setTimeout(() => {
+            card.style.outline = previousOutline;
+            card.style.outlineOffset = previousOutlineOffset;
+            card.style.boxShadow = previousBoxShadow;
+            card.style.transform = previousTransform;
+            card.style.transition = previousTransition;
+        }, 4200);
+    }
+
+    // يحدث حالة الإعلان تلقائياً بعد قرارات الإدارة بدون حاجة المالك لتحديث الصفحة يدوياً.
+    // نستخدم polling خفيف + تحديث فوري عند الرجوع للنافذة، مع إيقاف التحديث أثناء فتح النوافذ المنبثقة.
+    function initializeAutomaticStatusRefresh() {
+        const intervalMs = 7000;
+        let refreshTimer = 0;
+        let running = false;
+
+        const run = async () => {
+            if (running || document.hidden) return;
+            if (window.Swal?.isVisible?.()) return;
+
+            running = true;
+            try {
+                await refreshAfterChange(true);
+            } finally {
+                running = false;
+            }
+        };
+
+        const schedule = () => {
+            window.clearInterval(refreshTimer);
+            refreshTimer = window.setInterval(() => { void run(); }, intervalMs);
+        };
+
+        window.addEventListener("focus", () => { void run(); });
+        document.addEventListener("visibilitychange", () => {
+            if (!document.hidden) void run();
+        });
+
+        schedule();
+    }
+
+    function detectAdminPlaceContext() {
+        const dataFlag = String(app.dataset.adminPlace || "").trim().toLowerCase();
+        if (dataFlag === "true") return true;
+
+        // منشأة الإدارة تُدار من نفس منطقة Owner، ويظهر للأدمن رابط الرجوع لإدارة المنشآت.
+        // هذا fallback يحافظ على العمل حتى مع النسخ القديمة التي كانت تضع data-admin-place=false ثابتة.
+        return Boolean(
+            document.querySelector(
+                '.sidebar-nav a[href="/Admin/Places/PlaceManagement"], a[href^="/Admin/Places/PlaceManagement"]'
+            )
+        );
+    }
+
+    function applyAdminPlaceMode() {
+        if (!isAdminPlace) return;
+
+        app.dataset.adminPlace = "true";
+        app.classList.add("oad-page--admin-place");
+
+        const paymentFilter = $('[name="PaymentStatus"]', app);
+        if (paymentFilter) {
+            paymentFilter.hidden = true;
+            paymentFilter.disabled = true;
+            paymentFilter.value = "";
+        }
+
+        // حالة الدفع داخلية فقط حتى يعتبر الإعلان صالحاً للعرض؛ لا نعرضها لمنشأة الإدارة.
+        $$(".oad-payment", app).forEach(badge => {
+            badge.hidden = true;
+        });
+
+        const howText = $(".oad-how .oad-steps > div:last-of-type small", app);
+        if (howText) {
+            howText.textContent = "ويبدأ العرض مباشرة أو في الموعد المحدد";
+        }
+
+        const adsIntro = $('[data-panel="ads"] .oad-section-title--actions p', app);
+        if (adsIntro) {
+            adsIntro.textContent = "الحالة، النتائج، والإجراء المطلوب.";
+        }
+
+        // النصوص التي جاءت مع أول تحميل من Razor تُنقّى فوراً من أي كلام عن الدفع/المراجعة.
+        $$(".oad-card-alert span, .oad-attention-list small", app).forEach(node => {
+            const raw = String(node.textContent || "").trim();
+            if (!raw) return;
+            if (/دفع|مراجعة|موافقة الإدارة/.test(raw)) {
+                node.textContent = "الإعلان يحتاج إلى تأكيد أو استكمال بياناته.";
+            }
+        });
+
+        // نعيد بناء البطاقات مباشرة حتى لا تظهر لحظةً واحدة حقول مالية من الـRazor الأولي.
+        const filterForm = $("[data-filter-form]", app);
+        if (filterForm) {
+            void loadAds(filterForm, true);
+        }
+    }
 
     function initializeOverviewBookingChart() {
         ensureOverviewBookingChart();
@@ -232,8 +455,13 @@
             return;
         }
 
-        if (event.target.closest("[data-save-submit]")) {
-            saveAndSubmitWizard();
+        const saveSubmitButton = event.target.closest("[data-save-submit]");
+        if (saveSubmitButton) {
+            if (state.currentEditMode === "ContentOnly") {
+                confirmAndContinueToPayment(saveSubmitButton, true);
+            } else {
+                saveAndSubmitWizard();
+            }
             return;
         }
 
@@ -308,7 +536,7 @@
         }
     }
 
-    function onChange(event) {
+    async function onChange(event) {
         if (event.target.matches('[name="AdvertisementPlanId"]')) {
             const root = event.target.closest(".oad-swal-builder");
             clearStep1Error(root);
@@ -375,6 +603,25 @@
                 event.target.value = "";
                 state.selectedVideoFile = null;
                 showWizardError(root, "اختر فيديو MP4 أو WebM بحجم لا يتجاوز 25MB.", event.target);
+                updateMediaChoiceUI(root);
+                return;
+            }
+
+            let durationSeconds;
+            try {
+                durationSeconds = await readVideoDurationSeconds(file);
+            } catch (_) {
+                event.target.value = "";
+                state.selectedVideoFile = null;
+                showWizardError(root, "تعذر قراءة مدة الفيديو. اختر ملف MP4 أو WebM صالحًا.", event.target);
+                updateMediaChoiceUI(root);
+                return;
+            }
+
+            if (durationSeconds > 30.05) {
+                event.target.value = "";
+                state.selectedVideoFile = null;
+                showWizardError(root, "مدة فيديو الإعلان يجب ألا تتجاوز 30 ثانية.", event.target);
                 updateMediaChoiceUI(root);
                 return;
             }
@@ -475,7 +722,7 @@
         });
     }
 
-    async function loadAds(form) {
+    async function loadAds(form, silent = false) {
         // IMPORTANT: serialize BEFORE disabling controls.
         // Disabled inputs/selects are excluded from FormData.
         const formData = new FormData(form);
@@ -490,7 +737,7 @@
         }
 
         try {
-            busy(form, true);
+            if (!silent) busy(form, true);
             const response = await fetch(`${app.dataset.adsUrl}?${params.toString()}`, {
                 headers: { "X-Requested-With": "XMLHttpRequest" },
                 cache: "no-store"
@@ -500,9 +747,9 @@
             const data = await response.json();
             renderAds(data);
         } catch (error) {
-            toast(error.message || "تعذر تحميل الإعلانات.", "error");
+            if (!silent) toast(error.message || "تعذر تحميل الإعلانات.", "error");
         } finally {
-            busy(form, false);
+            if (!silent) busy(form, false);
         }
     }
 
@@ -511,11 +758,14 @@
         if (!grid) return;
 
         grid.innerHTML = (data.items || []).map(item => {
-            const media = item.primaryMediaPath
-                ? `<img src="${attr(item.primaryMediaPath)}" alt="${attr(item.advertisementTitle)}" loading="lazy">`
-                : `<span><i class="bi bi-image"></i></span>`;
-            const alert = item.attentionText
-                ? `<div class="oad-card-alert"><i class="bi bi-exclamation-circle"></i><span>${esc(item.attentionText)}</span></div>`
+            const media = ownerCardMediaMarkup(
+                item.primaryMediaPath,
+                item.primaryMediaType,
+                item.advertisementTitle
+            );
+            const attentionText = ownerAttentionText(item);
+            const alert = attentionText
+                ? `<div class="oad-card-alert"><i class="bi bi-exclamation-circle"></i><span>${esc(attentionText)}</span></div>`
                 : "";
             return `
                 <article class="oad-ad-card" data-ad-card="${item.advertisementId}">
@@ -527,8 +777,8 @@
                         <div class="oad-ad-card__title">
                             <div><small>#${item.advertisementId}</small><h3>${esc(item.advertisementTitle)}</h3></div>
                             <div class="oad-ad-card__badges">
-                                <span class="oad-payment is-${slug(item.paymentStatus)}">${esc(item.paymentStatusLabel)}</span>
-                                ${item.refundStatusLabel ? `<span class="oad-refund-badge is-${item.refundedAt ? "done" : "pending"}">${esc(item.refundStatusLabel)}</span>` : ""}
+                                ${isAdminPlace ? "" : `<span class="oad-payment is-${slug(item.paymentStatus)}">${esc(item.paymentStatusLabel)}</span>`}
+                                ${!isAdminPlace && item.refundStatusLabel ? `<span class="oad-refund-badge is-${item.refundedAt ? "done" : "pending"}">${esc(item.refundStatusLabel)}</span>` : ""}
                             </div>
                         </div>
                         ${alert}
@@ -545,8 +795,11 @@
                             </div>
                         </div>
                         <div class="oad-ad-card__foot">
-                            <span><small>المصروف</small><strong>${esc(item.spentAmountText || "—")}</strong></span>
-                            <span><small>المتبقي</small><strong>${esc(item.remainingBudgetText || "—")}</strong></span>
+                            ${isAdminPlace
+                                ? `<span><small>البداية</small><strong>${esc(formatDateOnly(item.startAt || item.requestedStartAt))}</strong></span>
+                                   <span><small>النهاية</small><strong>${esc(formatDateOnly(item.endAt))}</strong></span>`
+                                : `<span><small>المصروف</small><strong>${esc(item.spentAmountText || "—")}</strong></span>
+                                   <span><small>المتبقي</small><strong>${esc(item.remainingBudgetText || "—")}</strong></span>`}
                             <button type="button" class="oad-btn oad-btn--soft" data-details-id="${item.advertisementId}">التفاصيل <i class="bi bi-arrow-left"></i></button>
                         </div>
                     </div>
@@ -587,7 +840,7 @@
         }
     }
 
-    async function openWizard(id = null) {
+    async function openWizard(id = null, editMode = "Full") {
         try {
             const url = new URL(app.dataset.wizardUrl, window.location.origin);
             if (id) url.searchParams.set("id", id);
@@ -599,6 +852,7 @@
             state.existingMedia = null;
             state.wizardStep = 1;
             state.currentWizardIsEdit = Boolean(id);
+            state.currentEditMode = id ? (editMode || "Full") : "Full";
 
             const html = document.getElementById("oad-wizard-template").innerHTML;
             await Swal.fire({
@@ -615,6 +869,9 @@
                     updateMediaChoiceUI(popup);
                     updateNextState(popup);
                     quotePrice(popup);
+                    if (state.currentEditMode === "ContentOnly") {
+                        configureContentOnlyEditor(popup);
+                    }
                 }
             });
         } catch (error) {
@@ -625,7 +882,10 @@
     function hydrateWizard(root, data) {
         const form = $("[data-wizard-form]", root);
         const ad = data.advertisement || {};
-        $("[data-wizard-title]", root).textContent = data.isEdit ? "تعديل الإعلان" : "إنشاء إعلان";
+        $("[data-wizard-title]", root).textContent =
+            state.currentEditMode === "ContentOnly"
+                ? "تعديل محتوى الإعلان"
+                : (data.isEdit ? "تعديل الإعلان" : "إنشاء إعلان");
         setValue(form, "AdvertisementId", ad.advertisementId || "");
         setValue(form, "RowVersion", ad.rowVersion || "");
         setValue(form, "AdvertisementTitle", ad.advertisementTitle || "");
@@ -658,9 +918,71 @@
         updateMediaChoiceUI(root);
     }
 
+    function configureContentOnlyEditor(root) {
+        if (!root) return;
+
+        const form = $("[data-wizard-form]", root);
+        if (!form) return;
+
+        state.wizardStep = 2;
+
+        $$('[data-step]', root).forEach(section => {
+            const active = Number(section.dataset.step) === 2;
+            section.hidden = !active;
+            section.classList.toggle("active", active);
+        });
+
+        $$('[data-step-go]', root).forEach(button => {
+            button.hidden = true;
+        });
+
+        const previous = $("[data-prev]", root);
+        const next = $("[data-next]", root);
+        const save = $("[data-save-submit]", root);
+        if (previous) previous.hidden = true;
+        if (next) next.hidden = true;
+        if (save) {
+            save.hidden = false;
+            save.innerHTML = '<i class="bi bi-check2-circle"></i><span>حفظ التعديل</span>';
+        }
+
+        // المستخدم طلب أن يكون تعديل المحتوى محصورًا في: الصورة/الفيديو،
+        // عنوان الإعلان، ونص الزر. بقية الحقول تبقى كما اعتمدتها الإدارة سابقًا.
+        ["ShortDescription", "PromotionId"].forEach(name => {
+            const field = form.elements.namedItem(name);
+            if (!field) return;
+            field.disabled = true;
+            const wrapper = field.closest("label") || field.closest(".oad-field") || field.parentElement;
+            if (wrapper) wrapper.hidden = true;
+        });
+
+        const contentStep = $('[data-step="2"]', root);
+        if (contentStep && !contentStep.querySelector('[data-content-edit-note]')) {
+            const note = document.createElement("div");
+            note.dataset.contentEditNote = "true";
+            note.setAttribute("dir", "rtl");
+            note.style.cssText =
+                "margin:0 0 16px;padding:12px 14px;border:1px solid rgba(0,166,218,.20);" +
+                "border-radius:14px;background:rgba(0,166,218,.07);color:#0b3555;font-weight:700;line-height:1.8";
+            note.innerHTML =
+                '<i class="bi bi-shield-check" style="margin-left:7px"></i>' +
+                'يمكنك تعديل الصورة أو الفيديو، عنوان الإعلان ونص الزر فقط. ' +
+                'لن يُطلب منك دفع جديد، وستُرسل التعديلات للإدارة للموافقة قبل عودة الإعلان للظهور.';
+            contentStep.prepend(note);
+        }
+
+        updatePreviewText(root);
+        updateMediaChoiceUI(root);
+    }
+
     function goWizardStep(step) {
         const root = $(".oad-swal-builder");
         if (!root) return;
+
+        if (state.currentEditMode === "ContentOnly") {
+            configureContentOnlyEditor(root);
+            return;
+        }
 
         const target = Math.max(1, Math.min(4, step));
         if (target > state.wizardStep) {
@@ -971,7 +1293,9 @@
             text(root, "[data-quote-weight]", "—");
             text(root, "[data-quote-daily]", "—");
             text(root, "[data-quote-total]", "—");
-            text(root, "[data-quote-note]", "اختر الباقة أولًا لإظهار السعر والإجمالي.");
+            text(root, "[data-quote-note]", isAdminPlace
+                ? "اختر الباقة وحدد المدة. إعلانات منشآت الإدارة لا تتطلب دفعاً."
+                : "اختر الباقة أولًا لإظهار السعر والإجمالي.");
             updateNextState(root);
             return;
         }
@@ -985,11 +1309,16 @@
         const priceText = selected.dataset.priceText || "—";
         const weight = selected.dataset.weight || "—";
 
-        text(root, "[data-flat-unit]", priceText);
+        text(root, "[data-flat-unit]", isAdminPlace ? "لا يتطلب دفع" : priceText);
         text(root, "[data-flat-weight]", weight);
         text(root, "[data-quote-plan]", planName);
         text(root, "[data-quote-weight]", weight);
-        text(root, "[data-quote-daily]", priceText);
+        text(root, "[data-quote-daily]", isAdminPlace ? "لا يتطلب دفع" : priceText);
+        if (isAdminPlace) {
+            text(root, "[data-quote-total]", "لا يتطلب دفع");
+            text(root, "[data-flat-total]", "لا يتطلب دفع");
+            text(root, "[data-quote-note]", "هذه منشأة إدارة؛ يتم استخدام الباقة وأولوية الظهور والمدة فقط دون أي عملية دفع.");
+        }
 
         if (form.elements.DurationDays) {
             form.elements.DurationDays.required = true;
@@ -1234,6 +1563,16 @@
         const form = $("[data-wizard-form]", root);
         const planInput = form.querySelector('[name="AdvertisementPlanId"]:checked');
 
+        if (isAdminPlace) {
+            text(root, "[data-quote-total]", planInput ? "لا يتطلب دفع" : "—");
+            text(root, "[data-flat-total]", planInput ? "لا يتطلب دفع" : "—");
+            text(root, "[data-quote-note]", planInput
+                ? "إعلانات منشآت الإدارة لا تتطلب دفعاً أو مراجعة إدارية."
+                : "اختر الباقة وحدد المدة.");
+            updateStep1Summary(root);
+            return;
+        }
+
         if (!planInput) {
             text(root, "[data-quote-total]", "—");
             text(root, "[data-flat-total]", "—");
@@ -1274,6 +1613,31 @@
         } catch {
             text(root, "[data-quote-note]", "تعذر حساب السعر الآن.");
         }
+    }
+
+    function setReviewDateTime(root, selector, value, fallback = "—") {
+        const element = $(selector, root);
+        if (!element) return;
+
+        const date = value instanceof Date ? value : (value ? new Date(value) : null);
+        if (!date || Number.isNaN(date.getTime())) {
+            element.textContent = fallback;
+            return;
+        }
+
+        const dateText = date.toLocaleDateString("ar-YE", {
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit"
+        });
+        const timeText = date.toLocaleTimeString("ar-YE", {
+            hour: "2-digit",
+            minute: "2-digit"
+        });
+
+        element.innerHTML = `
+            <span style="display:block;margin-bottom:4px"><b style="font-weight:800">التاريخ:</b> ${esc(dateText)}</span>
+            <span style="display:block"><b style="font-weight:800">الساعة:</b> ${esc(timeText)}</span>`;
     }
 
     function updatePreviewText(root = $(".oad-swal-builder")) {
@@ -1323,32 +1687,35 @@
 
         text(root, "[data-review-plan]", planName);
         text(root, "[data-review-weight]", weightText);
-        text(root, "[data-review-daily]", daily);
+        text(root, "[data-review-daily]", isAdminPlace ? "لا يتطلب دفع" : daily);
         text(root, "[data-review-days]", days > 0 ? `${days} ${days === 1 ? "يوم" : "أيام"}` : "—");
-        text(root, "[data-review-total]", $("[data-quote-total]", root)?.textContent || "—");
+        text(root, "[data-review-total]", isAdminPlace
+            ? "لا يتطلب دفع"
+            : ($("[data-quote-total]", root)?.textContent || "—"));
 
         const immediate =
             form.querySelector('[name="StartImmediately"]:checked')?.value !== "false";
         const startValue = form.elements.RequestedStartAt?.value;
 
         if (immediate) {
-            text(root, "[data-review-start]", "يبدأ الآن");
-            text(root, "[data-review-end]", "تُحسب من وقت البدء الفعلي");
+            setReviewDateTime(
+                root,
+                "[data-review-start]",
+                null,
+                isAdminPlace ? "يبدأ فورًا بعد التأكيد" : "بعد موافقة الإدارة"
+            );
+            setReviewDateTime(root, "[data-review-end]", null, "تُحسب من وقت البدء الفعلي");
         } else {
             const start = startValue ? new Date(startValue) : null;
-            const startText =
-                start && !Number.isNaN(start.getTime())
-                    ? start.toLocaleString("ar-YE")
-                    : "—";
 
-            text(root, "[data-review-start]", startText);
+            setReviewDateTime(root, "[data-review-start]", start);
 
             if (start && !Number.isNaN(start.getTime()) && days > 0) {
                 const end = new Date(start.getTime());
                 end.setDate(end.getDate() + days);
-                text(root, "[data-review-end]", end.toLocaleString("ar-YE"));
+                setReviewDateTime(root, "[data-review-end]", end);
             } else {
-                text(root, "[data-review-end]", "—");
+                setReviewDateTime(root, "[data-review-end]", null);
             }
         }
 
@@ -1390,6 +1757,25 @@
 
         const panel = $("[data-wizard-confirm]", root);
         if (panel) {
+            if (isAdminPlace) {
+                const title = $("h3", panel);
+                const description = $("p", panel);
+                const confirm = $("[data-wizard-confirm-pay]", panel);
+                const icon = $(".oad-wizard-confirm__icon i", panel);
+
+                if (title) title.textContent = "تأكيد الإعلان";
+                if (description) {
+                    description.textContent =
+                        "سيتم تثبيت الباقة وأولوية العرض وعدد الأيام، ثم يبدأ الإعلان مباشرة أو يُجدول في الموعد الذي حددته دون دفع أو مراجعة إدارية.";
+                }
+                if (confirm) {
+                    confirm.innerHTML = '<i class="bi bi-check2-circle"></i> تأكيد الإعلان';
+                }
+                if (icon) {
+                    icon.className = "bi bi-megaphone-fill";
+                }
+            }
+
             panel.hidden = false;
             panel.classList.add("is-visible");
         }
@@ -1404,18 +1790,24 @@
         }
     }
 
-    async function confirmAndContinueToPayment(button) {
+    async function confirmAndContinueToPayment(button, contentOnly = false) {
         const root = $(".oad-swal-builder");
         if (!root) return;
 
         const form = $("[data-wizard-form]", root);
         if (!form) return;
 
-        for (let step = 1; step <= 3; step++) {
-            if (!validateStep(step, root)) {
-                hideWizardConfirmation(root);
-                goWizardStep(step);
+        if (contentOnly) {
+            if (!validateStep(2, root)) {
                 return;
+            }
+        } else {
+            for (let step = 1; step <= 3; step++) {
+                if (!validateStep(step, root)) {
+                    hideWizardConfirmation(root);
+                    goWizardStep(step);
+                    return;
+                }
             }
         }
 
@@ -1479,21 +1871,30 @@
             const submitResult = await readJson(submitResponse);
 
             if (!submitResponse.ok || !submitResult.success) {
-                throw new Error(submitResult.message || "تعذر تجهيز الإعلان للدفع.");
+                throw new Error(
+                    submitResult.message ||
+                    (isAdminPlace ? "تعذر تأكيد الإعلان." : "تعذر تجهيز الإعلان للدفع.")
+                );
             }
 
-            const isAdminPlace = app.dataset.adminPlace === "True";
-
             if (submitResult.status === "AwaitingPayment" && !isAdminPlace) {
+                if (contentOnly) {
+                    throw new Error("تعديل المحتوى لا يجب أن يطلب دفعًا جديدًا. حدّث الصفحة وحاول مرة أخرى.");
+                }
                 await openPayment(advertisementId, root);
                 return;
             }
 
             Swal.close();
             toast(
-                isAdminPlace
-                    ? "تم تأكيد الإعلان وعرضه بنجاح."
-                    : (submitResult.message || "تم إرسال الإعلان للمراجعة."),
+                contentOnly
+                    ? (submitResult.message || "تم حفظ التعديلات وإرسالها للإدارة دون دفع جديد.")
+                    : (isAdminPlace
+                        ? (submitResult.message ||
+                            (submitResult.status === "Scheduled"
+                                ? "تم تأكيد الإعلان وجدولته بنجاح."
+                                : "تم تأكيد الإعلان وبدأ عرضه بنجاح."))
+                        : (submitResult.message || "تم إرسال الإعلان للمراجعة.")),
                 "success"
             );
             await refreshAfterChange();
@@ -1507,6 +1908,7 @@
 
     function collectWizardForm(form) {
         const fd = new FormData();
+        fd.append("EditMode", state.currentEditMode || "Full");
 
         const scalarNames = [
             "AdvertisementId",
@@ -1588,8 +1990,21 @@
         status.textContent = d.statusLabel || "—";
         status.className = `is-${slug(d.status)}`;
         const payment = $("[data-d-payment]", root);
-        payment.textContent = d.paymentStatusLabel || "—";
-        payment.className = `is-${slug(d.paymentStatus)}`;
+        if (payment) {
+            payment.hidden = isAdminPlace;
+            if (!isAdminPlace) {
+                payment.textContent = d.paymentStatusLabel || "—";
+                payment.className = `is-${slug(d.paymentStatus)}`;
+            }
+        }
+
+        if (isAdminPlace) {
+            ["[data-d-expected]", "[data-d-spent]", "[data-d-remaining]"].forEach(selector => {
+                const valueNode = $(selector, root);
+                const field = valueNode?.closest("div");
+                if (field) field.hidden = true;
+            });
+        }
 
         const media = (d.media || [])[0];
         $("[data-d-media]", root).innerHTML = media?.filePath
@@ -1604,7 +2019,7 @@
         notice.innerHTML = noticeText ? `<i class="bi bi-exclamation-circle-fill"></i><span>${esc(noticeText)}</span>` : "";
 
         const refund = $("[data-d-refund]", root);
-        const hasRefund = Boolean(d.refundRequestedAt || d.refundedAt || String(d.paymentStatus || "") === "Refunded");
+        const hasRefund = !isAdminPlace && Boolean(d.refundRequestedAt || d.refundedAt || String(d.paymentStatus || "") === "Refunded");
         if (refund) {
             refund.hidden = !hasRefund;
             if (hasRefund) {
@@ -1632,18 +2047,106 @@
         const actions = $("[data-d-actions]", root);
         const list = [];
         if (d.canEdit) list.push(actionButton("edit", "bi-pencil-square", "تعديل", "soft", d));
-        if (d.canPay) list.push(actionButton("pay", "bi-receipt", "رفع إثبات الدفع", "primary", d));
-        if (d.canSubmit) list.push(actionButton("submit", "bi-send-check", "إرسال للمراجعة", "primary", d));
+        if (!isAdminPlace && d.canPay) list.push(actionButton("pay", "bi-receipt", "رفع إثبات الدفع", "primary", d));
+        if (d.canSubmit) {
+            list.push(actionButton(
+                "submit",
+                isAdminPlace ? "bi-megaphone-fill" : "bi-send-check",
+                isAdminPlace ? "تأكيد الإعلان" : "إرسال للمراجعة",
+                "primary",
+                d
+            ));
+        }
         if (d.canPause) list.push(actionButton("pause", "bi-pause-circle", "إيقاف", "soft", d));
         if (d.canResume) list.push(actionButton("resume", "bi-play-circle", "استئناف", "primary", d));
         if (d.canRestore) list.push(actionButton("restore", "bi-arrow-counterclockwise", "استعادة الإعلان", "primary", d));
         if (d.canRenew) list.push(actionButton("renew", "bi-arrow-repeat", "تجديد", "primary", d));
-        if (d.canCancel) list.push(actionButton("cancel", "bi-x-circle", "إلغاء", "danger", d));
+
+        // الحذف النهائي متاح فقط لمسودة/إعلان بانتظار الدفع لم يُدفع ولم يدخل المراجعة.
+        // السيرفر يعيد التحقق من نفس القاعدة قبل الحذف، لذلك إخفاء/إظهار الزر ليس الحماية الوحيدة.
+        const canDeletePermanently =
+            (String(d.status || "") === "Draft" || String(d.status || "") === "AwaitingPayment") &&
+            String(d.paymentStatus || "") === "Unpaid" &&
+            !d.refundRequestedAt &&
+            !d.refundedAt;
+
+        if (canDeletePermanently) {
+            list.push(actionButton("delete", "bi-trash3", "حذف نهائي", "danger", d));
+        } else if (d.canCancel) {
+            list.push(actionButton("cancel", "bi-x-circle", "إلغاء", "danger", d));
+        }
+
         actions.innerHTML = list.join("");
     }
 
     function actionButton(action, icon, label, mode, d) {
-        return `<button type="button" class="oad-btn oad-btn--${mode}" data-owner-action="${action}" data-ad-id="${d.advertisementId}" data-row-version="${attr(d.rowVersion)}" data-payment-status="${attr(d.paymentStatus || "")}"><i class="bi ${icon}"></i>${label}</button>`;
+        return `<button type="button" class="oad-btn oad-btn--${mode}" data-owner-action="${action}" data-ad-id="${d.advertisementId}" data-row-version="${attr(d.rowVersion)}" data-status="${attr(d.status || "")}" data-payment-status="${attr(d.paymentStatus || "")}"><i class="bi ${icon}"></i>${label}</button>`;
+    }
+
+    function openEditModeChooser(advertisementId) {
+        Swal.fire({
+            title: "كيف تريد تعديل الإعلان؟",
+            html: `
+                <div dir="rtl" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;padding:12px 14px 18px">
+                    <button type="button" data-edit-choice="ContentOnly"
+                            style="min-height:132px;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:12px;padding:18px;border:1px solid rgba(0,166,218,.22);border-radius:20px;background:linear-gradient(180deg,#f8fdff,#eefaff);color:#05203c;text-align:center;transition:.18s ease">
+                        <span style="width:54px;height:54px;border-radius:16px;display:grid;place-items:center;background:#e4f8ff;color:#00a6da;font-size:1.45rem"><i class="bi bi-images"></i></span>
+                        <strong style="font-size:1rem">تعديل محتوى الإعلان</strong>
+                    </button>
+                    <button type="button" data-edit-choice="PlanOrDuration"
+                            style="min-height:132px;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:12px;padding:18px;border:1px solid rgba(245,158,11,.24);border-radius:20px;background:linear-gradient(180deg,#fffdf7,#fff7e7);color:#05203c;text-align:center;transition:.18s ease">
+                        <span style="width:54px;height:54px;border-radius:16px;display:grid;place-items:center;background:#fff0cf;color:#d88b08;font-size:1.45rem"><i class="bi bi-calendar2-week"></i></span>
+                        <strong style="font-size:1rem">تعديل الباقة أو الأيام</strong>
+                    </button>
+                </div>`,
+            showConfirmButton: false,
+            showCloseButton: true,
+            width: "min(560px, calc(100vw - 24px))",
+            backdrop: "rgba(5, 32, 60, .52)",
+            customClass: { popup: "oad-swal-shell oad-edit-choice-popup" },
+            didOpen: popup => {
+                popup.style.setProperty("background", "#ffffff", "important");
+                popup.style.setProperty("background-color", "#ffffff", "important");
+                popup.style.setProperty("opacity", "1", "important");
+                popup.style.setProperty("backdrop-filter", "none", "important");
+                popup.style.setProperty("-webkit-backdrop-filter", "none", "important");
+                popup.style.setProperty("border", "1px solid #dcecf2", "important");
+                popup.style.setProperty("box-shadow", "0 28px 90px rgba(5, 32, 60, .30)", "important");
+                popup.style.setProperty("color", "#05203c", "important");
+
+                const title = popup.querySelector(".swal2-title");
+                if (title) {
+                    title.style.setProperty("color", "#05203c", "important");
+                    title.style.setProperty("opacity", "1", "important");
+                }
+
+                const htmlContainer = popup.querySelector(".swal2-html-container");
+                if (htmlContainer) {
+                    htmlContainer.style.setProperty("background", "#ffffff", "important");
+                    htmlContainer.style.setProperty("opacity", "1", "important");
+                }
+
+                popup.querySelectorAll("[data-edit-choice]").forEach(option => {
+                    option.addEventListener("mouseenter", () => {
+                        option.style.transform = "translateY(-3px)";
+                        option.style.boxShadow = "0 14px 28px rgba(5,32,60,.10)";
+                    });
+                    option.addEventListener("mouseleave", () => {
+                        option.style.transform = "";
+                        option.style.boxShadow = "";
+                    });
+                });
+
+                popup.querySelector('[data-edit-choice="ContentOnly"]')?.addEventListener("click", () => {
+                    Swal.close();
+                    setTimeout(() => openWizard(advertisementId, "ContentOnly"), 140);
+                });
+                popup.querySelector('[data-edit-choice="PlanOrDuration"]')?.addEventListener("click", () => {
+                    Swal.close();
+                    setTimeout(() => openWizard(advertisementId, "PlanOrDuration"), 140);
+                });
+            }
+        });
     }
 
     async function handleOwnerAction(button) {
@@ -1652,14 +2155,51 @@
         const rowVersion = button.dataset.rowVersion || "";
 
         if (action === "edit") {
+            const details = state.currentDetails || {};
+            const status = button.dataset.status || details.status || "";
+            const paymentStatus = button.dataset.paymentStatus || details.paymentStatus || "";
             Swal.close();
-            setTimeout(() => openWizard(id), 180);
+
+            setTimeout(() => {
+                // إظهار اختيار نوع التعديل فقط للإعلان الذي اعتمدته الإدارة
+                // وأصبح مجدولاً لوقت قادم. أما الإعلان الذي لم تعتمد عليه الإدارة
+                // بعد (Pending/Draft/AwaitingPayment/Rejected) فيفتح نموذج التعديل مباشرة.
+                const splitEditAllowed =
+                    status === "Scheduled" &&
+                    paymentStatus === "Paid";
+
+                if (splitEditAllowed) {
+                    openEditModeChooser(id);
+                } else {
+                    openWizard(id, "Full");
+                }
+            }, 180);
             return;
         }
         if (action === "pay") {
+            if (isAdminPlace) {
+                toast("إعلانات منشآت الإدارة لا تحتاج إلى دفع.", "info");
+                return;
+            }
             Swal.close();
             setTimeout(() => openPayment(id), 180);
             return;
+        }
+
+        if (action === "delete") {
+            const result = await confirmBox(
+                "حذف الإعلان نهائياً",
+                "سيتم حذف هذه المسودة ووسائطها نهائياً ولا يمكن التراجع عن العملية.",
+                "حذف نهائي"
+            );
+            if (!result) return;
+
+            // نستخدم نفس مسار الإلغاء الحالي حتى لا نضيف endpoint جديداً؛
+            // الخدمة تميّز المسودة/غير المدفوع وتحذفه نهائياً، بينما الحالات الأخرى تُلغى فقط.
+            return postState(app.dataset.cancelUrl, {
+                AdvertisementId: id,
+                RowVersion: rowVersion
+            });
         }
 
         if (action === "restore") {
@@ -1673,13 +2213,25 @@
         }
 
         if (action === "renew") {
-            const result = await confirmBox("تجديد الإعلان", "سيتم تجديد الإعلان والبدء بعد الاعتماد.", "تجديد");
+            const result = await confirmBox(
+                "تجديد الإعلان",
+                isAdminPlace
+                    ? "سيتم تجديد الإعلان وبدء عرضه مباشرة دون دفع أو مراجعة."
+                    : "سيتم تجديد الإعلان والبدء بعد الاعتماد.",
+                "تجديد"
+            );
             if (!result) return;
             return postState(app.dataset.renewUrl, { AdvertisementId: id, RowVersion: rowVersion, StartImmediately: true });
         }
 
         if (action === "submit") {
-            const result = await confirmBox("إرسال الإعلان", "سيتم إرسال الإعلان للمراجعة.", "إرسال");
+            const result = await confirmBox(
+                isAdminPlace ? "تأكيد الإعلان" : "إرسال الإعلان",
+                isAdminPlace
+                    ? "سيتم تأكيد الإعلان مباشرة دون دفع أو مراجعة إدارية."
+                    : "سيتم إرسال الإعلان للمراجعة.",
+                isAdminPlace ? "تأكيد" : "إرسال"
+            );
             if (!result) return;
             return postState(app.dataset.submitUrl, { AdvertisementId: id, RowVersion: rowVersion });
         }
@@ -1734,9 +2286,11 @@
                 }
             }
 
-            const hasPaidOrPendingPayment = paymentStatus === "Paid" || paymentStatus === "PendingReview";
+            const hasPaidOrPendingPayment =
+                !isAdminPlace &&
+                (paymentStatus === "Paid" || paymentStatus === "PendingReview");
             const scheduledStart = details?.startImmediately === false;
-            const needsRefundWallet = hasPaidOrPendingPayment && scheduledStart;
+            const needsRefundWallet = !isAdminPlace && hasPaidOrPendingPayment && scheduledStart;
             const wallets = needsRefundWallet ? (details?.refundWallets || []) : [];
             if (needsRefundWallet && wallets.length === 0) {
                 await Swal.fire({
@@ -1759,13 +2313,15 @@
                     ${esc(wallet.walletName || "محفظة")}
                 </option>`).join("");
 
-            const explanation = needsRefundWallet
-                ? (paymentStatus === "Paid"
-                    ? "الإعلان له موعد عرض محدد ولم يبدأ بعد. اختر محفظة الاسترداد، وسيتم حفظ بياناتها كاملة مع طلب الإلغاء."
-                    : "الإعلان له موعد عرض محدد ولم يبدأ بعد. إذا اعتمدت الإدارة إثبات الدفع فسيتم رد المبلغ إلى محفظة الاسترداد التي تختارها.")
-                : (hasPaidOrPendingPayment && !scheduledStart
-                    ? "هذا الإعلان مضبوط ليبدأ مباشرة بعد موافقة الإدارة. بعد تأكيد الدفع يكون المبلغ غير قابل للاسترداد؛ يمكنك إلغاء الإعلان ولكن دون استرداد المبلغ."
-                    : "اكتب سبب الإلغاء. لا يوجد مبلغ مدفوع يحتاج إلى استرداد.");
+            const explanation = isAdminPlace
+                ? "اكتب سبب الإلغاء. إعلان منشأة الإدارة لا يرتبط بدفع أو استرداد مالي."
+                : needsRefundWallet
+                    ? (paymentStatus === "Paid"
+                        ? "الإعلان له موعد عرض محدد ولم يبدأ بعد. اختر محفظة الاسترداد، وسيتم حفظ بياناتها كاملة مع طلب الإلغاء."
+                        : "الإعلان له موعد عرض محدد ولم يبدأ بعد. إذا اعتمدت الإدارة إثبات الدفع فسيتم رد المبلغ إلى محفظة الاسترداد التي تختارها.")
+                    : (hasPaidOrPendingPayment && !scheduledStart
+                        ? "هذا الإعلان مضبوط ليبدأ مباشرة بعد موافقة الإدارة. بعد تأكيد الدفع يكون المبلغ غير قابل للاسترداد؛ يمكنك إلغاء الإعلان ولكن دون استرداد المبلغ."
+                        : "اكتب سبب الإلغاء. لا يوجد مبلغ مدفوع يحتاج إلى استرداد.");
 
             const result = await Swal.fire({
                 title: "إلغاء الإعلان",
@@ -1868,6 +2424,17 @@
     }
 
     async function openPayment(id, sourceWizardRoot = null) {
+        if (isAdminPlace) {
+            const message = "إعلانات منشآت الإدارة لا تحتاج إلى دفع أو إثبات دفع.";
+            if (sourceWizardRoot) {
+                hideWizardConfirmation(sourceWizardRoot);
+                showWizardError(sourceWizardRoot, message);
+            } else {
+                toast(message, "info");
+            }
+            return;
+        }
+
         try {
             const response = await fetch(`${app.dataset.paymentUrl}?id=${encodeURIComponent(id)}`, { headers: { "X-Requested-With": "XMLHttpRequest" } });
             if (!response.ok) throw new Error("تعذر تحميل بيانات الدفع.");
@@ -1919,6 +2486,10 @@
 
         text(root, "[data-pay-footer-amount]", d.expectedPaymentText || "—");
 
+        const referenceInput = root.querySelector('[name="ReferenceNumber"]');
+        const referenceCaption = referenceInput?.closest("label")?.querySelector("span");
+        if (referenceCaption) referenceCaption.textContent = "رقم الحوالة (اختياري)";
+
         const immediateStart = d.startImmediately === true;
         const policyText = immediateStart
             ? "تراجع الإدارة إثبات الدفع، وإذا وافقت على الإعلان يبدأ العرض مباشرة. بعد تأكيد وإرسال الدفع يكون المبلغ غير قابل للاسترداد."
@@ -1945,8 +2516,8 @@
         }
 
         const reference = (form.elements.ReferenceNumber.value || "").trim();
-        if (reference.length < 3) {
-            return showPaymentError(form, "اكتب رقم الحوالة بصورة صحيحة.", form.elements.ReferenceNumber);
+        if (reference && reference.length < 3) {
+            return showPaymentError(form, "إذا أدخلت رقم الحوالة فيجب أن يكون 3 أرقام على الأقل.", form.elements.ReferenceNumber);
         }
 
         if (!String(form.elements.TransferDate.value || "").trim()) {
@@ -2041,9 +2612,9 @@
         }
     }
 
-    async function refreshAfterChange() {
+    async function refreshAfterChange(silent = false) {
         const form = $("[data-filter-form]", app);
-        if (form) await loadAds(form);
+        if (form) await loadAds(form, silent);
         try {
             const response = await fetch(app.dataset.overviewUrl, {
                 headers: { "X-Requested-With": "XMLHttpRequest" },
@@ -2109,6 +2680,72 @@
 
             bar.style.width = `${width}%`;
             row.classList.toggle("is-zero", value <= 0);
+        });
+    }
+
+    function isVideoMedia(path, mediaType = "") {
+        if (String(mediaType || "").toLowerCase() === "video") return true;
+        return /\.(mp4|webm)(?:$|[?#])/i.test(String(path || ""));
+    }
+
+    function ownerCardMediaMarkup(path, mediaType, title) {
+        if (!path) return `<span><i class="bi bi-image"></i></span>`;
+
+        if (isVideoMedia(path, mediaType)) {
+            return `<video src="${attr(path)}" controls muted playsinline preload="metadata" aria-label="${attr(title || "فيديو الإعلان")}" style="width:100%;height:100%;object-fit:cover;background:#0f172a"></video>`;
+        }
+
+        return `<img src="${attr(path)}" alt="${attr(title || "الإعلان")}" loading="lazy">`;
+    }
+
+    function upgradeOwnerVideoCards(root) {
+        if (!root) return;
+
+        root.querySelectorAll(".oad-ad-card__media img[src]").forEach(image => {
+            const path = image.getAttribute("src") || "";
+            if (!isVideoMedia(path)) return;
+
+            const video = document.createElement("video");
+            video.src = path;
+            video.controls = true;
+            video.muted = true;
+            video.playsInline = true;
+            video.preload = "metadata";
+            video.setAttribute("aria-label", image.getAttribute("alt") || "فيديو الإعلان");
+            video.style.width = "100%";
+            video.style.height = "100%";
+            video.style.objectFit = "cover";
+            video.style.background = "#0f172a";
+            image.replaceWith(video);
+        });
+    }
+
+    function readVideoDurationSeconds(file) {
+        return new Promise((resolve, reject) => {
+            const video = document.createElement("video");
+            const objectUrl = URL.createObjectURL(file);
+            let settled = false;
+
+            const finish = (callback, value) => {
+                if (settled) return;
+                settled = true;
+                URL.revokeObjectURL(objectUrl);
+                video.removeAttribute("src");
+                try { video.load(); } catch (_) { }
+                callback(value);
+            };
+
+            video.preload = "metadata";
+            video.onloadedmetadata = () => {
+                const duration = Number(video.duration);
+                if (!Number.isFinite(duration) || duration < 0) {
+                    finish(reject, new Error("invalid-duration"));
+                    return;
+                }
+                finish(resolve, duration);
+            };
+            video.onerror = () => finish(reject, new Error("invalid-video"));
+            video.src = objectUrl;
         });
     }
 

@@ -43,7 +43,9 @@ namespace YemenGuide.Web.Services.Employees
         {
             var employeesQuery = _context.Users
                 .AsNoTracking()
-                .Where(user => user.Role == "Admin");
+                .Where(user =>
+                    user.Role == "Admin" &&
+                    (user.AdminRole == null || !user.AdminRole.IsSystemRole));
 
             var employeesCount = await employeesQuery.CountAsync(cancellationToken);
             var activeCount = await employeesQuery.CountAsync(
@@ -157,7 +159,9 @@ namespace YemenGuide.Web.Services.Employees
 
             var baseQuery = _context.Users
                 .AsNoTracking()
-                .Where(user => user.Role == "Admin");
+                .Where(user =>
+                    user.Role == "Admin" &&
+                    (user.AdminRole == null || !user.AdminRole.IsSystemRole));
 
             var activeCount = await baseQuery.CountAsync(
                 user => user.EmploymentStatus == AdminEmployeeStatuses.Active,
@@ -197,8 +201,7 @@ namespace YemenGuide.Web.Services.Employees
             var totalCount = await query.CountAsync(cancellationToken);
 
             var employees = await query
-                .OrderByDescending(user => user.AdminRole != null && user.AdminRole.IsSystemRole)
-                .ThenBy(user => user.FullName)
+                .OrderBy(user => user.FullName)
                 .Skip((filter.PageNumber - 1) * filter.PageSize)
                 .Take(filter.PageSize)
                 .Select(user => new AdminEmployeeListItemDto
@@ -223,7 +226,7 @@ namespace YemenGuide.Web.Services.Employees
                 .ToListAsync(cancellationToken);
 
             var roles = await GetRoleOptionsAsync(
-                includeSystemRole: true,
+                includeSystemRole: false,
                 selectedRoleId: null,
                 includePermissionGroups: false,
                 cancellationToken);
@@ -381,7 +384,7 @@ namespace YemenGuide.Web.Services.Employees
                 WarningCount = 0,
                 IsEmailVerified = true,
                 WalletBalance = 0,
-                PreferredCurrency = "ريال يمني",
+                PreferredCurrency = "ريال يمني (قديم)",
                 ReceiveOffers = true,
                 IsAgreedToTerms = true,
                 AgreedToTermsDate = DateTime.Now,

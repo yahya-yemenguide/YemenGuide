@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -130,7 +130,9 @@ namespace YemenGuide.Web.Services.Advertisements
             // الإيراد الإجمالي قد يحتوي إعلانات من North وSouth، لذلك لا نقسم
             // مجموع YER على سعر واحد. نحول كل إعلان حسب سوق مدينة منشأته ثم نجمع.
             var paidRevenueRows = await ads
-                .Where(x => x.PaymentStatus == "Paid")
+                .Where(x =>
+                    x.PaymentStatus == "Paid" &&
+                    x.Owner.Role != SystemRoles.Admin)
                 .Select(x => new
                 {
                     Amount = x.TransferredAmount ?? x.PriceSnapshot,
@@ -558,7 +560,9 @@ namespace YemenGuide.Web.Services.Advertisements
                 Status = ad.Status,
                 StatusLabel = AdminStatusLabel(ad.Status, ad.PaymentStatus),
                 PaymentStatus = ad.PaymentStatus,
-                PaymentStatusLabel = AdvertisementLookups.PaymentLabel(ad.PaymentStatus),
+                PaymentStatusLabel = IsAdminOwnedAdvertisement(ad)
+                    ? "لا يتطلب دفع"
+                    : AdvertisementLookups.PaymentLabel(ad.PaymentStatus),
 
                 Price = totalAmount,
                 CostPerClick = null,
@@ -614,15 +618,17 @@ namespace YemenGuide.Web.Services.Advertisements
                 ReviewedAt = ad.ReviewedAt,
                 ReviewedByName = ad.ReviewedByUser?.FullName,
 
-                CanReview = await _permissions.HasPermissionAsync(
-                    adminUserId,
-                    AdminPermissionKeys.Advertisements.Review,
-                    cancellationToken),
+                CanReview = !IsAdminOwnedAdvertisement(ad) &&
+                            await _permissions.HasPermissionAsync(
+                                adminUserId,
+                                AdminPermissionKeys.Advertisements.Review,
+                                cancellationToken),
                 CanControl = await _permissions.HasPermissionAsync(
                     adminUserId,
                     AdminPermissionKeys.Advertisements.Control,
                     cancellationToken),
-                CanRefund = IsRefundPending(ad) &&
+                CanRefund = !IsAdminOwnedAdvertisement(ad) &&
+                            IsRefundPending(ad) &&
                             await _permissions.HasPermissionAsync(
                                 adminUserId,
                                 AdminPermissionKeys.Advertisements.Control,
@@ -813,6 +819,7 @@ namespace YemenGuide.Web.Services.Advertisements
                     BillingModel = x.BillingModelSnapshot,
                     x.Status,
                     x.PaymentStatus,
+                    OwnerRole = x.Owner.Role,
                     x.CreatedAt,
                     x.DurationDaysSnapshot,
                     x.PrioritySnapshot,
@@ -825,10 +832,15 @@ namespace YemenGuide.Web.Services.Advertisements
                 ConvertDisplayMoney(amountInYer, displayCurrency, region);
 
             var paidRows = advertisementRows
-                .Where(x => string.Equals(
-                    x.PaymentStatus,
-                    "Paid",
-                    StringComparison.OrdinalIgnoreCase))
+                .Where(x =>
+                    !string.Equals(
+                        x.OwnerRole,
+                        SystemRoles.Admin,
+                        StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(
+                        x.PaymentStatus,
+                        "Paid",
+                        StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
             var model = new AdminAdvertisementReportsDto
@@ -841,11 +853,19 @@ namespace YemenGuide.Web.Services.Advertisements
                 PaidRevenue = paidRows.Sum(x => Money(x.PriceSnapshot, x.Region)),
                 PaidAdvertisements = paidRows.Count,
                 RefundedAdvertisements = advertisementRows.Count(x =>
+                    !string.Equals(
+                        x.OwnerRole,
+                        SystemRoles.Admin,
+                        StringComparison.OrdinalIgnoreCase) &&
                     string.Equals(
                         x.PaymentStatus,
                         "Refunded",
                         StringComparison.OrdinalIgnoreCase)),
                 PendingPayments = advertisementRows.Count(x =>
+                    !string.Equals(
+                        x.OwnerRole,
+                        SystemRoles.Admin,
+                        StringComparison.OrdinalIgnoreCase) &&
                     string.Equals(
                         x.PaymentStatus,
                         "PendingReview",
@@ -1054,10 +1074,15 @@ namespace YemenGuide.Web.Services.Advertisements
                     BillingLabel = AdvertisementLookups.BillingLabel(g.Key),
                     Advertisements = g.Count(),
                     PaidAmount = g
-                        .Where(x => string.Equals(
-                            x.PaymentStatus,
-                            "Paid",
-                            StringComparison.OrdinalIgnoreCase))
+                        .Where(x =>
+                            !string.Equals(
+                                x.OwnerRole,
+                                SystemRoles.Admin,
+                                StringComparison.OrdinalIgnoreCase) &&
+                            string.Equals(
+                                x.PaymentStatus,
+                                "Paid",
+                                StringComparison.OrdinalIgnoreCase))
                         .Sum(x => Money(x.PriceSnapshot, x.Region)),
                     SpentAmount = 0m
                 })
@@ -1065,6 +1090,10 @@ namespace YemenGuide.Web.Services.Advertisements
                 .ToList();
 
             model.PaymentMetrics = advertisementRows
+                .Where(x => !string.Equals(
+                    x.OwnerRole,
+                    SystemRoles.Admin,
+                    StringComparison.OrdinalIgnoreCase))
                 .GroupBy(x => x.PaymentStatus)
                 .Select(g => new AdminPaymentMetricDto
                 {
@@ -1155,12 +1184,22 @@ namespace YemenGuide.Web.Services.Advertisements
                         PlacementLabel = "صفحة البحث - أعلى الفئات",
                         BillingLabel = "سعر يومي",
                         StatusLabel = AdminStatusLabel(x.Status, x.PaymentStatus),
-                        PaymentStatusLabel = AdvertisementLookups.PaymentLabel(x.PaymentStatus),
-                        CreatedAt = x.CreatedAt,
-                        PaidAmount = string.Equals(
-                            x.PaymentStatus,
-                            "Paid",
+                        PaymentStatusLabel = string.Equals(
+                            x.OwnerRole,
+                            SystemRoles.Admin,
                             StringComparison.OrdinalIgnoreCase)
+                                ? "لا يتطلب دفع"
+                                : AdvertisementLookups.PaymentLabel(x.PaymentStatus),
+                        CreatedAt = x.CreatedAt,
+                        PaidAmount =
+                            !string.Equals(
+                                x.OwnerRole,
+                                SystemRoles.Admin,
+                                StringComparison.OrdinalIgnoreCase) &&
+                            string.Equals(
+                                x.PaymentStatus,
+                                "Paid",
+                                StringComparison.OrdinalIgnoreCase)
                                 ? totalAmount
                                 : 0m,
                         SpentAmount = 0m,
@@ -1431,6 +1470,12 @@ namespace YemenGuide.Web.Services.Advertisements
             if (ad == null)
                 return AdminAdvertisementOperationResult.Fail("الإعلان غير موجود.");
 
+            if (await IsAdminOwnedAdvertisementAsync(ad.OwnerId, cancellationToken))
+            {
+                return AdminAdvertisementOperationResult.Fail(
+                    "إعلانات منشآت الإدارة لا تحتاج إلى مراجعة دفع.");
+            }
+
             if (ad.PaymentStatus != "PendingReview")
             {
                 return AdminAdvertisementOperationResult.Fail(
@@ -1452,11 +1497,10 @@ namespace YemenGuide.Web.Services.Advertisements
                         "المبلغ المحول أقل من المبلغ المطلوب للإعلان.");
                 }
 
-                if (string.IsNullOrWhiteSpace(ad.ReceiptImage) ||
-                    string.IsNullOrWhiteSpace(ad.ReferenceNumber))
+                if (string.IsNullOrWhiteSpace(ad.ReceiptImage))
                 {
                     return AdminAdvertisementOperationResult.Fail(
-                        "بيانات إثبات الدفع غير مكتملة.");
+                        "صورة إثبات الدفع غير موجودة.");
                 }
 
                 ad.PaymentStatus = "Paid";
@@ -1517,6 +1561,39 @@ namespace YemenGuide.Web.Services.Advertisements
             ad.ReviewedByUserId = adminUserId;
             ad.UpdatedAt = DateTime.Now;
 
+            // لا نرسل إشعار اعتماد دفع منفصلاً عند المسار الموحد حتى لا يصل إشعاران متتاليان.
+            // نرسل فقط الحالات التي تحتاج إجراء من المالك أو الإعلان الملغي الذي أصبح جاهزاً للاسترداد.
+            if (ad.PaymentStatus == "Rejected")
+            {
+                _notificationService.Queue(new CreateNotificationDto
+                {
+                    UserId = ad.OwnerId,
+                    NotificationTitle = "تم رفض إثبات دفع الإعلان",
+                    NotificationText =
+                        $"تم رفض إثبات دفع الإعلان «{ad.AdvertisementTitle}». {ad.RejectionReason}",
+                    NotificationType = NotificationTypes.PaymentRejected,
+                    TargetUrl =
+                        $"/Owner/Advertisements/AdvertisementManagement?tab=ads&group=NeedsAction&focusAdvertisement={ad.AdvertisementId}",
+                    ReferenceType = NotificationReferenceTypes.Advertisement,
+                    ReferenceId = ad.AdvertisementId
+                });
+            }
+            else if (ad.PaymentStatus == "Paid" && ad.Status == "Cancelled")
+            {
+                _notificationService.Queue(new CreateNotificationDto
+                {
+                    UserId = ad.OwnerId,
+                    NotificationTitle = "تم اعتماد الدفع والإعلان بانتظار الاسترداد",
+                    NotificationText =
+                        $"تم اعتماد دفع الإعلان الملغي «{ad.AdvertisementTitle}» وأصبح المبلغ بانتظار تنفيذ الاسترداد.",
+                    NotificationType = NotificationTypes.RefundReadyForTransfer,
+                    TargetUrl =
+                        $"/Owner/Advertisements/AdvertisementManagement?tab=ads&group=Cancelled&focusAdvertisement={ad.AdvertisementId}",
+                    ReferenceType = NotificationReferenceTypes.Advertisement,
+                    ReferenceId = ad.AdvertisementId
+                });
+            }
+
             await _context.SaveChangesAsync(cancellationToken);
 
             await _audit.LogAsync(
@@ -1540,6 +1617,109 @@ namespace YemenGuide.Web.Services.Advertisements
             return AdminAdvertisementOperationResult.Ok(paymentMessage);
         }
 
+        public async Task<AdminAdvertisementOperationResult> ApprovePaymentAndAdvertisementAsync(
+            int advertisementId,
+            int adminUserId,
+            CancellationToken cancellationToken = default)
+        {
+            if (advertisementId <= 0)
+            {
+                return AdminAdvertisementOperationResult.Fail("الإعلان غير صالح.");
+            }
+
+            await using var transaction =
+                await _context.Database.BeginTransactionAsync(cancellationToken);
+
+            try
+            {
+                var state = await _context.Advertisements
+                    .AsNoTracking()
+                    .Where(item => item.AdvertisementId == advertisementId)
+                    .Select(item => new
+                    {
+                        item.PaymentStatus,
+                        item.Status
+                    })
+                    .FirstOrDefaultAsync(cancellationToken);
+
+                if (state == null)
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                    return AdminAdvertisementOperationResult.Fail("الإعلان غير موجود.");
+                }
+
+                if (string.Equals(
+                        state.PaymentStatus,
+                        "PendingReview",
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    var paymentResult = await ReviewPaymentAsync(
+                        new AdminAdvertisementPaymentReviewDto
+                        {
+                            AdvertisementId = advertisementId,
+                            Decision = "Approve"
+                        },
+                        adminUserId,
+                        cancellationToken);
+
+                    if (!paymentResult.Success)
+                    {
+                        await transaction.RollbackAsync(cancellationToken);
+                        return paymentResult;
+                    }
+                }
+                else if (!string.Equals(
+                             state.PaymentStatus,
+                             "Paid",
+                             StringComparison.OrdinalIgnoreCase))
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                    return AdminAdvertisementOperationResult.Fail(
+                        "إثبات الدفع يجب أن يكون قيد المراجعة أو معتمدًا قبل اعتماد الإعلان.");
+                }
+
+                var advertisementResult = await ReviewAdvertisementAsync(
+                    new AdminAdvertisementReviewDto
+                    {
+                        AdvertisementId = advertisementId,
+                        Decision = "Approve"
+                    },
+                    adminUserId,
+                    cancellationToken);
+
+                if (!advertisementResult.Success)
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                    return advertisementResult;
+                }
+
+                await transaction.CommitAsync(cancellationToken);
+
+                return AdminAdvertisementOperationResult.Ok(
+                    "تم اعتماد الدفع والإعلان بنجاح.",
+                    advertisementId);
+            }
+            catch (Exception exception)
+            {
+                try
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                }
+                catch
+                {
+                    // لا نخفي الخطأ الأصلي إذا تعذر التراجع نفسه.
+                }
+
+                _logger.LogError(
+                    exception,
+                    "فشل الاعتماد الموحد للدفع والإعلان {AdvertisementId}.",
+                    advertisementId);
+
+                return AdminAdvertisementOperationResult.Fail(
+                    "تعذر اعتماد الدفع والإعلان معًا. لم يتم اعتماد العملية جزئيًا.");
+            }
+        }
+
         public async Task<AdminAdvertisementOperationResult> ReviewAdvertisementAsync(
             AdminAdvertisementReviewDto request,
             int adminUserId,
@@ -1552,12 +1732,21 @@ namespace YemenGuide.Web.Services.Advertisements
             if (ad == null)
                 return AdminAdvertisementOperationResult.Fail("الإعلان غير موجود.");
 
+            if (await IsAdminOwnedAdvertisementAsync(ad.OwnerId, cancellationToken))
+            {
+                return AdminAdvertisementOperationResult.Fail(
+                    "إعلانات منشآت الإدارة لا تحتاج إلى موافقة أو مراجعة إدارية.");
+            }
+
             if (ad.Status != "Pending" && ad.Status != "Rejected")
             {
                 return AdminAdvertisementOperationResult.Fail(
                     "الإعلان ليس في حالة تسمح بالمراجعة.");
             }
 
+            // تعديل المحتوى للإعلان المعتمد يتميز بأن الدفع ما زال Paid،
+            // وReviewedAt يعود لمراجعة سابقة أقدم من SubmittedAt الحالي.
+            var isContentEditReview = IsPreviouslyApprovedContentEdit(ad);
             var decision = request.Decision?.Trim();
 
             if (string.Equals(decision, "Approve", StringComparison.OrdinalIgnoreCase))
@@ -1569,22 +1758,31 @@ namespace YemenGuide.Web.Services.Advertisements
                 }
 
                 var now = DateTime.Now;
-                var requestedStart = ad.StartImmediately == true
-                    ? now
-                    : ad.RequestedStartAt ?? now;
-                var originalStart = ad.StartAt ?? ad.RequestedStartAt ?? requestedStart;
-                var durationDays = ad.EndAt.HasValue && ad.EndAt > originalStart
-                    ? (int)Math.Ceiling(
-                        (ad.EndAt.Value - originalStart).TotalDays - 0.000001d)
-                    : Math.Max(1, ad.DurationDaysSnapshot);
 
-                durationDays = Math.Clamp(durationDays, 1, 365);
-                var duration = TimeSpan.FromDays(durationDays);
-                ad.StartAt = requestedStart < now ? now : requestedStart;
-                ad.EndAt = ad.StartAt.Value.Add(duration);
-                ad.Status = ad.StartAt.Value > now.AddMinutes(1)
-                    ? "Scheduled"
-                    : "Active";
+                if (isContentEditReview)
+                {
+                    RestoreCampaignAfterContentEditReview(ad, now);
+                }
+                else
+                {
+                    var requestedStart = ad.StartImmediately == true
+                        ? now
+                        : ad.RequestedStartAt ?? now;
+                    var originalStart = ad.StartAt ?? ad.RequestedStartAt ?? requestedStart;
+                    var durationDays = ad.EndAt.HasValue && ad.EndAt > originalStart
+                        ? (int)Math.Ceiling(
+                            (ad.EndAt.Value - originalStart).TotalDays - 0.000001d)
+                        : Math.Max(1, ad.DurationDaysSnapshot);
+
+                    durationDays = Math.Clamp(durationDays, 1, 365);
+                    var duration = TimeSpan.FromDays(durationDays);
+                    ad.StartAt = requestedStart < now ? now : requestedStart;
+                    ad.EndAt = ad.StartAt.Value.Add(duration);
+                    ad.Status = ad.StartAt.Value > now.AddMinutes(1)
+                        ? "Scheduled"
+                        : "Active";
+                }
+
                 ad.RejectionReason = null;
             }
             else if (string.Equals(
@@ -1620,6 +1818,37 @@ namespace YemenGuide.Web.Services.Advertisements
             ad.ReviewedByUserId = adminUserId;
             ad.UpdatedAt = DateTime.Now;
 
+            // إشعار المالك يذهب مباشرة إلى مجموعة الإعلان الناتجة عن القرار.
+            var ownerTargetGroup = ad.Status switch
+            {
+                "Active" => "Running",
+                "Scheduled" => "Scheduled",
+                "Paused" => "Paused",
+                "Expired" => "Expired",
+                "Cancelled" => "Cancelled",
+                _ => "NeedsAction"
+            };
+
+            _notificationService.Queue(new CreateNotificationDto
+            {
+                UserId = ad.OwnerId,
+                NotificationTitle =
+                    ad.Status is "Active" or "Scheduled" or "Paused"
+                        ? (isContentEditReview ? "تم اعتماد تعديلات إعلانك" : "تم اعتماد إعلانك")
+                        : "إعلانك يحتاج تعديل",
+                NotificationText =
+                    ad.Status is "Active" or "Scheduled" or "Paused"
+                        ? (isContentEditReview
+                            ? $"وافقت الإدارة على تعديلات محتوى الإعلان «{ad.AdvertisementTitle}»."
+                            : $"وافقت الإدارة على الإعلان «{ad.AdvertisementTitle}».")
+                        : $"أعادت الإدارة الإعلان «{ad.AdvertisementTitle}» للتعديل. {ad.RejectionReason}",
+                NotificationType = NotificationTypes.Advertisement,
+                TargetUrl =
+                    $"/Owner/Advertisements/AdvertisementManagement?tab=ads&group={ownerTargetGroup}&focusAdvertisement={ad.AdvertisementId}",
+                ReferenceType = NotificationReferenceTypes.Advertisement,
+                ReferenceId = ad.AdvertisementId
+            });
+
             await _context.SaveChangesAsync(cancellationToken);
 
             await _audit.LogAsync(
@@ -1627,15 +1856,92 @@ namespace YemenGuide.Web.Services.Advertisements
                 "Advertisements.ContentReviewed",
                 "Advertisement",
                 ad.AdvertisementId.ToString(),
-                "مراجعة محتوى إعلان.",
+                isContentEditReview
+                    ? "مراجعة تعديلات محتوى إعلان معتمد مسبقًا."
+                    : "مراجعة محتوى إعلان.",
                 null,
-                new { decision, ad.Status, ad.RejectionReason },
+                new { decision, ad.Status, ad.RejectionReason, isContentEditReview },
                 cancellationToken: cancellationToken);
 
             return AdminAdvertisementOperationResult.Ok(
-                ad.Status is "Active" or "Scheduled"
-                    ? "تم اعتماد الإعلان بنجاح."
+                ad.Status is "Active" or "Scheduled" or "Paused"
+                    ? (isContentEditReview
+                        ? "تم اعتماد تعديلات المحتوى وإعادة الإعلان إلى حالته التشغيلية دون دفع جديد."
+                        : "تم اعتماد الإعلان بنجاح.")
                     : "تمت إعادة الإعلان للمالك مع الملاحظة.");
+        }
+
+        private static bool IsPreviouslyApprovedContentEdit(Advertisement advertisement)
+        {
+            return advertisement.PaymentStatus == "Paid" &&
+                   advertisement.SubmittedAt.HasValue &&
+                   advertisement.ReviewedAt.HasValue &&
+                   advertisement.ReviewedAt.Value < advertisement.SubmittedAt.Value;
+        }
+
+        private static void RestoreCampaignAfterContentEditReview(
+            Advertisement advertisement,
+            DateTime approvedAt)
+        {
+            var submittedAt = advertisement.SubmittedAt ?? approvedAt;
+            var reviewDelay = approvedAt > submittedAt
+                ? approvedAt - submittedAt
+                : TimeSpan.Zero;
+
+            // إعلان كان متوقفًا قبل طلب تعديل المحتوى: نعيده متوقفًا،
+            // ونضيف فقط زمن انتظار الإدارة إلى النهاية حتى لا يخسر المالك وقتًا مدفوعًا.
+            if (advertisement.PausedAt.HasValue)
+            {
+                if (advertisement.EndAt.HasValue && reviewDelay > TimeSpan.Zero)
+                {
+                    advertisement.EndAt = advertisement.EndAt.Value.Add(reviewDelay);
+                }
+
+                advertisement.Status = "Paused";
+                return;
+            }
+
+            if (advertisement.StartAt.HasValue && advertisement.EndAt.HasValue)
+            {
+                var start = advertisement.StartAt.Value;
+                var end = advertisement.EndAt.Value;
+
+                // كانت الحملة نشطة وقت إرسال التعديل: نحافظ على البداية الأصلية
+                // ونمدد النهاية بمدة انتظار الإدارة فقط.
+                if (start <= submittedAt && end > submittedAt)
+                {
+                    advertisement.EndAt = end.Add(reviewDelay);
+                    advertisement.Status = "Active";
+                    return;
+                }
+
+                // كانت مجدولة ولم يحن موعدها بعد: تبقى الجدولة كما هي.
+                if (start > approvedAt)
+                {
+                    advertisement.Status = "Scheduled";
+                    return;
+                }
+
+                // كان موعد الإعلان المجدول سيبدأ أثناء انتظار المراجعة؛
+                // ننقل البداية إلى وقت الاعتماد ونمدد النهاية بنفس التأخير.
+                if (start > submittedAt && start <= approvedAt)
+                {
+                    var missed = approvedAt - start;
+                    advertisement.StartAt = approvedAt;
+                    advertisement.EndAt = end.Add(missed);
+                    advertisement.Status = "Active";
+                    return;
+                }
+            }
+
+            // احتياط للبيانات القديمة التي لا تحتوي نافذة زمنية مكتملة.
+            var durationDays = Math.Clamp(
+                Math.Max(1, advertisement.DurationDaysSnapshot),
+                1,
+                365);
+            advertisement.StartAt = approvedAt;
+            advertisement.EndAt = approvedAt.AddDays(durationDays);
+            advertisement.Status = "Active";
         }
 
         public async Task<AdminAdvertisementOperationResult> ProcessRefundAsync(
@@ -1653,6 +1959,12 @@ namespace YemenGuide.Web.Services.Advertisements
 
             if (ad == null)
                 return AdminAdvertisementOperationResult.Fail("الإعلان غير موجود.");
+
+            if (IsAdminOwnedAdvertisement(ad))
+            {
+                return AdminAdvertisementOperationResult.Fail(
+                    "إعلانات منشآت الإدارة لا ترتبط بدفع أو استرداد مالي.");
+            }
 
             if (!IsRefundPending(ad))
             {
@@ -1726,6 +2038,12 @@ namespace YemenGuide.Web.Services.Advertisements
             {
                 return AdminAdvertisementOperationResult.Fail(
                     "رقم مرجع عملية الاسترداد مطلوب.");
+            }
+
+            if (!IsAsciiDigitsOnly(referenceNumber))
+            {
+                return AdminAdvertisementOperationResult.Fail(
+                    "رقم مرجع الاسترداد يجب أن يحتوي أرقامًا فقط بدون حروف أو إشارة سالبة.");
             }
 
             if (string.IsNullOrWhiteSpace(proofImage) ||
@@ -1819,7 +2137,7 @@ namespace YemenGuide.Web.Services.Advertisements
                     $"تم التحويل عبر {wallet.WalletName} إلى الحساب {accountNumber}، ورقم المرجع {referenceNumber}.",
                 NotificationType = NotificationTypes.RefundTransferred,
                 TargetUrl =
-                    $"/Owner/Advertisements/AdvertisementManagement?tab=advertisements&advertisementId={ad.AdvertisementId}",
+                    $"/Owner/Advertisements/AdvertisementManagement?tab=ads&group=Cancelled&focusAdvertisement={ad.AdvertisementId}",
                 ReferenceType = NotificationReferenceTypes.Advertisement,
                 ReferenceId = ad.AdvertisementId
             });
@@ -1981,6 +2299,30 @@ namespace YemenGuide.Web.Services.Advertisements
             return AdminAdvertisementOperationResult.Ok(resultMessage);
         }
 
+        private async Task<bool> IsAdminOwnedAdvertisementAsync(
+            int ownerId,
+            CancellationToken cancellationToken)
+        {
+            if (ownerId <= 0)
+            {
+                return false;
+            }
+
+            return await _context.Users
+                .AsNoTracking()
+                .AnyAsync(
+                    user =>
+                        user.UserId == ownerId &&
+                        user.Role == SystemRoles.Admin,
+                    cancellationToken);
+        }
+
+        private static bool IsAdminOwnedAdvertisement(Advertisement advertisement) =>
+            string.Equals(
+                advertisement.Owner?.Role,
+                SystemRoles.Admin,
+                StringComparison.OrdinalIgnoreCase);
+
         private IQueryable<Advertisement> AdsWithRelations() =>
             _context.Advertisements
                 .AsNoTracking()
@@ -2034,7 +2376,9 @@ namespace YemenGuide.Web.Services.Advertisements
                 Status = ad.Status,
                 StatusLabel = AdminStatusLabel(ad.Status, ad.PaymentStatus),
                 PaymentStatus = ad.PaymentStatus,
-                PaymentStatusLabel = AdvertisementLookups.PaymentLabel(ad.PaymentStatus),
+                PaymentStatusLabel = IsAdminOwnedAdvertisement(ad)
+                    ? "لا يتطلب دفع"
+                    : AdvertisementLookups.PaymentLabel(ad.PaymentStatus),
                 Price = price,
                 Currency = displayCurrency,
                 TotalBudget = null,
@@ -2516,6 +2860,20 @@ namespace YemenGuide.Web.Services.Advertisements
         private static bool IsAll(string? value) =>
             string.IsNullOrWhiteSpace(value) ||
             string.Equals(value, "All", StringComparison.OrdinalIgnoreCase);
+
+        private static bool IsAsciiDigitsOnly(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return false;
+
+            foreach (var ch in value)
+            {
+                if (ch < '0' || ch > '9')
+                    return false;
+            }
+
+            return true;
+        }
 
         private static string? Clean(string? value, int max)
         {

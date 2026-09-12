@@ -1,10 +1,12 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using YemenGuide.Core.Constants;
@@ -30,19 +32,22 @@ namespace YemenGuide.Web.Services.Advertisements
         private readonly IAdvertisementPricingService _pricing;
         private readonly ILogger<OwnerAdvertisementService> _logger;
         private readonly INotificationService _notificationService;
+        private readonly IWebHostEnvironment _environment;
 
         public OwnerAdvertisementService(
             AppDbContext context,
             CurrencyDisplayService currencyDisplayService,
             IAdvertisementPricingService pricing,
             ILogger<OwnerAdvertisementService> logger,
-            INotificationService notificationService)
+            INotificationService notificationService,
+            IWebHostEnvironment environment)
         {
             _context = context;
             _currencyDisplayService = currencyDisplayService;
             _pricing = pricing;
             _logger = logger;
             _notificationService = notificationService;
+            _environment = environment;
         }
 
         public async Task<OwnerAdvertisementManagementPageDto> GetManagementPageAsync(
@@ -772,6 +777,18 @@ namespace YemenGuide.Web.Services.Advertisements
                 return OwnerAdvertisementOperationResultDto.Fail("اختر منشأة صحيحة من الهيدر أولًا.");
             }
 
+            // تعديل المحتوى فقط له مسار مستقل: لا نعيد تسعير الإعلان، ولا نغير الباقة/المدة/الاستهداف،
+            // ولا نمس بيانات الدفع المعتمدة. نسمح فقط بعنوان الإعلان ونص الزر، بينما الوسيط
+            // (الصورة/الفيديو) يُستبدل بعد هذه الخطوة من نفس معالج الوسائط الحالي.
+            if (request.AdvertisementId.HasValue && IsContentOnlyEditMode(request.EditMode))
+            {
+                return await SaveContentOnlyEditAsync(
+                    request,
+                    ownerId,
+                    place.PlaceId,
+                    cancellationToken);
+            }
+
             var validation = await ValidateSaveRequestAsync(request, ownerId, place, cancellationToken);
             if (validation != null)
             {
@@ -826,7 +843,7 @@ namespace YemenGuide.Web.Services.Advertisements
                     return OwnerAdvertisementOperationResultDto.Fail("الإعلان غير موجود أو لا يخص المنشأة المحددة.");
                 }
 
-                if (!CanEdit(entity.Status))
+                if (!CanEdit(entity.Status, entity.StartAt))
                 {
                     return OwnerAdvertisementOperationResultDto.Fail("لا يمكن تعديل الإعلان في حالته الحالية.");
                 }
@@ -881,6 +898,82 @@ namespace YemenGuide.Web.Services.Advertisements
             return AdvertisementSuccess("تم حفظ مسودة الإعلان.", entity);
         }
 
+        private async Task<OwnerAdvertisementOperationResultDto> SaveContentOnlyEditAsync(
+            OwnerAdvertisementSaveDto request,
+            int ownerId,
+            int placeId,
+            CancellationToken cancellationToken)
+        {
+            var advertisement = await _context.Advertisements
+                .FirstOrDefaultAsync(item =>
+                    item.AdvertisementId == request.AdvertisementId!.Value &&
+                    item.OwnerId == ownerId &&
+                    item.PlaceId == placeId,
+                    cancellationToken);
+
+            if (advertisement == null)
+            {
+                return OwnerAdvertisementOperationResultDto.Fail(
+                    "الإعلان غير موجود أو لا يخص المنشأة المحددة.");
+            }
+
+            if (!CanEdit(advertisement.Status, advertisement.StartAt))
+            {
+                return OwnerAdvertisementOperationResultDto.Fail(
+                    "لا يمكن تعديل الإعلان في حالته الحالية.");
+            }
+
+            if (advertisement.PaymentStatus != OwnerAdvertisementPaymentStatuses.Paid)
+            {
+                return OwnerAdvertisementOperationResultDto.Fail(
+                    "تعديل المحتوى بدون دفع جديد متاح فقط للإعلان الذي سبق اعتماد دفعه.");
+            }
+
+            if (!TryApplyRowVersion(advertisement, request.RowVersion))
+            {
+                return ConcurrencyFailure();
+            }
+
+            var title = NormalizeOptional(request.AdvertisementTitle);
+            if (title == null || title.Length < 3 || title.Length > 150)
+            {
+                return OwnerAdvertisementOperationResultDto.Fail(
+                    "عنوان الإعلان مطلوب ويجب أن يكون بين 3 و150 حرفًا.");
+            }
+
+            var buttonText = NormalizeOptional(request.ButtonText);
+            if (buttonText == null || buttonText.Length < 2 || buttonText.Length > 50)
+            {
+                return OwnerAdvertisementOperationResultDto.Fail(
+                    "نص زر الإعلان يجب أن يكون بين حرفين و50 حرفًا.");
+            }
+
+            // مهم: لا نستخدم ApplyDraft هنا حتى لا يستطيع أي طلب يدوي تغيير الباقة أو المدة
+            // أو السعر أو الاستهداف أو العرض المرتبط أثناء وضع ContentOnly.
+            advertisement.AdvertisementTitle = title;
+            advertisement.ButtonText = buttonText;
+
+            // نخرج النسخة الحالية من العرض قبل استبدال الصورة/الفيديو، ثم نعيد إرسالها للإدارة.
+            // ReviewedAt/ReviewedByUserId يبقيان كما هما عمدًا، حتى يستطيع مسار الإدارة تمييز
+            // أن الطلب الحالي تعديل لمحتوى إعلان سبق اعتماده، وليس إعلانًا جديدًا.
+            advertisement.Status = OwnerAdvertisementStatuses.Draft;
+            advertisement.RejectionReason = null;
+            advertisement.UpdatedAt = DateTime.Now;
+
+            try
+            {
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return ConcurrencyFailure();
+            }
+
+            return AdvertisementSuccess(
+                "تم حفظ تعديل المحتوى. سيتم إرساله للمراجعة دون طلب دفع جديد.",
+                advertisement);
+        }
+
         public async Task<OwnerAdvertisementOperationResultDto> SubmitAsync(
             OwnerAdvertisementSubmitDto request,
             int ownerId,
@@ -917,7 +1010,16 @@ namespace YemenGuide.Web.Services.Advertisements
             }
 
             var expectedPayment = ExpectedPayment(advertisement);
-            var paymentComplete = expectedPayment <= 0m || HasCompletePayment(advertisement, expectedPayment);
+            var paymentWasAlreadyApproved =
+                advertisement.PaymentStatus == OwnerAdvertisementPaymentStatuses.Paid;
+            var isApprovedContentEdit =
+                paymentWasAlreadyApproved && advertisement.ReviewedAt.HasValue;
+            var paymentComplete =
+                isAdminPlace ||
+                paymentWasAlreadyApproved ||
+                expectedPayment <= 0m ||
+                HasCompletePayment(advertisement, expectedPayment);
+
             advertisement.SubmittedAt = DateTime.Now;
             advertisement.UpdatedAt = DateTime.Now;
             advertisement.RejectionReason = null;
@@ -947,7 +1049,13 @@ namespace YemenGuide.Web.Services.Advertisements
             else if (paymentComplete)
             {
                 advertisement.Status = OwnerAdvertisementStatuses.Pending;
-                advertisement.PaymentStatus = OwnerAdvertisementPaymentStatuses.PendingReview;
+
+                // إذا كان هذا تعديل محتوى لإعلان سبق دفعه واعتماده فلا نعيد الدفع للمراجعة.
+                // أما الإعلان الجديد/إعادة التسعير فيبقى إثبات الدفع بحاجة مراجعة الإدارة.
+                if (!paymentWasAlreadyApproved)
+                {
+                    advertisement.PaymentStatus = OwnerAdvertisementPaymentStatuses.PendingReview;
+                }
             }
             else
             {
@@ -966,12 +1074,15 @@ namespace YemenGuide.Web.Services.Advertisements
                         AdminPermissionKeys.Advertisements.Review,
                         new CreateNotificationDto
                         {
-                            NotificationTitle = "إعلان جديد يحتاج مراجعة",
-                            NotificationText =
-                                $"أرسل مالك {loaded.Place!.PlaceName} الإعلان «{advertisement.AdvertisementTitle}» للمراجعة.",
+                            NotificationTitle = isApprovedContentEdit
+                                ? "تعديلات محتوى إعلان تحتاج مراجعة"
+                                : "إعلان جديد يحتاج مراجعة",
+                            NotificationText = isApprovedContentEdit
+                                ? $"عدّل مالك {loaded.Place!.PlaceName} محتوى الإعلان «{advertisement.AdvertisementTitle}». الدفع معتمد مسبقًا وتحتاج التعديلات موافقة الإدارة."
+                                : $"أرسل مالك {loaded.Place!.PlaceName} الإعلان «{advertisement.AdvertisementTitle}» للمراجعة.",
                             NotificationType = NotificationTypes.AdminAdvertisementActionRequired,
                             TargetUrl =
-                                $"/Admin/Advertisements/AdvertisementManagement?tab=ads&focusAdvertisement={advertisement.AdvertisementId}",
+                                $"/Admin/Advertisements/AdvertisementManagement?tab=ads&group=NeedsAction&focusAdvertisement={advertisement.AdvertisementId}",
                             ReferenceType = NotificationReferenceTypes.Advertisement,
                             ReferenceId = advertisement.AdvertisementId
                         },
@@ -986,10 +1097,18 @@ namespace YemenGuide.Web.Services.Advertisements
             }
 
             var paymentText = await FormatMoneyAsync(expectedPayment, loaded.Place!.ExchangeRateRegion);
+            var submitMessage = isAdminPlace
+                ? (advertisement.Status == OwnerAdvertisementStatuses.Scheduled
+                    ? "تم حفظ الإعلان وسيُعرض قريبًا."
+                    : "تم حفظ الإعلان وعرضه.")
+                : paymentComplete
+                    ? (isApprovedContentEdit
+                        ? "تم إرسال تعديلات المحتوى للإدارة دون طلب دفع جديد."
+                        : "تم إرسال الإعلان للمراجعة.")
+                    : "تم حفظ الإعلان وهو الآن بانتظار رفع إثبات الدفع.";
+
             return OwnerAdvertisementOperationResultDto.Ok(
-                paymentComplete
-                    ? "تم إرسال الإعلان للمراجعة."
-                    : "تم حفظ الإعلان وهو الآن بانتظار رفع إثبات الدفع.",
+                submitMessage,
                 advertisement.AdvertisementId,
                 advertisement.Status,
                 advertisement.PaymentStatus,
@@ -1012,6 +1131,17 @@ namespace YemenGuide.Web.Services.Advertisements
             }
 
             var advertisement = loaded.Advertisement;
+            var isAdminPlace = string.Equals(
+                loaded.Place?.OwnerRole,
+                "Admin",
+                StringComparison.OrdinalIgnoreCase);
+
+            if (isAdminPlace)
+            {
+                return OwnerAdvertisementOperationResultDto.Fail(
+                    "إعلانات منشآت الإدارة لا تحتاج إلى دفع أو رفع إثبات دفع.");
+            }
+
             if (advertisement.Status != OwnerAdvertisementStatuses.AwaitingPayment &&
                 advertisement.Status != OwnerAdvertisementStatuses.Draft &&
                 advertisement.Status != OwnerAdvertisementStatuses.Rejected)
@@ -1057,17 +1187,20 @@ namespace YemenGuide.Web.Services.Advertisements
                 return OwnerAdvertisementOperationResultDto.Fail("محفظة المنصة غير موجودة أو غير مفعلة.");
             }
 
-            var reference = request.ReferenceNumber.Trim();
-            var duplicateReference = await _context.Advertisements
-                .AsNoTracking()
-                .AnyAsync(item =>
-                    item.AdvertisementId != advertisement.AdvertisementId &&
-                    item.PlatformWalletId == request.PlatformWalletId &&
-                    item.ReferenceNumber == reference,
-                    cancellationToken);
-            if (duplicateReference)
+            var reference = NormalizeOptional(request.ReferenceNumber);
+            if (reference != null)
             {
-                return OwnerAdvertisementOperationResultDto.Fail("رقم الحوالة مستخدم في إعلان آخر.");
+                var duplicateReference = await _context.Advertisements
+                    .AsNoTracking()
+                    .AnyAsync(item =>
+                        item.AdvertisementId != advertisement.AdvertisementId &&
+                        item.PlatformWalletId == request.PlatformWalletId &&
+                        item.ReferenceNumber == reference,
+                        cancellationToken);
+                if (duplicateReference)
+                {
+                    return OwnerAdvertisementOperationResultDto.Fail("رقم الحوالة مستخدم في إعلان آخر.");
+                }
             }
 
             var submittedReceiptPath = NormalizeOptional(request.ReceiptImagePath);
@@ -1108,7 +1241,7 @@ namespace YemenGuide.Web.Services.Advertisements
                             $"رفع مالك {loaded.Place!.PlaceName} إثبات دفع للإعلان «{advertisement.AdvertisementTitle}» ويحتاج اعتماد الإدارة.",
                         NotificationType = NotificationTypes.AdminAdvertisementActionRequired,
                         TargetUrl =
-                            $"/Admin/Advertisements/AdvertisementManagement?tab=ads&focusAdvertisement={advertisement.AdvertisementId}",
+                            $"/Admin/Advertisements/AdvertisementManagement?tab=ads&group=NeedsAction&focusAdvertisement={advertisement.AdvertisementId}",
                         ReferenceType = NotificationReferenceTypes.Advertisement,
                         ReferenceId = advertisement.AdvertisementId
                     },
@@ -1122,8 +1255,8 @@ namespace YemenGuide.Web.Services.Advertisements
             }
             catch (DbUpdateException exception)
             {
-                _logger.LogWarning(exception, "Duplicate or invalid advertisement payment reference");
-                return OwnerAdvertisementOperationResultDto.Fail("تعذر حفظ إثبات الدفع. تحقق من رقم الحوالة وحاول مجددًا.");
+                _logger.LogWarning(exception, "Duplicate or invalid advertisement payment data");
+                return OwnerAdvertisementOperationResultDto.Fail("تعذر حفظ إثبات الدفع. تحقق من بيانات التحويل وحاول مجددًا.");
             }
 
             return OwnerAdvertisementOperationResultDto.Ok(
@@ -1151,7 +1284,7 @@ namespace YemenGuide.Web.Services.Advertisements
             }
 
             var advertisement = loaded.Advertisement;
-            if (!CanEdit(advertisement.Status))
+            if (!CanEdit(advertisement.Status, advertisement.StartAt))
             {
                 return OwnerAdvertisementOperationResultDto.Fail("لا يمكن تعديل وسائط الإعلان في حالته الحالية.");
             }
@@ -1262,7 +1395,7 @@ namespace YemenGuide.Web.Services.Advertisements
             }
 
             var advertisement = loaded.Advertisement;
-            if (!CanEdit(advertisement.Status))
+            if (!CanEdit(advertisement.Status, advertisement.StartAt))
             {
                 return OwnerAdvertisementOperationResultDto.Fail("لا يمكن حذف الوسائط في حالة الإعلان الحالية.");
             }
@@ -1363,13 +1496,197 @@ namespace YemenGuide.Web.Services.Advertisements
             return ChangeStateAsync(request, ownerId, requestedPlaceId, StateOperation.Resume, cancellationToken);
         }
 
-        public Task<OwnerAdvertisementOperationResultDto> CancelAsync(
+        public async Task<OwnerAdvertisementOperationResultDto> CancelAsync(
             OwnerAdvertisementStateChangeDto request,
             int ownerId,
             int? requestedPlaceId,
             CancellationToken cancellationToken = default)
         {
-            return ChangeStateAsync(request, ownerId, requestedPlaceId, StateOperation.Cancel, cancellationToken);
+            // المسودة أو الإعلان الذي ما زال بانتظار الدفع ولم يدخل المراجعة
+            // يُحذف نهائياً بدل الاحتفاظ به كسجل ملغي.
+            var deleteResult = await TryDeleteUnstartedUnpaidAdvertisementAsync(
+                request,
+                ownerId,
+                requestedPlaceId,
+                cancellationToken);
+
+            if (deleteResult != null)
+            {
+                return deleteResult;
+            }
+
+            // بمجرد دخول الإعلان المراجعة/الدفع المعتمد/الجدولة أو العرض،
+            // نحافظ عليه كسجل تاريخي ونستخدم الإلغاء العادي بدلاً من الحذف.
+            return await ChangeStateAsync(
+                request,
+                ownerId,
+                requestedPlaceId,
+                StateOperation.Cancel,
+                cancellationToken);
+        }
+
+        private async Task<OwnerAdvertisementOperationResultDto?> TryDeleteUnstartedUnpaidAdvertisementAsync(
+            OwnerAdvertisementStateChangeDto request,
+            int ownerId,
+            int? requestedPlaceId,
+            CancellationToken cancellationToken)
+        {
+            var loaded = await LoadOwnedAdvertisementAsync(
+                request.AdvertisementId,
+                ownerId,
+                requestedPlaceId,
+                cancellationToken);
+
+            if (loaded.Advertisement == null)
+            {
+                return OwnerAdvertisementOperationResultDto.Fail(loaded.Error!);
+            }
+
+            var advertisement = loaded.Advertisement;
+            var deleteCandidate =
+                (advertisement.Status == OwnerAdvertisementStatuses.Draft ||
+                 advertisement.Status == OwnerAdvertisementStatuses.AwaitingPayment) &&
+                advertisement.PaymentStatus == OwnerAdvertisementPaymentStatuses.Unpaid;
+
+            if (!deleteCandidate)
+            {
+                return null;
+            }
+
+            if (!TryApplyRowVersion(advertisement, request.RowVersion))
+            {
+                return ConcurrencyFailure();
+            }
+
+            // حماية السجل التاريخي: إذا دخل الإعلان فعلياً في مراجعة/تشغيل سابق،
+            // أو أصبح له أثر إعلاني/حجز/بلاغ، لا نسمح بالحذف النهائي حتى لو عاد
+            // لاحقاً إلى حالة تشبه المسودة (مثلاً بعد تجديد أو تعديل).
+            var hasNotificationHistory = await _context.Notifications
+                .AsNoTracking()
+                .AnyAsync(item =>
+                    item.ReferenceType == NotificationReferenceTypes.Advertisement &&
+                    item.ReferenceId == advertisement.AdvertisementId,
+                    cancellationToken);
+
+            var hasAdvertisementEvents = await _context.AdvertisementEvents
+                .AsNoTracking()
+                .AnyAsync(item =>
+                    item.AdvertisementId == advertisement.AdvertisementId,
+                    cancellationToken);
+
+            var hasBookings = await _context.Bookings
+                .AsNoTracking()
+                .AnyAsync(item =>
+                    item.AdvertisementId == advertisement.AdvertisementId,
+                    cancellationToken);
+
+            var hasReports = await _context.Reports
+                .AsNoTracking()
+                .AnyAsync(item =>
+                    item.AdvertisementId == advertisement.AdvertisementId,
+                    cancellationToken);
+
+            var hasHistoricalLifecycle =
+                hasNotificationHistory ||
+                hasAdvertisementEvents ||
+                hasBookings ||
+                hasReports ||
+                advertisement.RenewalCount > 0 ||
+                advertisement.ReviewedAt.HasValue ||
+                advertisement.RefundRequestedAt.HasValue ||
+                advertisement.RefundedAt.HasValue ||
+                advertisement.TransferredAmount.HasValue ||
+                !string.IsNullOrWhiteSpace(advertisement.ReceiptImage);
+
+            if (hasHistoricalLifecycle)
+            {
+                return OwnerAdvertisementOperationResultDto.Fail(
+                    "لا يمكن حذف هذا الإعلان نهائياً لأنه دخل دورة المراجعة أو أصبح له سجل تاريخي. استخدم الإلغاء بدلاً من الحذف.");
+            }
+
+            var media = await _context.AdvertisementMedia
+                .Where(item => item.AdvertisementId == advertisement.AdvertisementId)
+                .ToListAsync(cancellationToken);
+
+            var targets = await _context.AdvertisementTargets
+                .Where(item => item.AdvertisementId == advertisement.AdvertisementId)
+                .ToListAsync(cancellationToken);
+
+            await using var transaction =
+                await _context.Database.BeginTransactionAsync(cancellationToken);
+
+            try
+            {
+                if (media.Count > 0)
+                {
+                    _context.AdvertisementMedia.RemoveRange(media);
+                }
+
+                if (targets.Count > 0)
+                {
+                    _context.AdvertisementTargets.RemoveRange(targets);
+                }
+
+                _context.Advertisements.Remove(advertisement);
+
+                await _context.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return ConcurrencyFailure();
+            }
+            catch (DbUpdateException exception)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                _logger.LogWarning(
+                    exception,
+                    "Failed to permanently delete owner advertisement {AdvertisementId}",
+                    advertisement.AdvertisementId);
+
+                return OwnerAdvertisementOperationResultDto.Fail(
+                    "تعذر حذف الإعلان لأنه مرتبط ببيانات أخرى. يمكنك إلغاء الإعلان بدلاً من حذفه.");
+            }
+
+            TryDeleteAdvertisementUploadDirectory(ownerId, advertisement.AdvertisementId);
+
+            return OwnerAdvertisementOperationResultDto.Ok(
+                "تم حذف الإعلان نهائياً.",
+                advertisement.AdvertisementId,
+                "Deleted",
+                advertisement.PaymentStatus);
+        }
+
+        private void TryDeleteAdvertisementUploadDirectory(int ownerId, int advertisementId)
+        {
+            try
+            {
+                var webRoot = string.IsNullOrWhiteSpace(_environment.WebRootPath)
+                    ? Path.Combine(_environment.ContentRootPath, "wwwroot")
+                    : _environment.WebRootPath;
+
+                var directory = Path.Combine(
+                    webRoot,
+                    "uploads",
+                    "advertisements",
+                    ownerId.ToString(CultureInfo.InvariantCulture),
+                    advertisementId.ToString(CultureInfo.InvariantCulture));
+
+                if (Directory.Exists(directory))
+                {
+                    Directory.Delete(directory, recursive: true);
+                }
+            }
+            catch (Exception exception)
+            {
+                // فشل تنظيف الملف لا يعيد السجل المحذوف إلى قاعدة البيانات.
+                // نسجل الخطأ حتى يمكن تنظيف الملفات اليتيمة لاحقاً دون تعطيل المستخدم.
+                _logger.LogWarning(
+                    exception,
+                    "Advertisement {AdvertisementId} was deleted but its upload directory could not be removed.",
+                    advertisementId);
+            }
         }
 
         public async Task<OwnerAdvertisementOperationResultDto> RestoreAsync(
@@ -1578,6 +1895,11 @@ namespace YemenGuide.Web.Services.Advertisements
             advertisement.StartImmediately = request.StartImmediately;
             advertisement.RequestedStartAt = request.StartImmediately ? null : request.RequestedStartAt;
             SetPlannedCampaignRange(advertisement, renewalDurationDays, request.StartImmediately, request.RequestedStartAt);
+            var isAdminPlace = string.Equals(
+                loaded.Place?.OwnerRole,
+                "Admin",
+                StringComparison.OrdinalIgnoreCase);
+
             advertisement.Status = OwnerAdvertisementStatuses.AwaitingPayment;
             advertisement.PaymentStatus = OwnerAdvertisementPaymentStatuses.Unpaid;
             advertisement.SpentAmount = 0m;
@@ -1599,7 +1921,30 @@ namespace YemenGuide.Web.Services.Advertisements
             advertisement.UpdatedAt = DateTime.Now;
 
             var expectedPayment = ExpectedPayment(advertisement);
-            if (expectedPayment <= 0m)
+            if (isAdminPlace)
+            {
+                // تجديد إعلان منشأة الإدارة لا يمر بالدفع أو المراجعة الإدارية.
+                advertisement.PaymentStatus = OwnerAdvertisementPaymentStatuses.Paid;
+                advertisement.SubmittedAt = DateTime.Now;
+
+                if (advertisement.StartImmediately == true)
+                {
+                    advertisement.Status = OwnerAdvertisementStatuses.Active;
+                    advertisement.StartAt = DateTime.Now;
+                    advertisement.EndAt = DateTime.Now.AddDays(
+                        Math.Max(1, advertisement.DurationDaysSnapshot));
+                }
+                else
+                {
+                    advertisement.Status = OwnerAdvertisementStatuses.Scheduled;
+                    advertisement.StartAt = advertisement.RequestedStartAt;
+                    advertisement.EndAt = advertisement.RequestedStartAt.HasValue
+                        ? advertisement.RequestedStartAt.Value.AddDays(
+                            Math.Max(1, advertisement.DurationDaysSnapshot))
+                        : DateTime.Now.AddDays(Math.Max(1, advertisement.DurationDaysSnapshot));
+                }
+            }
+            else if (expectedPayment <= 0m)
             {
                 advertisement.Status = OwnerAdvertisementStatuses.Pending;
                 advertisement.PaymentStatus = OwnerAdvertisementPaymentStatuses.PendingReview;
@@ -1615,10 +1960,16 @@ namespace YemenGuide.Web.Services.Advertisements
                 return ConcurrencyFailure();
             }
 
-            return OwnerAdvertisementOperationResultDto.Ok(
-                expectedPayment > 0m
+            var renewalMessage = isAdminPlace
+                ? (advertisement.Status == OwnerAdvertisementStatuses.Scheduled
+                    ? "تم تجديد الإعلان وجدولته في الموعد المحدد دون دفع أو مراجعة."
+                    : "تم تجديد الإعلان وبدأ عرضه مباشرة دون دفع أو مراجعة.")
+                : expectedPayment > 0m
                     ? "تم تجهيز التجديد. ارفع إثبات الدفع لإرساله للمراجعة."
-                    : "تم إرسال تجديد الإعلان للمراجعة.",
+                    : "تم إرسال تجديد الإعلان للمراجعة.";
+
+            return OwnerAdvertisementOperationResultDto.Ok(
+                renewalMessage,
                 advertisement.AdvertisementId,
                 advertisement.Status,
                 advertisement.PaymentStatus,
@@ -1648,6 +1999,10 @@ namespace YemenGuide.Web.Services.Advertisements
             }
 
             var now = DateTime.Now;
+            var isAdminPlace = string.Equals(
+                loaded.Place?.OwnerRole,
+                "Admin",
+                StringComparison.OrdinalIgnoreCase);
             string message;
             switch (operation)
             {
@@ -1727,6 +2082,7 @@ namespace YemenGuide.Web.Services.Advertisements
                     // الاسترداد متاح فقط للإعلان ذي الموعد المحدد ما دام العرض لم يبدأ.
                     // الإعلان الذي يبدأ مباشرة بعد موافقة الإدارة يصبح غير قابل للاسترداد بعد تأكيد الدفع.
                     var needsRefundDestination =
+                        !isAdminPlace &&
                         advertisement.StartImmediately != true &&
                         (advertisement.PaymentStatus == OwnerAdvertisementPaymentStatuses.Paid ||
                          advertisement.PaymentStatus == OwnerAdvertisementPaymentStatuses.PendingReview);
@@ -1798,7 +2154,12 @@ namespace YemenGuide.Web.Services.Advertisements
                         advertisement.RefundNote = null;
                     }
 
-                    if (needsRefundDestination && advertisement.PaymentStatus == OwnerAdvertisementPaymentStatuses.Paid)
+                    if (isAdminPlace)
+                    {
+                        advertisement.CancellationReason = reason;
+                        message = "تم إلغاء الإعلان. إعلانات منشآت الإدارة لا ترتبط بدفع أو استرداد مالي.";
+                    }
+                    else if (needsRefundDestination && advertisement.PaymentStatus == OwnerAdvertisementPaymentStatuses.Paid)
                     {
                         advertisement.CancellationReason = RefundPendingMarker + reason;
                         message = $"تم إلغاء الإعلان قبل بدء العرض. سيتم استرداد المبلغ إلى {refundDestination!.WalletName} ({refundDestination.AccountNumber}) بعد تنفيذ الإدارة للعملية.";
@@ -1819,6 +2180,28 @@ namespace YemenGuide.Web.Services.Advertisements
                     {
                         advertisement.CancellationReason = reason;
                         message = "تم إلغاء الإعلان قبل بدء العرض. لا يوجد مبلغ مدفوع يحتاج إلى استرداد.";
+                    }
+
+                    // إذا اختار المالك وجهة استرداد، فهذه عملية تحتاج إجراء من الإدارة.
+                    // نضيف الإشعار إلى نفس DbContext ليُحفظ مع الإلغاء والاسترداد بشكل ذري.
+                    if (needsRefundDestination && refundDestination != null)
+                    {
+                        await _notificationService.QueueForAdminPermissionAsync(
+                            AdminPermissionKeys.Advertisements.Review,
+                            new CreateNotificationDto
+                            {
+                                NotificationTitle = "طلب استرداد مبلغ إعلان",
+                                NotificationText =
+                                    advertisement.PaymentStatus == OwnerAdvertisementPaymentStatuses.Paid
+                                        ? $"ألغى مالك {loaded.Place!.PlaceName} الإعلان «{advertisement.AdvertisementTitle}» قبل بدء العرض وطلب استرداد المبلغ إلى {refundDestination.WalletName} ({refundDestination.AccountNumber})."
+                                        : $"ألغى مالك {loaded.Place!.PlaceName} الإعلان «{advertisement.AdvertisementTitle}» قبل بدء العرض وحدد وجهة الاسترداد. راجع إثبات الدفع ثم نفّذ الاسترداد عند اعتماده.",
+                                NotificationType = NotificationTypes.AdminAdvertisementActionRequired,
+                                TargetUrl =
+                                    $"/Admin/Advertisements/AdvertisementManagement?tab=ads&group=Closed&focusAdvertisement={advertisement.AdvertisementId}",
+                                ReferenceType = NotificationReferenceTypes.Advertisement,
+                                ReferenceId = advertisement.AdvertisementId
+                            },
+                            cancellationToken);
                     }
                     break;
             }
@@ -2695,7 +3078,6 @@ namespace YemenGuide.Web.Services.Advertisements
             return advertisement.PlatformWalletId.HasValue &&
                    advertisement.TransferredAmount.HasValue &&
                    advertisement.TransferredAmount.Value >= expectedPayment &&
-                   !string.IsNullOrWhiteSpace(advertisement.ReferenceNumber) &&
                    advertisement.TransferDate.HasValue &&
                    !string.IsNullOrWhiteSpace(advertisement.ReceiptImage);
         }
@@ -2869,12 +3251,34 @@ namespace YemenGuide.Web.Services.Advertisements
                    value == OwnerAdvertisementPaymentStatuses.Refunded;
         }
 
-        private static bool CanEdit(string status)
+        private static bool CanEdit(string status, DateTime? startAt = null)
         {
-            // Editing is allowed for every advertisement that still belongs
-            // to an active lifecycle. Cancelled/Expired use their own flows.
-            return status != OwnerAdvertisementStatuses.Cancelled &&
-                   status != OwnerAdvertisementStatuses.Expired;
+            // بعد بدء الحملة لا نسمح بتعديل المحتوى أو التسعير.
+            // الإعلان المجدول يمكن تعديله فقط قبل وصول موعد بدايته،
+            // أما Pending فيبقى ثابتاً أثناء مراجعة الإدارة.
+            if (status == OwnerAdvertisementStatuses.Active ||
+                status == OwnerAdvertisementStatuses.Paused ||
+                status == OwnerAdvertisementStatuses.Pending ||
+                status == OwnerAdvertisementStatuses.Cancelled ||
+                status == OwnerAdvertisementStatuses.Expired)
+            {
+                return false;
+            }
+
+            if (status == OwnerAdvertisementStatuses.Scheduled)
+            {
+                return !startAt.HasValue || startAt.Value > DateTime.Now;
+            }
+
+            return true;
+        }
+
+        private static bool IsContentOnlyEditMode(string? editMode)
+        {
+            return string.Equals(
+                editMode?.Trim(),
+                "ContentOnly",
+                StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool CanSubmit(string status)
@@ -2908,7 +3312,7 @@ namespace YemenGuide.Web.Services.Advertisements
 
             return new AdvertisementCapabilities
             {
-                CanEdit = CanEdit(status),
+                CanEdit = CanEdit(status, startAt),
                 CanSubmit = CanSubmit(status),
                 CanPay = paymentStatus != OwnerAdvertisementPaymentStatuses.Paid &&
                          (status == OwnerAdvertisementStatuses.AwaitingPayment ||

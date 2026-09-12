@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
@@ -306,6 +306,11 @@ namespace YemenGuide.Core.DTOs.Owner
     {
         public int? AdvertisementId { get; set; }
 
+        // Full = التعديل الكامل الحالي.
+        // ContentOnly = تعديل محتوى إعلان مدفوع/معتمد دون تغيير الباقة أو المدة أو بقية شروط الحملة.
+        [StringLength(20)]
+        public string? EditMode { get; set; }
+
         [Range(1, int.MaxValue, ErrorMessage = "اختر باقة إعلانية صحيحة.")]
         public int AdvertisementPlanId { get; set; }
 
@@ -359,10 +364,9 @@ namespace YemenGuide.Core.DTOs.Owner
         [Range(0.01d, 9999999999999999d, ErrorMessage = "المبلغ المحول يجب أن يكون أكبر من صفر.")]
         public decimal TransferredAmount { get; set; }
 
-        [Required(ErrorMessage = "رقم الحوالة مطلوب.")]
-        [StringLength(100, MinimumLength = 3, ErrorMessage = "رقم الحوالة بين 3 و100 رقم.")]
+        [StringLength(100, MinimumLength = 3, ErrorMessage = "رقم الحوالة بين 3 و100 رقم عند إدخاله.")]
         [RegularExpression(@"^[0-9]+$", ErrorMessage = "رقم الحوالة يجب أن يحتوي على أرقام فقط دون حروف أو رموز.")]
-        public string ReferenceNumber { get; set; } = string.Empty;
+        public string? ReferenceNumber { get; set; }
 
         [Required(ErrorMessage = "تاريخ الحوالة مطلوب.")]
         public DateTime? TransferDate { get; set; }

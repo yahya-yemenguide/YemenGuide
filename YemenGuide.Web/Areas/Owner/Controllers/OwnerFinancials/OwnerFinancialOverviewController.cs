@@ -67,6 +67,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers.OwnerFinancials
         public async Task<IActionResult> Index(
             [FromQuery] DateTime? fromDate = null,
             [FromQuery] DateTime? toDate = null,
+            [FromQuery] int? placeId = null,
             CancellationToken cancellationToken = default)
         {
             if (
@@ -120,6 +121,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers.OwnerFinancials
                 var activePlaceId =
                     await ResolveActivePlaceIdAsync(
                         ownerId,
+                        placeId,
                         cancellationToken);
 
                 var isAdministrationAccount =
@@ -223,12 +225,13 @@ namespace YemenGuide.Web.Areas.Owner.Controllers.OwnerFinancials
         private Task<int?>
             ResolveActivePlaceIdAsync(
                 int ownerId,
+                int? requestedPlaceId,
                 CancellationToken cancellationToken)
         {
             return _ownerFinancialService
                 .ResolveActivePlaceIdAsync(
                     ownerId,
-                    null,
+                    requestedPlaceId,
                     GetCookiePlaceId(ownerId),
                     cancellationToken);
         }

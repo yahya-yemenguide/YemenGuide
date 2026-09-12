@@ -145,6 +145,8 @@ namespace YemenGuide.Web.Maintenance
                                 MaintenanceTypeNames.Full,
                             message =
                                 "النظام تحت الصيانة حاليًا.",
+                            redirectUrl =
+                                "/maintenance",
                             retryAtUtc =
                                 state.EndAtUtc
                         });
@@ -166,6 +168,13 @@ namespace YemenGuide.Web.Maintenance
                     context.Response,
                     state);
 
+            var redirectUrl =
+                MaintenanceResponseHelper
+                    .BuildReadOnlyUrl(
+                        MaintenanceResponseHelper
+                            .BuildReturnUrl(
+                                context.Request));
+
             if (MaintenanceResponseHelper
                 .ExpectsJson(
                     context.Request))
@@ -184,6 +193,7 @@ namespace YemenGuide.Web.Maintenance
                                 MaintenanceTypeNames.ReadOnly,
                             message =
                                 "النظام متاح للتصفح فقط حاليًا بسبب أعمال الصيانة.",
+                            redirectUrl,
                             retryAtUtc =
                                 state.EndAtUtc
                         });
@@ -192,11 +202,7 @@ namespace YemenGuide.Web.Maintenance
             }
 
             context.Response.Redirect(
-                MaintenanceResponseHelper
-                    .BuildReadOnlyUrl(
-                        MaintenanceResponseHelper
-                            .BuildReturnUrl(
-                                context.Request)));
+                redirectUrl);
         }
     }
 }
