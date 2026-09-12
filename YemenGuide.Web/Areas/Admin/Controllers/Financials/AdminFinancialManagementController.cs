@@ -1,11 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Security.Claims;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using YemenGuide.Core.Constants;
@@ -161,37 +163,32 @@ namespace YemenGuide.Web.Areas.Admin.Controllers.Financials
         [RequireAdminPermission(AdminPermissionKeys.Finance.ManageSettings)]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> SaveSettings(
-            [FromForm] AdminFinancialSettingsUpdateDto? request,
             CancellationToken cancellationToken = default)
         {
-            if (request == null)
+            var submittedForm =
+                await Request.ReadFormAsync(cancellationToken);
+
+            if (!TryReadFinancialSettingsRequest(
+                    submittedForm,
+                    out var request,
+                    out var requestError))
             {
                 return BadRequest(new
                 {
                     success = false,
-                    message = "بيانات الإعدادات المالية غير مكتملة."
+                    message = requestError
                 });
             }
 
-            request.DefaultCurrency =
-                request.DefaultCurrency?.Trim() ?? string.Empty;
-
-            // لا نطلب من الأدمن كتابة سبب في كل تعديل.
-            // نحافظ على سجل التدقيق بسبب تلقائي واضح بدل تعطيل التوثيق.
-            request.ChangeReason = "تحديث إعدادات المالية من لوحة الإدارة";
-            ModelState.Remove(nameof(request.ChangeReason));
-
-            request.CategoryCommissions ??=
-                new List<AdminCategoryCommissionUpdateDto>();
-
-            if (!ModelState.IsValid)
+            // Each tab records a precise automatic reason. The admin does not
+            // have to type a reason before every ordinary settings save.
+            request.ChangeReason = request.SettingsSection switch
             {
-                return BadRequest(new
-                {
-                    success = false,
-                    message = FirstModelError()
-                });
-            }
+                "commissions" => "تحديث نسب العمولات من لوحة الإدارة",
+                "trial" => "تحديث سياسة الفترة المجانية من لوحة الإدارة",
+                "policies" => "تحديث سياسات الشحن والرصيد من لوحة الإدارة",
+                _ => "تحديث إعدادات المالية من لوحة الإدارة"
+            };
 
             if (!TryGetCurrentAdminUserId(out var adminUserId))
             {
@@ -557,6 +554,260 @@ namespace YemenGuide.Web.Areas.Admin.Controllers.Financials
             }
         }
 
+        private static bool TryReadFinancialSettingsRequest(
+            IFormCollection form,
+            out AdminFinancialSettingsUpdateDto request,
+            out string error)
+        {
+            request = new AdminFinancialSettingsUpdateDto
+            {
+                SettingsSection =
+                    form["SettingsSection"].FirstOrDefault()?.Trim().ToLowerInvariant() ??
+                    string.Empty,
+                DefaultCurrency = CurrencyDisplayService.YemeniRial,
+                CategoryCommissions = new List<AdminCategoryCommissionUpdateDto>()
+            };
+            error = string.Empty;
+
+            switch (request.SettingsSection)
+            {
+                case "commissions":
+                    if (!TryReadFinancialDecimal(
+                            form,
+                            "CommissionPercentage",
+                            "النسبة العامة للعمولة",
+                            out var commissionPercentage,
+                            out error))
+                    {
+                        return false;
+                    }
+
+                    request.CommissionPercentage = commissionPercentage;
+
+                    for (var index = 0; ; index++)
+                    {
+                        var idKey = $"CategoryCommissions[{index}].CategoryId";
+                        if (!form.ContainsKey(idKey))
+                        {
+                            break;
+                        }
+
+                        if (!TryReadFinancialInteger(
+                                form,
+                                idKey,
+                                "رقم فئة العمولة",
+                                out var categoryId,
+                                out error))
+                        {
+                            return false;
+                        }
+
+                        var rateKey =
+                            $"CategoryCommissions[{index}].CommissionPercentage";
+                        var rawRate = form[rateKey].FirstOrDefault();
+                        decimal? categoryRate = null;
+
+                        if (!string.IsNullOrWhiteSpace(rawRate))
+                        {
+                            if (!TryParseFlexibleDecimal(rawRate, out var parsedRate))
+                            {
+                                error = "نسبة إحدى الفئات غير صحيحة. استخدم رقمًا مثل 5 أو 5.5.";
+                                return false;
+                            }
+
+                            categoryRate = parsedRate;
+                        }
+
+                        request.CategoryCommissions.Add(
+                            new AdminCategoryCommissionUpdateDto
+                            {
+                                CategoryId = categoryId,
+                                CommissionPercentage = categoryRate
+                            });
+                    }
+
+                    return true;
+
+                case "trial":
+                    request.OwnerFreeTrialEnabled =
+                        ReadFinancialBoolean(form, "OwnerFreeTrialEnabled");
+
+                    if (!TryReadFinancialInteger(
+                            form,
+                            "OwnerFreeTrialDays",
+                            "مدة الفترة المجانية",
+                            out var trialDays,
+                            out error) ||
+                        !TryReadFinancialDecimal(
+                            form,
+                            "RequiredCommissionGuaranteeBalance",
+                            "رصيد الضمان المطلوب بعد الفترة",
+                            out var guaranteeBalance,
+                            out error))
+                    {
+                        return false;
+                    }
+
+                    request.OwnerFreeTrialDays = trialDays;
+                    request.RequiredCommissionGuaranteeBalance = guaranteeBalance;
+                    return true;
+
+                case "policies":
+                    if (!TryReadFinancialDecimal(
+                            form,
+                            "MinimumCommissionTopUp",
+                            "الحد الأدنى للشحن",
+                            out var minimumTopUp,
+                            out error) ||
+                        !TryReadFinancialDecimal(
+                            form,
+                            "DefaultLowBalanceThreshold",
+                            "حد انخفاض الرصيد",
+                            out var lowBalanceThreshold,
+                            out error) ||
+                        !TryReadFinancialDecimal(
+                            form,
+                            "DefaultCommissionDebtLimit",
+                            "حد الدين",
+                            out var debtLimit,
+                            out error) ||
+                        !TryReadFinancialInteger(
+                            form,
+                            "CommissionDebtGraceDays",
+                            "مهلة سداد الدين",
+                            out var debtGraceDays,
+                            out error))
+                    {
+                        return false;
+                    }
+
+                    request.MinimumCommissionTopUp = minimumTopUp;
+                    request.DefaultLowBalanceThreshold = lowBalanceThreshold;
+                    request.DefaultCommissionDebtLimit = debtLimit;
+                    request.CommissionDebtGraceDays = debtGraceDays;
+                    request.AllowNegativeCommissionBalance =
+                        ReadFinancialBoolean(form, "AllowNegativeCommissionBalance");
+                    request.SuspendBookingWhenBalanceInsufficient =
+                        ReadFinancialBoolean(form, "SuspendBookingWhenBalanceInsufficient");
+                    request.HidePlaceWhenCommissionSuspended =
+                        ReadFinancialBoolean(form, "HidePlaceWhenCommissionSuspended");
+                    request.ReturnCommissionOnCancellation =
+                        ReadFinancialBoolean(form, "ReturnCommissionOnCancellation");
+                    return true;
+
+                default:
+                    error = "قسم الإعدادات المالية المطلوب غير معروف. أعد فتح النافذة وحاول مجددًا.";
+                    return false;
+            }
+        }
+
+        private static bool TryReadFinancialDecimal(
+            IFormCollection form,
+            string key,
+            string fieldName,
+            out decimal value,
+            out string error)
+        {
+            var rawValue = form[key].FirstOrDefault();
+            if (TryParseFlexibleDecimal(rawValue, out value))
+            {
+                error = string.Empty;
+                return true;
+            }
+
+            error = $"قيمة «{fieldName}» غير صحيحة. استخدم رقمًا مثل 20000 أو 20000.50.";
+            return false;
+        }
+
+        private static bool TryReadFinancialInteger(
+            IFormCollection form,
+            string key,
+            string fieldName,
+            out int value,
+            out string error)
+        {
+            var normalized = NormalizeFinancialNumber(form[key].FirstOrDefault());
+            if (int.TryParse(
+                    normalized,
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out value))
+            {
+                error = string.Empty;
+                return true;
+            }
+
+            error = $"قيمة «{fieldName}» غير صحيحة. استخدم عددًا صحيحًا.";
+            return false;
+        }
+
+        private static bool TryParseFlexibleDecimal(
+            string? rawValue,
+            out decimal value)
+        {
+            var normalized = NormalizeFinancialNumber(rawValue);
+            return decimal.TryParse(
+                normalized,
+                NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint,
+                CultureInfo.InvariantCulture,
+                out value);
+        }
+
+        private static string NormalizeFinancialNumber(string? rawValue)
+        {
+            if (string.IsNullOrWhiteSpace(rawValue))
+            {
+                return string.Empty;
+            }
+
+            var input = rawValue.Trim();
+            var builder = new StringBuilder(input.Length);
+
+            foreach (var character in input)
+            {
+                if (character >= '0' && character <= '9')
+                {
+                    builder.Append(character);
+                }
+                else if (character >= '٠' && character <= '٩')
+                {
+                    builder.Append((char)('0' + character - '٠'));
+                }
+                else if (character >= '۰' && character <= '۹')
+                {
+                    builder.Append((char)('0' + character - '۰'));
+                }
+                else if (character == '.' || character == ',' || character == '٫')
+                {
+                    builder.Append('.');
+                }
+                else if (character == '-' || character == '+')
+                {
+                    builder.Append(character);
+                }
+                else if (character == ' ' || character == '٬')
+                {
+                    continue;
+                }
+                else
+                {
+                    return string.Empty;
+                }
+            }
+
+            return builder.ToString();
+        }
+
+        private static bool ReadFinancialBoolean(
+            IFormCollection form,
+            string key)
+        {
+            return form[key].Any(value =>
+                string.Equals(value, "true", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(value, "on", StringComparison.OrdinalIgnoreCase) ||
+                value == "1");
+        }
+
         private void ConvertSettingsForDisplay(
             AdminFinancialSettingsDto? settings,
             string displayCurrency)
@@ -640,7 +891,7 @@ namespace YemenGuide.Web.Areas.Admin.Controllers.Financials
             return false;
         }
 
-                
+
         private static bool TryNormalizeAccountNumber(
             string? value,
             out string normalized)
@@ -719,4 +970,3 @@ namespace YemenGuide.Web.Areas.Admin.Controllers.Financials
         }
     }
 }
-

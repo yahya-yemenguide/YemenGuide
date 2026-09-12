@@ -1896,6 +1896,11 @@ namespace YemenGuide.Core.DTOs.Admin
 
     public class AdminFinancialSettingsUpdateDto
     {
+        // Each management tab posts only its own section. "all" keeps
+        // compatibility with the original full settings form.
+        [StringLength(30)]
+        public string SettingsSection { get; set; } = "all";
+
         [Range(
             0,
             100,
@@ -1968,4 +1973,3 @@ namespace YemenGuide.Core.DTOs.Admin
     new();
     }
 }
-

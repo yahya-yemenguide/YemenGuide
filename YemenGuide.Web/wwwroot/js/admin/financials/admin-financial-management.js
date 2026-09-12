@@ -1,7 +1,8 @@
 ﻿(function (window, document) {
     "use strict";
 
-    let activeManagementTab = "general";
+    let activeManagementTab = "commissions";
+    let pendingTrialDisableConfirmation = null;
 
     function api() {
         return window.AdminFinance;
@@ -52,7 +53,99 @@
 
     function initializeManagement(currentRoot) {
         syncTrialPolicyState(currentRoot);
+        syncDebtPolicyState(currentRoot);
+        syncCommissionRates(currentRoot);
         activateManagementTab(currentRoot, activeManagementTab, false);
+    }
+
+    function syncDebtPolicyState(scope) {
+        const currentRoot = scope || root();
+        if (!currentRoot) return;
+
+        const enabled = currentRoot.querySelector("[data-negative-balance-policy]");
+        const limitField = currentRoot.querySelector("[data-debt-limit-field]");
+        const graceField = currentRoot.querySelector("[data-debt-grace-field]");
+        const limit = limitField?.querySelector("input");
+        const grace = graceField?.querySelector("input");
+        if (!enabled) return;
+
+        [limitField, graceField].forEach(field => {
+            field?.classList.toggle("is-disabled", !enabled.checked);
+        });
+
+        if (limit) {
+            limit.readOnly = !enabled.checked;
+            limit.setAttribute("aria-disabled", enabled.checked ? "false" : "true");
+        }
+        if (grace) {
+            grace.readOnly = !enabled.checked;
+            grace.setAttribute("aria-disabled", enabled.checked ? "false" : "true");
+        }
+    }
+
+    function syncCommissionRates(scope) {
+        const currentRoot = scope || root();
+        if (!currentRoot) return;
+
+        const generalInput = currentRoot.querySelector("[data-global-commission-rate]");
+        const generalRate = Number(generalInput?.value || 0);
+
+        currentRoot.querySelectorAll("[data-category-commission-card]").forEach(card => {
+            const input = card.querySelector("[data-category-commission-rate]");
+            const mode = card.querySelector("[data-category-rate-mode]");
+            const effective = card.querySelector("[data-category-effective-rate]");
+            if (!input) return;
+
+            const hasSpecialRate = input.value.trim() !== "";
+            const appliedRate = hasSpecialRate ? Number(input.value) : generalRate;
+            const generalText = Number.isFinite(generalRate)
+                ? String(Math.round(generalRate * 100) / 100)
+                : "0";
+            card.classList.toggle("has-special-rate", hasSpecialRate);
+            input.placeholder = generalText;
+            if (mode) mode.textContent = hasSpecialRate ? "نسبة خاصة" : "النسبة العامة";
+            if (effective) {
+                const safeRate = Number.isFinite(appliedRate) ? appliedRate : 0;
+                effective.textContent = `المطبق بعد الحفظ: ${safeRate.toLocaleString("ar-YE", { maximumFractionDigits: 2 })}%`;
+            }
+        });
+    }
+
+    function trialDisableModal() {
+        return document.querySelector("[data-trial-disable-modal]") || null;
+    }
+
+    function resolveTrialDisable(confirmed) {
+        const modal = trialDisableModal();
+        if (modal) closeModal(modal);
+
+        const resolve = pendingTrialDisableConfirmation;
+        pendingTrialDisableConfirmation = null;
+        if (resolve) resolve(confirmed === true);
+    }
+
+    function confirmTrialDisable() {
+        const modal = trialDisableModal();
+        if (!modal) {
+            api()?.showToast(
+                "تعذر فتح نافذة التأكيد. أعد فتح إدارة المالية ثم حاول مجددًا.",
+                "danger"
+            );
+            return Promise.resolve(false);
+        }
+
+        if (pendingTrialDisableConfirmation) {
+            return Promise.resolve(false);
+        }
+
+        const decision = new Promise(resolve => {
+            pendingTrialDisableConfirmation = resolve;
+        });
+        openModal(modal);
+        window.setTimeout(() => {
+            modal.querySelector("[data-trial-disable-cancel]")?.focus();
+        }, 50);
+        return decision;
     }
 
     function openModal(element) {
@@ -213,6 +306,16 @@
             return;
         }
 
+        const section = form.dataset.settingsSection || "all";
+        if (section === "trial") {
+            const wasEnabled = form.dataset.trialOriginalEnabled === "true";
+            const remainsEnabled = form.querySelector("[data-trial-enabled]")?.checked === true;
+            if (wasEnabled && !remainsEnabled) {
+                const confirmed = await confirmTrialDisable();
+                if (!confirmed) return;
+            }
+        }
+
         const button = submitter || form.querySelector('[type="submit"]');
         Finance.setButtonBusy(button, true, "حفظ...");
 
@@ -222,7 +325,15 @@
                 Finance.pick(payload, "message", "Message") ||
                 "تم حفظ الإعدادات المالية.";
 
-            Finance.showToast(message, "success", "تم تحديث الإعدادات");
+            const successTitle = section === "commissions"
+                ? "تم تحديث العمولات"
+                : section === "trial"
+                    ? "تم تحديث الفترة المجانية"
+                    : section === "policies"
+                        ? "تم تحديث سياسات الشحن"
+                        : "تم تحديث الإعدادات";
+
+            Finance.showToast(message, "success", successTitle);
 
             await Finance.reloadManagement();
             await Finance.refreshShell();
@@ -303,6 +414,20 @@
             return;
         }
 
+        const trialConfirm = event.target.closest("[data-trial-disable-confirm]");
+        if (trialConfirm && belongsToManagementUi(trialConfirm, currentRoot)) {
+            event.preventDefault();
+            resolveTrialDisable(true);
+            return;
+        }
+
+        const trialCancel = event.target.closest("[data-trial-disable-cancel]");
+        if (trialCancel && belongsToManagementUi(trialCancel, currentRoot)) {
+            event.preventDefault();
+            resolveTrialDisable(false);
+            return;
+        }
+
         const add = event.target.closest("[data-platform-wallet-new]");
         if (add && belongsToManagementUi(add, currentRoot)) {
             event.preventDefault();
@@ -348,6 +473,16 @@
 
         if (event.target.matches("[data-trial-enabled]")) {
             syncTrialPolicyState(currentRoot);
+            return;
+        }
+
+        if (event.target.matches("[data-negative-balance-policy]")) {
+            syncDebtPolicyState(currentRoot);
+            return;
+        }
+
+        if (event.target.matches("[data-global-commission-rate], [data-category-commission-rate]")) {
+            syncCommissionRates(currentRoot);
             return;
         }
 
@@ -401,6 +536,13 @@
             return;
         }
 
+        const trialModal = trialDisableModal();
+        if (trialModal?.classList.contains("is-open")) {
+            event.preventDefault();
+            resolveTrialDisable(false);
+            return;
+        }
+
         const opened = document.querySelector(".afm-modal.is-open");
         if (opened) {
             closeModal(opened);
@@ -418,5 +560,6 @@
     document.addEventListener("submit", onSubmit);
     document.addEventListener("click", onClick);
     document.addEventListener("change", onChange);
+    document.addEventListener("input", onChange);
     document.addEventListener("keydown", onKeyDown);
 })(window, document);

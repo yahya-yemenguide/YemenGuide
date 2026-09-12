@@ -296,6 +296,8 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     });
 
+    initializeMaintenanceControls();
+
 });
 
 
@@ -328,6 +330,48 @@ async function saveAllSettings() {
 
         bilingualValidation.control?.focus();
         return;
+    }
+
+    if (section === 'maintenance') {
+        const maintenanceValidation =
+            validateMaintenanceSettings();
+
+        if (!maintenanceValidation.valid) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'راجع إعدادات الصيانة',
+                text: maintenanceValidation.message,
+                confirmButtonColor: '#00A6DA'
+            });
+
+            maintenanceValidation.control?.focus();
+            return;
+        }
+
+        const maintenanceEnabled =
+            document.getElementById('maintenanceMode')?.checked === true;
+
+        if (
+            maintenanceEnabled &&
+            getSelectedMaintenanceType() === 'Full'
+        ) {
+            const confirmation = await Swal.fire({
+                icon: 'warning',
+                title: 'تفعيل الإغلاق الكامل؟',
+                text: 'بعد الحفظ ستظهر شاشة الصيانة للفئات التي اخترتها حتى توقف الصيانة أو ينتهي موعدها.',
+                showCancelButton: true,
+                confirmButtonText: 'نعم، حفظ وتفعيل',
+                cancelButtonText: 'رجوع',
+                confirmButtonColor: '#ff5a5f',
+                cancelButtonColor: '#64748b',
+                reverseButtons: true,
+                focusCancel: true
+            });
+
+            if (!confirmation.isConfirmed) {
+                return;
+            }
+        }
     }
 
     Swal.fire({
@@ -403,14 +447,35 @@ async function saveAllSettings() {
         formData.append('MaintenanceMessage', document.getElementById('maintenanceMessage')?.value || '');
         formData.append('MaintenanceMessageEn', document.getElementById('maintenanceMessageEn')?.value || '');
 
-        const selectedMaintenanceType =
-            document.querySelector('input[name="maintenanceType"]:checked')?.value;
+        syncMaintenanceScopeToHidden();
 
-        formData.append('MaintenanceType', selectedMaintenanceType || 'Full');
-        formData.append('MaintenanceAffectOwners', document.getElementById('maintenanceAffectOwners')?.checked === true);
-        formData.append('MaintenanceShowContact', document.getElementById('maintenanceShowContact')?.checked === true);
-        formData.append('MaintenanceStartAt', document.getElementById('maintenanceStartAt')?.value || '');
-        formData.append('MaintenanceEndAt', document.getElementById('maintenanceEndAt')?.value || '');
+        const maintenanceSchedule =
+            getMaintenanceSchedulePayload();
+
+        formData.append(
+            'MaintenanceType',
+            getSelectedMaintenanceType()
+        );
+
+        formData.append(
+            'MaintenanceAffectOwners',
+            document.getElementById('maintenanceAffectOwners')?.checked === true
+        );
+
+        formData.append(
+            'MaintenanceShowContact',
+            document.getElementById('maintenanceShowContact')?.checked === true
+        );
+
+        formData.append(
+            'MaintenanceStartAt',
+            maintenanceSchedule.start
+        );
+
+        formData.append(
+            'MaintenanceEndAt',
+            maintenanceSchedule.end
+        );
 
         [
             'MaintenanceBlockBookings',
@@ -739,6 +804,613 @@ function deletePlatformWalletDynamically(walletId, walletName) {
         }
     });
 }
+
+
+/* ==========================================================================
+ * 🛠️ مركز الصيانة — نسخة مبسطة: تشغيل ← نوع ← فئة ← وقت ← رسالة
+ * ========================================================================== */
+
+function initializeMaintenanceControls() {
+    const center =
+        document.querySelector('[data-maintenance-center]');
+
+    if (!center) return;
+
+    const directControls = [
+        'maintenanceMode',
+        'maintenanceTitle',
+        'maintenanceMessage',
+        'maintenanceShowContact',
+        'maintenanceStartAt',
+        'maintenanceEndAt',
+        'maintenanceNoEnd',
+        'maintenanceBlockBookings',
+        'maintenanceBlockPayments',
+        'maintenanceBlockOwnerChanges',
+        'maintenanceBlockMessages',
+        'maintenanceBlockReviews',
+        'maintenanceBlockRegistrations'
+    ];
+
+    directControls.forEach(id => {
+        const control = document.getElementById(id);
+        if (!control) return;
+
+        const eventName =
+            control.matches('input[type="text"], textarea, input[type="datetime-local"]')
+                ? 'input'
+                : 'change';
+
+        control.addEventListener(eventName, syncMaintenanceUi);
+    });
+
+    document
+        .querySelectorAll('input[name="maintenanceType"]')
+        .forEach(control => {
+            control.addEventListener('change', syncMaintenanceUi);
+        });
+
+    document
+        .querySelectorAll('input[name="maintenanceScope"]')
+        .forEach(control => {
+            control.addEventListener('change', () => {
+                syncMaintenanceScopeToHidden();
+                syncMaintenanceUi();
+            });
+        });
+
+    document
+        .querySelectorAll('input[name="maintenanceTiming"]')
+        .forEach(control => {
+            control.addEventListener('change', syncMaintenanceUi);
+        });
+
+    syncMaintenanceScopeToHidden();
+    syncMaintenanceUi();
+}
+
+function getSelectedMaintenanceType() {
+    return document.querySelector(
+        'input[name="maintenanceType"]:checked'
+    )?.value || 'Full';
+}
+
+function getSelectedMaintenanceScope() {
+    return document.querySelector(
+        'input[name="maintenanceScope"]:checked'
+    )?.value || 'customers';
+}
+
+function syncMaintenanceScopeToHidden() {
+    const affectOwners =
+        document.getElementById('maintenanceAffectOwners');
+
+    if (!affectOwners) return;
+
+    affectOwners.checked =
+        getSelectedMaintenanceScope() === 'everyone';
+}
+
+function getMaintenanceTimingMode() {
+    return document.querySelector(
+        'input[name="maintenanceTiming"]:checked'
+    )?.value || 'now';
+}
+
+function getMaintenanceSchedulePayload() {
+    if (getMaintenanceTimingMode() !== 'scheduled') {
+        return { start: '', end: '' };
+    }
+
+    const start =
+        document.getElementById('maintenanceStartAt')?.value || '';
+
+    const noEnd =
+        document.getElementById('maintenanceNoEnd')?.checked === true;
+
+    const end = noEnd
+        ? ''
+        : document.getElementById('maintenanceEndAt')?.value || '';
+
+    return { start, end };
+}
+
+function syncMaintenanceUi() {
+    const enabled =
+        document.getElementById('maintenanceMode')?.checked === true;
+
+    const type =
+        getSelectedMaintenanceType();
+
+    syncMaintenanceScopeToHidden();
+
+    const center =
+        document.querySelector('[data-maintenance-center]');
+
+    const statusBoard =
+        document.querySelector('[data-maintenance-status-board]');
+
+    const setupPanel =
+        document.getElementById('maintenanceSetupPanel');
+
+    const normalNote =
+        document.getElementById('maintenanceNormalNote');
+
+    const partialPanel =
+        document.getElementById('maintenancePartialPanel');
+
+    const schedulePanel =
+        document.getElementById('maintenanceSchedulePanel');
+
+    const endField =
+        document.getElementById('maintenanceEndField');
+
+    const noEnd =
+        document.getElementById('maintenanceNoEnd')?.checked === true;
+
+    const statusTitle =
+        document.getElementById('maintenanceStatusTitle');
+
+    const statusDescription =
+        document.getElementById('maintenanceStatusDescription');
+
+    const powerLabel =
+        document.getElementById('maintenancePowerLabel');
+
+    const heroStatus =
+        document.getElementById('maintenanceHeroStatus');
+
+    const saveButtonText =
+        document.getElementById('maintenanceSaveButtonText');
+
+    if (center) {
+        center.dataset.enabled = enabled ? 'true' : 'false';
+        center.dataset.type = type;
+    }
+
+    if (statusBoard) {
+        statusBoard.dataset.enabled = enabled ? 'true' : 'false';
+    }
+
+    if (setupPanel) {
+        setupPanel.hidden = !enabled;
+    }
+
+    if (normalNote) {
+        normalNote.hidden = enabled;
+    }
+
+    document
+        .querySelectorAll('[data-maintenance-type-card]')
+        .forEach(card => {
+            card.classList.toggle(
+                'is-selected',
+                card.dataset.maintenanceTypeCard === type
+            );
+        });
+
+    const selectedScope = getSelectedMaintenanceScope();
+
+    document
+        .querySelectorAll('[data-maintenance-scope-card]')
+        .forEach(card => {
+            card.classList.toggle(
+                'is-selected',
+                card.dataset.maintenanceScopeCard === selectedScope
+            );
+        });
+
+    const timingMode = getMaintenanceTimingMode();
+
+    document
+        .querySelectorAll('[data-maintenance-timing-card]')
+        .forEach(card => {
+            card.classList.toggle(
+                'is-selected',
+                card.dataset.maintenanceTimingCard === timingMode
+            );
+        });
+
+    if (partialPanel) {
+        partialPanel.hidden = !(enabled && type === 'Partial');
+    }
+
+    if (schedulePanel) {
+        schedulePanel.hidden = !(enabled && timingMode === 'scheduled');
+    }
+
+    if (endField) {
+        endField.classList.toggle('is-disabled', noEnd);
+    }
+
+    const endInput =
+        document.getElementById('maintenanceEndAt');
+
+    if (endInput) {
+        endInput.disabled = noEnd || timingMode !== 'scheduled';
+    }
+
+    const startInput =
+        document.getElementById('maintenanceStartAt');
+
+    if (startInput) {
+        startInput.disabled = timingMode !== 'scheduled';
+    }
+
+    if (statusTitle) {
+        statusTitle.textContent = enabled
+            ? 'وضع الصيانة مفعّل'
+            : 'المنصة تعمل بشكل طبيعي';
+    }
+
+    if (statusDescription) {
+        statusDescription.textContent = enabled
+            ? getMaintenanceTypeDescription(type)
+            : 'لا توجد قيود صيانة مفعلة الآن، وجميع الخدمات تعمل بصورة طبيعية.';
+    }
+
+    if (powerLabel) {
+        powerLabel.textContent = enabled
+            ? 'إيقاف الصيانة'
+            : 'تشغيل الصيانة';
+    }
+
+    if (heroStatus) {
+        heroStatus.textContent = enabled
+            ? getMaintenanceTypeShortLabel(type)
+            : 'تعمل بصورة طبيعية';
+    }
+
+    if (saveButtonText) {
+        saveButtonText.textContent = enabled
+            ? 'حفظ وتطبيق إعدادات الصيانة'
+            : 'حفظ وإيقاف وضع الصيانة';
+    }
+
+    syncMaintenanceOperationCards();
+    syncMaintenanceMessageCounter();
+    syncMaintenanceScheduleSummary();
+    syncMaintenanceImpactPreview();
+}
+
+function getMaintenanceTypeShortLabel(type) {
+    switch (type) {
+        case 'ReadOnly':
+            return 'تصفح فقط';
+        case 'Partial':
+            return 'خدمات محددة';
+        default:
+            return 'إغلاق كامل';
+    }
+}
+
+function getMaintenanceTypeDescription(type) {
+    switch (type) {
+        case 'ReadOnly':
+            return 'المستخدمون يستطيعون التصفح والمشاهدة، لكن العمليات التي تغيّر البيانات تتوقف.';
+        case 'Partial':
+            return 'المنصة تستمر بالعمل، وسيتم إيقاف الخدمات التي تختارها فقط.';
+        default:
+            return 'سيتم إغلاق المنصة أمام الفئات التي اخترتها وإظهار شاشة الصيانة لهم.';
+    }
+}
+
+function syncMaintenanceOperationCards() {
+    document
+        .querySelectorAll('.maintenance-service-card input[type="checkbox"]')
+        .forEach(input => {
+            const card = input.closest('.maintenance-service-card');
+            const state = card?.querySelector('.maintenance-service-card__state');
+
+            if (!card) return;
+
+            card.classList.toggle('is-blocked', input.checked);
+
+            if (state) {
+                state.textContent = input.checked
+                    ? 'سيتم إيقافه'
+                    : 'يعمل';
+            }
+        });
+}
+
+function syncMaintenanceMessageCounter() {
+    const message =
+        document.getElementById('maintenanceMessage');
+
+    const counter =
+        document.getElementById('maintenanceMessageCounter');
+
+    if (!message || !counter) return;
+
+    counter.textContent =
+        `${message.value.length} / 500`;
+}
+
+function syncMaintenanceScheduleSummary() {
+    const summary =
+        document.querySelector('#maintenanceScheduleSummary span');
+
+    if (!summary) return;
+
+    const timingMode =
+        getMaintenanceTimingMode();
+
+    if (timingMode !== 'scheduled') {
+        summary.textContent =
+            'سيبدأ وضع الصيانة فورًا بعد الحفظ ويستمر حتى توقفه يدويًا.';
+        return;
+    }
+
+    const schedule =
+        getMaintenanceSchedulePayload();
+
+    if (!schedule.start) {
+        summary.textContent =
+            'حدد موعد البداية أولًا.';
+        return;
+    }
+
+    if (!schedule.end) {
+        summary.textContent =
+            `تبدأ الصيانة في ${formatMaintenanceLocalDate(schedule.start)} وتستمر حتى توقفها يدويًا.`;
+        return;
+    }
+
+    summary.textContent =
+        `تبدأ الصيانة في ${formatMaintenanceLocalDate(schedule.start)} وتنتهي تلقائيًا في ${formatMaintenanceLocalDate(schedule.end)}.`;
+}
+
+function formatMaintenanceLocalDate(value) {
+    if (!value) return '—';
+
+    const parsed = new Date(value);
+
+    if (Number.isNaN(parsed.getTime())) {
+        return value.replace('T', ' ');
+    }
+
+    return new Intl.DateTimeFormat(
+        'ar-YE',
+        {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
+        }
+    ).format(parsed);
+}
+
+function syncMaintenanceImpactPreview() {
+    const enabled =
+        document.getElementById('maintenanceMode')?.checked === true;
+
+    const type =
+        getSelectedMaintenanceType();
+
+    const scope =
+        getSelectedMaintenanceScope();
+
+    const title =
+        document.getElementById('maintenancePreviewTitle');
+
+    const text =
+        document.getElementById('maintenancePreviewText');
+
+    const badge =
+        document.getElementById('maintenancePreviewBadge');
+
+    const preview =
+        document.querySelector('[data-maintenance-preview]');
+
+    if (!title || !text || !badge || !preview) return;
+
+    preview.dataset.mode = enabled ? type : 'Normal';
+
+    if (!enabled) {
+        title.textContent = 'سيتم حفظ المنصة بوضعها الطبيعي';
+        text.textContent = 'لن يتم منع العملاء أو الزوار أو المالكين بسبب الصيانة.';
+        badge.textContent = 'طبيعي';
+        return;
+    }
+
+    const audienceText = scope === 'everyone'
+        ? 'العملاء والزوار والمالكون'
+        : 'العملاء والزوار فقط';
+
+    const timingText =
+        getMaintenanceTimingMode() === 'scheduled'
+            ? buildMaintenanceTimingPreviewText()
+            : 'وتبدأ بعد الحفظ مباشرة';
+
+    if (type === 'Full') {
+        title.textContent = 'سيتم إغلاق المنصة بالكامل';
+        text.textContent = `ستظهر شاشة الصيانة لـ ${audienceText}، ${timingText}.`;
+        badge.textContent = 'إغلاق كامل';
+        return;
+    }
+
+    if (type === 'ReadOnly') {
+        title.textContent = 'ستصبح المنصة للتصفح فقط';
+        text.textContent = `سيتمكن ${audienceText} من المشاهدة دون تنفيذ العمليات التي تغيّر البيانات، ${timingText}.`;
+        badge.textContent = 'تصفح فقط';
+        return;
+    }
+
+    const blockedLabels =
+        getSelectedPartialOperationLabels();
+
+    title.textContent = blockedLabels.length > 0
+        ? `سيتم إيقاف ${blockedLabels.length} خدمات فقط`
+        : 'اختر الخدمات التي تريد إيقافها';
+
+    text.textContent = blockedLabels.length > 0
+        ? `الخدمات المتوقفة: ${blockedLabels.join('، ')}. سيطبق ذلك على ${audienceText}، ${timingText}.`
+        : 'الصيانة الجزئية تحتاج اختيار خدمة واحدة على الأقل.';
+
+    badge.textContent = 'خدمات محددة';
+}
+
+function buildMaintenanceTimingPreviewText() {
+    const schedule =
+        getMaintenanceSchedulePayload();
+
+    if (!schedule.start) {
+        return 'لكن موعد البداية لم يُحدد بعد';
+    }
+
+    if (!schedule.end) {
+        return `وتبدأ في ${formatMaintenanceLocalDate(schedule.start)}`;
+    }
+
+    return `وتعمل من ${formatMaintenanceLocalDate(schedule.start)} حتى ${formatMaintenanceLocalDate(schedule.end)}`;
+}
+
+function getSelectedPartialOperationLabels() {
+    const options = [
+        ['maintenanceBlockBookings', 'الحجوزات'],
+        ['maintenanceBlockPayments', 'المدفوعات'],
+        ['maintenanceBlockOwnerChanges', 'تعديلات المالك'],
+        ['maintenanceBlockMessages', 'الرسائل'],
+        ['maintenanceBlockReviews', 'التقييمات'],
+        ['maintenanceBlockRegistrations', 'التسجيل']
+    ];
+
+    return options
+        .filter(([id]) => document.getElementById(id)?.checked === true)
+        .map(([, label]) => label);
+}
+
+function validateMaintenanceSettings() {
+    const enabled =
+        document.getElementById('maintenanceMode')?.checked === true;
+
+    if (!enabled) {
+        return { valid: true };
+    }
+
+    const title =
+        document.getElementById('maintenanceTitle');
+
+    const message =
+        document.getElementById('maintenanceMessage');
+
+    if (!String(title?.value || '').trim()) {
+        return {
+            valid: false,
+            message: 'اكتب عنوانًا واضحًا لشاشة الصيانة.',
+            control: title
+        };
+    }
+
+    if (!String(message?.value || '').trim()) {
+        return {
+            valid: false,
+            message: 'اكتب رسالة الصيانة التي ستظهر للمستخدمين.',
+            control: message
+        };
+    }
+
+    if (getMaintenanceTimingMode() === 'scheduled') {
+        const schedule =
+            getMaintenanceSchedulePayload();
+
+        const startControl =
+            document.getElementById('maintenanceStartAt');
+
+        const endControl =
+            document.getElementById('maintenanceEndAt');
+
+        if (!schedule.start) {
+            return {
+                valid: false,
+                message: 'اختر تاريخ ووقت بداية الصيانة المجدولة.',
+                control: startControl
+            };
+        }
+
+        if (schedule.end) {
+            const startDate = new Date(schedule.start);
+            const endDate = new Date(schedule.end);
+
+            if (endDate <= startDate) {
+                return {
+                    valid: false,
+                    message: 'موعد انتهاء الصيانة يجب أن يكون بعد موعد البداية.',
+                    control: endControl
+                };
+            }
+        }
+    }
+
+    if (
+        getSelectedMaintenanceType() === 'Partial' &&
+        getSelectedPartialOperationLabels().length === 0
+    ) {
+        return {
+            valid: false,
+            message: 'اختر خدمة واحدة على الأقل لإيقافها في وضع «خدمات محددة».',
+            control: document.getElementById('maintenanceBlockBookings')
+        };
+    }
+
+    return { valid: true };
+}
+
+function validateImageLimitsSettings() {
+    const sizeControl =
+        document.getElementById('maxImageSize');
+
+    const countControl =
+        document.getElementById('maxImageCount');
+
+    const size = Number.parseInt(sizeControl?.value || '', 10);
+    const count = Number.parseInt(countControl?.value || '', 10);
+
+    if (!Number.isInteger(size) || size < 1 || size > 100) {
+        return {
+            valid: false,
+            message: 'الحد الأقصى لحجم الصورة يجب أن يكون بين 1 و100 ميجابايت.',
+            control: sizeControl
+        };
+    }
+
+    if (!Number.isInteger(count) || count < 1 || count > 100) {
+        return {
+            valid: false,
+            message: 'الحد الأقصى لعدد الصور يجب أن يكون بين 1 و100 صورة.',
+            control: countControl
+        };
+    }
+
+    return { valid: true };
+}
+
+function applyMaintenancePayload(payload) {
+    if (!payload) return;
+
+    const enabled =
+        document.getElementById('maintenanceMode');
+
+    if (enabled && typeof payload.enabled === 'boolean') {
+        enabled.checked = payload.enabled;
+    }
+
+    const typeControl =
+        document.querySelector(
+            `input[name="maintenanceType"][value="${payload.type || 'Full'}"]`
+        );
+
+    if (typeControl) {
+        typeControl.checked = true;
+    }
+
+    syncMaintenanceUi();
+}
+
+
 
 
 /* ==========================================================================

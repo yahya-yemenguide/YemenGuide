@@ -2,6 +2,47 @@
 @{
     ViewData["Title"] = "إعدادات النظام";
     Layout = "~/Areas/Admin/Views/Shared/_AdminLayout.cshtml";
+
+    var maintenanceType =
+        Model.MaintenanceType switch
+        {
+            "ReadOnly" => "ReadOnly",
+            "Partial" => "Partial",
+            _ => "Full"
+        };
+
+    string FormatYemenMaintenanceInput(DateTime? value)
+    {
+        if (!value.HasValue)
+        {
+            return string.Empty;
+        }
+
+        var utcValue =
+            value.Value.Kind == DateTimeKind.Local
+                ? value.Value.ToUniversalTime()
+                : value.Value.Kind == DateTimeKind.Utc
+                    ? value.Value
+                    : DateTime.SpecifyKind(value.Value, DateTimeKind.Utc);
+
+        return utcValue
+            .AddHours(3)
+            .ToString(
+                "yyyy-MM-ddTHH:mm",
+                System.Globalization.CultureInfo.InvariantCulture
+            );
+    }
+
+    var maintenanceStartInput =
+        FormatYemenMaintenanceInput(
+            Model.MaintenanceStartAt
+        );
+
+    var maintenanceEndInput =
+        FormatYemenMaintenanceInput(
+            Model.MaintenanceEndAt
+        );
+
 }
 
 @section Styles {
@@ -9,9 +50,194 @@
 }
 
 
+    <style>
+        /* ==========================================================================
+           YemenGuide Admin Settings — Bilingual fields
+           داخل SystemSettings.cshtml نفسه، بدون إنشاء CSS جديد.
+           ========================================================================== */
+
+        .system-settings-page {
+            overflow-x: clip;
+        }
+
+        .settings-bilingual-card {
+            overflow: visible;
+        }
+
+        .settings-bilingual-pair {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            gap: 14px;
+            align-items: stretch;
+            width: 100%;
+        }
+
+        .settings-language-field {
+            position: relative;
+            min-width: 0;
+            padding: 14px 12px 10px;
+            border: 1px solid rgba(5, 32, 60, .08);
+            border-radius: 16px;
+            background: linear-gradient(180deg, #ffffff 0%, #f9fbfd 100%);
+        }
+
+        .settings-language-field--ar {
+            border-inline-start: 3px solid #00a6da;
+        }
+
+        .settings-language-field--en {
+            border-inline-start: 3px solid #f59e0b;
+        }
+
+        .settings-language-badge {
+            position: absolute;
+            top: -10px;
+            inset-inline-start: 12px;
+            z-index: 2;
+            min-width: 34px;
+            height: 21px;
+            padding: 0 8px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            background: #05203c;
+            color: #fff;
+            font-size: .68rem;
+            font-weight: 900;
+            letter-spacing: .06em;
+            box-shadow: 0 4px 12px rgba(5, 32, 60, .15);
+        }
+
+        .settings-language-field--en .settings-language-badge {
+            background: #f59e0b;
+            color: #3b2a00;
+        }
+
+        .settings-language-field .form-floating {
+            width: 100%;
+            margin: 0;
+        }
+
+        .settings-language-field .form-control,
+        .settings-language-field .form-select {
+            width: 100%;
+            min-width: 0;
+            background: #fff !important;
+        }
+
+        .settings-language-field--ar .form-control,
+        .settings-language-field--ar .form-select {
+            direction: rtl;
+            text-align: right;
+        }
+
+        .settings-language-field--en .form-control,
+        .settings-language-field--en .form-select {
+            direction: ltr;
+            text-align: left;
+        }
+
+        .settings-language-field--ar .form-floating > label {
+            right: 0;
+            left: auto;
+            width: 100%;
+            text-align: right;
+            direction: rtl;
+        }
+
+        .settings-language-field--en .form-floating > label {
+            left: 0;
+            right: auto;
+            width: 100%;
+            text-align: left;
+            direction: ltr;
+        }
+
+        .settings-bilingual-pair textarea.form-control {
+            min-height: 110px;
+        }
+
+        .settings-bilingual-pair + .settings-bilingual-pair {
+            margin-top: 14px;
+        }
+
+        .system-settings-page .settings-card > [class*="col-"] {
+            width: 100%;
+            max-width: 100%;
+            padding-inline: 0;
+        }
+
+        .settings-slider-form-row--bilingual > [class*="col-"],
+        .settings-wallet-form-row--bilingual > [class*="col-"] {
+            min-width: 0;
+        }
+
+        .settings-slider-form-row--bilingual .form-control,
+        .settings-wallet-form-row--bilingual .form-control,
+        .settings-slider-form-row--bilingual .settings-slide-upload-label,
+        .settings-slider-form-row--bilingual .settings-slider-add-btn,
+        .settings-wallet-form-row--bilingual .settings-wallet-add-btn {
+            min-height: 58px;
+        }
+
+        .system-settings-page .form-floating > label {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: calc(100% - 10px);
+        }
+
+        .maintenance-tab .settings-bilingual-card {
+            min-height: 100%;
+        }
+
+        @@media (max-width: 1199.98px) {
+            .settings-bilingual-pair--stack-at-lg {
+                grid-template-columns: 1fr;
+                gap: 16px;
+            }
+        }
+
+        @@media (max-width: 767.98px) {
+            .settings-bilingual-pair {
+                grid-template-columns: 1fr;
+                gap: 16px;
+            }
+
+            .settings-language-field {
+                padding: 14px 10px 10px;
+            }
+
+            .settings-bilingual-card {
+                padding: 18px !important;
+            }
+
+            .settings-slider-form-row--bilingual .settings-slider-add-btn,
+            .settings-wallet-form-row--bilingual .settings-wallet-add-btn {
+                width: 100%;
+            }
+        }
+
+        @@media (max-width: 480px) {
+            .system-settings-page {
+                padding-inline: 10px !important;
+            }
+
+            .settings-main-panel {
+                padding: 12px !important;
+            }
+
+            .settings-language-badge {
+                inset-inline-start: 8px;
+            }
+        }
+    </style>
+
+
     @Html.AntiForgeryToken()
 
-<div class="container-fluid px-4 py-3 system-settings-page" dir="rtl">
+    <div class="container-fluid px-4 py-3 system-settings-page" dir="rtl">
         <div class="d-flex justify-content-between align-items-center mb-4 settings-page-header">
             <div class="settings-title-block">
                 <h2 class="fw-bold mb-1 settings-page-title"><i class="bi bi-gear-wide-connected text-primary me-2"></i> إعدادات النظام</h2>
@@ -21,23 +247,23 @@
 
         <div class="settings-tabs-scroll mb-4" role="region" aria-label="تبويبات إعدادات النظام">
             <div class="custom-tabs-container d-flex justify-content-start border-bottom gap-3" role="tablist">
-            <button type="button" class="tab-btn active d-flex align-items-center gap-2" data-target="branding-tab" role="tab" aria-selected="true">
+                <button type="button" class="tab-btn active d-flex align-items-center gap-2" data-target="branding-tab" role="tab" aria-selected="true">
                     <i class="bi bi-globe2"></i>
                     <span class="tab-label">هوية وماركة</span>
                 </button>
-            <button type="button" class="tab-btn d-flex align-items-center gap-2" data-target="policies-tab" role="tab" aria-selected="false">
+                <button type="button" class="tab-btn d-flex align-items-center gap-2" data-target="policies-tab" role="tab" aria-selected="false">
                     <i class="bi bi-sliders2"></i>
                     <span class="tab-label">سياسات التشغيل</span>
                 </button>
-            <button type="button" class="tab-btn d-flex align-items-center gap-2" data-target="contact-tab" role="tab" aria-selected="false">
+                <button type="button" class="tab-btn d-flex align-items-center gap-2" data-target="contact-tab" role="tab" aria-selected="false">
                     <i class="bi bi-headset"></i>
                     <span class="tab-label">التواصل والروابط</span>
                 </button>
-            <button type="button" class="tab-btn d-flex align-items-center gap-2" data-target="maintenance-tab" role="tab" aria-selected="false">
+                <button type="button" class="tab-btn d-flex align-items-center gap-2" data-target="maintenance-tab" role="tab" aria-selected="false">
                     <i class="bi bi-cone-striped"></i>
                     <span class="tab-label">الصيانة والطوارئ</span>
                 </button>
-            <button type="button" class="tab-btn d-flex align-items-center gap-2" data-target="wallets-tab" role="tab" aria-selected="false">
+                <button type="button" class="tab-btn d-flex align-items-center gap-2" data-target="wallets-tab" role="tab" aria-selected="false">
                     <i class="bi bi-wallet2"></i>
                     <span class="tab-label">شبكات الدفع</span>
                 </button>
@@ -63,10 +289,10 @@
                                     <span class="settings-language-badge">AR</span>
                                     <div class="form-floating">
                                         <input type="text"
-                                               class="form-control rounded-3"
-                                               id="siteName"
-                                               placeholder="اسم المنصة"
-                                               value="@Model.SiteName">
+                                           class="form-control rounded-3"
+                                           id="siteName"
+                                           placeholder="اسم المنصة"
+                                           value="@Model.SiteName">
                                         <label for="siteName">اسم المنصة الرسمي</label>
                                     </div>
                                 </div>
@@ -75,11 +301,11 @@
                                     <span class="settings-language-badge">EN</span>
                                     <div class="form-floating">
                                         <input type="text"
-                                               class="form-control rounded-3"
-                                               id="siteNameEn"
-                                               placeholder="Platform name"
-                                               value="@Model.SiteNameEn"
-                                               required>
+                                           class="form-control rounded-3"
+                                           id="siteNameEn"
+                                           placeholder="Platform name"
+                                           value="@Model.SiteNameEn"
+                                           required>
                                         <label for="siteNameEn">Platform name</label>
                                     </div>
                                 </div>
@@ -90,9 +316,9 @@
                                     <span class="settings-language-badge">AR</span>
                                     <div class="form-floating">
                                         <textarea class="form-control rounded-3"
-                                                  id="siteDescription"
-                                                  placeholder="وصف المنصة"
-                                                  style="height: 112px">@Model.SiteDescription</textarea>
+                                              id="siteDescription"
+                                              placeholder="وصف المنصة"
+                                              style="height: 112px">@Model.SiteDescription</textarea>
                                         <label for="siteDescription">الوصف لمحركات البحث (SEO)</label>
                                     </div>
                                 </div>
@@ -101,9 +327,9 @@
                                     <span class="settings-language-badge">EN</span>
                                     <div class="form-floating">
                                         <textarea class="form-control rounded-3"
-                                                  id="siteDescriptionEn"
-                                                  placeholder="Platform description"
-                                                  style="height: 112px">@Model.SiteDescriptionEn</textarea>
+                                              id="siteDescriptionEn"
+                                              placeholder="Platform description"
+                                              style="height: 112px">@Model.SiteDescriptionEn</textarea>
                                         <label for="siteDescriptionEn">Platform description (SEO)</label>
                                     </div>
                                 </div>
@@ -675,76 +901,392 @@
             </div>
         </div>
 
-        @* 4. تبويب الصيانة والعناية بالطوارئ *@
-        <div class="tab-pane-content maintenance-tab settings-tab-panel" style="display: none;">
-            <div class="row g-4">
-                <div class="col-md-4">
-                    <div class="settings-card emergency-card p-4">
-                        <div class="d-flex align-items-start gap-3 mb-3">
-                            <div class="card-icon">
-                                <i class="bi bi-shield-lock"></i>
-                            </div>
-                            <div class="flex-grow-1">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <label class="fw-bold mb-1 text-danger">وضع الصيانة العام</label>
-                                        <small class="text-muted d-block">إغلاق الموقع أمام الزوار</small>
-                                    </div>
-                                    <div class="form-check form-switch">
-                                        <input class="form-check-input" type="checkbox" id="maintenanceMode" @(Model.MaintenanceMode ? "checked" : null)>
-                                    </div>
-                                </div>
-                            </div>
+        @* =========================================================
+        4. تبويب الصيانة والطوارئ — النسخة المبسطة والواضحة
+        ========================================================= *@
+
+        <div id="settings-maintenance-panel" class="tab-pane-content maintenance-tab settings-tab-panel" role="tabpanel" style="display: none;">
+
+            <div class="settings-tab-intro settings-tab-intro--danger mb-4">
+                <div class="settings-tab-intro__icon"><i class="bi bi-tools"></i></div>
+                <div class="settings-tab-intro__copy">
+                    <span>مركز الصيانة</span>
+                    <h2>شغّل الصيانة بخطوات بسيطة وواضحة</h2>
+                    <p>ابدأ من المفتاح الرئيسي، ثم اختر ما تريد إيقافه ومن يتأثر ومتى تبدأ الصيانة. الإدارة تبقى مستثناة دائمًا.</p>
+                </div>
+            </div>
+
+            <section class="maintenance-simple"
+                     data-maintenance-center
+                     data-enabled="@Model.MaintenanceMode.ToString().ToLowerInvariant()"
+                     data-type="@maintenanceType">
+
+                @* الحالة الرئيسية *@
+                <div class="maintenance-simple-status" data-maintenance-status-board>
+                    <div class="maintenance-simple-status__identity">
+                        <span class="maintenance-simple-status__icon" aria-hidden="true">
+                            <i class="bi bi-check2-circle"></i>
+                        </span>
+                        <div>
+                            <small>حالة المنصة</small>
+                            <h3 id="maintenanceStatusTitle">
+                                @(Model.MaintenanceMode ? "وضع الصيانة مفعّل" : "المنصة تعمل بشكل طبيعي")
+                            </h3>
+                            <p id="maintenanceStatusDescription">
+                                @(Model.MaintenanceMode
+                                    ? "إعدادات الصيانة أدناه هي التي ستحدد ما الذي يتوقف ومن يتأثر."
+                                    : "لا توجد قيود صيانة مفعلة الآن، وجميع الخدمات تعمل بصورة طبيعية.")
+                            </p>
                         </div>
                     </div>
+
+                    <label class="maintenance-simple-power" for="maintenanceMode">
+                        <span>
+                            <strong id="maintenancePowerLabel">@(Model.MaintenanceMode ? "إيقاف الصيانة" : "تشغيل الصيانة")</strong>
+                            <small>المفتاح الرئيسي</small>
+                        </span>
+                        <span class="form-check form-switch m-0">
+                            <input class="form-check-input"
+                                   type="checkbox"
+                                   id="maintenanceMode"
+                                   @(Model.MaintenanceMode ? "checked" : null)>
+                        </span>
+                    </label>
                 </div>
-                <div class="col-md-8">
-                    <div class="settings-card emergency-card p-4 settings-bilingual-card">
-                        <div class="d-flex align-items-center gap-3 mb-4">
-                            <div class="card-icon">
-                                <i class="bi bi-chat-dots"></i>
-                            </div>
+
+                <div class="maintenance-simple-normal-note" id="maintenanceNormalNote">
+                    <i class="bi bi-check-circle-fill"></i>
+                    <div>
+                        <strong>كل شيء طبيعي الآن</strong>
+                        <span>إذا لم تكن بحاجة إلى صيانة، لا تحتاج إلى تغيير أي شيء. فعّل المفتاح فقط عندما تريد تطبيق الصيانة.</span>
+                    </div>
+                </div>
+
+                @* تظهر الخطوات فقط عند تفعيل الصيانة *@
+                <div class="maintenance-simple-setup" id="maintenanceSetupPanel">
+
+                    @* 1. النوع *@
+                    <section class="maintenance-simple-step">
+                        <header class="maintenance-simple-step__head">
+                            <span class="maintenance-simple-step__number">1</span>
                             <div>
-                                <h6 class="fw-bold mb-1 text-navy">رسالة الصيانة للزوار</h6>
-                                <small class="text-muted">أدخل العربي والإنجليزي ليظهر النص الصحيح حسب لغة المستخدم.</small>
+                                <h3>ماذا تريد أن توقف؟</h3>
+                                <p>اختر الخيار الذي يصف ما تريد فعله بالضبط.</p>
                             </div>
+                        </header>
+
+                        <div class="maintenance-simple-choice-grid maintenance-simple-choice-grid--three" role="radiogroup" aria-label="نوع الصيانة">
+                            <label class="maintenance-simple-choice maintenance-simple-choice--danger" data-maintenance-type-card="Full">
+                                <input type="radio"
+                                       name="maintenanceType"
+                                       id="maintenanceTypeFull"
+                                       value="Full"
+                                       @(maintenanceType == "Full" ? "checked" : null)>
+                                <span class="maintenance-simple-choice__check"><i class="bi bi-check-lg"></i></span>
+                                <span class="maintenance-simple-choice__icon"><i class="bi bi-lock-fill"></i></span>
+                                <span class="maintenance-simple-choice__copy">
+                                    <strong>إغلاق المنصة بالكامل</strong>
+                                    <small>يظهر للمستخدمين شاشة الصيانة ولا يستطيعون استخدام المنصة.</small>
+                                </span>
+                                <span class="maintenance-simple-choice__footer">أقوى وضع</span>
+                            </label>
+
+                            <label class="maintenance-simple-choice maintenance-simple-choice--warning" data-maintenance-type-card="ReadOnly">
+                                <input type="radio"
+                                       name="maintenanceType"
+                                       id="maintenanceTypeReadOnly"
+                                       value="ReadOnly"
+                                       @(maintenanceType == "ReadOnly" ? "checked" : null)>
+                                <span class="maintenance-simple-choice__check"><i class="bi bi-check-lg"></i></span>
+                                <span class="maintenance-simple-choice__icon"><i class="bi bi-eye-fill"></i></span>
+                                <span class="maintenance-simple-choice__copy">
+                                    <strong>السماح بالتصفح فقط</strong>
+                                    <small>يشاهد المستخدم المحتوى، لكن العمليات التي تغيّر البيانات تتوقف.</small>
+                                </span>
+                                <span class="maintenance-simple-choice__footer">مشاهدة فقط</span>
+                            </label>
+
+                            <label class="maintenance-simple-choice maintenance-simple-choice--primary" data-maintenance-type-card="Partial">
+                                <input type="radio"
+                                       name="maintenanceType"
+                                       id="maintenanceTypePartial"
+                                       value="Partial"
+                                       @(maintenanceType == "Partial" ? "checked" : null)>
+                                <span class="maintenance-simple-choice__check"><i class="bi bi-check-lg"></i></span>
+                                <span class="maintenance-simple-choice__icon"><i class="bi bi-sliders2"></i></span>
+                                <span class="maintenance-simple-choice__copy">
+                                    <strong>إيقاف خدمات محددة فقط</strong>
+                                    <small>المنصة تستمر بالعمل، وأنت تختار الخدمات التي تريد إيقافها.</small>
+                                </span>
+                                <span class="maintenance-simple-choice__footer">تحكم دقيق</span>
+                            </label>
                         </div>
 
-                        <div class="settings-bilingual-pair">
-                            <div class="settings-language-field settings-language-field--ar" dir="rtl">
-                                <span class="settings-language-badge">AR</span>
-                                <div class="form-floating">
-                                    <input type="text"
-                                           class="form-control"
-                                           id="maintenanceTitle"
-                                           value="@Model.MaintenanceTitle"
-                                           placeholder="عنوان الصيانة">
-                                    <label for="maintenanceTitle">عنوان الصيانة</label>
+                        @* تظهر فقط مع الصيانة الجزئية *@
+                        <div class="maintenance-simple-partial" id="maintenancePartialPanel" data-maintenance-partial-panel>
+                            <div class="maintenance-simple-partial__head">
+                                <i class="bi bi-ui-checks-grid"></i>
+                                <div>
+                                    <strong>ما الخدمات التي تريد إيقافها؟</strong>
+                                    <span>اضغط على أي خدمة لإيقافها مؤقتًا. الباقي سيستمر بالعمل.</span>
                                 </div>
                             </div>
 
+                            <div class="maintenance-simple-services">
+                                <label class="maintenance-service-card" for="maintenanceBlockBookings">
+                                    <input type="checkbox" id="maintenanceBlockBookings" @(Model.MaintenanceBlockBookings ? "checked" : null)>
+                                    <span class="maintenance-service-card__icon"><i class="bi bi-calendar-x"></i></span>
+                                    <span class="maintenance-service-card__copy">
+                                        <strong>الحجوزات</strong>
+                                        <small>إنشاء وإدارة الحجوزات</small>
+                                    </span>
+                                    <span class="maintenance-service-card__state">يعمل</span>
+                                </label>
+
+                                <label class="maintenance-service-card" for="maintenanceBlockPayments">
+                                    <input type="checkbox" id="maintenanceBlockPayments" @(Model.MaintenanceBlockPayments ? "checked" : null)>
+                                    <span class="maintenance-service-card__icon"><i class="bi bi-credit-card"></i></span>
+                                    <span class="maintenance-service-card__copy">
+                                        <strong>المدفوعات</strong>
+                                        <small>الدفع وإثباتات الدفع</small>
+                                    </span>
+                                    <span class="maintenance-service-card__state">يعمل</span>
+                                </label>
+
+                                <label class="maintenance-service-card" for="maintenanceBlockOwnerChanges">
+                                    <input type="checkbox" id="maintenanceBlockOwnerChanges" @(Model.MaintenanceBlockOwnerChanges ? "checked" : null)>
+                                    <span class="maintenance-service-card__icon"><i class="bi bi-building-gear"></i></span>
+                                    <span class="maintenance-service-card__copy">
+                                        <strong>تعديلات المالك</strong>
+                                        <small>المنشآت والغرف والباقات والسياسات</small>
+                                    </span>
+                                    <span class="maintenance-service-card__state">يعمل</span>
+                                </label>
+
+                                <label class="maintenance-service-card" for="maintenanceBlockMessages">
+                                    <input type="checkbox" id="maintenanceBlockMessages" @(Model.MaintenanceBlockMessages ? "checked" : null)>
+                                    <span class="maintenance-service-card__icon"><i class="bi bi-chat-dots"></i></span>
+                                    <span class="maintenance-service-card__copy">
+                                        <strong>الرسائل</strong>
+                                        <small>إرسال الرسائل الجديدة</small>
+                                    </span>
+                                    <span class="maintenance-service-card__state">يعمل</span>
+                                </label>
+
+                                <label class="maintenance-service-card" for="maintenanceBlockReviews">
+                                    <input type="checkbox" id="maintenanceBlockReviews" @(Model.MaintenanceBlockReviews ? "checked" : null)>
+                                    <span class="maintenance-service-card__icon"><i class="bi bi-star"></i></span>
+                                    <span class="maintenance-service-card__copy">
+                                        <strong>التقييمات</strong>
+                                        <small>إضافة وتعديل التقييمات</small>
+                                    </span>
+                                    <span class="maintenance-service-card__state">يعمل</span>
+                                </label>
+
+                                <label class="maintenance-service-card" for="maintenanceBlockRegistrations">
+                                    <input type="checkbox" id="maintenanceBlockRegistrations" @(Model.MaintenanceBlockRegistrations ? "checked" : null)>
+                                    <span class="maintenance-service-card__icon"><i class="bi bi-person-plus"></i></span>
+                                    <span class="maintenance-service-card__copy">
+                                        <strong>التسجيل</strong>
+                                        <small>إنشاء حسابات جديدة</small>
+                                    </span>
+                                    <span class="maintenance-service-card__state">يعمل</span>
+                                </label>
+                            </div>
+                        </div>
+                    </section>
+
+                    @* 2. النطاق *@
+                    <section class="maintenance-simple-step">
+                        <header class="maintenance-simple-step__head">
+                            <span class="maintenance-simple-step__number">2</span>
+                            <div>
+                                <h3>من سيتأثر بالصيانة؟</h3>
+                                <p>اختر الفئة التي تريد تطبيق الصيانة عليها.</p>
+                            </div>
+                        </header>
+
+                        <input type="checkbox"
+                               id="maintenanceAffectOwners"
+                               @(Model.MaintenanceAffectOwners == true ? "checked" : null)
+                               hidden>
+
+                        <div class="maintenance-simple-choice-grid maintenance-simple-choice-grid--two" role="radiogroup" aria-label="الفئات المتأثرة بالصيانة">
+                            <label class="maintenance-simple-choice maintenance-simple-choice--compact" data-maintenance-scope-card="customers">
+                                <input type="radio"
+                                       name="maintenanceScope"
+                                       id="maintenanceScopeCustomers"
+                                       value="customers"
+                                       @(Model.MaintenanceAffectOwners != true ? "checked" : null)>
+                                <span class="maintenance-simple-choice__check"><i class="bi bi-check-lg"></i></span>
+                                <span class="maintenance-simple-choice__icon"><i class="bi bi-people"></i></span>
+                                <span class="maintenance-simple-choice__copy">
+                                    <strong>العملاء والزوار فقط</strong>
+                                    <small>المالكون يستمرون في استخدام لوحة التحكم.</small>
+                                </span>
+                            </label>
+
+                            <label class="maintenance-simple-choice maintenance-simple-choice--compact" data-maintenance-scope-card="everyone">
+                                <input type="radio"
+                                       name="maintenanceScope"
+                                       id="maintenanceScopeEveryone"
+                                       value="everyone"
+                                       @(Model.MaintenanceAffectOwners == true ? "checked" : null)>
+                                <span class="maintenance-simple-choice__check"><i class="bi bi-check-lg"></i></span>
+                                <span class="maintenance-simple-choice__icon"><i class="bi bi-buildings"></i></span>
+                                <span class="maintenance-simple-choice__copy">
+                                    <strong>العملاء والزوار والمالكون</strong>
+                                    <small>الصيانة تشمل جميع الواجهات ما عدا الإدارة.</small>
+                                </span>
+                            </label>
+                        </div>
+
+                        <div class="maintenance-simple-admin-note">
+                            <i class="bi bi-person-badge-fill"></i>
+                            <div>
+                                <strong>الإدارة مستثناة دائمًا</strong>
+                                <span>يمكن لموظفي الإدارة المصرح لهم الدخول وإيقاف الصيانة أو تعديل إعداداتها.</span>
+                            </div>
+                            <i class="bi bi-check-circle-fill"></i>
+                        </div>
+                    </section>
+
+                    @* 3. الوقت *@
+                    <section class="maintenance-simple-step">
+                        <header class="maintenance-simple-step__head">
+                            <span class="maintenance-simple-step__number">3</span>
+                            <div>
+                                <h3>متى تبدأ الصيانة؟</h3>
+                                <p>شغّلها فورًا أو حدّد موعدًا لاحقًا بتوقيت اليمن.</p>
+                            </div>
+                        </header>
+
+                        <div class="maintenance-simple-choice-grid maintenance-simple-choice-grid--two" role="radiogroup" aria-label="موعد بدء الصيانة">
+                            <label class="maintenance-simple-choice maintenance-simple-choice--compact" data-maintenance-timing-card="now">
+                                <input type="radio"
+                                       name="maintenanceTiming"
+                                       id="maintenanceTimingNow"
+                                       value="now"
+                                       @(string.IsNullOrWhiteSpace(maintenanceStartInput) ? "checked" : null)>
+                                <span class="maintenance-simple-choice__check"><i class="bi bi-check-lg"></i></span>
+                                <span class="maintenance-simple-choice__icon"><i class="bi bi-lightning-charge-fill"></i></span>
+                                <span class="maintenance-simple-choice__copy">
+                                    <strong>ابدأ الآن</strong>
+                                    <small>تبدأ الصيانة بعد الحفظ مباشرة وتستمر حتى توقفها يدويًا.</small>
+                                </span>
+                            </label>
+
+                            <label class="maintenance-simple-choice maintenance-simple-choice--compact" data-maintenance-timing-card="scheduled">
+                                <input type="radio"
+                                       name="maintenanceTiming"
+                                       id="maintenanceTimingScheduled"
+                                       value="scheduled"
+                                       @(!string.IsNullOrWhiteSpace(maintenanceStartInput) ? "checked" : null)>
+                                <span class="maintenance-simple-choice__check"><i class="bi bi-check-lg"></i></span>
+                                <span class="maintenance-simple-choice__icon"><i class="bi bi-calendar2-week"></i></span>
+                                <span class="maintenance-simple-choice__copy">
+                                    <strong>تحديد موعد</strong>
+                                    <small>اختر تاريخ ووقت البداية، ويمكن تحديد نهاية تلقائية.</small>
+                                </span>
+                            </label>
+                        </div>
+
+                        <div class="maintenance-simple-schedule" id="maintenanceSchedulePanel">
+                            <div class="maintenance-simple-schedule__fields">
+                                <div class="maintenance-simple-field">
+                                    <label for="maintenanceStartAt">
+                                        <span>موعد البداية</span>
+                                        <small>بتوقيت اليمن</small>
+                                    </label>
+                                    <input type="datetime-local"
+                                           class="form-control"
+                                           id="maintenanceStartAt"
+                                           value="@maintenanceStartInput">
+                                </div>
+
+                                <div class="maintenance-simple-field" id="maintenanceEndField">
+                                    <label for="maintenanceEndAt">
+                                        <span>موعد الانتهاء</span>
+                                        <small>اختياري</small>
+                                    </label>
+                                    <input type="datetime-local"
+                                           class="form-control"
+                                           id="maintenanceEndAt"
+                                           value="@maintenanceEndInput">
+                                </div>
+                            </div>
+
+                            <label class="maintenance-simple-inline-toggle" for="maintenanceNoEnd">
+                                <span>
+                                    <strong>بدون موعد انتهاء</strong>
+                                    <small>تستمر الصيانة حتى توقفها يدويًا.</small>
+                                </span>
+                                <span class="form-check form-switch m-0">
+                                    <input class="form-check-input"
+                                           type="checkbox"
+                                           id="maintenanceNoEnd"
+                                           @(string.IsNullOrWhiteSpace(maintenanceEndInput) ? "checked" : null)>
+                                </span>
+                            </label>
+                        </div>
+
+                        <div class="maintenance-simple-summary-line" id="maintenanceScheduleSummary">
+                            <i class="bi bi-clock-history"></i>
+                            <span>سيبدأ وضع الصيانة فورًا بعد الحفظ.</span>
+                        </div>
+                    </section>
+
+                    @* 4. الرسالة *@
+                    <section class="maintenance-simple-step">
+                        <header class="maintenance-simple-step__head">
+                            <span class="maintenance-simple-step__number">4</span>
+                            <div>
+                                <h3>ماذا سيشاهد المستخدم؟</h3>
+                                <p>اكتب رسالة قصيرة وواضحة. هذه هي الرسالة التي ستظهر عند الحاجة.</p>
+                            </div>
+                        </header>
+
+                        <div class="maintenance-simple-message-grid">
+                            <div class="maintenance-simple-field">
+                                <label for="maintenanceTitle">
+                                    <span>العنوان</span>
+                                    <small>مثال: نعود إليكم قريبًا</small>
+                                </label>
+                                <input type="text"
+                                       class="form-control"
+                                       id="maintenanceTitle"
+                                       maxlength="150"
+                                       value="@(Model.MaintenanceTitle ?? "نعود إليكم قريبًا")"
+                                       placeholder="نعود إليكم قريبًا">
+                            </div>
+
+                            <div class="maintenance-simple-field maintenance-simple-field--message">
+                                <label for="maintenanceMessage">
+                                    <span>رسالة الصيانة</span>
+                                    <small>رسالة مطمئنة ومختصرة</small>
+                                </label>
+                                <textarea class="form-control"
+                                          id="maintenanceMessage"
+                                          maxlength="500"
+                                          placeholder="نجري حاليًا بعض التحسينات على المنصة، وسنعود إليكم قريبًا...">@Model.MaintenanceMessage</textarea>
+                                <div class="maintenance-simple-message-footer">
+                                    <span><i class="bi bi-lightbulb"></i> اجعل الرسالة بسيطة ولا تذكر تفاصيل تقنية داخلية.</span>
+                                    <span id="maintenanceMessageCounter">0 / 500</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="settings-bilingual-pair mt-3">
                             <div class="settings-language-field settings-language-field--en" dir="ltr">
                                 <span class="settings-language-badge">EN</span>
                                 <div class="form-floating">
                                     <input type="text"
                                            class="form-control"
                                            id="maintenanceTitleEn"
+                                           maxlength="150"
                                            value="@Model.MaintenanceTitleEn"
-                                           placeholder="Maintenance title">
-                                    <label for="maintenanceTitleEn">Maintenance title</label>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="settings-bilingual-pair settings-bilingual-pair--textarea mt-3">
-                            <div class="settings-language-field settings-language-field--ar" dir="rtl">
-                                <span class="settings-language-badge">AR</span>
-                                <div class="form-floating">
-                                    <textarea class="form-control"
-                                              id="maintenanceMessage"
-                                              placeholder="رسالة الصيانة"
-                                              style="height: 110px">@Model.MaintenanceMessage</textarea>
-                                    <label for="maintenanceMessage">رسالة الصيانة</label>
+                                           placeholder="We’ll be back soon">
+                                    <label for="maintenanceTitleEn">Maintenance title — English</label>
                                 </div>
                             </div>
 
@@ -753,21 +1295,52 @@
                                 <div class="form-floating">
                                     <textarea class="form-control"
                                               id="maintenanceMessageEn"
-                                              placeholder="Maintenance message"
+                                              maxlength="500"
+                                              placeholder="We’re making improvements and will be back soon..."
                                               style="height: 110px">@Model.MaintenanceMessageEn</textarea>
-                                    <label for="maintenanceMessageEn">Maintenance message</label>
+                                    <label for="maintenanceMessageEn">Maintenance message — English</label>
                                 </div>
                             </div>
                         </div>
-                    </div>
+
+                        <label class="maintenance-simple-contact" for="maintenanceShowContact">
+                            <span class="maintenance-simple-contact__icon"><i class="bi bi-headset"></i></span>
+                            <span class="maintenance-simple-contact__copy">
+                                <strong>إظهار وسائل التواصل والدعم</strong>
+                                <small>سيستخدم النظام البريد والهاتف والواتساب المسجلة في تبويب «التواصل».</small>
+                            </span>
+                            <span class="form-check form-switch m-0">
+                                <input class="form-check-input"
+                                       type="checkbox"
+                                       id="maintenanceShowContact"
+                                       @(Model.MaintenanceShowContact == true ? "checked" : null)>
+                            </span>
+                        </label>
+                    </section>
+
                 </div>
-            </div>
-            <div class="mt-4 pt-3 border-top settings-save-actions">
-                <button type="button" class="btn btn-primary btn-save-tab" onclick="saveAllSettings()">
-                    <i class="bi bi-save me-2"></i> حفظ جميع الإعدادات
-                </button>
-            </div>
+
+                @* الملخص والحفظ يبقيان ظاهرين حتى يمكن إيقاف الصيانة بسهولة *@
+                <div class="maintenance-simple-final" data-maintenance-preview>
+                    <div class="maintenance-simple-final__icon"><i class="bi bi-eye-fill"></i></div>
+                    <div class="maintenance-simple-final__body">
+                        <small>ملخص ما سيحدث عند الحفظ</small>
+                        <strong id="maintenancePreviewTitle">سيتم تحديث الملخص تلقائيًا</strong>
+                        <p id="maintenancePreviewText">غيّر الخيارات لترى النتيجة هنا قبل التطبيق.</p>
+                    </div>
+                    <span class="maintenance-simple-final__badge" id="maintenancePreviewBadge">طبيعي</span>
+                    <button type="button" class="btn btn-primary btn-save-tab maintenance-save-button" onclick="saveAllSettings()">
+                        <i class="bi bi-shield-check"></i>
+                        <span id="maintenanceSaveButtonText">حفظ إعدادات الصيانة</span>
+                    </button>
+                </div>
+
+            </section>
+
         </div>
+
+
+
 
         @* ✨ 5. تبويب شبكات الدفع *@
         <div class="tab-pane-content wallets-tab settings-tab-panel" style="display: none;">

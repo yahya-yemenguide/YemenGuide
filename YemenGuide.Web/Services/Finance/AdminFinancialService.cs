@@ -4779,13 +4779,26 @@ namespace YemenGuide.Web.Services.Finance
             int adminUserId,
             CancellationToken cancellationToken = default)
         {
-            if (request != null && (request.OwnerFreeTrialDays < 0 || request.OwnerFreeTrialDays > 3650 ||
-                (request.OwnerFreeTrialEnabled && request.OwnerFreeTrialDays == 0) || request.RequiredCommissionGuaranteeBalance < 0m))
-                return FinanceOperationResult.Failed("مدة الفترة المجانية أو مبلغ ضمان العمولات غير صحيح.");
             if (request == null)
             {
                 return FinanceOperationResult.Failed(
                     "بيانات الإعدادات المالية غير مكتملة.");
+            }
+
+            var settingsSection =
+                string.IsNullOrWhiteSpace(request.SettingsSection)
+                    ? "all"
+                    : request.SettingsSection.Trim().ToLowerInvariant();
+
+            var saveAll = settingsSection == "all";
+            var saveCommissions = saveAll || settingsSection == "commissions";
+            var saveTrial = saveAll || settingsSection == "trial";
+            var savePolicies = saveAll || settingsSection == "policies";
+
+            if (!saveCommissions && !saveTrial && !savePolicies)
+            {
+                return FinanceOperationResult.Failed(
+                    "قسم الإعدادات المالية المطلوب غير معروف.");
             }
 
             if (adminUserId <= 0)
@@ -4794,57 +4807,61 @@ namespace YemenGuide.Web.Services.Finance
                     "تعذر تحديد حساب الأدمن المنفذ للعملية.");
             }
 
-            if (
-                request.CommissionPercentage < 0m ||
-                request.CommissionPercentage > 100m
-            )
+            if (saveCommissions &&
+                (request.CommissionPercentage < 0m ||
+                 request.CommissionPercentage > 100m))
             {
                 return FinanceOperationResult.Failed(
                     "نسبة العمولة الافتراضية يجب أن تكون بين 0 و100.");
             }
 
-            if (request.MinimumCommissionTopUp <= 0m)
+            if (saveTrial &&
+                (request.OwnerFreeTrialDays < 0 ||
+                 request.OwnerFreeTrialDays > 3650 ||
+                 (request.OwnerFreeTrialEnabled && request.OwnerFreeTrialDays == 0) ||
+                 request.RequiredCommissionGuaranteeBalance < 0m))
+            {
+                return FinanceOperationResult.Failed(
+                    "مدة الفترة المجانية أو مبلغ ضمان العمولات غير صحيح.");
+            }
+
+            if (savePolicies && request.MinimumCommissionTopUp <= 0m)
             {
                 return FinanceOperationResult.Failed(
                     "الحد الأدنى للشحن يجب أن يكون أكبر من صفر.");
             }
 
-            if (
-                request.DefaultLowBalanceThreshold < 0m ||
-                request.DefaultCommissionDebtLimit < 0m ||
-                request.CommissionDebtGraceDays < 0
-            )
+            if (savePolicies &&
+                (request.DefaultLowBalanceThreshold < 0m ||
+                 request.DefaultCommissionDebtLimit < 0m ||
+                 request.CommissionDebtGraceDays < 0))
             {
                 return FinanceOperationResult.Failed(
                     "قيم الرصيد والدين لا يمكن أن تكون سالبة.");
             }
 
-            if (
-                request.CommissionDebtGraceDays >
-                3650
-            )
+            if (savePolicies && request.CommissionDebtGraceDays > 3650)
             {
                 return FinanceOperationResult.Failed(
                     "مهلة سداد الدين يجب أن تكون بين 0 و3650 يومًا.");
             }
 
-            if (
+            if (savePolicies &&
                 request.AllowNegativeCommissionBalance &&
-                request.DefaultCommissionDebtLimit <= 0m
-            )
+                request.DefaultCommissionDebtLimit <= 0m)
             {
                 return FinanceOperationResult.Failed(
                     "حدد حد دين أكبر من صفر عند السماح بالرصيد السالب.");
             }
 
-            if (string.IsNullOrWhiteSpace(
+            if (saveAll && string.IsNullOrWhiteSpace(
                     request.DefaultCurrency))
             {
                 return FinanceOperationResult.Failed(
                     "اكتب العملة الافتراضية.");
             }
 
-            if (request.DefaultCurrency.Trim().Length > 50)
+            if (saveAll && request.DefaultCurrency.Trim().Length > 50)
             {
                 return FinanceOperationResult.Failed(
                     "اسم العملة يجب ألا يتجاوز 50 حرفًا.");
@@ -4857,9 +4874,10 @@ namespace YemenGuide.Web.Services.Finance
                     "اكتب سبب تعديل الإعدادات المالية.");
             }
 
-            var categoryRequests =
-                request.CategoryCommissions ??
-                new List<AdminCategoryCommissionUpdateDto>();
+            var categoryRequests = saveCommissions
+                ? request.CategoryCommissions ??
+                  new List<AdminCategoryCommissionUpdateDto>()
+                : new List<AdminCategoryCommissionUpdateDto>();
 
             var invalidCategoryCommission =
                 categoryRequests.FirstOrDefault(item =>
@@ -4972,7 +4990,11 @@ namespace YemenGuide.Web.Services.Finance
                         settings.DefaultCommissionDebtLimit,
                         settings.CommissionDebtGraceDays,
                         settings.SuspendBookingWhenBalanceInsufficient,
-                        settings.HidePlaceWhenCommissionSuspended
+                        settings.HidePlaceWhenCommissionSuspended,
+                        settings.ReturnCommissionOnCancellation,
+                        settings.OwnerFreeTrialEnabled,
+                        settings.OwnerFreeTrialDays,
+                        settings.RequiredCommissionGuaranteeBalance
                     };
 
                 var oldCategoryValues =
@@ -4986,46 +5008,57 @@ namespace YemenGuide.Web.Services.Finance
                             })
                         .ToList();
 
-                settings.CommissionPercentage =
-                    Math.Round(
-                        request.CommissionPercentage,
-                        2);
+                if (saveCommissions)
+                {
+                    settings.CommissionPercentage =
+                        Math.Round(request.CommissionPercentage, 2);
+                }
 
-                settings.DefaultCurrency =
-                    request.DefaultCurrency.Trim();
+                // The legacy complete form may still update the visitor fallback
+                // currency. Section forms deliberately preserve it.
+                if (saveAll)
+                {
+                    settings.DefaultCurrency = request.DefaultCurrency.Trim();
+                }
 
-                settings.MinimumCommissionTopUp =
-                    Math.Round(
-                        request.MinimumCommissionTopUp,
-                        2);
+                if (savePolicies)
+                {
+                    settings.MinimumCommissionTopUp =
+                        Math.Round(request.MinimumCommissionTopUp, 2);
+                    settings.DefaultLowBalanceThreshold =
+                        Math.Round(request.DefaultLowBalanceThreshold, 2);
+                    settings.AllowNegativeCommissionBalance =
+                        request.AllowNegativeCommissionBalance;
+                    settings.DefaultCommissionDebtLimit =
+                        request.AllowNegativeCommissionBalance
+                            ? Math.Round(request.DefaultCommissionDebtLimit, 2)
+                            : 0m;
+                    settings.CommissionDebtGraceDays =
+                        request.CommissionDebtGraceDays;
+                    settings.SuspendBookingWhenBalanceInsufficient =
+                        request.SuspendBookingWhenBalanceInsufficient;
+                    settings.HidePlaceWhenCommissionSuspended =
+                        request.HidePlaceWhenCommissionSuspended;
 
-                settings.DefaultLowBalanceThreshold =
-                    Math.Round(
-                        request.DefaultLowBalanceThreshold,
-                        2);
+                    if (request.ReturnCommissionOnCancellation.HasValue)
+                    {
+                        settings.ReturnCommissionOnCancellation =
+                            request.ReturnCommissionOnCancellation.Value;
+                    }
+                }
 
-                settings.AllowNegativeCommissionBalance =
-                    request.AllowNegativeCommissionBalance;
-
-                settings.DefaultCommissionDebtLimit =
-                    request.AllowNegativeCommissionBalance
-                        ? Math.Round(
-                            request.DefaultCommissionDebtLimit,
-                            2)
-                        : 0m;
-
-                settings.CommissionDebtGraceDays =
-                    request.CommissionDebtGraceDays;
-
-                settings.SuspendBookingWhenBalanceInsufficient =
-                    request.SuspendBookingWhenBalanceInsufficient;
-
-                settings.HidePlaceWhenCommissionSuspended = request.HidePlaceWhenCommissionSuspended;
-                settings.OwnerFreeTrialEnabled = request.OwnerFreeTrialEnabled;
-                settings.OwnerFreeTrialDays = request.OwnerFreeTrialDays;
-                settings.RequiredCommissionGuaranteeBalance = Math.Round(request.RequiredCommissionGuaranteeBalance, 2, MidpointRounding.AwayFromZero);
-                if (request.ReturnCommissionOnCancellation.HasValue)
-                    settings.ReturnCommissionOnCancellation = request.ReturnCommissionOnCancellation.Value;
+                if (saveTrial)
+                {
+                    settings.OwnerFreeTrialEnabled =
+                        request.OwnerFreeTrialEnabled;
+                    settings.OwnerFreeTrialDays =
+                        request.OwnerFreeTrialDays;
+                    settings.RequiredCommissionGuaranteeBalance =
+                        Math.Round(
+                            request.RequiredCommissionGuaranteeBalance,
+                            2,
+                            MidpointRounding.AwayFromZero);
+                }
 
                 var categoryRequestById =
                     categoryRequests
@@ -5094,11 +5127,21 @@ namespace YemenGuide.Web.Services.Finance
                     changedCategoryCount,
                     request.ChangeReason.Trim());
 
-                return FinanceOperationResult.Succeeded(
-                    changedCategoryCount > 0
-                        ? $"تم حفظ الإعدادات المالية وتحديث عمولات {changedCategoryCount} فئة."
-                        : "تم حفظ الإعدادات المالية وتحديث حالات حسابات الضمان.",
-                    settings.Id);
+                var successMessage = settingsSection switch
+                {
+                    "commissions" when changedCategoryCount > 0 =>
+                        $"تم حفظ النسبة العامة وتحديث عمولات {changedCategoryCount} فئة.",
+                    "commissions" => "تم حفظ نسب العمولات بنجاح.",
+                    "trial" => request.OwnerFreeTrialEnabled
+                        ? "تم تفعيل سياسة الفترة المجانية للمنشآت الجديدة. الفترات الممنوحة سابقًا لم تتغير."
+                        : "تم إيقاف الفترة المجانية للمنشآت الجديدة. الفترات السارية ستستمر حتى نهايتها.",
+                    "policies" => "تم حفظ سياسات الشحن والرصيد بنجاح.",
+                    _ when changedCategoryCount > 0 =>
+                        $"تم حفظ الإعدادات المالية وتحديث عمولات {changedCategoryCount} فئة.",
+                    _ => "تم حفظ الإعدادات المالية وتحديث حالات حسابات الضمان."
+                };
+
+                return FinanceOperationResult.Succeeded(successMessage, settings.Id);
             }
             catch (Exception exception)
             {
@@ -7436,4 +7479,3 @@ namespace YemenGuide.Web.Services.Finance
         }
     }
 }
-

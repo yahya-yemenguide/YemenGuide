@@ -407,7 +407,7 @@ app.UseRequestLocalization(
 // محرك الصيانة تم تسجيله في الخدمات أعلاه.
 // سنفعّل السطر التالي بعد إنشاء MaintenanceController
 // وصفحتي MaintenancePage و RestrictedService حتى لا يحدث تحويل لمسار غير موجود.
-// app.UseYemenGuideMaintenance();
+app.UseYemenGuideMaintenance();
 
 app.UseAuthorization();
 
