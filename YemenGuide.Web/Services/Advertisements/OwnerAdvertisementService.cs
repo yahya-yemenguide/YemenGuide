@@ -779,7 +779,7 @@ namespace YemenGuide.Web.Services.Advertisements
 
             // تعديل المحتوى فقط له مسار مستقل: لا نعيد تسعير الإعلان، ولا نغير الباقة/المدة/الاستهداف،
             // ولا نمس بيانات الدفع المعتمدة. نسمح فقط بعنوان الإعلان ونص الزر، بينما الوسيط
-            // (الصورة/الفيديو) يُستبدل بعد هذه الخطوة من نفس معالج الوسائط الحالي.
+            // (الصورة/الفيديو) يُستبدل بعد هذه الخطوة من نفس معالج الوسائط الحالي
             if (request.AdvertisementId.HasValue && IsContentOnlyEditMode(request.EditMode))
             {
                 return await SaveContentOnlyEditAsync(
