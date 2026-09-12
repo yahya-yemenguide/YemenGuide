@@ -887,6 +887,14 @@ namespace YemenGuide.Web.Services.Finance
                     place.PlaceId == filter.PlaceId.Value);
             }
 
+            if (filter.DisplayMarket == "North" || filter.DisplayMarket == "South")
+            {
+                placesQuery = placesQuery.Where(place =>
+                    filter.DisplayMarket == "South"
+                        ? place.City.ExchangeRateRegion == "South"
+                        : place.City.ExchangeRateRegion != "South");
+            }
+
             var placeIds = await placesQuery
                 .Select(place => place.PlaceId)
                 .ToListAsync(cancellationToken);
@@ -1463,6 +1471,14 @@ namespace YemenGuide.Web.Services.Finance
                     filter.PlaceId.Value);
             }
 
+            if (filter.DisplayMarket == "North" || filter.DisplayMarket == "South")
+            {
+                query = query.Where(transaction =>
+                    filter.DisplayMarket == "South"
+                        ? transaction.Place.City.ExchangeRateRegion == "South"
+                        : transaction.Place.City.ExchangeRateRegion != "South");
+            }
+
             if (filter.PlatformWalletId.HasValue)
             {
                 query = query.Where(transaction =>
@@ -2009,6 +2025,7 @@ namespace YemenGuide.Web.Services.Finance
                 {
                     OwnerId = filter.OwnerId,
                     PlaceId = filter.PlaceId,
+                    DisplayMarket = filter.DisplayMarket,
                     AccountStatus = filter.AccountStatus,
                     HasDebt = filter.HasDebt,
                     IsLowBalance = filter.IsLowBalance,
@@ -2024,6 +2041,7 @@ namespace YemenGuide.Web.Services.Finance
                 {
                     OwnerId = filter.OwnerId,
                     PlaceId = filter.PlaceId,
+                    DisplayMarket = filter.DisplayMarket,
                     HasDebt = filter.HasDebt,
                     Search = filter.Search,
                     PageNumber = 1,
@@ -2108,6 +2126,14 @@ namespace YemenGuide.Web.Services.Finance
             {
                 query = query.Where(account =>
                     account.PlaceId == filter.PlaceId.Value);
+            }
+
+            if (filter.DisplayMarket == "North" || filter.DisplayMarket == "South")
+            {
+                query = query.Where(account =>
+                    filter.DisplayMarket == "South"
+                        ? account.Place.City.ExchangeRateRegion == "South"
+                        : account.Place.City.ExchangeRateRegion != "South");
             }
 
             if (!string.IsNullOrWhiteSpace(filter.AccountStatus))
@@ -2769,6 +2795,14 @@ namespace YemenGuide.Web.Services.Finance
                     record.Booking.PlaceId == filter.PlaceId.Value);
             }
 
+            if (filter.DisplayMarket == "North" || filter.DisplayMarket == "South")
+            {
+                query = query.Where(record =>
+                    filter.DisplayMarket == "South"
+                        ? record.Booking.Place.City.ExchangeRateRegion == "South"
+                        : record.Booking.Place.City.ExchangeRateRegion != "South");
+            }
+
             if (!string.IsNullOrWhiteSpace(filter.BookingState))
             {
                 var bookingState = filter.BookingState.Trim();
@@ -2961,6 +2995,7 @@ namespace YemenGuide.Web.Services.Finance
 
             var effectiveValues = await query.Select(record => new
             {
+                record.BookingId,
                 record.Booking.BookingState,
                 record.Booking.TotalPrice,
                 Paid = record.AmountPaidOnline + record.AmountCollectedAtProperty,
@@ -2970,6 +3005,9 @@ namespace YemenGuide.Web.Services.Finance
             }).ToListAsync(cancellationToken);
             summary.TotalBookingValue = effectiveValues.Sum(item => BookingMoneyPolicy.EffectiveValue(
                 item.BookingState, item.TotalPrice, item.Paid, item.Refunds, 0m));
+
+            var effectiveValueByBooking = effectiveValues.ToDictionary(item => item.BookingId,
+                item => BookingMoneyPolicy.EffectiveValue(item.BookingState, item.TotalPrice, item.Paid, item.Refunds, 0m));
 
             summary.NeedsReviewCount = await query.CountAsync(record =>
                 record.CommissionStatus ==
@@ -3073,6 +3111,7 @@ namespace YemenGuide.Web.Services.Finance
                             place?.OwnerId,
                             ownerNames),
                         BookingTotalPrice = record.Booking.TotalPrice,
+                        EffectiveBookingValue = effectiveValueByBooking[record.BookingId],
                         CommissionRateSnapshot =
                             record.CommissionRateSnapshot,
                         CommissionBaseAmount =
@@ -3230,6 +3269,17 @@ namespace YemenGuide.Web.Services.Finance
             var status = record.CommissionStatus?.Trim() ??
                 AdminBookingCommissionStatuses.Calculated;
 
+            var detailRefunds = await _context.RefundRequests.AsNoTracking()
+                .Where(refund => refund.BookingId == bookingId)
+                .Select(refund => new { refund.Status, refund.TransferredAt, refund.RefundAmount })
+                .ToListAsync(cancellationToken);
+            var cashRefunded = detailRefunds.Where(refund => refund.Status == "Completed" ||
+                    (refund.Status == "Processing" && refund.TransferredAt.HasValue))
+                .Sum(refund => refund.RefundAmount);
+            var pendingRefund = detailRefunds.Where(refund => refund.Status == "Pending" ||
+                    (refund.Status == "Processing" && !refund.TransferredAt.HasValue))
+                .Sum(refund => refund.RefundAmount);
+
             var result = new AdminBookingCommissionDetailsDto
             {
                 RecordId = record.RecordId,
@@ -3256,6 +3306,7 @@ namespace YemenGuide.Web.Services.Finance
                     record.Booking.Place?.OwnerId,
                     ownerNames),
                 BookingTotalPrice = record.Booking.TotalPrice,
+                EffectiveBookingValue = BookingMoneyPolicy.EffectiveValue(record.Booking.BookingState, record.Booking.TotalPrice, record.AmountPaidOnline + record.AmountCollectedAtProperty, cashRefunded, pendingRefund),
                 CommissionRateSnapshot = record.CommissionRateSnapshot,
                 CommissionBaseAmount = record.CommissionBaseAmount,
                 PlatformCommission = record.PlatformCommission,
@@ -3290,9 +3341,9 @@ namespace YemenGuide.Web.Services.Finance
                 BookingEndDate = record.Booking.EndDate,
                 PaymentMethod = record.Booking.PaymentMethod?.Trim(),
                 DepositAmount = record.DepositAmount,
-                AmountPaidOnline = record.AmountPaidOnline,
-                AmountCollectedAtProperty = record.AmountCollectedAtProperty,
-                AmountToPayAtProperty = record.AmountToPayAtProperty,
+                AmountPaidOnline = BookingMoneyPolicy.NetPaid(record.AmountPaidOnline, cashRefunded),
+                AmountCollectedAtProperty = BookingMoneyPolicy.NetPaid(record.AmountCollectedAtProperty, Math.Max(0m, cashRefunded - record.AmountPaidOnline)),
+                AmountToPayAtProperty = BookingMoneyPolicy.Remaining(record.Booking.BookingState, record.AmountToPayAtProperty),
                 IsPaymentConfirmed = IsBookingPaymentConfirmed(record.Booking),
                 TransferReferenceNumber =
                     record.TransferReferenceNumber?.Trim(),
@@ -3385,6 +3436,14 @@ namespace YemenGuide.Web.Services.Finance
             {
                 query = query.Where(transaction =>
                     transaction.PlaceId == filter.PlaceId.Value);
+            }
+
+            if (filter.DisplayMarket == "North" || filter.DisplayMarket == "South")
+            {
+                query = query.Where(transaction =>
+                    filter.DisplayMarket == "South"
+                        ? transaction.Place.City.ExchangeRateRegion == "South"
+                        : transaction.Place.City.ExchangeRateRegion != "South");
             }
 
             if (filter.BookingId.HasValue)
@@ -5516,6 +5575,7 @@ namespace YemenGuide.Web.Services.Finance
 
         private static AdminFinancialReportRowDto ReportRow(
             string rowKey,
+            int placeId,
             IEnumerable<AdminFinancialReportCellDto> cells,
             string? tone = null,
             string? documentType = null,
@@ -5526,6 +5586,7 @@ namespace YemenGuide.Web.Services.Finance
             return new AdminFinancialReportRowDto
             {
                 RowKey = rowKey,
+                PlaceId = placeId,
                 Cells = typedCells.Select(cell => cell.Text).ToList(),
                 TypedCells = typedCells,
                 Tone = tone,
@@ -5551,6 +5612,7 @@ namespace YemenGuide.Web.Services.Finance
                         BookingId = reportFilter.BookingId,
                         OwnerId = reportFilter.OwnerId,
                         PlaceId = reportFilter.PlaceId,
+                    DisplayMarket = reportFilter.DisplayMarket,
                         CommissionStatus = reportFilter.CommissionStatus,
                         HasDebt = reportFilter.HasDebt,
                         DateScope = reportFilter.DateScope,
@@ -5593,6 +5655,7 @@ namespace YemenGuide.Web.Services.Finance
                         RequestId = reportFilter.CommissionTransactionId,
                         OwnerId = reportFilter.OwnerId,
                         PlaceId = reportFilter.PlaceId,
+                    DisplayMarket = reportFilter.DisplayMarket,
                         PlatformWalletId = reportFilter.PlatformWalletId,
                         Status = reportFilter.TopUpStatus,
                         ReferenceNumber = reportFilter.ReferenceNumber,
@@ -5636,6 +5699,7 @@ namespace YemenGuide.Web.Services.Finance
                     {
                         OwnerId = reportFilter.OwnerId,
                         PlaceId = reportFilter.PlaceId,
+                    DisplayMarket = reportFilter.DisplayMarket,
                         AccountStatus = mode == AdminFinancialReportTypes.SuspendedAccounts
                             ? AdminCommissionAccountStatuses.Suspended
                             : reportFilter.AccountStatus,
@@ -5685,6 +5749,7 @@ namespace YemenGuide.Web.Services.Finance
                         TransactionId = reportFilter.CommissionTransactionId,
                         OwnerId = reportFilter.OwnerId,
                         PlaceId = reportFilter.PlaceId,
+                    DisplayMarket = reportFilter.DisplayMarket,
                         BookingId = reportFilter.BookingId,
                         PlatformWalletId = reportFilter.PlatformWalletId,
                         TransactionType = reportFilter.TransactionType,
@@ -5909,6 +5974,7 @@ namespace YemenGuide.Web.Services.Finance
                     BookingId = filter.BookingId,
                     OwnerId = filter.OwnerId,
                     PlaceId = filter.PlaceId,
+                    DisplayMarket = filter.DisplayMarket,
                     CommissionStatus = filter.CommissionStatus,
                     HasDebt = filter.HasDebt,
                     DateScope = filter.DateScope,
@@ -5994,7 +6060,7 @@ namespace YemenGuide.Web.Services.Finance
                     Column("BookingId", "الحجز", AdminFinancialReportDataTypes.Number, 11d, AdminFinancialReportAlignments.Center),
                     Column("Owner", "المالك", width: 20d),
                     Column("Place", "المنشأة", width: 24d),
-                    Column("BookingValue", "قيمة الحجز", AdminFinancialReportDataTypes.Money, 18d, AdminFinancialReportAlignments.Left),
+                    Column("BookingValue", "القيمة الحالية للحجز", AdminFinancialReportDataTypes.Money, 18d, AdminFinancialReportAlignments.Left),
                     Column("Rate", "النسبة", AdminFinancialReportDataTypes.Percentage, 12d, AdminFinancialReportAlignments.Center),
                     Column("Commission", "العمولة", AdminFinancialReportDataTypes.Money, 18d, AdminFinancialReportAlignments.Left),
                     Column("Held", "المحجوز", AdminFinancialReportDataTypes.Money, 16d, AdminFinancialReportAlignments.Left),
@@ -6010,12 +6076,13 @@ namespace YemenGuide.Web.Services.Finance
             {
                 section.Rows.Add(ReportRow(
                     $"booking-{row.BookingId}",
+                    row.PlaceId,
                     new[]
                     {
                         NumberCell(row.BookingId),
                         TextCell(row.OwnerName),
                         TextCell(row.PlaceName),
-                        MoneyCell(row.BookingTotalPrice, model.Currency),
+                        MoneyCell(row.EffectiveBookingValue, model.Currency),
                         PercentageCell(row.CommissionRateSnapshot),
                         MoneyCell(row.PlatformCommission, model.Currency),
                         MoneyCell(row.HeldAmount, model.Currency),
@@ -6034,6 +6101,7 @@ namespace YemenGuide.Web.Services.Finance
 
                 model.Documents.Add(new AdminFinancialDocumentListItemDto
                 {
+                        PlaceId = row.PlaceId,
                     DocumentType = AdminFinancialDocumentTypes.BookingCommissionSettlement,
                     SourceId = row.BookingId,
                     DocumentNumber = $"COM-{row.BookingId:D8}",
@@ -6100,6 +6168,7 @@ namespace YemenGuide.Web.Services.Finance
                     RequestId = filter.CommissionTransactionId,
                     OwnerId = filter.OwnerId,
                     PlaceId = filter.PlaceId,
+                    DisplayMarket = filter.DisplayMarket,
                     PlatformWalletId = filter.PlatformWalletId,
                     Status = filter.TopUpStatus,
                     ReferenceNumber = filter.ReferenceNumber,
@@ -6186,6 +6255,7 @@ namespace YemenGuide.Web.Services.Finance
             {
                 section.Rows.Add(ReportRow(
                     $"topup-{row.CommissionTransactionId}",
+                    row.PlaceId,
                     new[]
                     {
                         NumberCell(row.CommissionTransactionId),
@@ -6214,6 +6284,7 @@ namespace YemenGuide.Web.Services.Finance
                 {
                     model.Documents.Add(new AdminFinancialDocumentListItemDto
                     {
+                        PlaceId = row.PlaceId,
                         DocumentType = AdminFinancialDocumentTypes.TopUpReceipt,
                         SourceId = row.CommissionTransactionId,
                         DocumentNumber = $"TOP-{row.CommissionTransactionId:D8}",
@@ -6277,6 +6348,7 @@ namespace YemenGuide.Web.Services.Finance
                 {
                     OwnerId = filter.OwnerId,
                     PlaceId = filter.PlaceId,
+                    DisplayMarket = filter.DisplayMarket,
                     AccountStatus = mode == AdminFinancialReportTypes.SuspendedAccounts
                         ? AdminCommissionAccountStatuses.Suspended
                         : filter.AccountStatus,
@@ -6393,6 +6465,7 @@ namespace YemenGuide.Web.Services.Finance
             {
                 section.Rows.Add(ReportRow(
                     $"account-{row.PlaceCommissionAccountId}",
+                    row.PlaceId,
                     new[]
                     {
                         TextCell(row.OwnerName),
@@ -6417,6 +6490,7 @@ namespace YemenGuide.Web.Services.Finance
 
                 model.Documents.Add(new AdminFinancialDocumentListItemDto
                 {
+                        PlaceId = row.PlaceId,
                     DocumentType = AdminFinancialDocumentTypes.CommissionAccountStatement,
                     SourceId = row.PlaceCommissionAccountId,
                     DocumentNumber = $"ACC-{row.PlaceCommissionAccountId:D8}",
@@ -6459,6 +6533,7 @@ namespace YemenGuide.Web.Services.Finance
                     TransactionId = filter.CommissionTransactionId,
                     OwnerId = filter.OwnerId,
                     PlaceId = filter.PlaceId,
+                    DisplayMarket = filter.DisplayMarket,
                     BookingId = filter.BookingId,
                     PlatformWalletId = filter.PlatformWalletId,
                     TransactionType = filter.TransactionType,
@@ -6549,6 +6624,7 @@ namespace YemenGuide.Web.Services.Finance
             {
                 section.Rows.Add(ReportRow(
                     $"transaction-{row.CommissionTransactionId}",
+                    row.PlaceId,
                     new[]
                     {
                         NumberCell(row.CommissionTransactionId),
@@ -6572,6 +6648,7 @@ namespace YemenGuide.Web.Services.Finance
 
                 model.Documents.Add(new AdminFinancialDocumentListItemDto
                 {
+                        PlaceId = row.PlaceId,
                     DocumentType = AdminFinancialDocumentTypes.TransactionDocument,
                     SourceId = row.CommissionTransactionId,
                     DocumentNumber = $"TRX-{row.CommissionTransactionId:D8}",
@@ -6621,6 +6698,7 @@ namespace YemenGuide.Web.Services.Finance
                 ReportType = AdminFinancialReportTypes.TopUps,
                 OwnerId = originalFilter.OwnerId,
                 PlaceId = originalFilter.PlaceId,
+                    DisplayMarket = originalFilter.DisplayMarket,
                 FromDate = originalFilter.FromDate,
                 ToDate = originalFilter.ToDate,
                 DateScope = AdminFinancialDateScopes.CreatedAt,
@@ -6645,6 +6723,7 @@ namespace YemenGuide.Web.Services.Finance
                 ReportType = AdminFinancialReportTypes.Transactions,
                 OwnerId = originalFilter.OwnerId,
                 PlaceId = originalFilter.PlaceId,
+                    DisplayMarket = originalFilter.DisplayMarket,
                 FromDate = originalFilter.FromDate,
                 ToDate = originalFilter.ToDate,
                 DateScope = AdminFinancialDateScopes.CreatedAt,
@@ -6750,7 +6829,7 @@ namespace YemenGuide.Web.Services.Finance
                 {
                     Column("Booking", "الحجز", AdminFinancialReportDataTypes.Number, 11d, AdminFinancialReportAlignments.Center),
                     Column("Place", "المنشأة", width: 24d),
-                    Column("Value", "قيمة الحجز", AdminFinancialReportDataTypes.Money, 18d, AdminFinancialReportAlignments.Left),
+                    Column("Value", "القيمة الحالية للحجز", AdminFinancialReportDataTypes.Money, 18d, AdminFinancialReportAlignments.Left),
                     Column("Commission", "العمولة", AdminFinancialReportDataTypes.Money, 18d, AdminFinancialReportAlignments.Left),
                     Column("Status", "الحالة", AdminFinancialReportDataTypes.Status, 16d, AdminFinancialReportAlignments.Center)
                 }
@@ -6759,11 +6838,12 @@ namespace YemenGuide.Web.Services.Finance
             commissionsSection.Rows = commissionRows
                 .Select(row => ReportRow(
                     $"comprehensive-booking-{row.BookingId}",
+                    row.PlaceId,
                     new[]
                     {
                         NumberCell(row.BookingId),
                         TextCell(row.PlaceName),
-                        MoneyCell(row.BookingTotalPrice, model.Currency),
+                        MoneyCell(row.EffectiveBookingValue, model.Currency),
                         MoneyCell(row.PlatformCommission, model.Currency),
                         StatusCell(
                             row.CommissionStatus,
@@ -6792,6 +6872,7 @@ namespace YemenGuide.Web.Services.Finance
             accountsSection.Rows = accountRows
                 .Select(row => ReportRow(
                     $"comprehensive-account-{row.PlaceCommissionAccountId}",
+                    row.PlaceId,
                     new[]
                     {
                         TextCell(row.PlaceName),
@@ -6826,6 +6907,7 @@ namespace YemenGuide.Web.Services.Finance
             topUpsSection.Rows = topUpRows
                 .Select(row => ReportRow(
                     $"comprehensive-topup-{row.CommissionTransactionId}",
+                    row.PlaceId,
                     new[]
                     {
                         NumberCell(row.CommissionTransactionId),
@@ -6862,6 +6944,7 @@ namespace YemenGuide.Web.Services.Finance
             transactionsSection.Rows = transactionRows
                 .Select(row => ReportRow(
                     $"comprehensive-transaction-{row.CommissionTransactionId}",
+                    row.PlaceId,
                     new[]
                     {
                         NumberCell(row.CommissionTransactionId),
@@ -6894,6 +6977,7 @@ namespace YemenGuide.Web.Services.Finance
 
             var export = new AdminFinancialReportExportDto
             {
+                Filter = page.Filter,
                 PlatformName = page.PlatformName,
                 PlatformLogoPath = page.PlatformLogoPath,
                 Currency = page.Currency,
@@ -6947,6 +7031,7 @@ namespace YemenGuide.Web.Services.Finance
                         new AdminFinancialReportExportRowDto
                         {
                             Tone = row.Tone,
+                            PlaceId = row.PlaceId,
                             Cells = cells.Select(cell => cell.Text).ToList(),
                             TypedCells = cells
                                 .Select(cell =>
@@ -7096,6 +7181,7 @@ namespace YemenGuide.Web.Services.Finance
 
             return new AdminFinancialDocumentDetailsDto
             {
+                PlaceId = details.PlaceId,
                 DocumentType = AdminFinancialDocumentTypes.TopUpReceipt,
                 SourceId = details.CommissionTransactionId,
                 DocumentNumber = $"TOP-{details.CommissionTransactionId:D8}",
@@ -7166,6 +7252,7 @@ namespace YemenGuide.Web.Services.Finance
 
             return new AdminFinancialDocumentDetailsDto
             {
+                PlaceId = details.PlaceId,
                 DocumentType =
                     AdminFinancialDocumentTypes.BookingCommissionSettlement,
                 SourceId = details.BookingId,
@@ -7174,7 +7261,7 @@ namespace YemenGuide.Web.Services.Finance
                 Subtitle = details.PlaceName,
                 Status = CommissionStatusLabel(details.CommissionStatus),
                 DocumentDate = settlementDate,
-                TotalAmount = details.PlatformCommission,
+                TotalAmount = details.ChargedAmount,
                 Sections = new List<AdminFinancialDocumentSectionDto>
                 {
                     new()
@@ -7208,13 +7295,15 @@ namespace YemenGuide.Web.Services.Finance
                 },
                 Amounts = new List<AdminFinancialDocumentAmountDto>
                 {
-                    new() { Label = "قيمة الحجز", Amount = details.BookingTotalPrice },
+                    new() { Label = "قيمة الحجز الأصلية", Amount = details.BookingTotalPrice },
+                    new() { Label = "قيمة الحجز الحالية بعد الإلغاء", Amount = details.EffectiveBookingValue },
                     new() { Label = "أساس احتساب العمولة", Amount = details.CommissionBaseAmount },
                     new() { Label = "العمولة المحجوزة", Amount = details.HeldAmount, Tone = "Warning" },
                     new() { Label = "العمولة المخصومة", Amount = details.ChargedAmount, Tone = "Success" },
                     new() { Label = "العمولة المحررة", Amount = details.ReleasedAmount, Tone = "Muted" },
                     new() { Label = "الدين الناتج", Amount = details.DebtAmount, Tone = details.DebtAmount > 0m ? "Danger" : "Default" },
-                    new() { Label = $"عمولة المنصة ({details.CommissionRateSnapshot:N2}%)", Amount = details.PlatformCommission, IsTotal = true }
+                    new() { Label = $"العمولة المحتسبة ({details.CommissionRateSnapshot:N2}%)", Amount = details.PlatformCommission },
+                    new() { Label = "صافي العمولة المخصومة حاليًا", Amount = details.ChargedAmount, IsTotal = true }
                 }
             };
         }
@@ -7234,6 +7323,7 @@ namespace YemenGuide.Web.Services.Finance
 
             return new AdminFinancialDocumentDetailsDto
             {
+                PlaceId = details.PlaceId,
                 DocumentType = AdminFinancialDocumentTypes.TransactionDocument,
                 SourceId = details.CommissionTransactionId,
                 DocumentNumber = $"TRX-{details.CommissionTransactionId:D8}",
@@ -7294,6 +7384,7 @@ namespace YemenGuide.Web.Services.Finance
 
             return new AdminFinancialDocumentDetailsDto
             {
+                PlaceId = details.PlaceId,
                 DocumentType =
                     AdminFinancialDocumentTypes.CommissionAccountStatement,
                 SourceId = details.PlaceCommissionAccountId,

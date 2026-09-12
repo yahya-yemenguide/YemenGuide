@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 
 namespace YemenGuide.Core.Constants
 {
@@ -22,6 +22,31 @@ namespace YemenGuide.Core.Constants
 
         public static decimal Remaining(string? state, decimal remaining) =>
             IsClosed(state) ? 0m : Round(Math.Max(0m, remaining));
+
+        public static decimal ChargedCommission(string? status, decimal amount) =>
+            string.Equals(status?.Trim(), "Charged", StringComparison.OrdinalIgnoreCase)
+                ? Round(Math.Max(0m, amount)) : 0m;
+
+        public static decimal NetOwner(decimal collected, decimal refunded, decimal chargedCommission) =>
+            Round(collected - refunded - chargedCommission);
+
+        public static bool IsWithinImmediateCancellationGrace(
+            bool enabled,
+            DateTime? bookingCreatedAt,
+            DateTime? fallbackCreatedAt,
+            DateTime now,
+            int graceHours = 24)
+        {
+            if (!enabled || graceHours <= 0)
+            {
+                return false;
+            }
+
+            var startedAt = bookingCreatedAt ?? fallbackCreatedAt;
+            return startedAt.HasValue &&
+                   now >= startedAt.Value &&
+                   now <= startedAt.Value.AddHours(graceHours);
+        }
 
         public static bool InTrial(DateTime? start, DateTime? end, DateTime at) =>
             start.HasValue && end.HasValue && start.Value <= at && at < end.Value;

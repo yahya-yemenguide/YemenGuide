@@ -1,9 +1,11 @@
-﻿@using YemenGuide.Core.DTOs.Admin
+﻿@using YemenGuide.Web.Services.Finance
+@using YemenGuide.Core.DTOs.Admin
 @using System.Globalization
 @using YemenGuide.Web.Services.ExchangeRates
 @model AdminFinancialReportPrintDto
 
 @{
+    var display = await FinancialDisplayContext.CreateAsync(Context, Model, Context.RequestAborted);
     Layout = null;
     var report = Model?.Report ?? new AdminFinancialReportExportDto();
     var autoPrint = Model?.AutoPrint ?? false;
@@ -61,6 +63,7 @@
         </header>
 
         <section class="afp-title-block">
+    <p class="financial-currency-note">@display.Note</p>
             <div>
                 <span class="afp-eyebrow">@report.DateScopeLabel</span>
                 <h1>@report.Title</h1>
@@ -98,7 +101,7 @@
                 {
                     <article>
                         <small>@metric.Label</small>
-                        <strong>@metric.Value</strong>
+                        <strong>@display.Metric(metric)</strong>
                         @if (!string.IsNullOrWhiteSpace(metric.Hint))
                         {
                             <span>@metric.Hint</span>
@@ -154,7 +157,7 @@
                                             ? row.TypedCells[cellIndex]
                                             : null;
 
-                                        <td>@(cell?.Text ?? "—")</td>
+                                        <td>@display.Cell(cell, row.PlaceId)</td>
                                     }
                                 </tr>
                             }
@@ -171,7 +174,7 @@
             </div>
             <div>
                 <span>@report.GeneratedAt.ToString("yyyy/MM/dd HH:mm")</span>
-                <span>@report.Currency</span>
+                <span>@display.Currency</span>
             </div>
         </footer>
     </main>
@@ -187,3 +190,4 @@
     <script src="~/js/admin/financials/admin-financials-phase2.js" asp-append-version="true"></script>
 </body>
 </html>
+

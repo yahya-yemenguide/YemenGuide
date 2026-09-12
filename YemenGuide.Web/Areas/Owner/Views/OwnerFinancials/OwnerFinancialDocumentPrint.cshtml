@@ -1,3 +1,4 @@
+﻿@using YemenGuide.Web.Services.Finance
 @using System
 @using System.Collections.Generic
 @using System.Globalization
@@ -6,17 +7,14 @@
 @model FinancialDocumentDetailsDto
 
 @{
+    var display = await FinancialDisplayContext.CreateAsync(Context, Model, Context.RequestAborted);
     Layout = null;
     var pageModel = Model ?? new FinancialDocumentDetailsDto();
     var lines = pageModel.Lines ?? new List<FinancialDocumentLineDto>();
     var amountLines = pageModel.AmountLines ?? new List<FinancialDocumentAmountLineDto>();
     var culture = CultureInfo.GetCultureInfo("en-US");
 
-    string Money(decimal value)
-    {
-        var format = decimal.Truncate(value) == value ? "N0" : "N2";
-        return $"{value.ToString(format, culture)} {pageModel.Currency}";
-    }
+    string Money(decimal value) => display.Money(value);
 
     string DateText(DateTime? value) => value?.ToString("dd/MM/yyyy", culture) ?? "—";
     string DateTimeText(DateTime value) => value.ToString("dd/MM/yyyy - hh:mm tt", culture);
@@ -74,6 +72,7 @@
         </header>
 
         <section class="financial-document-sheet__title">
+    <p class="financial-currency-note">@display.Note</p>
             <div>
                 <small>المستند</small>
                 <h1>@pageModel.Title</h1>
@@ -224,3 +223,4 @@
     </script>
 </body>
 </html>
+

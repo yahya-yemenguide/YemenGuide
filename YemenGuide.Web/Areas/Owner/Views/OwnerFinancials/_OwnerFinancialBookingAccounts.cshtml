@@ -1,3 +1,4 @@
+﻿@using YemenGuide.Web.Services.Finance
 @using System
 @using System.Collections.Generic
 @using System.Globalization
@@ -8,6 +9,7 @@
 @model BookingAccountsTabDto
 
 @{
+    var display = await FinancialDisplayContext.CreateAsync(Context, Model, Context.RequestAborted);
     var isAdminOwnedPlace = (bool?)ViewData["IsAdministrationOwnedPlace"] ?? false;
     var pageModel = Model ?? new BookingAccountsTabDto();
     var filter = pageModel.Filter ?? new BookingFinancialFilterDto();
@@ -49,19 +51,9 @@
         ? 0m
         : Math.Round(Math.Min(100m, (summary.TotalCollected / totalCollectionBase) * 100m), 1);
 
-    string Money(decimal value)
-    {
-        var safe = Math.Max(0m, value);
-        var format = decimal.Truncate(safe) == safe ? "N0" : "N2";
-        return $"{safe.ToString(format, CultureInfo.InvariantCulture)} {currency}";
-    }
+    string Money(decimal value) => display.Money(value);
 
-    string MoneySigned(decimal value)
-    {
-        var safe = Math.Abs(value);
-        var format = decimal.Truncate(safe) == safe ? "N0" : "N2";
-        return $"{safe.ToString(format, CultureInfo.InvariantCulture)} {currency}";
-    }
+    string MoneySigned(decimal value) => display.Money(Math.Abs(value));
 
     string DateText(DateTime? value) =>
         value.HasValue
@@ -187,7 +179,7 @@
 
     decimal CollectionRate(BookingFinancialItemDto item)
     {
-        var total = Math.Max(0m, item.TotalPrice);
+        var total = item.EffectiveBookingValue;
         if (total <= 0m)
         {
             return 0m;
@@ -220,6 +212,7 @@
          data-total-count="@pageModel.TotalCount"
          dir="rtl"
          aria-labelledby="ownerBookingAccountsTitle">
+    <p class="financial-currency-note">@display.Note</p>
 
     <header class="owner-booking-dossier__intro">
         <div class="owner-booking-dossier__intro-main">
@@ -252,7 +245,7 @@
 
         <article class="is-value">
             <span class="owner-booking-dossier__metric-icon"><i class="bi bi-cash-stack"></i></span>
-            <div><small>القيمة النهائية</small><strong>@Money(summary.TotalBookingValue)</strong></div>
+            <div><small>القيمة الحالية</small><strong>@Money(summary.TotalBookingValue)</strong></div>
         </article>
 
         <article class="is-collected">
@@ -442,11 +435,11 @@
                     var hasDiscount = item.FinalSavingsAmount > 0m;
                     var paymentTypeLabel = OnlinePaymentTypeLabel(item);
                     var paymentTypeClass = OnlinePaymentTypeClass(item);
-                    var finalPrice = Math.Max(0m, item.TotalPrice);
+                    var finalPrice = item.EffectiveBookingValue;
                     var remaining = Math.Max(0m, item.AmountToPayAtProperty);
                     var collected = Math.Max(0m, item.TotalCollectedAmount);
                     var commission = Math.Max(0m, item.PlatformCommission);
-                    var ownerNet = Math.Max(0m, item.OwnerNetAmount);
+                    var ownerNet = item.OwnerNetAmount;
                     var image = SafeImage(item.PlaceImageUrl);
 
                     <article class="owner-booking-dossier__card"
@@ -613,7 +606,8 @@
                                     <dl>
                                         <div><dt>السعر الأصلي</dt><dd>@Money(item.DisplayOriginalTotalPrice)</dd></div>
                                         <div><dt>الخصم / التوفير</dt><dd class="is-discount">− @MoneySigned(item.FinalSavingsAmount)</dd></div>
-                                        <div class="is-total"><dt>السعر النهائي</dt><dd>@Money(finalPrice)</dd></div>
+                                        <div><dt>قيمة الحجز الأصلية بعد الخصم</dt><dd>@Money(item.TotalPrice)</dd></div>
+                                        <div class="is-total"><dt>القيمة الحالية بعد الإلغاء</dt><dd>@Money(finalPrice)</dd></div>
                                     </dl>
 
                                     @if (item.HasPromotion)
@@ -643,7 +637,10 @@
                                     </div>
                                     <dl>
                                         <div><dt>العربون المطلوب</dt><dd>@Money(item.DepositAmount)</dd></div>
-                                        <div><dt>مدفوع إلكترونيًا</dt><dd>@Money(item.AmountPaidOnline)</dd></div>
+                                        <div><dt>المدفوع الأصلي إلكترونيًا</dt><dd>@Money(item.GrossPaidOnline)</dd></div>
+                                        <div><dt>المبلغ المسترد / المحوّل</dt><dd>@Money(item.RefundedAmount)</dd></div>
+                                        <div><dt>بانتظار تحويل الاسترداد</dt><dd>@Money(item.PendingRefundAmount)</dd></div>
+                                        <div><dt>صافي المدفوع إلكترونيًا</dt><dd>@Money(item.AmountPaidOnline)</dd></div>
                                         <div><dt>محصل في المنشأة</dt><dd>@Money(item.AmountCollectedAtProperty)</dd></div>
                                         <div><dt>إجمالي المحصل</dt><dd>@Money(collected)</dd></div>
                                         <div class="@(remaining <= 0m ? "is-total" : "is-warning")"><dt>المتبقي</dt><dd>@Money(remaining)</dd></div>
@@ -812,3 +809,4 @@
         </div>
     </dialog>
 </section>
+

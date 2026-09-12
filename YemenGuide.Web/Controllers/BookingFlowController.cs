@@ -1748,6 +1748,13 @@ namespace YemenGuide.Web.Controllers
             }
 
             if (place.PlacePolicy?
+                    .ImmediateGracePeriod == true)
+            {
+                cancellationParts.Add(
+                    "يمكن التراجع مجانًا خلال 24 ساعة من إنشاء الحجز.");
+            }
+
+            if (place.PlacePolicy?
                     .ConfiscateOnNoShow == true)
             {
                 cancellationParts.Add(

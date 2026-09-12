@@ -118,6 +118,9 @@ namespace YemenGuide.Core.DTOs.Admin
 
         public int? PlaceId { get; set; }
 
+        // Internal read scope; does not change stored financial amounts.
+        public string? DisplayMarket { get; set; }
+
         [Range(1, int.MaxValue)]
         public int? BookingId { get; set; }
 
@@ -399,6 +402,7 @@ namespace YemenGuide.Core.DTOs.Admin
 
     public class AdminFinancialReportRowDto
     {
+        public int PlaceId { get; set; }
         public string RowKey { get; set; } = string.Empty;
 
         public List<string> Cells { get; set; } =
@@ -686,6 +690,7 @@ namespace YemenGuide.Core.DTOs.Admin
 
     public class AdminFinancialDocumentListItemDto
     {
+        public int PlaceId { get; set; }
         public string DocumentType { get; set; } = string.Empty;
 
         public int SourceId { get; set; }
@@ -713,6 +718,7 @@ namespace YemenGuide.Core.DTOs.Admin
 
     public class AdminFinancialDocumentDetailsDto
     {
+        public int PlaceId { get; set; }
         public string PlatformName { get; set; } =
             "دليلك اليمني";
 
@@ -793,6 +799,7 @@ namespace YemenGuide.Core.DTOs.Admin
 
     public class AdminFinancialReportExportDto
     {
+        public AdminFinancialReportFilterDto Filter { get; set; } = new();
         public string PlatformName { get; set; } =
             "دليلك اليمني";
 
@@ -878,6 +885,7 @@ namespace YemenGuide.Core.DTOs.Admin
 
     public class AdminFinancialReportExportRowDto
     {
+        public int PlaceId { get; set; }
         public List<string> Cells { get; set; } =
             new();
 
@@ -931,3 +939,4 @@ namespace YemenGuide.Core.DTOs.Admin
         public bool AutoPrint { get; set; } = true;
     }
 }
+

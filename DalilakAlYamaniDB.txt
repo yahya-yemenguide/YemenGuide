@@ -26,7 +26,10 @@
 -- 19) تم تنظيف النظام المالي: تطوير الاستردادات وحسابات العمولات، إضافة RowVersion، وإزالة جدول المستندات المالية والحقول القديمة.
 -- 20) تم إضافة OnlinePaymentType إلى FinancialRecords لتحديد نوع الدفع الإلكتروني عند الحاجة.
 -- 21) تم توسيع مدة الإعلان اليومية لتسمح بقيمة فعلية من 1 إلى 365 يومًا مع الإبقاء على Weekly/Monthly للتوافق.
--- 21) تم تطوير نظام العروض لدعم الخصم المباشر والمكافآت الشرطية وربط خدمة المكافأة بالمنشأة.
+-- 22) تم تطوير نظام العروض لدعم الخصم المباشر والمكافآت الشرطية وربط خدمة المكافأة بالمنشأة.
+-- 23) تم إضافة حقول اللغة الإنجليزية للبيانات العامة: الإعدادات، السلايدر، الفئات، المدن والمحافظ.
+-- 24) تم تطوير البلاغات لدعم ResponseContentType وتوسيع ReportStatus إلى NVARCHAR(30).
+-- 25) تم نقل تقييم الفترة التجريبية إلى مستوى المنشأة، وإضافة سياسة إعادة العمولة عند الإلغاء مع Snapshot مالي.
 -- ==============================================================================
 
 USE master;
@@ -281,6 +284,7 @@ CREATE TABLE dbo.Categories
 (
     CategoryID INT IDENTITY(1,1) NOT NULL,
     CategoryName NVARCHAR(50) NOT NULL,
+    CategoryNameEn NVARCHAR(150) NULL,
     IconClass NVARCHAR(50) NULL
         CONSTRAINT DF_Categories_IconClass DEFAULT N'bi-star',
     HasBookingSystem BIT NOT NULL
@@ -325,6 +329,7 @@ CREATE TABLE dbo.Cities
 (
     CityID INT IDENTITY(1,1) NOT NULL,
     CityName NVARCHAR(50) NOT NULL,
+    CityNameEn NVARCHAR(150) NULL,
     ThemeColor NVARCHAR(20) NULL
         CONSTRAINT DF_Cities_ThemeColor DEFAULT N'#198754',
 
@@ -397,6 +402,11 @@ CREATE TABLE dbo.Places
     SuitesCount INT NULL,
     RejectionReason NVARCHAR(500) NULL,
 
+    -- الفترة التجريبية أصبحت على مستوى المنشأة.
+    FreeTrialStartedAt DATETIME2(7) NULL,
+    FreeTrialEndsAt DATETIME2(7) NULL,
+    FreeTrialEvaluatedAt DATETIME2(7) NULL,
+
     CONSTRAINT PK_Places
         PRIMARY KEY CLUSTERED (PlaceID),
 
@@ -411,7 +421,19 @@ CREATE TABLE dbo.Places
 
     CONSTRAINT FK_Places_City
         FOREIGN KEY (CityID)
-        REFERENCES dbo.Cities (CityID)
+        REFERENCES dbo.Cities (CityID),
+
+    CONSTRAINT CK_Places_FreeTrialDates
+        CHECK
+        (
+            (FreeTrialStartedAt IS NULL AND FreeTrialEndsAt IS NULL)
+            OR
+            (
+                FreeTrialStartedAt IS NOT NULL
+                AND FreeTrialEndsAt IS NOT NULL
+                AND FreeTrialEndsAt > FreeTrialStartedAt
+            )
+        )
 );
 GO
 
@@ -807,6 +829,7 @@ CREATE TABLE dbo.SupportedWallets
 (
     WalletID INT IDENTITY(1,1) NOT NULL,
     WalletName NVARCHAR(100) NOT NULL,
+    WalletNameEn NVARCHAR(150) NULL,
     LogoPath NVARCHAR(255) NULL,
     IsActive BIT NOT NULL
         CONSTRAINT DF_SupportedWallets_IsActive DEFAULT 1,
@@ -880,6 +903,7 @@ CREATE TABLE dbo.PlatformWallets
         CONSTRAINT DF_PlatformWallets_IsPrimary DEFAULT 0,
 
     Instructions NVARCHAR(MAX) NULL,
+    InstructionsEn NVARCHAR(2000) NULL,
 
     CreatedAt DATETIME NULL
         CONSTRAINT DF_PlatformWallets_CreatedAt DEFAULT GETDATE(),
@@ -2451,6 +2475,9 @@ CREATE TABLE dbo.FinancialRecords
     CommissionRateSnapshot DECIMAL(5,2) NOT NULL
         CONSTRAINT DF_FinancialRecords_CommissionRateSnapshot DEFAULT 0.00,
 
+    -- Snapshot لسياسة إعادة العمولة وقت إنشاء السجل المالي.
+    ReturnCommissionOnCancellationSnapshot BIT NULL,
+
     CommissionBaseAmount DECIMAL(18,2) NOT NULL
         CONSTRAINT DF_FinancialRecords_CommissionBaseAmount DEFAULT 0.00,
 
@@ -2899,7 +2926,7 @@ CREATE TABLE dbo.Reports
     PlaceId INT NULL,
     EvidenceImage NVARCHAR(255) NULL,
 
-    ReportStatus NVARCHAR(20) NOT NULL
+    ReportStatus NVARCHAR(30) NOT NULL
         CONSTRAINT DF_Reports_ReportStatus DEFAULT N'Pending',
 
     AdminComment NVARCHAR(500) NULL,
@@ -2934,6 +2961,9 @@ CREATE TABLE dbo.Reports
     OtherReportTypeDescription NVARCHAR(200) NULL,
     OtherCategoryDescription NVARCHAR(200) NULL,
     RequiredAction NVARCHAR(30) NULL,
+
+    -- نوع الاستكمال المطلوب من الطرف الذي سيرد.
+    ResponseContentType NVARCHAR(20) NULL,
 
     Priority NVARCHAR(20) NOT NULL
         CONSTRAINT DF_Reports_Priority DEFAULT N'Normal',
@@ -3030,6 +3060,18 @@ CREATE TABLE dbo.Reports
                 N'Clarification',
                 N'ResolutionConfirmation',
                 N'ReportedPartyResponse'
+            )
+        ),
+
+    CONSTRAINT CK_Reports_ResponseContentType
+        CHECK
+        (
+            ResponseContentType IS NULL
+            OR ResponseContentType IN
+            (
+                N'Text',
+                N'Image',
+                N'TextAndImage'
             )
         ),
 
@@ -3263,7 +3305,9 @@ CREATE TABLE dbo.SystemSettings
     SiteName NVARCHAR(100) NOT NULL
         CONSTRAINT DF_SystemSettings_SiteName DEFAULT N'دليلك اليمني',
 
+    SiteNameEn NVARCHAR(200) NULL,
     SiteDescription NVARCHAR(500) NULL,
+    SiteDescriptionEn NVARCHAR(1000) NULL,
     LogoPath NVARCHAR(255) NULL,
     FaviconPath NVARCHAR(255) NULL,
 
@@ -3293,9 +3337,11 @@ CREATE TABLE dbo.SystemSettings
         CONSTRAINT DF_SystemSettings_MaintenanceMode DEFAULT 0,
 
     MaintenanceMessage NVARCHAR(500) NULL,
+    MaintenanceMessageEn NVARCHAR(1000) NULL,
 
     MaintenanceTitle NVARCHAR(150) NOT NULL
         CONSTRAINT DF_SystemSettings_MaintenanceTitle DEFAULT N'نعود إليكم قريبًا',
+    MaintenanceTitleEn NVARCHAR(200) NULL,
 
     MaintenanceType NVARCHAR(20) NOT NULL
         CONSTRAINT DF_SystemSettings_MaintenanceType DEFAULT N'Full',
@@ -3347,9 +3393,11 @@ CREATE TABLE dbo.SystemSettings
 
     HeroTitleMain NVARCHAR(150) NULL
         CONSTRAINT DF_SystemSettings_HeroTitleMain DEFAULT N'دليلك اليمني بين يديك..',
+    HeroTitleMainEn NVARCHAR(300) NULL,
 
     HeroTitleSub NVARCHAR(150) NULL
         CONSTRAINT DF_SystemSettings_HeroTitleSub DEFAULT N'اكتشف',
+    HeroTitleSubEn NVARCHAR(200) NULL,
 
     SeasonTheme NVARCHAR(50) NULL
         CONSTRAINT DF_SystemSettings_SeasonTheme DEFAULT N'Normal',
@@ -3360,6 +3408,7 @@ CREATE TABLE dbo.SystemSettings
     BannerText NVARCHAR(MAX) NULL
         CONSTRAINT DF_SystemSettings_BannerText
         DEFAULT N'إدارة منصة دليلك اليمني تهنئكم بحلول المناسبة السعيدة، كل عام وأنتم بخير! ✨',
+    BannerTextEn NVARCHAR(500) NULL,
 
     SanaaUsdRate DECIMAL(18,2) NOT NULL
         CONSTRAINT DF_SystemSettings_SanaaUsd DEFAULT 537.00,
@@ -3402,6 +3451,9 @@ CREATE TABLE dbo.SystemSettings
 
     RequiredCommissionGuaranteeBalance DECIMAL(18,2) NOT NULL
         CONSTRAINT DF_SystemSettings_RequiredCommissionGuaranteeBalance DEFAULT 0.00,
+
+    ReturnCommissionOnCancellation BIT NOT NULL
+        CONSTRAINT DF_SystemSettings_ReturnCommissionOnCancellation DEFAULT (1),
 
     -- حساب التشغيل الرسمي لمنشآت الإدارة
     PlatformOwnerUserID INT NULL,
@@ -3524,6 +3576,7 @@ CREATE TABLE dbo.HeroSlides
     HeroSlideID INT IDENTITY(1,1) NOT NULL,
     ImagePath NVARCHAR(255) NOT NULL,
     TypingText NVARCHAR(150) NOT NULL,
+    TypingTextEn NVARCHAR(250) NULL,
 
     DisplayOrder INT NOT NULL
         CONSTRAINT DF_HeroSlides_DisplayOrder DEFAULT 0,

@@ -1,7 +1,9 @@
-﻿@using YemenGuide.Core.DTOs.Admin
+﻿@using YemenGuide.Web.Services.Finance
+@using YemenGuide.Core.DTOs.Admin
 @model AdminCommissionGuaranteePageDto
 
 @{
+    var display = await FinancialDisplayContext.CreateAsync(Context, Model, Context.RequestAborted);
     var accountPage = Model?.Accounts ?? new AdminCommissionAccountPageDto();
     var summary = accountPage.Summary ?? new AdminCommissionAccountSummaryDto();
     var filter = Model?.Filter ?? new AdminCommissionGuaranteeFilterDto();
@@ -13,7 +15,7 @@
         ViewData["CanManageCommissionAccounts"] is bool allowed &&
         allowed;
 
-    string Money(decimal value) => $"{value:N0} {currency}";
+    string Money(decimal value) => display.Money(value);
 
     string AccountStatusLabel(string? status) =>
         (status ?? string.Empty).Trim() switch
@@ -42,6 +44,7 @@
          data-commission-guarantee-root
          data-details-url="@Url.Action("Details", "AdminCommissionGuarantee", new { area = "Admin" })"
          data-booking-url="@Url.Action("BookingDetails", "AdminCommissionGuarantee", new { area = "Admin" })">
+    <p class="financial-currency-note">@display.Note</p>
 
     <header class="acg-section-head">
         <div>
@@ -71,7 +74,7 @@
             <span class="acg-balance-card__icon"><i class="bi bi-wallet2"></i></span>
             <div>
                 <small>إجمالي الرصيد المتاح</small>
-                <strong>@Money(summary.TotalAvailableBalance)</strong>
+                <strong>@display.Summary("Accounts.Summary.TotalAvailableBalance", summary.TotalAvailableBalance)</strong>
             </div>
         </article>
 
@@ -79,7 +82,7 @@
             <span class="acg-balance-card__icon"><i class="bi bi-lock"></i></span>
             <div>
                 <small>إجمالي الرصيد المحجوز</small>
-                <strong>@Money(summary.TotalHeldBalance)</strong>
+                <strong>@display.Summary("Accounts.Summary.TotalHeldBalance", summary.TotalHeldBalance)</strong>
             </div>
         </article>
 
@@ -87,7 +90,7 @@
             <span class="acg-balance-card__icon"><i class="bi bi-exclamation-triangle"></i></span>
             <div>
                 <small>إجمالي الدين</small>
-                <strong>@Money(summary.TotalDebtAmount)</strong>
+                <strong>@display.Summary("Accounts.Summary.TotalDebtAmount", summary.TotalDebtAmount)</strong>
             </div>
         </article>
     </div>
@@ -243,11 +246,11 @@
                                         </div>
                                     </div>
                                 </td>
-                                <td><span class="acg-money acg-money--positive">@Money(account.AvailableBalance)</span></td>
-                                <td><span class="acg-money">@Money(account.HeldBalance)</span></td>
+                                <td><span class="acg-money acg-money--positive">@display.Money(account.AvailableBalance, account.PlaceId)</span></td>
+                                <td><span class="acg-money">@display.Money(account.HeldBalance, account.PlaceId)</span></td>
                                 <td>
                                     <span class="acg-money @(account.DebtAmount > 0 ? "acg-money--danger" : null)">
-                                        @Money(account.DebtAmount)
+                                        @display.Money(account.DebtAmount, account.PlaceId)
                                     </span>
                                 </td>
                                 <td>
@@ -590,3 +593,4 @@
         </div>
     }
 </section>
+

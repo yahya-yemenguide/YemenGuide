@@ -1479,21 +1479,14 @@ namespace YemenGuide.Web.Controllers
                 hoursUntilStart >=
                 freeCancellationHours;
 
-            var paymentReferenceTime =
-                financialRecord?
-                    .UpdatedAt ??
-                booking.CreatedAt ??
-                now;
-
             var isWithinImmediateGrace =
-                policy?
-                    .ImmediateGracePeriod ==
-                true &&
                 depositPaid > 0m &&
-                now <= paymentReferenceTime
-                    .AddHours(24) &&
-                booking.StartDate.Date >
-                    now.Date.AddDays(1);
+                BookingMoneyPolicy
+                    .IsWithinImmediateCancellationGrace(
+                        policy?.ImmediateGracePeriod == true,
+                        booking.CreatedAt,
+                        financialRecord?.UpdatedAt,
+                        now);
 
             var isFreeCancellation =
                 depositPaid <= 0m ||
@@ -2832,4 +2825,3 @@ namespace YemenGuide.Web.Controllers
         }
     }
 }
-

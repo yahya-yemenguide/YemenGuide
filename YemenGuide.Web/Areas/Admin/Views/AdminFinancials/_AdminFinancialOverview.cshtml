@@ -1,14 +1,16 @@
-﻿@using YemenGuide.Core.DTOs.Admin
+﻿@using YemenGuide.Web.Services.Finance
+@using YemenGuide.Core.DTOs.Admin
 @model AdminFinancialOverviewPageDto
 
 @{
+    var display = await FinancialDisplayContext.CreateAsync(Context, Model, Context.RequestAborted);
     var summary = Model?.Summary ?? new AdminFinancialOverviewSummaryDto();
     var filter = Model?.Filter ?? new AdminFinancialOverviewFilterDto();
     var currency = string.IsNullOrWhiteSpace(Model?.Currency)
         ? "ريال يمني"
         : Model.Currency;
 
-    string Money(decimal value) => $"{value:N0} {currency}";
+    string Money(decimal value) => display.Money(value);
 
     string AlertTone(string? severity) =>
         (severity ?? string.Empty).Trim().ToLowerInvariant() switch
@@ -21,6 +23,7 @@
 }
 
 <section class="afo afo--compact" data-overview-root>
+    <p class="financial-currency-note">@display.Note</p>
     <header class="afo-section-head afo-section-head--compact">
         <div>
             <h2 class="afo-section-head__title">نظرة عامة</h2>
@@ -100,7 +103,7 @@
             <span class="afo-kpi-card__icon"><i class="bi bi-stars"></i></span>
             <div class="afo-kpi-card__compact-body">
                 <small>عمولات المنصة المخصومة</small>
-                <strong class="afo-kpi-card__value">@Money(summary.TotalCommissionCharged)</strong>
+                <strong class="afo-kpi-card__value">@display.Summary("Summary.TotalCommissionCharged", summary.TotalCommissionCharged)</strong>
             </div>
         </article>
 
@@ -108,7 +111,7 @@
             <span class="afo-kpi-card__icon"><i class="bi bi-wallet2"></i></span>
             <div class="afo-kpi-card__compact-body">
                 <small>رصيد الضمان المتاح</small>
-                <strong class="afo-kpi-card__value">@Money(summary.TotalAvailableGuaranteeBalance)</strong>
+                <strong class="afo-kpi-card__value">@display.Summary("Summary.TotalAvailableGuaranteeBalance", summary.TotalAvailableGuaranteeBalance)</strong>
             </div>
         </article>
 
@@ -116,7 +119,7 @@
             <span class="afo-kpi-card__icon"><i class="bi bi-lock"></i></span>
             <div class="afo-kpi-card__compact-body">
                 <small>الرصيد المحجوز</small>
-                <strong class="afo-kpi-card__value">@Money(summary.TotalHeldGuaranteeBalance)</strong>
+                <strong class="afo-kpi-card__value">@display.Summary("Summary.TotalHeldGuaranteeBalance", summary.TotalHeldGuaranteeBalance)</strong>
             </div>
         </article>
 
@@ -124,7 +127,7 @@
             <span class="afo-kpi-card__icon"><i class="bi bi-exclamation-diamond"></i></span>
             <div class="afo-kpi-card__compact-body">
                 <small>إجمالي الدين الحالي</small>
-                <strong class="afo-kpi-card__value">@Money(summary.TotalCurrentDebt)</strong>
+                <strong class="afo-kpi-card__value">@display.Summary("Summary.TotalCurrentDebt", summary.TotalCurrentDebt)</strong>
             </div>
         </article>
     </div>
@@ -233,7 +236,7 @@
                                             <small>@item.OwnerName</small>
                                         </div>
                                     </td>
-                                    <td class="afo-money">@Money(item.Amount)</td>
+                                    <td class="afo-money">@display.Money(item.Amount, item.PlaceId)</td>
                                     <td>
                                         <span class="afo-status-badge" data-status="@item.Status">
                                             @item.StatusLabel
@@ -262,3 +265,4 @@
         </section>
     </div>
 </section>
+

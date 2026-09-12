@@ -93,9 +93,7 @@ namespace YemenGuide.Web.Areas.Admin.Controllers.Financials
                     return Forbid();
                 }
 
-                var displayCurrency =
-                    await _currencyDisplayService.GetPreferredCurrencyAsync(
-                        cancellationToken);
+                var displayCurrency = CurrencyDisplayService.YemeniRial;
 
                 var model = new AdminFinancialManagementPageDto
                 {
@@ -206,9 +204,7 @@ namespace YemenGuide.Web.Areas.Admin.Controllers.Financials
 
             try
             {
-                var displayCurrency =
-                    await _currencyDisplayService.GetPreferredCurrencyAsync(
-                        cancellationToken);
+                var displayCurrency = CurrencyDisplayService.YemeniRial;
 
                 // القيم وصلت من الحقول بعملة بروفايل الأدمن؛
                 // نعيدها إلى YER قبل تمريرها لخدمة الحفظ وقاعدة البيانات.
@@ -723,3 +719,4 @@ namespace YemenGuide.Web.Areas.Admin.Controllers.Financials
         }
     }
 }
+

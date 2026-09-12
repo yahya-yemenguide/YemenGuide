@@ -218,11 +218,7 @@ namespace YemenGuide.Core.DTOs.Owner
                 0m,
                 TotalCollectedAtProperty);
 
-        public decimal NetCollectedRevenue =>
-            Math.Max(
-                0m,
-                TotalCollected -
-                TotalCommissionCharged);
+        public decimal NetCollectedRevenue => BookingMoneyPolicy.NetOwner(TotalCollected, 0m, TotalCommissionCharged);
 
         public decimal RevenueChangePercentage
         {
@@ -326,11 +322,7 @@ namespace YemenGuide.Core.DTOs.Owner
                 0m,
                 TotalCollectedAtProperty);
 
-        public decimal OwnerNetAmount =>
-            Math.Max(
-                0m,
-                TotalCollected -
-                TotalCommission);
+        public decimal OwnerNetAmount => BookingMoneyPolicy.NetOwner(TotalCollected, 0m, TotalCommission);
     }
 
     public class BookingFinancialFilterDto
@@ -550,8 +542,8 @@ namespace YemenGuide.Core.DTOs.Owner
                 0m,
                 AmountCollectedAtProperty);
 
-        public decimal OwnerNetAmount => TotalCollectedAmount -
-            (string.Equals(CommissionStatus, "Charged", StringComparison.OrdinalIgnoreCase) ? PlatformCommission : 0m);
+        public decimal OwnerNetAmount => BookingMoneyPolicy.NetOwner(TotalCollectedAmount, 0m,
+            BookingMoneyPolicy.ChargedCommission(CommissionStatus, PlatformCommission));
 
         public bool IsFullyCollected =>
             TotalCollectedAmount >=
@@ -2465,6 +2457,7 @@ namespace YemenGuide.Core.DTOs.Owner
 
     public class FinancialReportRowDto
     {
+        public decimal? EffectiveBookingValue { get; set; }
         public int RecordId { get; set; }
         public string RecordType { get; set; } = string.Empty;
         public string RecordTypeLabel { get; set; } = string.Empty;
@@ -2629,6 +2622,7 @@ namespace YemenGuide.Core.DTOs.Owner
 
     public class FinancialReportExportDto
     {
+        public int? PlaceId { get; set; }
         public string PlatformName { get; set; } = "دليلك اليمني";
         public string Currency { get; set; } = "ريال يمني";
         public string ReportType { get; set; } =

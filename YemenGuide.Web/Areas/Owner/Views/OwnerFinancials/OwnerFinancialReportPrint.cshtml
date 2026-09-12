@@ -1,3 +1,4 @@
+﻿@using YemenGuide.Web.Services.Finance
 @using System
 @using System.Collections.Generic
 @using System.Globalization
@@ -7,6 +8,7 @@
 @model FinancialReportExportDto
 
 @{
+    var display = await FinancialDisplayContext.CreateAsync(Context, Model, Context.RequestAborted);
     Layout = null;
 
     var pageModel = Model ?? new FinancialReportExportDto();
@@ -41,11 +43,7 @@
     var isTransactions = string.Equals(pageModel.ReportType, OwnerFinancialReportTypes.Transactions, StringComparison.OrdinalIgnoreCase);
     var isDocuments = string.Equals(pageModel.ReportType, OwnerFinancialReportTypes.Documents, StringComparison.OrdinalIgnoreCase);
 
-    string Money(decimal value)
-    {
-        var format = decimal.Truncate(value) == value ? "N0" : "N2";
-        return $"{value.ToString(format, numberCulture)} {pageModel.Currency}";
-    }
+    string Money(decimal value) => display.Money(value);
 
     string Number(int value) => value.ToString("N0", numberCulture);
     string DateTimeText(DateTime value) => value.ToString("dd/MM/yyyy - hh:mm tt", numberCulture);
@@ -121,7 +119,7 @@
     if (isBookings)
     {
         kpis.Add(new FinancialReportMetricDto { Label = "إجمالي الحجوزات", Value = Number(summary.BookingCount), Hint = "حجز ضمن الفترة", Tone = "Primary" });
-        kpis.Add(new FinancialReportMetricDto { Label = "قيمة الحجوزات", Value = Money(summary.TotalBookingValue), Hint = "بعد الخصومات", Tone = "Info" });
+        kpis.Add(new FinancialReportMetricDto { Label = "قيمة الحجوزات", Value = Money(summary.TotalBookingValue), Hint = "بعد الخصم والإلغاء", Tone = "Info" });
         kpis.Add(new FinancialReportMetricDto { Label = "الإيراد الفعلي", Value = Money(summary.ActualRevenue), Hint = "وفق السجلات المالية", Tone = "Success" });
     }
     else if (isPayments)
@@ -189,6 +187,7 @@
 
     <main class="ofir-print-book">
         <section class="ofir-print-page">
+    <p class="financial-currency-note">@display.Note</p>
             <header class="ofir-print-brandline">
                 <div class="ofir-print-brand">
                     <span>د</span>
@@ -365,3 +364,4 @@
     </script>
 </body>
 </html>
+

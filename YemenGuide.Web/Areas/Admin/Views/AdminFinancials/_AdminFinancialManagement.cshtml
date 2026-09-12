@@ -37,9 +37,88 @@
         </button>
     </header>
 
+    <nav class="afm-tabs" role="tablist" aria-label="أقسام إدارة المالية">
+        @if (canManageSettings)
+        {
+            <button type="button"
+                    id="afmGeneralTab"
+                    class="afm-tab is-active"
+                    role="tab"
+                    aria-selected="true"
+                    aria-controls="afmGeneralPanel"
+                    data-management-tab="general">
+                <span class="afm-tab__icon"><i class="bi bi-sliders"></i></span>
+                <span>
+                    <strong>الإعدادات العامة</strong>
+                    <small>العمولة والعملة والحدود</small>
+                </span>
+            </button>
+
+            <button type="button"
+                    id="afmPoliciesTab"
+                    class="afm-tab"
+                    role="tab"
+                    aria-selected="false"
+                    aria-controls="afmPoliciesPanel"
+                    tabindex="-1"
+                    data-management-tab="policies">
+                <span class="afm-tab__icon"><i class="bi bi-shield-check"></i></span>
+                <span>
+                    <strong>السياسات والضمان</strong>
+                    <small>التجربة والإلغاء والتعليق</small>
+                </span>
+            </button>
+
+            <button type="button"
+                    id="afmCommissionsTab"
+                    class="afm-tab"
+                    role="tab"
+                    aria-selected="false"
+                    aria-controls="afmCommissionsPanel"
+                    tabindex="-1"
+                    data-management-tab="commissions">
+                <span class="afm-tab__icon"><i class="bi bi-percent"></i></span>
+                <span>
+                    <strong>عمولات الفئات</strong>
+                    <small>النسب الخاصة لكل فئة</small>
+                </span>
+            </button>
+        }
+
+        @if (canManageWallets)
+        {
+            <button type="button"
+                    id="afmWalletsTab"
+                    class="afm-tab @(!canManageSettings ? "is-active" : null)"
+                    role="tab"
+                    aria-selected="@(!canManageSettings ? "true" : "false")"
+                    aria-controls="afmWalletsPanel"
+                    tabindex="@(canManageSettings ? "-1" : "0")"
+                    data-management-tab="wallets">
+                <span class="afm-tab__icon"><i class="bi bi-wallet2"></i></span>
+                <span>
+                    <strong>حسابات الشحن</strong>
+                    <small>حسابات استقبال الضمان</small>
+                </span>
+            </button>
+        }
+    </nav>
+
     <div class="afm-body">
         @if (canManageSettings)
         {
+            <form method="post"
+                  action="@Url.Action("SaveSettings", "AdminFinancialManagement", new { area = "Admin" })"
+                  class="afm-settings-form"
+                  data-management-settings-container
+                  data-finance-settings-form>
+                @Html.AntiForgeryToken()
+
+            <div id="afmGeneralPanel"
+                 class="afm-tab-panel"
+                 role="tabpanel"
+                 aria-labelledby="afmGeneralTab"
+                 data-management-panel="general">
             <section class="afm-section afm-section--settings">
                 <div class="afm-section__head">
                     <div>
@@ -53,12 +132,6 @@
 
                     <span class="afm-section__badge">صلاحية إعدادات</span>
                 </div>
-
-                <form method="post"
-                      action="@Url.Action("SaveSettings", "AdminFinancialManagement", new { area = "Admin" })"
-                      class="afm-settings-form"
-                      data-finance-settings-form>
-                    @Html.AntiForgeryToken()
 
                     <div class="afm-settings-grid">
                         <div class="afm-field afm-field--featured">
@@ -139,6 +212,58 @@
                                    required />
                         </div>
                     </div>
+            </section>
+            </div>
+
+            <div id="afmPoliciesPanel"
+                 class="afm-tab-panel"
+                 role="tabpanel"
+                 aria-labelledby="afmPoliciesTab"
+                 data-management-panel="policies"
+                 hidden>
+                <section class="afm-section afm-section--settings">
+                    <div class="afm-section__head">
+                        <div>
+                            <span class="afm-section__icon"><i class="bi bi-shield-check"></i></span>
+                            <div>
+                                <small>سياسات المنشآت</small>
+                                <h3>الفترة المجانية والضمان</h3>
+                                <p>سياسات الإعفاء والإلغاء والتعليق المالي للمنشآت.</p>
+                            </div>
+                        </div>
+                        <span class="afm-section__badge">صلاحية إعدادات</span>
+                    </div>
+
+                    <section class="afm-toggle-list" data-trial-policy-card>
+                        <label class="afm-toggle-card">
+                            <input type="checkbox" name="OwnerFreeTrialEnabled" value="true" data-trial-enabled
+                                   checked="@(settings.OwnerFreeTrialEnabled ? "checked" : null)" />
+                            <span class="afm-toggle-card__switch"></span>
+                            <span class="afm-toggle-card__body"><strong>فترة مجانية لكل منشأة جديدة</strong>
+                                <small>التعطيل أو تغيير المدة لا يختصر الفترة الممنوحة سابقًا. الشحن أثناء الفترة لا يلغي الإعفاء.</small></span>
+                        </label>
+                        <input type="hidden" name="OwnerFreeTrialEnabled" value="false" />
+                        <div data-trial-policy-status></div>
+                        <div class="afm-field" data-trial-days-field>
+                            <label for="ownerFreeTrialDays">مدة الفترة المجانية بالأيام</label>
+                            <input id="ownerFreeTrialDays" name="OwnerFreeTrialDays" type="number" min="0" max="3650" step="1"
+                                   value="@settings.OwnerFreeTrialDays" data-trial-days required />
+                        </div>
+                        <div class="afm-field">
+                            <label for="requiredCommissionGuaranteeBalance">رصيد الضمان المطلوب بعد الفترة — ريال يمني</label>
+                            <input id="requiredCommissionGuaranteeBalance" name="RequiredCommissionGuaranteeBalance" type="number"
+                                   min="0" step="0.01" value="@settings.RequiredCommissionGuaranteeBalance.ToString(System.Globalization.CultureInfo.InvariantCulture)" required />
+                        </div>
+                        <label class="afm-toggle-card">
+                            <input type="checkbox" name="ReturnCommissionOnCancellation" value="true"
+                                   checked="@(settings.ReturnCommissionOnCancellation != false ? "checked" : null)" />
+                            <span class="afm-toggle-card__switch"></span>
+                            <span class="afm-toggle-card__body"><strong>تطبيق سياسة إعادة العمولة عند الإلغاء</strong>
+                                <small>تُحفظ السياسة مع العمولة؛ تغييرها لا يعيد كتابة تسويات الحجوزات السابقة. منشآت الإدارة معفاة من العمولة.</small></span>
+                        </label>
+                        <input type="hidden" name="ReturnCommissionOnCancellation" value="false" />
+                        <p>الحدود والمبالغ المدخلة في إعدادات المنصة بالريال اليمني.</p>
+                    </section>
 
                     <div class="afm-toggle-list">
                         <label class="afm-toggle-card">
@@ -176,6 +301,27 @@
                                 <small>يخفي المنشأة عندما تكون السياسة المالية موقفة لها.</small>
                             </span>
                         </label>
+                    </div>
+                </section>
+            </div>
+
+            <div id="afmCommissionsPanel"
+                 class="afm-tab-panel"
+                 role="tabpanel"
+                 aria-labelledby="afmCommissionsTab"
+                 data-management-panel="commissions"
+                 hidden>
+                <section class="afm-section afm-section--settings">
+                    <div class="afm-section__head">
+                        <div>
+                            <span class="afm-section__icon"><i class="bi bi-percent"></i></span>
+                            <div>
+                                <small>استثناءات العمولة</small>
+                                <h3>عمولات الفئات</h3>
+                                <p>نسبة خاصة لكل فئة أو النسبة العامة عند ترك الحقل فارغًا.</p>
+                            </div>
+                        </div>
+                        <span class="afm-section__badge">صلاحية إعدادات</span>
                     </div>
 
                     @if (settingsPage.CategoryCommissions.Count > 0)
@@ -226,7 +372,18 @@
                             </div>
                         </section>
                     }
+                    else
+                    {
+                        <div class="afm-empty">
+                            <span class="afm-empty__icon"><i class="bi bi-percent"></i></span>
+                            <h4>لا توجد فئات متاحة</h4>
+                            <p>ستظهر نسب الفئات هنا عند توفرها.</p>
+                        </div>
+                    }
+                </section>
+            </div>
 
+                <div class="afm-settings-footer">
                     <div class="afm-field afm-field--reason">
                         <label for="financialSettingsReason">سبب التعديل</label>
                         <textarea id="financialSettingsReason"
@@ -243,12 +400,18 @@
                             حفظ الإعدادات
                         </button>
                     </div>
-                </form>
-            </section>
+                </div>
+            </form>
         }
 
         @if (canManageWallets)
         {
+            <div id="afmWalletsPanel"
+                 class="afm-tab-panel"
+                 role="tabpanel"
+                 aria-labelledby="afmWalletsTab"
+                 data-management-panel="wallets"
+                 hidden="@(canManageSettings ? "hidden" : null)">
             <section class="afm-section afm-section--wallets">
                 <div class="afm-section__head">
                     <div>
@@ -272,7 +435,7 @@
                     <div><small>الإجمالي</small><strong>@wallets.Summary.TotalCount</strong></div>
                     <div><small>نشطة</small><strong>@wallets.Summary.ActiveCount</strong></div>
                     <div><small>طلبات معلقة</small><strong>@wallets.Summary.PendingTopUpsCount</strong></div>
-                    <div><small>مبلغ الشحنات المعتمدة</small><strong>@wallets.Summary.CompletedTopUpsAmount.ToString("N0") @currency</strong></div>
+                    <div><small>مبلغ الشحنات المعتمدة</small><strong>@wallets.Summary.CompletedTopUpsAmount.ToString("N2") @currency</strong></div>
                 </div>
 
                 @if (wallets.Wallets.Count == 0)
@@ -392,6 +555,7 @@
                     </div>
                 }
             </section>
+            </div>
 
             <div class="afm-modal" data-platform-wallet-modal aria-hidden="true">
                 <div class="afm-modal__backdrop" data-platform-wallet-modal-close></div>

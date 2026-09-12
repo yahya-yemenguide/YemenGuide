@@ -395,6 +395,9 @@ namespace YemenGuide.Core.DTOs.Admin
 
         public int? PlaceId { get; set; }
 
+        // Internal read scope; does not change stored financial amounts.
+        public string? DisplayMarket { get; set; }
+
         public string? AccountStatus { get; set; }
 
         [DataType(DataType.Date)]
@@ -646,6 +649,9 @@ namespace YemenGuide.Core.DTOs.Admin
 
         public int? PlaceId { get; set; }
 
+        // Internal read scope; does not change stored financial amounts.
+        public string? DisplayMarket { get; set; }
+
         public int? PlatformWalletId { get; set; }
 
         public string? Status { get; set; }
@@ -873,6 +879,9 @@ namespace YemenGuide.Core.DTOs.Admin
 
         public int? PlaceId { get; set; }
 
+        // Internal read scope; does not change stored financial amounts.
+        public string? DisplayMarket { get; set; }
+
         public string? AccountStatus { get; set; }
 
         public bool? HasDebt { get; set; }
@@ -940,6 +949,9 @@ namespace YemenGuide.Core.DTOs.Admin
         public int? OwnerId { get; set; }
 
         public int? PlaceId { get; set; }
+
+        // Internal read scope; does not change stored financial amounts.
+        public string? DisplayMarket { get; set; }
 
         public string? AccountStatus { get; set; }
 
@@ -1201,6 +1213,9 @@ namespace YemenGuide.Core.DTOs.Admin
 
         public int? PlaceId { get; set; }
 
+        // Internal read scope; does not change stored financial amounts.
+        public string? DisplayMarket { get; set; }
+
         public string? BookingState { get; set; }
 
         public string? PaymentStatus { get; set; }
@@ -1300,6 +1315,7 @@ namespace YemenGuide.Core.DTOs.Admin
 
     public class AdminBookingCommissionRowDto
     {
+        public decimal EffectiveBookingValue { get; set; }
         public int RecordId { get; set; }
 
         public int BookingId { get; set; }
@@ -1424,6 +1440,9 @@ namespace YemenGuide.Core.DTOs.Admin
         public int? OwnerId { get; set; }
 
         public int? PlaceId { get; set; }
+
+        // Internal read scope; does not change stored financial amounts.
+        public string? DisplayMarket { get; set; }
 
         [Range(1, int.MaxValue)]
         public int? BookingId { get; set; }

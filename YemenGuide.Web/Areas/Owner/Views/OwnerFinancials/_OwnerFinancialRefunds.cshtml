@@ -1,3 +1,4 @@
+﻿@using YemenGuide.Web.Services.Finance
 @using System
 @using System.Collections.Generic
 @using System.Globalization
@@ -7,6 +8,7 @@
 @model RefundsTabDto
 
 @{
+    var display = await FinancialDisplayContext.CreateAsync(Context, Model, Context.RequestAborted);
     var pageModel = Model ?? new RefundsTabDto();
     var filter = pageModel.Filter ?? new RefundFilterDto();
     var summary = pageModel.Summary ?? new RefundsSummaryDto();
@@ -31,12 +33,7 @@
         filter.ToDate.HasValue
     }.Count(value => value);
 
-    string Money(decimal value)
-    {
-        var normalized = Math.Max(0m, value);
-        var format = decimal.Truncate(normalized) == normalized ? "N0" : "N2";
-        return $"{normalized.ToString(format, culture)} {currency}";
-    }
+    string Money(decimal value) => display.Money(value);
 
     string DateText(DateTime? value) =>
         value.HasValue
@@ -111,6 +108,7 @@
          data-owner-financial-partial="refunds"
          data-load-url="@Url.Content("~/Owner/Financials/Refunds")"
          data-transfer-url="@Url.Content("~/Owner/Financials/Refunds/MarkTransferred")">
+    <p class="financial-currency-note">@display.Note</p>
 
     <header class="refund-signature__hero">
         <div class="refund-signature__hero-copy">
@@ -972,3 +970,4 @@
     </dialog>
 
 </section>
+

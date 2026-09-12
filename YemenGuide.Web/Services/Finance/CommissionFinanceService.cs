@@ -1550,7 +1550,7 @@ namespace YemenGuide.Web.Services.Finance
                         ? 0m
                         : Math.Max(0m, item.AmountToPayAtProperty)),
                 TotalCollectedAtProperty = records.Sum(item =>
-                    Math.Max(0m, item.AmountCollectedAtProperty)),
+                    BookingMoneyPolicy.NetPaid(item.AmountCollectedAtProperty, Math.Max(0m, CompletedRefundFor(item.BookingId) - item.AmountPaidOnline))),
                 TotalCommissionCalculated = records.Sum(item => item.PlatformCommission),
                 TotalCommissionHeld = records
                     .Where(item =>
@@ -2128,6 +2128,11 @@ namespace YemenGuide.Web.Services.Finance
                         2);
                 });
 
+            summary.TotalCollectedAtProperty = bookingSummaryRows.Sum(item =>
+                BookingMoneyPolicy.NetPaid(item.AmountCollectedAtProperty,
+                    Math.Max(0m, (bookingSummaryRefunds.TryGetValue(item.BookingId, out var refund)
+                        ? refund.CashRefundAmount : 0m) - item.AmountPaidOnline)));
+
             summary.TotalRemainingAtProperty =
                 bookingSummaryRows.Sum(item =>
                     IsCancelledBookingState(item.BookingState)
@@ -2411,10 +2416,7 @@ namespace YemenGuide.Web.Services.Finance
                             AmountToPayAtProperty = BookingMoneyPolicy.Remaining(booking.BookingState,
                                 financial?.AmountToPayAtProperty ?? booking.TotalPrice),
 
-                            AmountCollectedAtProperty =
-                                financial?
-                                    .AmountCollectedAtProperty ??
-                                0m,
+                            AmountCollectedAtProperty = BookingMoneyPolicy.NetPaid(financial?.AmountCollectedAtProperty ?? 0m, Math.Max(0m, refunded - rawPaid)),
 
                             IsPaymentConfirmed =
                                 IsBookingPaymentConfirmed(booking),
@@ -6344,17 +6346,9 @@ namespace YemenGuide.Web.Services.Finance
             FinancialRecord? financial,
             BookingCommissionMovementAggregate? movements)
         {
-            if (movements?.ChargedAmount > 0m)
-            {
-                return movements.ChargedAmount;
-            }
-
-            return financial != null &&
-                IsState(
-                    financial.CommissionStatus,
-                    FinancialCommissionStatuses.Charged)
-                    ? Math.Max(0m, financial.PlatformCommission)
-                    : 0m;
+            // The ledger retains the old debit after a release/recalculation.
+            // Current revenue must use the current net commission snapshot.
+            return BookingMoneyPolicy.ChargedCommission(financial?.CommissionStatus, financial?.PlatformCommission ?? 0m);
         }
 
         private static decimal GetHeldCommissionAmount(
@@ -6438,7 +6432,7 @@ namespace YemenGuide.Web.Services.Finance
              * لذلك لا نصفر الإيراد لمجرد أن الحالة Cancelled؛ بل نطرح
              * الاسترداد المكتمل والعمولة المخصومة من المبلغ المحصل فعليًا.
              */
-            var actualRevenue = BookingMoneyPolicy.Round(actualCollected - completedRefund - chargedCommission);
+            var actualRevenue = BookingMoneyPolicy.NetOwner(actualCollected, completedRefund, chargedCommission);
 
             return new FinancialReportRowDto
             {
@@ -6466,7 +6460,7 @@ namespace YemenGuide.Web.Services.Finance
                 StatusLabel = GetReportBookingStateLabel(booking.BookingState),
                 ReferenceNumber = financial?.TransferReferenceNumber?.Trim(),
                 Description = "القيمة المالية للحجز",
-                PrimaryAmount = Math.Max(0m, booking.TotalPrice),
+                PrimaryAmount = BookingMoneyPolicy.EffectiveValue(booking.BookingState, booking.TotalPrice, actualCollected, completedRefund, refund?.PendingRefundAmount ?? 0m),
                 OriginalTotalPrice = booking.OriginalTotalPrice > 0m
                     ? booking.OriginalTotalPrice
                     : booking.TotalPrice + booking.DiscountAmount,
@@ -6477,12 +6471,13 @@ namespace YemenGuide.Web.Services.Finance
                 DiscountTypeSnapshot = booking.DiscountTypeSnapshot?.Trim(),
                 DiscountValueSnapshot = booking.DiscountValueSnapshot,
                 TotalPrice = Math.Max(0m, booking.TotalPrice),
+                EffectiveBookingValue = BookingMoneyPolicy.EffectiveValue(booking.BookingState, booking.TotalPrice, actualCollected, completedRefund, refund?.PendingRefundAmount ?? 0m),
                 DepositAmount = Math.Max(0m, financial?.DepositAmount ?? 0m),
                 AmountPaidOnline = Math.Max(0m, financial?.AmountPaidOnline ?? 0m),
                 AmountCollectedAtProperty = Math.Max(0m, financial?.AmountCollectedAtProperty ?? 0m),
-                ActualPaidOnline = actualOnline,
-                ActualCollectedAtProperty = actualProperty,
-                ActualCollectedAmount = actualCollected,
+                ActualPaidOnline = BookingMoneyPolicy.NetPaid(actualOnline, completedRefund),
+                ActualCollectedAtProperty = BookingMoneyPolicy.NetPaid(actualProperty, Math.Max(0m, completedRefund - actualOnline)),
+                ActualCollectedAmount = BookingMoneyPolicy.NetPaid(actualCollected, completedRefund),
                 RemainingAmount = BookingMoneyPolicy.Remaining(booking.BookingState, financial?.AmountToPayAtProperty ?? booking.TotalPrice - actualCollected),
                 ActualRevenue = actualRevenue,
                 PlatformCommission = Math.Max(0m, financial?.PlatformCommission ?? 0m),
@@ -6608,6 +6603,9 @@ namespace YemenGuide.Web.Services.Finance
                 .AsSplitQuery()
                 .ToListAsync(cancellationToken);
 
+            var refundMap = await LoadBookingRefundAggregatesAsync(
+                bookings.Select(booking => booking.BookingId).ToArray(), cancellationToken);
+
             var rows = new List<FinancialReportRowDto>();
 
             foreach (var booking in bookings)
@@ -6654,10 +6652,13 @@ namespace YemenGuide.Web.Services.Finance
                     continue;
                 }
 
+                refundMap.TryGetValue(booking.BookingId, out var refund);
+                var cashRefund = refund?.CashRefundAmount ?? 0m;
+                var grossCollected = GetActualOnlineAmount(booking) + GetActualPropertyAmount(booking);
                 var rawOnline = Math.Max(0m, financial.AmountPaidOnline);
                 var rawProperty = Math.Max(0m, financial.AmountCollectedAtProperty);
-                var actualOnline = GetActualOnlineAmount(booking);
-                var actualProperty = GetActualPropertyAmount(booking);
+                var actualOnline = BookingMoneyPolicy.NetPaid(GetActualOnlineAmount(booking), cashRefund);
+                var actualProperty = BookingMoneyPolicy.NetPaid(GetActualPropertyAmount(booking), Math.Max(0m, cashRefund - GetActualOnlineAmount(booking)));
 
                 if (IsState(paymentChannel, OwnerFinancialPaymentChannels.Online))
                 {
@@ -6671,7 +6672,7 @@ namespace YemenGuide.Web.Services.Finance
                 }
 
                 var actualTotal = actualOnline + actualProperty;
-                var remaining = Math.Max(0m, booking.TotalPrice - actualTotal);
+                var remaining = BookingMoneyPolicy.Remaining(booking.BookingState, financial.AmountToPayAtProperty);
 
                 rows.Add(new FinancialReportRowDto
                 {
@@ -6712,6 +6713,7 @@ namespace YemenGuide.Web.Services.Finance
                     DiscountTypeSnapshot = booking.DiscountTypeSnapshot?.Trim(),
                     DiscountValueSnapshot = booking.DiscountValueSnapshot,
                     TotalPrice = Math.Max(0m, booking.TotalPrice),
+                    EffectiveBookingValue = BookingMoneyPolicy.EffectiveValue(booking.BookingState, booking.TotalPrice, grossCollected, cashRefund, refund?.PendingRefundAmount ?? 0m),
                     DepositAmount = Math.Max(0m, financial.DepositAmount),
                     AmountPaidOnline = rawOnline,
                     AmountCollectedAtProperty = rawProperty,
@@ -7119,11 +7121,7 @@ namespace YemenGuide.Web.Services.Finance
                     var releasedCommission = GetReleasedCommissionAmount(
                         financial,
                         commissionAggregate);
-                    var netOwner = Math.Max(
-                        0m,
-                        actualCollected -
-                        completedRefund -
-                        chargedCommission);
+                    var netOwner = BookingMoneyPolicy.NetOwner(actualCollected, completedRefund, chargedCommission);
 
                     return new FinancialReportRowDto
                     {
@@ -7173,12 +7171,13 @@ namespace YemenGuide.Web.Services.Finance
                         DiscountTypeSnapshot = booking.DiscountTypeSnapshot?.Trim(),
                         DiscountValueSnapshot = booking.DiscountValueSnapshot,
                         TotalPrice = Math.Max(0m, booking.TotalPrice),
+                        EffectiveBookingValue = BookingMoneyPolicy.EffectiveValue(booking.BookingState, booking.TotalPrice, actualCollected, completedRefund, refundAggregate?.PendingRefundAmount ?? 0m),
                         DepositAmount = Math.Max(0m, financial?.DepositAmount ?? 0m),
                         AmountPaidOnline = Math.Max(0m, financial?.AmountPaidOnline ?? 0m),
                         AmountCollectedAtProperty = Math.Max(0m, financial?.AmountCollectedAtProperty ?? 0m),
-                        ActualPaidOnline = actualOnline,
-                        ActualCollectedAtProperty = actualProperty,
-                        ActualCollectedAmount = actualCollected,
+                        ActualPaidOnline = BookingMoneyPolicy.NetPaid(actualOnline, completedRefund),
+                        ActualCollectedAtProperty = BookingMoneyPolicy.NetPaid(actualProperty, Math.Max(0m, completedRefund - actualOnline)),
+                        ActualCollectedAmount = BookingMoneyPolicy.NetPaid(actualCollected, completedRefund),
                         RemainingAmount = BookingMoneyPolicy.Remaining(booking.BookingState, financial?.AmountToPayAtProperty ?? booking.TotalPrice - actualCollected),
                         ActualRevenue = netOwner,
                         PlatformCommission = Math.Max(0m, financial?.PlatformCommission ?? 0m),
@@ -7231,7 +7230,10 @@ namespace YemenGuide.Web.Services.Finance
                     {
                         transaction.TransactionType,
                         transaction.Status,
-                        transaction.Amount
+                        transaction.Amount,
+                        transaction.AvailableBalanceBefore, transaction.AvailableBalanceAfter,
+                        transaction.HeldBalanceBefore, transaction.HeldBalanceAfter,
+                        transaction.DebtBefore, transaction.DebtAfter
                     })
                 .ToListAsync(cancellationToken);
 
@@ -7348,7 +7350,11 @@ namespace YemenGuide.Web.Services.Finance
                     IsState(item.Status, FinancialRefundStatuses.Pending) ||
                     IsState(item.Status, FinancialRefundStatuses.Processing)),
                 OperationalNetCashFlow = rows.Sum(row => row.NetOwnerAmount),
-                GuaranteeNetFlow = completedTopUps - commissionCharged
+                GuaranteeNetFlow = completedTopUps - commissionCharged + movements
+                    .Where(item => IsState(item.Status, FinancialTransactionStatuses.Completed) &&
+                        IsState(item.TransactionType, FinancialTransactionTypes.CommissionRelease))
+                    .Sum(item => item.AvailableBalanceAfter + item.HeldBalanceAfter - item.DebtAfter
+                        - item.AvailableBalanceBefore - item.HeldBalanceBefore + item.DebtBefore)
             };
         }
 
@@ -7369,7 +7375,7 @@ namespace YemenGuide.Web.Services.Finance
                 IsState(financial.CommissionStatus, FinancialCommissionStatuses.Charged)
                     ? Math.Max(0m, financial.PlatformCommission)
                     : 0m;
-            var netOwner = BookingMoneyPolicy.Round(paidOnline + collected - refunded - chargedCommission);
+            var netOwner = BookingMoneyPolicy.NetOwner(paidOnline + collected, refunded, chargedCommission);
 
             return new FinancialDocumentItemDto
             {
@@ -7836,7 +7842,7 @@ namespace YemenGuide.Web.Services.Finance
                     .Select(row => row.BookingId!.Value)
                     .Distinct()
                     .Count(),
-                TotalBookingValue = rows.Sum(row => row.TotalPrice),
+                TotalBookingValue = rows.Sum(row => row.EffectiveBookingValue ?? row.TotalPrice),
                 TotalDepositRequired = rows.Sum(row => row.DepositAmount),
                 TotalPaidOnline = rows.Sum(row => row.ActualPaidOnline),
                 TotalCollectedAtProperty = rows.Sum(row => row.ActualCollectedAtProperty),
@@ -8292,13 +8298,12 @@ namespace YemenGuide.Web.Services.Finance
                 bookingId,
                 out var commissionMovements);
 
-            var remaining = Math.Max(0m, financial?.AmountToPayAtProperty ??
-                Math.Max(0m, booking.TotalPrice - paidOnline - collected));
+            var remaining = BookingMoneyPolicy.Remaining(booking.BookingState, financial?.AmountToPayAtProperty ?? booking.TotalPrice - paidOnline - collected);
             var commission = GetChargedCommissionAmount(
                 financial,
                 commissionMovements);
-            var refunded = Math.Max(0m, refund?.RefundAmount ?? 0m);
-            var netOwner = Math.Max(0m, paidOnline + collected - commission - refunded);
+            var refunded = Math.Max(0m, refund?.CashRefundAmount ?? 0m);
+            var netOwner = BookingMoneyPolicy.NetOwner(paidOnline + collected, refunded, commission);
 
             var documentDate = IsState(documentType, OwnerFinancialDocumentTypes.DepositReceipt)
                 ? financial?.UpdatedAt ?? booking.CreatedAt ?? booking.StartDate
@@ -8680,7 +8685,7 @@ namespace YemenGuide.Web.Services.Finance
                     Column("OriginalTotalPrice", "قبل الخصم", "Money", "Left", 18d),
                     Column("DiscountAmount", "الخصم", "Money", "Left", 16d),
                     Column("PromotionTitleSnapshot", "العرض", width: 22d),
-                    Column("TotalPrice", "بعد الخصم", "Money", "Left", 18d),
+                    Column("TotalPrice", "القيمة الحالية", "Money", "Left", 18d),
                     Column("DepositAmount", "العربون", "Money", "Left", 16d),
                     Column("ActualCollectedAmount", "إجمالي المحصّل", "Money", "Left", 18d),
                     Column("RemainingAmount", "المتبقي", "Money", "Left", 17d),
@@ -8700,7 +8705,7 @@ namespace YemenGuide.Web.Services.Finance
                     Column("OriginalTotalPrice", "قبل الخصم", "Money", "Left", 18d),
                     Column("DiscountAmount", "الخصم", "Money", "Left", 16d),
                     Column("PromotionTitleSnapshot", "العرض", width: 22d),
-                    Column("TotalPrice", "بعد الخصم", "Money", "Left", 18d),
+                    Column("TotalPrice", "القيمة الحالية", "Money", "Left", 18d),
                     Column("ActualPaidOnline", "مدفوع إلكترونيًا", "Money", "Left", 19d),
                     Column("ActualCollectedAtProperty", "محصّل في المنشأة", "Money", "Left", 20d),
                     Column("ActualCollectedAmount", "إجمالي المحصّل", "Money", "Left", 18d),
@@ -8719,7 +8724,7 @@ namespace YemenGuide.Web.Services.Finance
                     Column("PlaceName", "المنشأة", width: 25d),
                     Column("OriginalTotalPrice", "قبل الخصم", "Money", "Left", 18d),
                     Column("DiscountAmount", "الخصم", "Money", "Left", 16d),
-                    Column("TotalPrice", "بعد الخصم", "Money", "Left", 18d),
+                    Column("TotalPrice", "القيمة الحالية", "Money", "Left", 18d),
                     Column("PlatformCommission", "العمولة المحسوبة", "Money", "Left", 19d),
                     Column("CommissionHeld", "المحجوزة", "Money", "Left", 16d),
                     Column("CommissionCharged", "المخصومة", "Money", "Left", 16d),
@@ -8742,7 +8747,7 @@ namespace YemenGuide.Web.Services.Finance
                     Column("OriginalTotalPrice", "قبل الخصم", "Money", "Left", 18d),
                     Column("DiscountAmount", "الخصم", "Money", "Left", 16d),
                     Column("PromotionTitleSnapshot", "العرض", width: 22d),
-                    Column("TotalPrice", "بعد الخصم", "Money", "Left", 18d),
+                    Column("TotalPrice", "القيمة الحالية", "Money", "Left", 18d),
                     Column("DepositAmount", "العربون", "Money", "Left", 16d),
                     Column("CancellationFee", "رسوم الإلغاء", "Money", "Left", 17d),
                     Column("RequestedRefundAmount", "المطلوب استرداده", "Money", "Left", 19d),
@@ -8788,7 +8793,7 @@ namespace YemenGuide.Web.Services.Finance
                 Column("OriginalTotalPrice", "قبل الخصم", "Money", "Left", 18d),
                 Column("DiscountAmount", "الخصم", "Money", "Left", 16d),
                 Column("PromotionTitleSnapshot", "العرض", width: 22d),
-                Column("TotalPrice", "بعد الخصم", "Money", "Left", 18d),
+                Column("TotalPrice", "القيمة الحالية", "Money", "Left", 18d),
                 Column("ActualPaidOnline", "مدفوع إلكترونيًا", "Money", "Left", 19d),
                 Column("ActualCollectedAtProperty", "محصّل في المنشأة", "Money", "Left", 20d),
                 Column("RemainingAmount", "المتبقي", "Money", "Left", 17d),
@@ -8879,7 +8884,7 @@ namespace YemenGuide.Web.Services.Finance
                     return row.DiscountValueSnapshot.HasValue
                     ? MoneyCell(row.DiscountValueSnapshot.Value)
                     : TextCell(string.Empty);
-                case "TotalPrice": return MoneyCell(row.TotalPrice);
+                case "TotalPrice": return MoneyCell(row.EffectiveBookingValue ?? row.TotalPrice);
                 case "DepositAmount": return MoneyCell(row.DepositAmount);
                 case "AmountPaidOnline": return MoneyCell(row.AmountPaidOnline);
                 case "AmountCollectedAtProperty": return MoneyCell(row.AmountCollectedAtProperty);
@@ -9223,14 +9228,14 @@ namespace YemenGuide.Web.Services.Finance
             BuildPlaceBreakdown(
                 IReadOnlyCollection<FinancialReportRowDto> rows)
         {
-            var totalAmount = rows.Sum(row => Math.Max(0m, row.PrimaryAmount));
+            var totalAmount = rows.Sum(row => row.PrimaryAmount);
 
             return rows
                 .Where(row => row.PlaceId > 0)
                 .GroupBy(row => new { row.PlaceId, row.PlaceName })
                 .Select(group =>
                 {
-                    var amount = group.Sum(row => Math.Max(0m, row.PrimaryAmount));
+                    var amount = group.Sum(row => row.PrimaryAmount);
 
                     return new FinancialReportBreakdownItemDto
                     {
@@ -9252,7 +9257,7 @@ namespace YemenGuide.Web.Services.Finance
             BuildStatusBreakdown(
                 IReadOnlyCollection<FinancialReportRowDto> rows)
         {
-            var totalAmount = rows.Sum(row => Math.Max(0m, row.PrimaryAmount));
+            var totalAmount = rows.Sum(row => row.PrimaryAmount);
 
             return rows
                 .GroupBy(row => FirstNonEmpty(
@@ -9263,7 +9268,7 @@ namespace YemenGuide.Web.Services.Finance
                     row.CommissionStatusLabel))
                 .Select(group =>
                 {
-                    var amount = group.Sum(row => Math.Max(0m, row.PrimaryAmount));
+                    var amount = group.Sum(row => row.PrimaryAmount);
 
                     return new FinancialReportBreakdownItemDto
                     {
@@ -9592,6 +9597,7 @@ namespace YemenGuide.Web.Services.Finance
 
             return new FinancialReportExportDto
             {
+                PlaceId = filter.PlaceId,
                 Currency = currency,
                 ReportType = filter.ReportType,
                 Title = GetFinancialReportTypeLabel(filter.ReportType),

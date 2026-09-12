@@ -1,7 +1,9 @@
-﻿@using YemenGuide.Core.DTOs.Admin
+﻿@using YemenGuide.Web.Services.Finance
+@using YemenGuide.Core.DTOs.Admin
 @model AdminFinancialReportPageDto
 
 @{
+    var display = await FinancialDisplayContext.CreateAsync(Context, Model, Context.RequestAborted);
     var filter = Model?.Filter ?? new AdminFinancialReportFilterDto();
     var capabilities = Model?.Capabilities ?? new AdminFinancialReportFilterCapabilitiesDto();
 
@@ -15,6 +17,7 @@
 }
 
 <section class="afr" data-reports-root>
+    <p class="financial-currency-note">@display.Note</p>
     <header class="afr-section-head afr-section-head--compact">
         <div>
             <h2 class="afr-section-head__title">التقارير والمستندات</h2>
@@ -374,7 +377,7 @@
                     </span>
                     <div>
                         <small>@metric.Label</small>
-                        <strong>@metric.Value</strong>
+                        <strong>@display.Metric(metric)</strong>
                         @if (!string.IsNullOrWhiteSpace(metric.Hint))
                         {
                             <span>@metric.Hint</span>
@@ -452,11 +455,11 @@
                                             <td class="afr-cell afr-cell--@CellTone(cell)">
                                                 @if (cell != null && !string.IsNullOrWhiteSpace(cell.LinkUrl))
                                                 {
-                                                    <a href="@cell.LinkUrl">@cell.Text</a>
+                                                    <a href="@cell.LinkUrl">@display.Cell(cell, row.PlaceId)</a>
                                                 }
                                                 else
                                                 {
-                                                    <span title="@cell?.Tooltip">@(cell?.Text ?? "—")</span>
+                                                    <span title="@cell?.Tooltip">@display.Cell(cell, row.PlaceId)</span>
                                                 }
                                             </td>
                                         }
@@ -522,7 +525,7 @@
                         <div class="afr-document-card__meta">
                             @if (document.Amount.HasValue)
                             {
-                                <strong>@document.Amount.Value.ToString("N0") @Model.Currency</strong>
+                                <strong>@display.Money(document.Amount.Value, document.PlaceId)</strong>
                             }
                             <span>@document.DocumentDate.ToString("yyyy/MM/dd")</span>
                         </div>
@@ -544,3 +547,4 @@
         </section>
     }
 </section>
+

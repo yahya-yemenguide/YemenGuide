@@ -1,16 +1,18 @@
-﻿@using YemenGuide.Core.DTOs.Admin
+﻿@using YemenGuide.Web.Services.Finance
+@using YemenGuide.Core.DTOs.Admin
 @using System.Globalization
 @using YemenGuide.Web.Services.ExchangeRates
 @model AdminFinancialDocumentPrintDto
 
 @{
+    var display = await FinancialDisplayContext.CreateAsync(Context, Model, Context.RequestAborted);
     Layout = null;
     var document = Model?.Document ?? new AdminFinancialDocumentDetailsDto();
     var autoPrint = Model?.AutoPrint ?? false;
     var isArabic = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
     var uiLang = isArabic ? "ar" : "en";
     var uiDir = isArabic ? "rtl" : "ltr";
-    string Money(decimal value) => $"{CurrencyDisplayService.FormatNumber(value, document.Currency)} {document.Currency}";
+    string Money(decimal value) => display.Money(value);
 }
 
 <!DOCTYPE html>
@@ -61,6 +63,7 @@
         </header>
 
         <section class="afp-document-title">
+    <p class="financial-currency-note">@display.Note</p>
             <span class="afp-document-title__badge">@document.Status</span>
             <h1>@document.Title</h1>
 
@@ -107,7 +110,7 @@
             <section class="afp-amounts">
                 <div class="afp-amounts__head">
                     <h2>المبالغ</h2>
-                    <span>@document.Currency</span>
+                    <span>@display.Currency</span>
                 </div>
 
                 <div class="afp-amount-list">
@@ -176,3 +179,4 @@
     <script src="~/js/admin/financials/admin-financials-phase2.js" asp-append-version="true"></script>
 </body>
 </html>
+

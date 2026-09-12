@@ -1,4 +1,5 @@
-﻿@using System
+﻿@using YemenGuide.Web.Services.Finance
+@using System
 @using System.Collections.Generic
 @using System.Globalization
 @using System.Linq
@@ -7,6 +8,7 @@
 @model FinancialOverviewTabDto
 
 @{
+    var display = await FinancialDisplayContext.CreateAsync(Context, Model, Context.RequestAborted);
     var isAdminAccount =
         (ViewData["IsAdministrationOwnedPlace"] is bool isAdminOwned && isAdminOwned) ||
         (ViewData["IsAdministrationAccount"] is bool isAdmin && isAdmin) ||
@@ -33,7 +35,7 @@
     var remaining = Math.Max(0m, summary.TotalRemainingAtProperty);
     var commissionCalculated = Math.Max(0m, summary.TotalCommissionCalculated);
     var commissionCharged = Math.Max(0m, summary.TotalCommissionCharged);
-    var netCollected = Math.Max(0m, summary.NetCollectedRevenue);
+    var netCollected = summary.NetCollectedRevenue;
 
     var collectionPercentage = bookingValue <= 0m
         ? 0m
@@ -54,12 +56,7 @@
           suspendedCount +
           debtAccountsCount;
 
-    string Money(decimal value)
-    {
-        var safeValue = Math.Max(0m, value);
-        var format = decimal.Truncate(safeValue) == safeValue ? "N0" : "N2";
-        return $"{safeValue.ToString(format, culture)} {currency}";
-    }
+    string Money(decimal value) => display.Money(value);
 
     string DateText(DateTime value) =>
         value.ToString("dd/MM/yyyy", culture);
@@ -155,6 +152,7 @@
          data-period-start="@pageModel.PeriodStart.ToString("yyyy-MM-dd", culture)"
          data-period-end="@pageModel.PeriodEnd.ToString("yyyy-MM-dd", culture)"
          aria-labelledby="ownerFinancialOverviewTitle">
+    <p class="financial-currency-note">@display.Note</p>
 
     <header class="owner-financial-overview__toolbar">
 
@@ -819,3 +817,4 @@
     </div>
 
 </section>
+

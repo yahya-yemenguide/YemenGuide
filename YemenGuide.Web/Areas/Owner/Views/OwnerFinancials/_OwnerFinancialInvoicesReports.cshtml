@@ -1,3 +1,4 @@
+﻿@using YemenGuide.Web.Services.Finance
 @using System
 @using System.Collections.Generic
 @using System.Globalization
@@ -7,6 +8,7 @@
 @model InvoicesReportsTabDto
 
 @{
+    var display = await FinancialDisplayContext.CreateAsync(Context, Model, Context.RequestAborted);
     var pageModel = Model ?? new InvoicesReportsTabDto();
     var filter = pageModel.Filter ?? new FinancialReportFilterDto();
     var summary = pageModel.Summary ?? new FinancialReportSummaryDto();
@@ -37,11 +39,7 @@
     var lastPage = Math.Min(totalPages, firstPage + 4);
     firstPage = Math.Max(1, lastPage - 4);
 
-    string Money(decimal value)
-    {
-        var format = decimal.Truncate(value) == value ? "N0" : "N2";
-        return $"{value.ToString(format, numberCulture)} {pageModel.Currency}";
-    }
+    string Money(decimal value) => display.Money(value);
 
     string Number(int value) => value.ToString("N0", numberCulture);
 
@@ -169,6 +167,7 @@
          data-print-url="@Url.Content("~/Owner/Financials/InvoicesReports/Print")"
          data-active-report-type="@reportType"
          dir="rtl">
+    <p class="financial-currency-note">@display.Note</p>
 
     <header class="ofir-editorial__header">
         <div class="ofir-editorial__identity">
@@ -738,7 +737,7 @@
                                     <td><strong>@DateText(row.BookingStartDate) — @DateText(row.BookingEndDate)</strong><span class="ofir-editorial__status @StatusClass(row.BookingState)">@row.BookingStateLabel</span></td>
                                     <td class="is-money">@Money(row.OriginalTotalPrice)</td>
                                     <td class="is-money is-coral">@Money(row.DiscountAmount)</td>
-                                    <td class="is-money is-strong">@Money(row.TotalPrice)</td>
+                                    <td class="is-money is-strong">@Money(row.EffectiveBookingValue ?? row.TotalPrice)</td>
                                     <td class="is-money is-mint">@Money(row.ActualCollectedAmount)</td>
                                     <td class="is-money is-primary">@Money(row.ActualRevenue)</td>
                                 }
@@ -755,7 +754,7 @@
                                 else if (isCommissions)
                                 {
                                     <td><strong>#@row.BookingId</strong><span>@row.PlaceName</span></td>
-                                    <td class="is-money">@Money(row.TotalPrice)</td>
+                                    <td class="is-money">@Money(row.EffectiveBookingValue ?? row.TotalPrice)</td>
                                     <td class="is-money">@Money(row.PlatformCommission)</td>
                                     <td class="is-money is-primary">@Money(row.CommissionCharged)</td>
                                     <td class="is-money is-mint">@Money(row.CommissionReleased)</td>
@@ -786,7 +785,7 @@
                                 {
                                     <td><strong>#@row.BookingId</strong><span>@row.CustomerName</span><small>@row.PlaceName</small></td>
                                     <td><span class="ofir-editorial__status @StatusClass(row.BookingState)">@row.BookingStateLabel</span><small>@row.PaymentStatusLabel</small></td>
-                                    <td class="is-money">@Money(row.TotalPrice)</td>
+                                    <td class="is-money">@Money(row.EffectiveBookingValue ?? row.TotalPrice)</td>
                                     <td class="is-money is-mint">@Money(row.ActualCollectedAmount)</td>
                                     <td class="is-money @(row.RemainingAmount > 0 ? "is-coral" : string.Empty)">@Money(row.RemainingAmount)</td>
                                     <td class="is-money">@Money(row.CommissionCharged)</td>

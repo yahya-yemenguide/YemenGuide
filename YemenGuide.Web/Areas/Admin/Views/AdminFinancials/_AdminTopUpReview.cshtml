@@ -1,14 +1,16 @@
-﻿@using YemenGuide.Core.DTOs.Admin
+﻿@using YemenGuide.Web.Services.Finance
+@using YemenGuide.Core.DTOs.Admin
 @model AdminCommissionTopUpPageDto
 
 @{
+    var display = await FinancialDisplayContext.CreateAsync(Context, Model, Context.RequestAborted);
     var filter = Model?.Filter ?? new AdminCommissionTopUpFilterDto();
     var summary = Model?.Summary ?? new AdminCommissionTopUpSummaryDto();
     var currency = string.IsNullOrWhiteSpace(Model?.Currency)
         ? "ريال يمني"
         : Model.Currency;
 
-    string Money(decimal value) => $"{value:N0} {currency}";
+    string Money(decimal value) => display.Money(value);
 
     string TopUpTone(string? status) =>
         (status ?? string.Empty).Trim() switch
@@ -27,6 +29,7 @@
          data-topup-root
          data-details-url="@Url.Action("Details", "AdminTopUpReview", new { area = "Admin" })"
          data-proof-url="@Url.Content("~/Admin/Financials/TopUps/Proof")">
+    <p class="financial-currency-note">@display.Note</p>
 
     <header class="atr-section-head">
         <div>
@@ -44,7 +47,7 @@
                 <small>تنتظر المراجعة</small>
                 <strong>@summary.PendingCount طلب</strong>
             </div>
-            <b>@Money(summary.PendingAmount)</b>
+            <b>@display.Summary("Summary.PendingAmount", summary.PendingAmount)</b>
         </div>
     </header>
 
@@ -52,24 +55,24 @@
         <article class="atr-kpi atr-kpi--pending">
             <span>قيد المراجعة</span>
             <strong>@summary.PendingCount</strong>
-            <small>@Money(summary.PendingAmount)</small>
+            <small>@display.Summary("Summary.PendingAmount", summary.PendingAmount)</small>
         </article>
 
         <article class="atr-kpi atr-kpi--approved">
             <span>تم اعتمادها</span>
             <strong>@summary.CompletedCount</strong>
-            <small>@Money(summary.CompletedAmount)</small>
+            <small>@display.Summary("Summary.CompletedAmount", summary.CompletedAmount)</small>
         </article>
 
         <article class="atr-kpi atr-kpi--rejected">
             <span>مرفوضة</span>
             <strong>@summary.RejectedCount</strong>
-            <small>@Money(summary.RejectedAmount)</small>
+            <small>@display.Summary("Summary.RejectedAmount", summary.RejectedAmount)</small>
         </article>
 
         <article class="atr-kpi atr-kpi--credit">
             <span>أضيف للرصيد</span>
-            <strong>@Money(summary.AddedToAvailableBalanceAmount)</strong>
+            <strong>@display.Summary("Summary.AddedToAvailableBalanceAmount", summary.AddedToAvailableBalanceAmount)</strong>
             <small>بعد سداد الدين إن وجد</small>
         </article>
     </div>
@@ -227,7 +230,7 @@
                                         </div>
                                     </div>
                                 </td>
-                                <td><span class="atr-amount">@Money(item.Amount)</span></td>
+                                <td><span class="atr-amount">@display.Money(item.Amount, item.PlaceId)</span></td>
                                 <td>
                                     <div class="atr-reference">
                                         <strong>@(string.IsNullOrWhiteSpace(item.ReferenceNumber) ? "—" : item.ReferenceNumber)</strong>
@@ -468,3 +471,4 @@
         </div>
     </div>
 </section>
+

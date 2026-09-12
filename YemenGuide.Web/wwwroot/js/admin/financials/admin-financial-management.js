@@ -1,12 +1,58 @@
 ﻿(function (window, document) {
     "use strict";
 
+    let activeManagementTab = "general";
+
     function api() {
         return window.AdminFinance;
     }
 
     function root() {
         return document.querySelector("[data-financial-management-root]");
+    }
+
+    function activateManagementTab(currentRoot, requestedTab, shouldFocus) {
+        if (!currentRoot) {
+            return;
+        }
+
+        const tabs = Array.from(currentRoot.querySelectorAll("[data-management-tab]"));
+        const panels = Array.from(currentRoot.querySelectorAll("[data-management-panel]"));
+        if (tabs.length === 0 || panels.length === 0) {
+            return;
+        }
+
+        const selected = tabs.find(tab => tab.dataset.managementTab === requestedTab) || tabs[0];
+        activeManagementTab = selected.dataset.managementTab;
+        currentRoot.dataset.activeManagementTab = activeManagementTab;
+
+        const settingsContainer = currentRoot.querySelector("[data-management-settings-container]");
+        if (settingsContainer) {
+            settingsContainer.hidden = activeManagementTab === "wallets";
+        }
+
+        tabs.forEach(tab => {
+            const isActive = tab === selected;
+            tab.classList.toggle("is-active", isActive);
+            tab.setAttribute("aria-selected", isActive ? "true" : "false");
+            tab.tabIndex = isActive ? 0 : -1;
+        });
+
+        panels.forEach(panel => {
+            const isActive = panel.dataset.managementPanel === activeManagementTab;
+            panel.hidden = !isActive;
+            panel.setAttribute("aria-hidden", isActive ? "false" : "true");
+        });
+
+        if (shouldFocus) {
+            selected.focus();
+            currentRoot.querySelector(".afm-body")?.scrollTo({ top: 0, behavior: "smooth" });
+        }
+    }
+
+    function initializeManagement(currentRoot) {
+        syncTrialPolicyState(currentRoot);
+        activateManagementTab(currentRoot, activeManagementTab, false);
     }
 
     function openModal(element) {
@@ -250,6 +296,13 @@
             return;
         }
 
+        const managementTab = event.target.closest("[data-management-tab]");
+        if (managementTab && currentRoot.contains(managementTab)) {
+            event.preventDefault();
+            activateManagementTab(currentRoot, managementTab.dataset.managementTab, true);
+            return;
+        }
+
         const add = event.target.closest("[data-platform-wallet-new]");
         if (add && belongsToManagementUi(add, currentRoot)) {
             event.preventDefault();
@@ -318,6 +371,32 @@
     }
 
     function onKeyDown(event) {
+        const currentRoot = root();
+        const managementTab = event.target.closest("[data-management-tab]");
+        const navigationKeys = ["ArrowRight", "ArrowLeft", "Home", "End"];
+
+        if (currentRoot && managementTab && navigationKeys.includes(event.key)) {
+            const tabs = Array.from(currentRoot.querySelectorAll("[data-management-tab]"));
+            const currentIndex = tabs.indexOf(managementTab);
+            if (currentIndex < 0 || tabs.length === 0) {
+                return;
+            }
+
+            event.preventDefault();
+            let nextIndex;
+            if (event.key === "Home") {
+                nextIndex = 0;
+            } else if (event.key === "End") {
+                nextIndex = tabs.length - 1;
+            } else {
+                const direction = event.key === "ArrowRight" ? 1 : -1;
+                nextIndex = (currentIndex + direction + tabs.length) % tabs.length;
+            }
+
+            activateManagementTab(currentRoot, tabs[nextIndex].dataset.managementTab, true);
+            return;
+        }
+
         if (event.key !== "Escape") {
             return;
         }
@@ -329,11 +408,11 @@
     }
 
     document.addEventListener("adminfinance:managementloaded", function () {
-        syncTrialPolicyState(root());
+        initializeManagement(root());
     });
 
     document.addEventListener("DOMContentLoaded", function () {
-        syncTrialPolicyState(root());
+        initializeManagement(root());
     });
 
     document.addEventListener("submit", onSubmit);

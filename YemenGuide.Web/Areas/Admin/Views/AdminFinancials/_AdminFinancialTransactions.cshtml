@@ -1,14 +1,16 @@
-﻿@using YemenGuide.Core.DTOs.Admin
+﻿@using YemenGuide.Web.Services.Finance
+@using YemenGuide.Core.DTOs.Admin
 @model AdminFinancialTransactionPageDto
 
 @{
+    var display = await FinancialDisplayContext.CreateAsync(Context, Model, Context.RequestAborted);
     var filter = Model?.Filter ?? new AdminFinancialTransactionFilterDto();
     var summary = Model?.Summary ?? new AdminFinancialTransactionSummaryDto();
     var currency = string.IsNullOrWhiteSpace(Model?.Currency)
         ? "ريال يمني"
         : Model.Currency;
 
-    string Money(decimal value) => $"{value:N0} {currency}";
+    string Money(decimal value) => display.Money(value);
 
     string MovementTone(string? type) =>
         (type ?? string.Empty).Trim() switch
@@ -27,6 +29,7 @@
 <section class="aft"
          data-transactions-root
          data-details-url="@Url.Action("Details", "AdminFinancialTransactions", new { area = "Admin" })">
+    <p class="financial-currency-note">@display.Note</p>
 
     <header class="aft-section-head">
         <div>
@@ -49,22 +52,22 @@
     <div class="aft-kpi-row">
         <article class="aft-kpi aft-kpi--topup">
             <small>شحنات مكتملة</small>
-            <strong>@Money(summary.TotalTopUps)</strong>
+            <strong>@display.Summary("Summary.TotalTopUps", summary.TotalTopUps)</strong>
         </article>
 
         <article class="aft-kpi aft-kpi--charge">
             <small>عمولات مخصومة</small>
-            <strong>@Money(summary.TotalCommissionCharged)</strong>
+            <strong>@display.Summary("Summary.TotalCommissionCharged", summary.TotalCommissionCharged)</strong>
         </article>
 
         <article class="aft-kpi aft-kpi--debt">
             <small>ديون مسجلة</small>
-            <strong>@Money(summary.TotalDebtRegistered)</strong>
+            <strong>@display.Summary("Summary.TotalDebtRegistered", summary.TotalDebtRegistered)</strong>
         </article>
 
         <article class="aft-kpi aft-kpi--paid">
             <small>ديون مسددة</small>
-            <strong>@Money(summary.TotalDebtPaid)</strong>
+            <strong>@display.Summary("Summary.TotalDebtPaid", summary.TotalDebtPaid)</strong>
         </article>
     </div>
 
@@ -203,7 +206,7 @@
                                 </td>
                                 <td>
                                     <span class="aft-amount" data-direction="@row.Direction">
-                                        @Money(row.Amount)
+                                        @display.Money(row.Amount, row.PlaceId)
                                     </span>
                                 </td>
                                 <td>
@@ -220,10 +223,10 @@
                                 </td>
                                 <td>
                                     <div class="aft-balance-after">
-                                        <strong>@Money(row.AvailableBalanceAfter)</strong>
+                                        <strong>@display.Money(row.AvailableBalanceAfter, row.PlaceId)</strong>
                                         @if (row.DebtAfter > 0)
                                         {
-                                            <small>دين: @Money(row.DebtAfter)</small>
+                                            <small>دين: @display.Money(row.DebtAfter, row.PlaceId)</small>
                                         }
                                     </div>
                                 </td>
@@ -372,3 +375,4 @@
         </div>
     </div>
 </section>
+
