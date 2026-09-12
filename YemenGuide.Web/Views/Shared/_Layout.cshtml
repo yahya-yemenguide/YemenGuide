@@ -35,6 +35,18 @@
         string.Equals(currentController, "Home", StringComparison.OrdinalIgnoreCase) &&
         string.Equals(currentAction, "Index", StringComparison.OrdinalIgnoreCase);
 
+    // نفس محرك الترجمة المركزي لكل صفحات العميل التي تمت ترجمتها.
+    // لا ننشئ محرك ترجمة منفصل لكل صفحة.
+    bool useCustomerPageLocalization =
+        isHomeIndex ||
+        (
+            string.Equals(currentController, "Places", StringComparison.OrdinalIgnoreCase) &&
+            (
+                string.Equals(currentAction, "Details", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(currentAction, "Search", StringComparison.OrdinalIgnoreCase)
+            )
+        );
+
     // -------------------------------------------------------------
     // اللغة والاتجاه:
     //
@@ -353,7 +365,7 @@
             asp-append-version="true"></script>
     }
 
-    @if (isHomeIndex)
+    @if (useCustomerPageLocalization)
     {
         <partial name="_HomeLocalizationData" />
 
@@ -362,6 +374,116 @@
     }
 
     @await RenderSectionAsync("Scripts", required: false)
+
+    @* =============================================================
+       English live clock fix ONLY
+       - index.js writes #live-time / #live-date using ar-YE every second.
+       - We correct ONLY these two elements after page scripts load.
+       - No Date/Intl prototypes, no Google Maps, no translation engine changes.
+       ============================================================= *@
+    @if (
+        isHomeIndex &&
+        string.Equals(
+            langCode,
+            "en",
+            StringComparison.OrdinalIgnoreCase
+        )
+    )
+    {
+        <script>
+            (() => {
+                "use strict";
+
+                const timeElement =
+                    document.getElementById("live-time");
+
+                const dateElement =
+                    document.getElementById("live-date");
+
+                if (!timeElement || !dateElement) {
+                    return;
+                }
+
+                let applyingEnglishClock = false;
+
+                const renderEnglishClock = () => {
+                    if (applyingEnglishClock) {
+                        return;
+                    }
+
+                    applyingEnglishClock = true;
+
+                    try {
+                        const now = new Date();
+
+                        const timeText =
+                            now.toLocaleTimeString(
+                                "en-US",
+                                {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                    hour12: true
+                                }
+                            );
+
+                        const dateText =
+                            now.toLocaleDateString(
+                                "en-US",
+                                {
+                                    weekday: "long",
+                                    month: "long",
+                                    day: "numeric"
+                                }
+                            );
+
+                        if (
+                            timeElement.textContent !==
+                            timeText
+                        ) {
+                            timeElement.textContent =
+                                timeText;
+                        }
+
+                        if (
+                            dateElement.textContent !==
+                            dateText
+                        ) {
+                            dateElement.textContent =
+                                dateText;
+                        }
+                    }
+                    finally {
+                        applyingEnglishClock = false;
+                    }
+                };
+
+                renderEnglishClock();
+
+                const clockObserver =
+                    new MutationObserver(() => {
+                        renderEnglishClock();
+                    });
+
+                clockObserver.observe(
+                    timeElement,
+                    {
+                        childList: true,
+                        characterData: true,
+                        subtree: true
+                    }
+                );
+
+                clockObserver.observe(
+                    dateElement,
+                    {
+                        childList: true,
+                        characterData: true,
+                        subtree: true
+                    }
+                );
+            })();
+        </script>
+    }
 
     <button type="button"
             class="customer-back-to-top"
