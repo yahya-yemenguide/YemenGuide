@@ -94,12 +94,180 @@ document.addEventListener("DOMContentLoaded", function () {
     // =========================================================================
     const tabButtons = document.querySelectorAll('.custom-tabs-container .tab-btn');
     const tabContents = document.querySelectorAll('.tab-pane-content');
+    const pageActionHost = document.getElementById('managePlacesPageActions');
+    const headerAddPlaceButton = document.getElementById('managePlacesHeaderAddPlace');
+    const headerAddPromotionButton = document.getElementById('managePlacesHeaderAddPromotion');
     const currentUrl = new URL(window.location.href);
     const requestedTab = currentUrl.searchParams.get('placeTab');
     const knownTabs = new Set(Array.from(tabButtons).map(button => button.getAttribute('data-target')).filter(Boolean));
     const savedTab = knownTabs.has(requestedTab)
         ? requestedTab
         : (localStorage.getItem('activePlaceTab') || 'place-list-tab');
+
+    /**
+     * يحذف الرؤوس الكبيرة داخل التبويبات فعليًا من DOM، وليس مجرد إخفائها بالـCSS.
+     * هذا هو المطلوب في قائمة المنشآت، إضافة منشأة، العروض، والخدمات والباقات.
+     */
+    function removeRedundantTabHeader(targetClass, targetContent) {
+        if (!targetContent) return;
+
+        if (targetClass === 'place-list-tab') {
+            targetContent.querySelector('.owner-places-hero')?.remove();
+            return;
+        }
+
+        if (targetClass === 'add-place-tab') {
+            targetContent.querySelector('.add-place-entry__header')?.remove();
+            return;
+        }
+
+        if (targetClass === 'promotions-manager-tab') {
+            const promoHeader = targetContent.querySelector('.yg-promo-page-head');
+
+            if (promoHeader) {
+                // زر الإضافة الأصلي مرتبط بالـEvents داخل promotions-manager.js.
+                // ننقله مخفيًا خارج الديف المحذوف ونبقيه كـhook فقط للزر الموجود أعلى الصفحة.
+                const originalPromotionButton = promoHeader.querySelector('#openPromotionModal');
+                if (originalPromotionButton) {
+                    originalPromotionButton.hidden = true;
+                    originalPromotionButton.style.display = 'none';
+                    originalPromotionButton.setAttribute('aria-hidden', 'true');
+                    targetContent.appendChild(originalPromotionButton);
+                }
+
+                promoHeader.remove();
+            }
+
+            // لا نحتاج بطاقات الإحصائيات الكبيرة هنا؛ تبويبات الحالات بالأسفل تعرض العدادات نفسها.
+            targetContent.querySelector('.yg-promo-stats')?.remove();
+            return;
+        }
+
+        if (targetClass === 'details-manager-tab') {
+            targetContent.querySelector('.details-hero')?.remove();
+
+            // إزالة شريط «جهّز تجربة الحجز من مكان واحد» بالكامل لتقليل الزحمة.
+            targetContent.querySelector('.details-content-guide')?.remove();
+        }
+    }
+
+    /**
+     * يظهر فقط زر الإجراء المناسب للتبويب الحالي داخل الهيدر الرئيسي.
+     */
+    function syncManagePlacesHeaderActions(targetClass, targetContent) {
+        if (headerAddPlaceButton) {
+            headerAddPlaceButton.hidden = targetClass !== 'place-list-tab';
+        }
+
+        if (headerAddPromotionButton) {
+            const promotionReady =
+                targetClass === 'promotions-manager-tab' &&
+                targetContent?.getAttribute('data-loaded') === 'true' &&
+                !!targetContent.querySelector('#openPromotionModal');
+
+            headerAddPromotionButton.hidden = !promotionReady;
+        }
+
+        if (pageActionHost) {
+            const hasVisibleAction = Array.from(pageActionHost.children)
+                .some(element => !element.hidden);
+            pageActionHost.hidden = !hasVisibleAction;
+        }
+    }
+
+    headerAddPlaceButton?.addEventListener('click', function () {
+        const addPlaceTab = document.querySelector('.tab-btn[data-target="add-place-tab"]');
+        addPlaceTab?.click();
+    });
+
+    headerAddPromotionButton?.addEventListener('click', function () {
+        const promotionsPanel = document.querySelector('.promotions-manager-tab');
+        const originalPromotionButton = promotionsPanel?.querySelector('#openPromotionModal');
+        originalPromotionButton?.click();
+    });
+
+    // تحديث هادئ: نبقي المحتوى الحالي ظاهرًا أثناء جلب النسخة الجديدة من السيرفر،
+    // بدل مسح التبويب وإظهار شاشة تحميل كاملة كل مرة.
+    function beginSmoothRefresh(targetContent) {
+        if (!targetContent || targetContent.querySelector(':scope > .manage-places-soft-refresh')) return;
+
+        if (!document.getElementById('managePlacesSmoothRefreshStyles')) {
+            const style = document.createElement('style');
+            style.id = 'managePlacesSmoothRefreshStyles';
+            style.textContent = `
+                .tab-pane-content { position: relative; }
+                .tab-pane-content.is-soft-refreshing { pointer-events: none; }
+                .tab-pane-content.is-soft-refreshing > :not(.manage-places-soft-refresh) {
+                    opacity: .72;
+                    transition: opacity .18s ease;
+                }
+                .manage-places-soft-refresh {
+                    position: absolute;
+                    top: 10px;
+                    inset-inline-start: 10px;
+                    z-index: 50;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 7px;
+                    min-height: 34px;
+                    padding: 7px 11px;
+                    color: #187b9c;
+                    background: rgba(255,255,255,.96);
+                    border: 1px solid rgba(0,166,218,.18);
+                    border-radius: 999px;
+                    box-shadow: 0 8px 24px rgba(5,32,60,.10);
+                    font-size: .72rem;
+                    font-weight: 800;
+                    backdrop-filter: blur(10px);
+                }
+                .manage-places-soft-refresh__spinner {
+                    width: 14px;
+                    height: 14px;
+                    border: 2px solid rgba(0,166,218,.20);
+                    border-top-color: #00A6DA;
+                    border-radius: 50%;
+                    animation: managePlacesSoftSpin .65s linear infinite;
+                }
+                @keyframes managePlacesSoftSpin { to { transform: rotate(360deg); } }
+                body.dark-mode .manage-places-soft-refresh {
+                    color: #d8f4ff;
+                    background: rgba(16,42,64,.96);
+                    border-color: rgba(0,166,218,.25);
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        targetContent.classList.add('is-soft-refreshing');
+
+        const badge = document.createElement('div');
+        badge.className = 'manage-places-soft-refresh';
+        badge.setAttribute('role', 'status');
+        badge.innerHTML = `
+            <span class="manage-places-soft-refresh__spinner" aria-hidden="true"></span>
+            <span>جاري التحديث...</span>
+        `;
+        targetContent.appendChild(badge);
+    }
+
+    function endSmoothRefresh(targetContent) {
+        if (!targetContent) return;
+        targetContent.classList.remove('is-soft-refreshing');
+        targetContent.querySelector(':scope > .manage-places-soft-refresh')?.remove();
+    }
+
+    function animateFreshContent(targetContent) {
+        if (!targetContent || typeof targetContent.animate !== 'function') return;
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+        targetContent.animate(
+            [
+                { opacity: 0.82, transform: 'translateY(3px)' },
+                { opacity: 1, transform: 'translateY(0)' }
+            ],
+            { duration: 180, easing: 'ease-out' }
+        );
+    }
 
     function activatePlaceTab(targetClass, isTabClick = false) {
         const targetBtn = document.querySelector(`.custom-tabs-container .tab-btn[data-target="${targetClass}"]`);
@@ -119,31 +287,46 @@ document.addEventListener("DOMContentLoaded", function () {
             content.classList.remove('show-smooth');
         });
 
+        syncManagePlacesHeaderActions(targetClass, null);
+
         const targetContent = document.querySelector('.' + targetClass);
         if (!targetContent) return;
 
         targetContent.style.display = 'block';
 
-        if (isTabClick && targetContent.getAttribute('data-loaded') === 'true') {
+        const alreadyLoaded = targetContent.getAttribute('data-loaded') === 'true';
+
+        if (isTabClick && alreadyLoaded) {
             targetContent.classList.add('show-smooth');
+            removeRedundantTabHeader(targetClass, targetContent);
+            syncManagePlacesHeaderActions(targetClass, targetContent);
             return;
         }
 
         if (!endpointUrl) return;
 
-        targetContent.innerHTML = `
-            <div class="text-center py-5">
-                <div class="spinner-border text-primary opacity-50 mb-3" role="status" style="width: 3rem; height: 3rem;"></div>
-                <h6 class="fw-bold text-muted">جاري بناء الواجهة...</h6>
-            </div>
-        `;
+        // عند التحديث بعد حفظ/حذف/تغيير حالة، لا نمسح المحتوى القديم.
+        // نبقيه ظاهرًا مع مؤشر صغير حتى تصل البيانات الجديدة ثم نستبدلها دفعة واحدة.
+        const isSoftRefresh = alreadyLoaded && !isTabClick;
 
-        fetch(endpointUrl)
+        if (isSoftRefresh) {
+            beginSmoothRefresh(targetContent);
+        } else {
+            targetContent.innerHTML = `
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary opacity-50 mb-3" role="status" style="width: 2.35rem; height: 2.35rem;"></div>
+                    <h6 class="fw-bold text-muted">جاري تحميل البيانات...</h6>
+                </div>
+            `;
+        }
+
+        fetch(endpointUrl, { cache: 'no-store' })
             .then(response => {
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 return response.text();
             })
             .then(htmlMarkup => {
+                endSmoothRefresh(targetContent);
                 targetContent.innerHTML = htmlMarkup;
                 targetContent.classList.add('show-smooth');
                 targetContent.setAttribute('data-loaded', 'true');
@@ -162,9 +345,26 @@ document.addEventListener("DOMContentLoaded", function () {
                 }
 
                 initializeTab();
+                removeRedundantTabHeader(targetClass, targetContent);
+                syncManagePlacesHeaderActions(targetClass, targetContent);
                 focusManagePlacesDeepLink(targetClass, targetContent);
+                animateFreshContent(targetContent);
             })
             .catch(error => {
+                endSmoothRefresh(targetContent);
+
+                if (isSoftRefresh) {
+                    // إذا فشل التحديث الهادئ نُبقي البيانات القديمة بدل تحويل الصفحة إلى شاشة خطأ.
+                    syncManagePlacesHeaderActions(targetClass, targetContent);
+                    if (typeof window.showSafeToast === 'function') {
+                        window.showSafeToast('تعذر تحديث البيانات الآن. حاول مرة أخرى.', 'error');
+                    } else {
+                        console.error('فشل تحديث تبويب إدارة المنشآت:', error);
+                    }
+                    return;
+                }
+
+                syncManagePlacesHeaderActions('', null);
                 targetContent.innerHTML = `<div class="text-center py-5 text-danger"><h6 class="fw-bold">عذراً، فشل تحديث البيانات.</h6><p class="small text-muted">${error.message}</p></div>`;
             });
     }

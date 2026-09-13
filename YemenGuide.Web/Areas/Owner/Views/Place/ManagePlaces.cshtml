@@ -1,4 +1,4 @@
-﻿@{
+﻿﻿@{
     ViewData["Title"] = "إدارة منشآتي";
     Layout = "~/Areas/Owner/Views/Shared/_OwnerLayout.cshtml";
     bool isAdmin = User.IsInRole("Admin");
@@ -35,6 +35,98 @@
     <link rel="stylesheet"
       href="~/css/owner/places/place-editor.css"
       asp-append-version="true" />
+
+    <style>
+        /* زر الإجراء العلوي: مستقل عن CSS التبويبات الداخلية حتى لا يفقد لونه أو نصه عند نقله للهيدر */
+        .manage-places-page-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .manage-places-page-heading {
+            flex: 1 1 520px;
+            min-width: 0;
+        }
+
+        .manage-places-page-actions {
+            position: relative;
+            z-index: 2;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            flex: 0 1 auto;
+            min-width: 0;
+            margin-inline-start: auto;
+        }
+
+        .manage-places-page-actions[hidden],
+        .manage-places-page-actions:empty,
+        .manage-places-header-action[hidden] {
+            display: none !important;
+        }
+
+        .manage-places-header-action {
+            appearance: none;
+            -webkit-appearance: none;
+            display: inline-flex !important;
+            align-items: center;
+            justify-content: center;
+            gap: 0.65rem;
+            min-width: 180px;
+            min-height: 52px;
+            margin: 0 !important;
+            padding: 0.65rem 1.05rem;
+            color: #ffffff !important;
+            background: linear-gradient(135deg, #FF5A5F 0%, #F26A6E 100%) !important;
+            border: 0 !important;
+            border-radius: 15px !important;
+            box-shadow: 0 12px 25px rgba(255, 90, 95, 0.24) !important;
+            font: inherit;
+            font-size: 0.88rem;
+            font-weight: 900;
+            line-height: 1.2;
+            white-space: nowrap;
+            opacity: 1 !important;
+            visibility: visible !important;
+            cursor: pointer;
+            transition: transform 0.22s ease, box-shadow 0.22s ease;
+        }
+
+        .manage-places-header-action:hover {
+            color: #ffffff !important;
+            background: linear-gradient(135deg, #F64F55 0%, #EA6267 100%) !important;
+            transform: translateY(-1px);
+            box-shadow: 0 16px 30px rgba(255, 90, 95, 0.30) !important;
+        }
+
+        .manage-places-header-action > span,
+        .manage-places-header-action > i,
+        .manage-places-header-action .manage-places-header-action__icon,
+        .manage-places-header-action .manage-places-header-action__icon i {
+            color: #ffffff !important;
+            opacity: 1 !important;
+            visibility: visible !important;
+        }
+
+        .manage-places-header-action .manage-places-header-action__icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 32px;
+            width: 32px;
+            height: 32px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.18);
+        }
+
+        /* قائمة منشآتي: مسافة إضافية أسفل البطاقات حتى لا تلتصق الأزرار بحد الديف الأبيض. */
+        .place-list-tab .owner-places-list {
+            padding-bottom: 1.5rem;
+        }
+    </style>
 }
 
     <div class="container-fluid manage-places-page animate-fade-in"
@@ -53,6 +145,32 @@
                         مركز واحد لإدارة منشآتك وبياناتها وخدماتها وعروضها بسهولة
                     </p>
                 </div>
+            </div>
+
+            <div class="manage-places-page-actions"
+                 id="managePlacesPageActions"
+                 aria-label="إجراء التبويب الحالي">
+                @if (!isAdmin)
+                {
+                    <button type="button"
+                            class="manage-places-header-action"
+                            id="managePlacesHeaderAddPlace">
+                        <span class="manage-places-header-action__icon" aria-hidden="true">
+                            <i class="bi bi-plus-lg"></i>
+                        </span>
+                        <span>إضافة منشأة</span>
+                    </button>
+                }
+
+                <button type="button"
+                        class="manage-places-header-action"
+                        id="managePlacesHeaderAddPromotion"
+                        hidden>
+                    <span class="manage-places-header-action__icon" aria-hidden="true">
+                        <i class="bi bi-plus-lg"></i>
+                    </span>
+                    <span>إضافة عرض جديد</span>
+                </button>
             </div>
         </header>
 
