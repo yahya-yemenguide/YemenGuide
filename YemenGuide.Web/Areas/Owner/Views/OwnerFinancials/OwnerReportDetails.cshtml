@@ -1,0 +1,234 @@
+﻿@using System.IO
+@using YemenGuide.Core.Constants
+@using YemenGuide.Core.DTOs.Owner
+@model OwnerReportDetailsDto
+@{
+    ViewData["Title"] = $"القضية {Model.ReportNumber}";
+    Layout = "~/Areas/Owner/Views/Shared/_OwnerLayout.cshtml";
+    var responseType = Model.ResponseContentType;
+    var allowResponseText = responseType != "Image";
+    var allowResponseFile = responseType != "Text";
+    var requireResponseText = responseType == "Text";
+    var requireResponseFile = responseType == "Image";
+    var requireResponseImage = responseType == "Image" || responseType == "TextAndImage";
+    var responseLabel = responseType == "Image" ? "صورة إثبات فقط" :
+                        responseType == "Text" ? "توضيح نصي فقط" :
+                        responseType == "TextAndImage" ? "نص أو صورة أو كليهما" :
+                        "توضيح أو صورة بحسب ما يتوفر لديك";
+    var customerInitial = string.IsNullOrWhiteSpace(Model.CustomerName) ? "ع" : Model.CustomerName.Trim().Substring(0, 1);
+    var isImageEvidence = !string.IsNullOrWhiteSpace(Model.EvidenceImage) && new[] { ".jpg", ".jpeg", ".png", ".webp" }.Contains(System.IO.Path.GetExtension(Model.EvidenceImage).ToLowerInvariant());
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/owner/owner-reports.css" asp-append-version="true" />
+}
+
+<div class="or-page" data-owner-reports-page="details" dir="rtl">
+    <div class="or-shell or-shell--details">
+        <div class="or-back-row">
+            <a asp-action="OwnerReports" asp-route-scope="@Model.Scope"><i class="bi bi-arrow-right"></i> العودة إلى القضايا</a>
+        </div>
+
+        <header class="or-details-hero">
+            <div class="or-details-hero__main">
+                <div class="or-case-number or-case-number--hero"><i class="bi bi-hash"></i>@Model.ReportNumber</div>
+                <div class="or-details-title-row">
+                    <div>
+                        <span class="or-eyebrow"><i class="bi @(Model.IsIncomingFromCustomer ? "bi-inbox-fill" : "bi-flag-fill")"></i>@(Model.IsIncomingFromCustomer ? "قضية محالة من الإدارة" : "بلاغك ضد عميل")</span>
+                        <h1>@Model.Title</h1>
+                    </div>
+                    <span class="or-status or-status--large tone-@Model.StatusTone">@Model.StatusLabel</span>
+                </div>
+                <div class="or-details-meta">
+                    <span><i class="bi bi-tag-fill"></i>@Model.ReportTypeLabel</span>
+                    <span><i class="bi bi-grid-fill"></i>@Model.CategoryLabel</span>
+                    <span><i class="bi bi-calendar3"></i>@Model.CreatedAt.ToString("yyyy/MM/dd")</span>
+                    <span><i class="bi bi-lightning-charge-fill"></i>@Model.PriorityLabel</span>
+                </div>
+            </div>
+        </header>
+
+        @if (TempData["OwnerReportSuccess"] is string successMessage)
+        {
+            <div class="or-phase2-notice" role="status">@successMessage</div>
+        }
+        @if (TempData["OwnerReportError"] is string errorMessage)
+        {
+            <div class="or-phase2-notice is-error" role="alert">@errorMessage</div>
+        }
+        @if (Model.CanSubmitResponse)
+        {
+            <section class="or-next-action @(Model.IsReplyOverdue ? "is-overdue" : "")">
+                <span class="or-next-action__icon"><i class="bi bi-reply-fill"></i></span>
+                <div class="or-next-action__copy">
+                    <small>الإجراء المطلوب منك الآن</small>
+                    <h2>الإدارة تنتظر ردك على القضية</h2>
+                    <p>يمكنك الرد بـ @responseLabel. يُحفظ ردك في القضية ويصل إلى الإدارة فقط.</p>
+                </div>
+                <div class="or-next-action__side">
+                    @if (Model.ReplyDeadline.HasValue)
+                    {
+                        <span class="or-deadline"><i class="bi bi-hourglass-split"></i><small>مهلة الرد</small><strong>@Model.ReplyDeadline.Value.ToString("yyyy/MM/dd - hh:mm tt")</strong></span>
+                    }
+                    <button type="button" class="or-primary-btn" data-open-response><i class="bi bi-send-fill"></i> إرسال الرد</button>
+                </div>
+            </section>
+        }
+        else if (Model.IsOwnerCreated && !string.IsNullOrWhiteSpace(Model.Resolution))
+        {
+            <section class="or-result-banner tone-@Model.StatusTone">
+                <span><i class="bi bi-patch-check-fill"></i></span>
+                <div><small>آخر قرار مسجل من الإدارة</small><h2>@Model.Resolution</h2></div>
+            </section>
+        }
+
+        <div class="or-details-grid">
+            <main class="or-details-main">
+                <section class="or-panel">
+                    <header class="or-panel__head"><span><i class="bi bi-file-earmark-text-fill"></i></span><div><small>محتوى القضية</small><h2>المشكلة والأدلة</h2></div></header>
+                    <div class="or-problem-text">@Model.ReportReason</div>
+
+                    @if (!string.IsNullOrWhiteSpace(Model.EvidenceImage))
+                    {
+                        <div class="or-evidence-box">
+                            <div class="or-evidence-box__head"><i class="bi bi-paperclip"></i><strong>الدليل المرفق</strong></div>
+                            @if (isImageEvidence)
+                            {
+                                <button type="button" class="or-evidence-image" data-image-preview="@Model.EvidenceImage">
+                                    <img src="@Model.EvidenceImage" alt="دليل القضية" loading="lazy" />
+                                    <span><i class="bi bi-arrows-fullscreen"></i> معاينة</span>
+                                </button>
+                            }
+                            else
+                            {
+                                <a class="or-file-link" href="@Model.EvidenceImage" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf-fill"></i><div><strong>فتح المرفق</strong><small>PDF / ملف دليل</small></div><i class="bi bi-box-arrow-up-left"></i></a>
+                            }
+                        </div>
+                    }
+                </section>
+
+                <partial name="~/Areas/Owner/Views/Reports/_OwnerReportActions.cshtml" model="Model" />
+                <section class="or-panel or-timeline-panel">
+                    <header class="or-panel__head"><span><i class="bi bi-clock-history"></i></span><div><small>تحديثات القضية</small><h2>سجل القضية</h2></div></header>
+                    @if (Model.Timeline.Count == 0)
+                    {
+                        <div class="or-mini-empty">لا توجد تحديثات إضافية حتى الآن.</div>
+                    }
+                    else
+                    {
+                        <div class="or-timeline">
+                            @foreach (var item in Model.Timeline.OrderBy(x => x.Date))
+                            {
+                                <article class="or-timeline-item tone-@item.Tone">
+                                    <div class="or-timeline-item__rail"><span><i class="bi @item.Icon"></i></span></div>
+                                    <div class="or-timeline-item__card">
+                                        <header><div><strong>@item.Title</strong><small>@item.Actor</small></div><time>@item.Date.ToString("yyyy/MM/dd - hh:mm tt")</time></header>
+                                        @if (!string.IsNullOrWhiteSpace(item.Description))
+                                        {
+                                            <p>@item.Description</p>
+                                        }
+                                        @if (!string.IsNullOrWhiteSpace(item.AttachmentUrl))
+                                        {
+                                            <a href="@item.AttachmentUrl" target="_blank" rel="noopener" class="or-timeline-attachment"><i class="bi bi-paperclip"></i> فتح المرفق</a>
+                                        }
+                                    </div>
+                                </article>
+                            }
+                        </div>
+                    }
+                </section>
+            </main>
+
+            <aside class="or-details-side">
+                <section class="or-panel or-person-card">
+                    <header class="or-panel__head"><span><i class="bi bi-person-badge-fill"></i></span><div><small>@(Model.IsIncomingFromCustomer ? "المبلّغ" : "المبلّغ ضده")</small><h2>بيانات العميل</h2></div></header>
+                    <div class="or-person">
+                        @if (!string.IsNullOrWhiteSpace(Model.CustomerProfileImage))
+                        {
+                            <img src="@Model.CustomerProfileImage" alt="@Model.CustomerName" />
+                        }
+                        else
+                        {
+                            <span class="or-person__avatar">@customerInitial</span>
+                        }
+                        <div><strong>@(Model.CustomerName ?? "عميل")</strong><small>عميل في دليلك اليمني</small></div>
+                    </div>
+                    <div class="or-person-stats">
+                        <span><small>التحذيرات المسجلة</small><strong>@Model.CustomerWarningCount</strong></span>
+                        <span><small>رقم العميل</small><strong>@(Model.CustomerId?.ToString() ?? "—")</strong></span>
+                    </div>
+                </section>
+
+                @if (Model.PlaceId.HasValue || Model.BookingId.HasValue || Model.ReviewId.HasValue)
+                {
+                    <section class="or-panel or-reference-card">
+                        <header class="or-panel__head"><span><i class="bi bi-link-45deg"></i></span><div><small>السياق المرتبط</small><h2>مرجع القضية</h2></div></header>
+                        @if (!string.IsNullOrWhiteSpace(Model.PlaceName))
+                        {
+                            <div class="or-place-reference">
+                                @if (!string.IsNullOrWhiteSpace(Model.PlaceImage)) { <img src="@Model.PlaceImage" alt="@Model.PlaceName" /> }
+                                else { <span><i class="bi bi-building"></i></span> }
+                                <div><small>المنشأة</small><strong>@Model.PlaceName</strong></div>
+                            </div>
+                        }
+                        @if (Model.BookingId.HasValue)
+                        {
+                            <div class="or-reference-facts">
+                                <span><small>الحجز</small><strong>#@Model.BookingId</strong></span>
+                                <span><small>الحالة</small><strong>@(Model.BookingState ?? "—")</strong></span>
+                                @if (Model.BookingStartDate.HasValue) { <span><small>الوصول</small><strong>@Model.BookingStartDate.Value.ToString("yyyy/MM/dd")</strong></span> }
+                                @if (Model.BookingEndDate.HasValue) { <span><small>المغادرة</small><strong>@Model.BookingEndDate.Value.ToString("yyyy/MM/dd")</strong></span> }
+                            </div>
+                        }
+                        @if (Model.ReviewId.HasValue)
+                        {
+                            <div class="or-review-reference"><small>التقييم #@Model.ReviewId</small><p>@(Model.ReviewText ?? "لا يوجد نص للتقييم")</p></div>
+                        }
+                    </section>
+                }
+
+                <section class="or-panel or-privacy-card">
+                    <i class="bi bi-shield-lock-fill"></i>
+                    <div><strong>خصوصية القضية</strong><p>@(Model.IsIncomingFromCustomer ? "تظهر لك فقط المراسلات التي أرسلتها الإدارة إليك وردودك عليها. محادثات الإدارة مع العميل لا تظهر هنا." : "العميل المبلّغ ضده لا يرى هذه القضية ولا يستطيع الرد عليها؛ القرار يصدر من الإدارة.")</p></div>
+                </section>
+            </aside>
+        </div>
+    </div>
+
+    @if (Model.CanSubmitResponse)
+    {
+        <div class="or-modal-layer" data-response-modal aria-hidden="true">
+            <div class="or-modal-backdrop" data-close-response></div>
+            <section class="or-modal" role="dialog" aria-modal="true" aria-labelledby="responseTitle">
+                <header><div><span><i class="bi bi-reply-fill"></i></span><div><small>يرسل إلى الإدارة فقط</small><h2 id="responseTitle">ردك على القضية</h2></div></div><button type="button" data-close-response aria-label="إغلاق"><i class="bi bi-x-lg"></i></button></header>
+                <form asp-action="SubmitResponse" asp-route-id="@Model.ReportId" method="post" enctype="multipart/form-data" data-owner-report-form="response" data-response-content-type="@responseType">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="RowVersion" value="@Model.RowVersion" />
+                    <p class="or-phase2-notice">يمكنك الرد بـ: @responseLabel</p>
+                    @if (allowResponseText)
+                    {
+                        <div class="or-field"><label for="ownerResponse">التوضيح</label><textarea id="ownerResponse" name="Message" maxlength="4000" required="@requireResponseText" placeholder="اكتب التوضيح الذي طلبته الإدارة..."></textarea><small><span data-char-count>0</span> / 4000</small></div>
+                    }
+                    @if (allowResponseFile)
+                    {
+                        <div class="or-upload" data-upload-zone>
+                            <input type="file" name="evidenceFile" id="responseEvidence"
+                                   accept="@(requireResponseImage ? ".jpg,.jpeg,.png,.webp" : ".jpg,.jpeg,.png,.webp,.pdf")"
+                                   required="@requireResponseFile" data-evidence-input data-image-only="@requireResponseImage.ToString().ToLowerInvariant()" />
+                            <label for="responseEvidence"><i class="bi bi-cloud-arrow-up-fill"></i><div><strong>@(responseType == "Image" ? "إرفاق صورة الإثبات المطلوبة" : responseType == "TextAndImage" ? "إضافة صورة إثبات (اختياري)" : "إرفاق دليل")</strong><small>@(requireResponseImage ? "JPG, PNG, WEBP — حتى 5MB" : "JPG, PNG, WEBP أو PDF — حتى 5MB")</small></div></label>
+                            <div class="or-upload-preview" data-upload-preview hidden></div>
+                        </div>
+                    }
+                    <footer><button type="button" class="or-btn-ghost" data-close-response>إلغاء</button><button type="submit" class="or-primary-btn"><i class="bi bi-send-fill"></i><span>إرسال الرد للإدارة</span></button></footer>
+                </form>
+            </section>
+        </div>
+    }
+
+    <div class="or-image-viewer" data-image-viewer aria-hidden="true"><button type="button" data-close-image aria-label="إغلاق"><i class="bi bi-x-lg"></i></button><img src="" alt="معاينة الدليل" /></div>
+    <div class="or-toast-host" data-toast-host></div>
+</div>
+
+@section Scripts {
+    <script src="~/js/owner/owner-reports.js" asp-append-version="true"></script>
+}

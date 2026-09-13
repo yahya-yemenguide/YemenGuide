@@ -1,4 +1,4 @@
-(() => {
+﻿(() => {
     "use strict";
 
     const MAX_FILE_SIZE = 5 * 1024 * 1024;
@@ -1042,12 +1042,12 @@
             const value = field?.value.trim() || "";
             const type = form.dataset.responseContentType;
             const file = fileInput?.files?.[0];
-            if ((type === "Text" || type === "TextAndImage") && !value) return invalid("اكتب التوضيح الذي طلبته الإدارة.", field);
-            if ((type === "Image" || type === "TextAndImage") && !file) return invalid("أرفق صورة الإثبات المطلوبة.", fileInput);
-            if ((type === "Image" || type === "TextAndImage") && file && !/\.(jpe?g|png|webp)$/i.test(file.name)) return invalid("المطلوب صورة، وليس PDF.", fileInput);
+            if (type === "Text" && !value) return invalid("اكتب التوضيح الذي طلبته الإدارة.", field);
+            if (type === "Image" && !file) return invalid("أرفق صورة الإثبات المطلوبة.", fileInput);
+            if ((type === "Image" || type === "TextAndImage") && file && !/\.(jpe?g|png|webp)$/i.test(file.name)) return invalid("مرفق الرد يجب أن يكون صورة JPG أو PNG أو WEBP.", fileInput);
             if (type === "Text" && file) return invalid("طلبت الإدارة نصًا فقط دون مرفق.", fileInput);
             if (type === "Image" && value) return invalid("طلبت الإدارة صورة فقط دون نص.", field);
-            if (!value && !file) return invalid("اكتب توضيحًا أو أرفق دليلًا جديدًا.", field || fileInput);
+            if (!value && !file) return invalid("اكتب توضيحًا أو أرفق صورة إثبات.", field || fileInput);
             if (value.length > 4000) return invalid("التوضيح يجب ألا يتجاوز 4000 حرف.", field);
         }
 

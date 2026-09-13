@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
@@ -179,9 +179,17 @@ namespace YemenGuide.Web.Services.Reports
             if (!string.IsNullOrWhiteSpace(filter.Search))
             {
                 var search = filter.Search.Trim();
+
+                // البحث الإداري يجب أن يجد القضية من بياناتها الفعلية، وليس من العنوان فقط.
                 query = query.Where(report =>
                     report.ReportNumber.Contains(search) ||
                     (report.Title != null && report.Title.Contains(search)) ||
+                    report.ReportReason.Contains(search) ||
+                    (report.Category != null && report.Category.Contains(search)) ||
+                    (report.OtherCategoryDescription != null &&
+                     report.OtherCategoryDescription.Contains(search)) ||
+                    (report.OtherReportTypeDescription != null &&
+                     report.OtherReportTypeDescription.Contains(search)) ||
                     report.Reporter.FullName.Contains(search) ||
                     (report.AgainstUser != null && report.AgainstUser.FullName.Contains(search)) ||
                     (report.Place != null && report.Place.PlaceNameAndDesc.Contains(search)) ||
@@ -189,12 +197,8 @@ namespace YemenGuide.Web.Services.Reports
                      report.Booking.Place.PlaceNameAndDesc.Contains(search)));
             }
 
-            if (!string.IsNullOrWhiteSpace(filter.Status) &&
-                ReportConstants.Statuses.IsValid(filter.Status))
-            {
-                var status = FindCanonical(ReportConstants.Statuses.All, filter.Status)!;
-                query = query.Where(report => report.ReportStatus == status);
-            }
+            // الحالة تدار من تبويبات مركز البلاغات فقط.
+            // لا نطبق Filter.Status مرة ثانية حتى لا تتعارض حالتان معًا.
 
             if (!string.IsNullOrWhiteSpace(filter.ReportType) &&
                 ReportConstants.Types.IsValid(filter.ReportType))
@@ -344,7 +348,7 @@ namespace YemenGuide.Web.Services.Reports
         {
             filter.Search = NormalizeOptional(filter.Search);
             filter.Scope = AdminReportValues.NormalizeScope(filter.Scope);
-            filter.Status = NormalizeOptional(filter.Status);
+            filter.Status = null; // الحالة تدار بالتبويبات فقط.
             filter.ReportType = NormalizeOptional(filter.ReportType);
             filter.Priority = NormalizeOptional(filter.Priority);
             filter.Page = Math.Max(1, filter.Page);
@@ -815,9 +819,12 @@ namespace YemenGuide.Web.Services.Reports
             CancellationToken cancellationToken = default)
         {
             input.Message = NormalizeRequired(input.Message);
-            if (input.Message.Length < 5 || input.Message.Length > 4000 ||
-                !ReportConstants.ResponseContentTypes.IsValid(input.ResponseContentType))
-                return Task.FromResult(AdminReportOperationResultDto.Fail("راجع نص الطلب ونوع الاستكمال المطلوب.", "validation"));
+
+            // الرد مرن دائمًا: نص أو صورة أو الاثنين معًا.
+            input.ResponseContentType = ReportConstants.ResponseContentTypes.TextAndImage;
+
+            if (input.Message.Length < 5 || input.Message.Length > 4000)
+                return Task.FromResult(AdminReportOperationResultDto.Fail("راجع نص الطلب المطلوب.", "validation"));
             var deadlineError = ValidateDeadline(input.Deadline);
             if (deadlineError != null)
                 return Task.FromResult(AdminReportOperationResultDto.Fail(deadlineError, "invalid-deadline"));
@@ -840,7 +847,7 @@ namespace YemenGuide.Web.Services.Reports
                     var oldAction = report.RequiredAction;
 
                     AddReportChat(currentAdminUserId, report.ReporterId, report,
-                        input.Message + "\nنوع الاستكمال المطلوب: " + input.ResponseContentType, now);
+                        input.Message + "\nيمكن الرد بنص أو صورة أو الاثنين معًا.", now);
 
                     report.ReportStatus = ReportConstants.Statuses.WaitingForReporter;
                     report.RequiredAction = ReportConstants.RequiredActions.Clarification;
@@ -881,9 +888,12 @@ namespace YemenGuide.Web.Services.Reports
             CancellationToken cancellationToken = default)
         {
             input.Message = NormalizeRequired(input.Message);
-            if (input.Message.Length < 5 || input.Message.Length > 4000 ||
-                !ReportConstants.ResponseContentTypes.IsValid(input.ResponseContentType))
-                return Task.FromResult(AdminReportOperationResultDto.Fail("راجع نص الطلب ونوع الاستكمال المطلوب.", "validation"));
+
+            // الرد مرن دائمًا: نص أو صورة أو الاثنين معًا.
+            input.ResponseContentType = ReportConstants.ResponseContentTypes.TextAndImage;
+
+            if (input.Message.Length < 5 || input.Message.Length > 4000)
+                return Task.FromResult(AdminReportOperationResultDto.Fail("راجع نص الطلب المطلوب.", "validation"));
             var deadlineError = ValidateDeadline(input.Deadline);
             if (deadlineError != null)
                 return Task.FromResult(AdminReportOperationResultDto.Fail(deadlineError, "invalid-deadline"));
@@ -933,7 +943,7 @@ namespace YemenGuide.Web.Services.Reports
                     }
 
                     AddReportChat(currentAdminUserId, owner.UserId, report,
-                        input.Message + "\nنوع الاستكمال المطلوب: " + input.ResponseContentType, now);
+                        input.Message + "\nيمكن الرد بنص أو صورة أو الاثنين معًا.", now);
 
                     report.ReportStatus = ReportConstants.Statuses.WaitingForReportedParty;
                     report.RequiredAction = ReportConstants.RequiredActions.ReportedPartyResponse;

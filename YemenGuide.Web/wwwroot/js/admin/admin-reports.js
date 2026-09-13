@@ -1,4 +1,4 @@
-/* =============================================================
+﻿/* =============================================================
    Admin Reports — Rebuild V2
    Center + Details, بدون أي منطق موظفين أو إسناد قضايا.
    ============================================================= */
@@ -90,7 +90,6 @@
             page: Number(root.dataset.currentPage || 1),
             pageSize: Number(root.dataset.pageSize || 15),
             search: searchInput?.value || '',
-            status: qs('#filterStatus', root)?.value || '',
             reportType: qs('#filterType', root)?.value || '',
             priority: qs('#filterPriority', root)?.value || '',
             dateFrom: qs('#filterDateFrom', root)?.value || '',
@@ -114,7 +113,6 @@
             params.set('tab', state.tab);
             if (state.scope && state.scope !== 'all') params.set('Scope', state.scope);
             if (state.search.trim()) params.set('Search', state.search.trim());
-            if (state.status) params.set('Status', state.status);
             if (state.reportType) params.set('ReportType', state.reportType);
             if (state.priority) params.set('Priority', state.priority);
             if (state.dateFrom) params.set('DateFrom', state.dateFrom);
@@ -135,7 +133,6 @@
         };
 
         const activeFilterCount = () => [
-            state.status,
             state.reportType,
             state.priority,
             state.dateFrom,
@@ -346,6 +343,15 @@
                 if (state.tab === tab) return;
                 state.tab = tab;
                 state.page = 1;
+
+                // فلتر "متأخرة فقط" منطقي مع الكل أو بانتظار رد فقط.
+                if (state.overdueOnly && tab !== 'all' && tab !== 'waiting') {
+                    state.overdueOnly = false;
+                    const overdue = qs('#filterOverdue', root);
+                    if (overdue) overdue.checked = false;
+                    updateActiveFilterBadge();
+                }
+
                 qsa('[data-report-tab]', root).forEach(node => {
                     const active = node === button;
                     node.classList.toggle('is-active', active);
@@ -388,7 +394,6 @@
         qs('[data-close-filters]', root)?.addEventListener('click', closeFilters);
 
         qs('[data-apply-filters]', root)?.addEventListener('click', () => {
-            state.status = qs('#filterStatus', root)?.value || '';
             state.reportType = qs('#filterType', root)?.value || '';
             state.priority = qs('#filterPriority', root)?.value || '';
             state.dateFrom = qs('#filterDateFrom', root)?.value || '';
@@ -401,22 +406,67 @@
         });
 
         qs('[data-reset-filters]', root)?.addEventListener('click', () => {
-            ['#filterStatus', '#filterType', '#filterPriority', '#filterDateFrom', '#filterDateTo'].forEach(selector => {
+            // إعادة ضبط حقيقية: المسار + الحالة + البحث + كل الفلاتر.
+            ['#filterType', '#filterPriority', '#filterDateFrom', '#filterDateTo'].forEach(selector => {
                 const field = qs(selector, root);
                 if (field) field.value = '';
             });
+
             const overdue = qs('#filterOverdue', root);
             if (overdue) overdue.checked = false;
-            Object.assign(state, { status: '', reportType: '', priority: '', dateFrom: '', dateTo: '', overdueOnly: false, page: 1 });
+
+            if (searchInput) searchInput.value = '';
+
+            Object.assign(state, {
+                tab: 'all',
+                scope: 'all',
+                search: '',
+                reportType: '',
+                priority: '',
+                dateFrom: '',
+                dateTo: '',
+                overdueOnly: false,
+                page: 1
+            });
+
+            qsa('[data-report-scope]', root).forEach(node => {
+                const active = node.dataset.reportScope === 'all';
+                node.classList.toggle('is-active', active);
+                node.setAttribute('aria-selected', active ? 'true' : 'false');
+            });
+
+            qsa('[data-report-tab]', root).forEach(node => {
+                const active = node.dataset.reportTab === 'all';
+                node.classList.toggle('is-active', active);
+                node.setAttribute('aria-selected', active ? 'true' : 'false');
+            });
+
+            if (scopeTitle) scopeTitle.textContent = 'كل القضايا';
+            if (sectionTitle) sectionTitle.textContent = 'الكل';
+
             updateActiveFilterBadge();
+            closeFilters();
             loadList();
         });
 
         qs('[data-show-overdue]', root)?.addEventListener('click', () => {
             const overdue = qs('#filterOverdue', root);
             if (overdue) overdue.checked = true;
+
+            // المتأخر قد يكون انتظار المبلّغ أو انتظار الطرف الآخر؛
+            // نعرضه من "الكل" حتى لا يتعارض مع تبويب حالة آخر.
+            state.tab = 'all';
             state.overdueOnly = true;
             state.page = 1;
+
+            qsa('[data-report-tab]', root).forEach(node => {
+                const active = node.dataset.reportTab === 'all';
+                node.classList.toggle('is-active', active);
+                node.setAttribute('aria-selected', active ? 'true' : 'false');
+            });
+
+            if (sectionTitle) sectionTitle.textContent = 'الكل';
+
             updateActiveFilterBadge();
             openFilters();
             loadList();
@@ -477,13 +527,14 @@
         };
 
         const responseContentField = () => `
-            <label class="ar-modal-field"><span>ما الذي تسمح بإرساله؟</span>
-                <select name="ResponseContentType" required>
-                    <option value="Text">توضيح نصي فقط</option>
-                    <option value="Image">صورة إثبات فقط</option>
-                    <option value="TextAndImage">توضيح نصي وصورة إثبات</option>
-                </select><small>سيظهر للمستلم نموذج الاستكمال المختار فقط.</small>
-            </label>`;
+            <input type="hidden" name="ResponseContentType" value="TextAndImage" />
+            <div class="ar-decision-intro">
+                <i class="bi bi-paperclip"></i>
+                <div>
+                    <strong>الرد مفتوح</strong>
+                    <p>يمكن للمستلم إرسال نص أو صورة أو الاثنين معًا حسب ما لديه.</p>
+                </div>
+            </div>`;
         const configs = {
             'send-reporter-message': {
                 title: 'إرسال توضيح للمبلّغ', eyebrow: 'رد الإدارة', icon: 'bi-send', submit: 'إرسال التوضيح',

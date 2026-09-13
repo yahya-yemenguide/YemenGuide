@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -39,8 +39,16 @@ namespace YemenGuide.Core.Constants
                     return "طلبت الإدارة توضيحًا نصيًا فقط، دون مرفق.";
                 if (type == Image && (hasText || !hasFile || !isImage))
                     return "طلبت الإدارة صورة إثبات فقط، دون نص أو ملف PDF.";
-                if (type == TextAndImage && (!hasText || !hasFile || !isImage))
-                    return "طلبت الإدارة توضيحًا نصيًا وصورة إثبات معًا.";
+                if (type == TextAndImage)
+                {
+                    // TextAndImage هو وضع الرد المرن المتوافق مع قاعدة البيانات الحالية:
+                    // يقبل نصًا فقط، أو صورة فقط، أو الاثنين معًا.
+                    if (!hasText && !hasFile)
+                        return "أرسل توضيحًا أو صورة إثبات.";
+
+                    if (hasFile && !isImage)
+                        return "المرفق في رد القضية يجب أن يكون صورة إثبات.";
+                }
                 return null;
             }
         }

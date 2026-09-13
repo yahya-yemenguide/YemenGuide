@@ -1,4 +1,4 @@
-@using System
+﻿@using System
 @using System.IO
 @using YemenGuide.Core.Constants
 @using YemenGuide.Core.DTOs.Customer
@@ -33,10 +33,12 @@
     var responseType = isClarificationRequested ? Model.ResponseContentType : null;
     var allowClarificationText = responseType != "Image";
     var allowClarificationFile = responseType != "Text";
+    var requireClarificationText = responseType == "Text";
+    var requireClarificationFile = responseType == "Image";
     var requireClarificationImage = responseType == "Image" || responseType == "TextAndImage";
     var responseLabel = responseType == "Image" ? "صورة إثبات فقط" :
                         responseType == "Text" ? "توضيح نصي فقط" :
-                        responseType == "TextAndImage" ? "توضيح نصي وصورة إثبات" : "توضيح أو مرفق";
+                        responseType == "TextAndImage" ? "نص أو صورة أو كليهما" : "توضيح أو مرفق";
     var isResolutionConfirmation = Model.CanConfirmResolution &&
         string.Equals(Model.RequiredAction, ReportConstants.RequiredActions.ResolutionConfirmation, StringComparison.OrdinalIgnoreCase);
 
@@ -290,19 +292,19 @@
                                 <form asp-controller="Reports" asp-action="AddClarification" asp-route-id="@Model.ReportId"
                                   method="post" enctype="multipart/form-data" class="cr-action-form" data-report-operation-form="clarification" data-response-content-type="@responseType">
                                     @Html.AntiForgeryToken()
-                                    <p>المطلوب: @responseLabel</p>
+                                    <p>يمكنك الرد بـ: @responseLabel</p>
                                     @if (allowClarificationText)
                                     {
                                         <label for="customerClarification">التوضيح للإدارة</label>
-                                        <textarea id="customerClarification" name="Message" maxlength="4000" rows="4" required="@(responseType != null)" placeholder="اكتب التوضيح الذي طلبته الإدارة..."></textarea>
+                                        <textarea id="customerClarification" name="Message" maxlength="4000" rows="4" required="@requireClarificationText" placeholder="اكتب التوضيح الذي طلبته الإدارة..."></textarea>
                                     }
                                     @if (allowClarificationFile)
                                     {
                                         <label class="cr-mini-upload">
                                             <input type="file" name="evidenceFile"
                                            accept="@(requireClarificationImage ? ".jpg,.jpeg,.png,.webp" : ".jpg,.jpeg,.png,.webp,.pdf")"
-                                           data-image-only="@requireClarificationImage.ToString().ToLowerInvariant()" />
-                                            <i class="bi bi-paperclip"></i><span>@(requireClarificationImage ? "إرفاق صورة الإثبات المطلوبة — حتى 5MB" : "إضافة مرفق اختياري — حتى 5MB")</span>
+                                           required="@requireClarificationFile" data-image-only="@requireClarificationImage.ToString().ToLowerInvariant()" />
+                                            <i class="bi bi-paperclip"></i><span>@(responseType == "Image" ? "إرفاق صورة الإثبات المطلوبة — حتى 5MB" : responseType == "TextAndImage" ? "إضافة صورة إثبات (اختياري) — حتى 5MB" : "إضافة مرفق اختياري — حتى 5MB")</span>
                                         </label>
                                     }
                                     <button type="submit"><i class="bi bi-send-fill"></i> إرسال التوضيح</button>

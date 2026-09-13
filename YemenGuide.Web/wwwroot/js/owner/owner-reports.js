@@ -1,4 +1,4 @@
-(() => {
+﻿(() => {
     "use strict";
 
     const qs = (selector, root = document) => root.querySelector(selector);
@@ -111,11 +111,12 @@
         const message = qs("textarea[name='Message']", form)?.value.trim() || "";
         const file = qs("input[name='evidenceFile']", form)?.files?.[0];
         if (form.dataset.ownerReportForm === "response") {
-            if ((type === "Text" || type === "TextAndImage") && !message) { toast("اكتب التوضيح المطلوب.", true); return; }
-            if ((type === "Image" || type === "TextAndImage") && !file) { toast("أرفق صورة الإثبات المطلوبة.", true); return; }
+            if (type === "Text" && !message) { toast("اكتب التوضيح المطلوب.", true); return; }
+            if (type === "Image" && !file) { toast("أرفق صورة الإثبات المطلوبة.", true); return; }
             if (type === "Text" && file) { toast("المطلوب نص فقط دون مرفق.", true); return; }
             if (type === "Image" && message) { toast("المطلوب صورة فقط دون نص.", true); return; }
-            if (!type && !message && !file) { toast("اكتب توضيحًا أو أرفق دليلًا.", true); return; }
+            if ((type === "Image" || type === "TextAndImage") && file && !/\.(jpe?g|png|webp)$/i.test(file.name)) { toast("مرفق الرد يجب أن يكون صورة JPG أو PNG أو WEBP.", true); return; }
+            if (!message && !file) { toast("اكتب توضيحًا أو أرفق صورة إثبات.", true); return; }
         }
         if (!form.reportValidity()) return;
         if (form.dataset.ownerReportForm === "edit" && qs("input[name='RemoveEvidence']", form)?.checked && file) {

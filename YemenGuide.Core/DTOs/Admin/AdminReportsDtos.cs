@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
@@ -454,7 +454,7 @@ namespace YemenGuide.Core.DTOs.Admin
     public sealed class AdminReportReplyRequestDto
     {
         [Required, RegularExpression("^(Text|Image|TextAndImage)$")]
-        public string ResponseContentType { get; set; } = ReportConstants.ResponseContentTypes.Text;
+        public string ResponseContentType { get; set; } = ReportConstants.ResponseContentTypes.TextAndImage;
 
         [Range(1, int.MaxValue)]
         public int ReportId { get; set; }
