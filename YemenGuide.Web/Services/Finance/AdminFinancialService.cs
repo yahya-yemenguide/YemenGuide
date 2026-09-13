@@ -5866,7 +5866,7 @@ namespace YemenGuide.Web.Services.Finance
                 GeneratedByName = generatedByName,
                 Filter = filter,
                 Capabilities = BuildReportCapabilities(filter.ReportType),
-                ReportTypeOptions = AdminFinancialReportTypes.UiTypes
+                ReportTypeOptions = AdminFinancialReportTypes.All
                     .Select(type => new AdminFinancialReportOptionDto
                     {
                         Value = type,

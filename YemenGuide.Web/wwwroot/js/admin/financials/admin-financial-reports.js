@@ -124,6 +124,44 @@
             if (url) {
                 window.open(url, "_blank", "noopener,noreferrer");
             }
+            return;
+        }
+
+        const moreToggle = event.target.closest("[data-report-more-toggle]");
+        if (moreToggle && currentRoot.contains(moreToggle)) {
+            event.preventDefault();
+            const morePanel = currentRoot.querySelector("[data-report-more]");
+            if (!morePanel) {
+                return;
+            }
+
+            const willOpen = morePanel.hasAttribute("hidden");
+            morePanel.toggleAttribute("hidden", !willOpen);
+            morePanel.classList.toggle("is-open", willOpen);
+            moreToggle.classList.toggle("is-open", willOpen);
+            moreToggle.setAttribute("aria-expanded", willOpen ? "true" : "false");
+
+            const label = moreToggle.querySelector("[data-report-more-label]");
+            if (label) {
+                label.textContent = willOpen ? "إخفاء الفلاتر" : "إظهار المزيد";
+            }
+            return;
+        }
+
+        const sectionTab = event.target.closest("[data-report-section-tab]");
+        if (sectionTab && currentRoot.contains(sectionTab)) {
+            event.preventDefault();
+            const selectedIndex = sectionTab.dataset.reportSectionTab;
+
+            currentRoot.querySelectorAll("[data-report-section-tab]").forEach(button => {
+                const active = button === sectionTab;
+                button.classList.toggle("is-active", active);
+                button.setAttribute("aria-selected", active ? "true" : "false");
+            });
+
+            currentRoot.querySelectorAll("[data-report-section]").forEach(section => {
+                section.toggleAttribute("hidden", section.dataset.reportSection !== selectedIndex);
+            });
         }
     }
 

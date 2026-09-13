@@ -8,6 +8,21 @@
     var capabilities = Model?.Capabilities ?? new AdminFinancialReportFilterCapabilitiesDto();
     var hasSelectedReport = Context.Request.Query.ContainsKey("ReportType");
     var selectedReport = Model?.ReportTypeOptions?.FirstOrDefault(option => option.IsSelected);
+    var hasAdvancedFilters =
+        filter.OwnerId.HasValue ||
+        filter.PlaceId.HasValue ||
+        filter.BookingId.HasValue ||
+        filter.CommissionTransactionId.HasValue ||
+        filter.PlatformWalletId.HasValue ||
+        !string.IsNullOrWhiteSpace(filter.CommissionStatus) ||
+        !string.IsNullOrWhiteSpace(filter.AccountStatus) ||
+        !string.IsNullOrWhiteSpace(filter.TransactionType) ||
+        !string.IsNullOrWhiteSpace(filter.TransactionStatus) ||
+        !string.IsNullOrWhiteSpace(filter.TopUpStatus) ||
+        !string.IsNullOrWhiteSpace(filter.ReferenceNumber) ||
+        filter.HasDebt == true ||
+        filter.IsLowBalance == true ||
+        filter.IsSuspended == true;
 
     string MetricTone(string? tone) =>
         string.IsNullOrWhiteSpace(tone) ? "neutral" : tone.Trim().ToLowerInvariant();
@@ -96,22 +111,60 @@
                value="@Model.ReportType"
                data-report-type-input />
 
-        <div class="afr-filter-card__head">
-            <div>
-                <span>الفلاتر</span>
-                <h3>@Model.Title</h3>
-                <p>@Model.Subtitle</p>
+        <div class="afr-quick-filter">
+            @if (capabilities.ShowSearch)
+            {
+                <div class="afr-quick-search">
+                    <i class="bi bi-search"></i>
+                    <input type="search"
+                           name="Search"
+                           value="@filter.Search"
+                           placeholder="ابحث في نتائج التقرير..." />
+                </div>
+            }
+
+            <div class="afr-quick-date">
+                <label>من</label>
+                <input type="date"
+                       name="FromDate"
+                       value="@(filter.FromDate?.ToString("yyyy-MM-dd"))" />
             </div>
 
-            @if (Model.HasActiveFilters)
-            {
-                <button type="button"
-                        class="afr-clear-filters"
-                        data-report-clear-filters>
-                    مسح الفلاتر
-                </button>
-            }
+            <div class="afr-quick-date">
+                <label>إلى</label>
+                <input type="date"
+                       name="ToDate"
+                       value="@(filter.ToDate?.ToString("yyyy-MM-dd"))" />
+            </div>
+
+            <button type="submit" class="afr-btn afr-btn--primary afr-quick-apply">
+                <i class="bi bi-funnel"></i>
+                تطبيق
+            </button>
+
+            <button type="button"
+                    class="afr-btn afr-btn--ghost afr-more-toggle @(hasAdvancedFilters ? "is-open" : null)"
+                    data-report-more-toggle
+                    aria-expanded="@(hasAdvancedFilters ? "true" : "false")">
+                <span data-report-more-label>@(hasAdvancedFilters ? "إخفاء الفلاتر" : "إظهار المزيد")</span>
+                <i class="bi bi-chevron-down"></i>
+            </button>
         </div>
+
+        <div class="afr-filter-more @(hasAdvancedFilters ? "is-open" : null)"
+             data-report-more
+             hidden="@(!hasAdvancedFilters ? "hidden" : null)">
+            <div class="afr-filter-more__head">
+                <strong>فلاتر إضافية</strong>
+                @if (Model.HasActiveFilters)
+                {
+                    <button type="button"
+                            class="afr-clear-filters"
+                            data-report-clear-filters>
+                        مسح الكل
+                    </button>
+                }
+            </div>
 
         <div class="afr-filter-grid">
             @if (capabilities.ShowDateScope)
@@ -129,20 +182,6 @@
                     </select>
                 </div>
             }
-
-            <div class="afr-field">
-                <label>من تاريخ</label>
-                <input type="date"
-                       name="FromDate"
-                       value="@(filter.FromDate?.ToString("yyyy-MM-dd"))" />
-            </div>
-
-            <div class="afr-field">
-                <label>إلى تاريخ</label>
-                <input type="date"
-                       name="ToDate"
-                       value="@(filter.ToDate?.ToString("yyyy-MM-dd"))" />
-            </div>
 
             @if (capabilities.ShowOwner)
             {
@@ -312,19 +351,6 @@
                 </div>
             }
 
-            @if (capabilities.ShowSearch)
-            {
-                <div class="afr-field afr-field--wide">
-                    <label>بحث</label>
-                    <div class="afr-search-field">
-                        <i class="bi bi-search"></i>
-                        <input type="search"
-                               name="Search"
-                               value="@filter.Search"
-                               placeholder="بحث داخل نتائج التقرير..." />
-                    </div>
-                </div>
-            }
         </div>
 
         <div class="afr-boolean-filters">
@@ -361,38 +387,8 @@
                 </label>
             }
         </div>
-
-        <div class="afr-filter-card__actions">
-            <button type="submit" class="afr-btn afr-btn--primary">
-                <i class="bi bi-play-fill"></i>
-                عرض التقرير
-            </button>
         </div>
     </form>
-
-    <section class="afr-report-header-card">
-        <div class="afr-report-header-card__identity">
-            <span class="afr-report-header-card__mark">
-                <i class="bi bi-file-earmark-bar-graph"></i>
-            </span>
-            <div>
-                <span class="afr-report-header-card__eyebrow">@Model.PeriodLabel</span>
-                <h3>@Model.Title</h3>
-                <p>@Model.FilterDescription</p>
-            </div>
-        </div>
-
-        <div class="afr-report-header-card__meta">
-            <div>
-                <small>عدد النتائج</small>
-                <strong>@Model.TotalAvailableRows</strong>
-            </div>
-            <div>
-                <small>تاريخ الإنشاء</small>
-                <strong>@Model.GeneratedAt.ToString("yyyy/MM/dd HH:mm")</strong>
-            </div>
-        </div>
-    </section>
 
     @if (Model.Metrics.Count > 0)
     {
@@ -416,10 +412,30 @@
         </div>
     }
 
+    @if (Model.Sections.Count > 1)
+    {
+        <nav class="afr-section-tabs" aria-label="أقسام التقرير">
+            @for (var sectionTabIndex = 0; sectionTabIndex < Model.Sections.Count; sectionTabIndex++)
+            {
+                var sectionTab = Model.Sections[sectionTabIndex];
+                <button type="button"
+                        class="afr-section-tab @(sectionTabIndex == 0 ? "is-active" : null)"
+                        data-report-section-tab="@sectionTabIndex"
+                        aria-selected="@(sectionTabIndex == 0 ? "true" : "false")">
+                    <span>@sectionTab.Title</span>
+                    <small>@sectionTab.Rows.Count</small>
+                </button>
+            }
+        </nav>
+    }
+
     <div class="afr-sections">
-        @foreach (var reportSection in Model.Sections)
+        @for (var sectionIndex = 0; sectionIndex < Model.Sections.Count; sectionIndex++)
         {
-            <section class="afr-data-card @(reportSection.IsPrimary ? "afr-data-card--primary" : null)">
+            var reportSection = Model.Sections[sectionIndex];
+            <section class="afr-data-card @(reportSection.IsPrimary ? "afr-data-card--primary" : null)"
+                     data-report-section="@sectionIndex"
+                     hidden="@(sectionIndex > 0 ? "hidden" : null)">
                 <div class="afr-data-card__head">
                     <div>
                         <span class="afr-data-card__eyebrow">بيانات التقرير</span>
@@ -517,62 +533,5 @@
         }
     </div>
 
-    @if (Model.Documents.Count > 0)
-    {
-        <section class="afr-documents">
-            <div class="afr-documents__head">
-                <div>
-                    <span>مستندات جاهزة</span>
-                    <h3>المستندات المالية</h3>
-                    <p>مستندات رسمية مرتبطة بنتائج التقرير الحالية.</p>
-                </div>
-                <span class="afr-documents__count">@Model.Documents.Count</span>
-            </div>
-
-            <div class="afr-document-grid">
-                @foreach (var document in Model.Documents.Take(12))
-                {
-                    <article class="afr-document-card">
-                        <div class="afr-document-card__top">
-                            <span class="afr-document-card__icon">
-                                <i class="bi bi-file-earmark-text"></i>
-                            </span>
-                            <span class="afr-document-card__status">@document.Status</span>
-                        </div>
-
-                        <div class="afr-document-card__body">
-                            <small>@document.DocumentNumber</small>
-                            <h4>@document.Title</h4>
-                            <p>
-                                @(string.IsNullOrWhiteSpace(document.PlaceName)
-                                    ? document.Subtitle
-                                    : document.PlaceName)
-                            </p>
-                        </div>
-
-                        <div class="afr-document-card__meta">
-                            @if (document.Amount.HasValue)
-                            {
-                                <strong>@display.Money(document.Amount.Value, document.PlaceId)</strong>
-                            }
-                            <span>@document.DocumentDate.ToString("yyyy/MM/dd")</span>
-                        </div>
-
-                        <div class="afr-document-card__actions">
-                            <a href="@Url.Action("Document", "AdminFinancialReports", new { area = "Admin", documentType = document.DocumentType, sourceId = document.SourceId, autoPrint = false })"
-                               target="_blank">
-                                عرض
-                            </a>
-                            <a class="is-primary"
-                               href="@Url.Action("Document", "AdminFinancialReports", new { area = "Admin", documentType = document.DocumentType, sourceId = document.SourceId, autoPrint = true })"
-                               target="_blank">
-                                طباعة
-                            </a>
-                        </div>
-                    </article>
-                }
-            </div>
-        </section>
-    }
     }
 </section>

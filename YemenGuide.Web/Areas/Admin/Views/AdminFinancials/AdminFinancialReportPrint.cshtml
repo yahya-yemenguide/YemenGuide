@@ -12,6 +12,8 @@
     var isArabic = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
     var uiLang = isArabic ? "ar" : "en";
     var uiDir = isArabic ? "rtl" : "ltr";
+    var useLandscape = report.Sections.Any(section =>
+        section.Columns.Count(column => column.IsVisible) > 6);
 }
 
 <!DOCTYPE html>
@@ -23,8 +25,11 @@
     <link rel="stylesheet"
           href="~/css/admin/financials/admin-financial-print.css"
           asp-append-version="true" />
+    <style>
+        @@page { size: A4 @(useLandscape ? "landscape" : "portrait"); margin: 8mm; }
+    </style>
 </head>
-<body class="afp afp--report">
+<body class="afp afp--report @(useLandscape ? "afp--wide" : null)">
     <div class="afp-toolbar no-print">
         <button type="button" onclick="window.print()">
             <i class="bi bi-printer"></i>
@@ -135,12 +140,17 @@
                 }
                 else
                 {
+                    var visibleColumns = reportSection.Columns
+                        .Select((column, index) => new { column, index })
+                        .Where(entry => entry.column.IsVisible)
+                        .ToList();
+
                     <table class="afp-table">
                         <thead>
                             <tr>
-                                @foreach (var column in reportSection.Columns)
+                                @foreach (var entry in visibleColumns)
                                 {
-                                    <th>@column.Label</th>
+                                    <th>@entry.column.Label</th>
                                 }
                             </tr>
                         </thead>
@@ -148,12 +158,10 @@
                             @foreach (var row in reportSection.Rows)
                             {
                                 <tr>
-                                    @for (var cellIndex = 0;
-                                          cellIndex < reportSection.Columns.Count;
-                                          cellIndex++)
+                                    @foreach (var entry in visibleColumns)
                                     {
-                                        var cell = row.TypedCells.Count > cellIndex
-                                            ? row.TypedCells[cellIndex]
+                                        var cell = row.TypedCells.Count > entry.index
+                                            ? row.TypedCells[entry.index]
                                             : null;
 
                                         <td>@display.Cell(cell, row.PlaceId)</td>
