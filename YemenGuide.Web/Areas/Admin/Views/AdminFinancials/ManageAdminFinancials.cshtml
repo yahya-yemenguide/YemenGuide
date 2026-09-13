@@ -163,12 +163,25 @@
             }
         </nav>
 
-        <div class="af-tab-panel" id="adminFinancialTabHost" aria-live="polite">
-            <div class="af-loading-state" data-finance-loading>
-                <div class="af-loading-state__mark"><span></span><span></span><span></span></div>
-                <strong>جارٍ تجهيز البيانات المالية</strong>
-                <p>لحظات بسيطة...</p>
-            </div>
+        <div class="af-tab-panel"
+             id="adminFinancialTabHost"
+             aria-live="polite"
+             data-initial-finance-tab="@(Model?.InitialOverview != null ? AdminFinancialTabs.Overview : string.Empty)">
+            @if (Model?.InitialOverview != null &&
+                 IsActive(AdminFinancialTabs.Overview))
+            {
+                @await Html.PartialAsync(
+                    "~/Areas/Admin/Views/AdminFinancials/_AdminFinancialOverview.cshtml",
+                    Model.InitialOverview)
+            }
+            else
+            {
+                <div class="af-loading-state" data-finance-loading>
+                    <div class="af-loading-state__mark"><span></span><span></span><span></span></div>
+                    <strong>جارٍ تجهيز البيانات المالية</strong>
+                    <p>لحظات بسيطة...</p>
+                </div>
+            }
         </div>
     </section>
 

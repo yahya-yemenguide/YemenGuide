@@ -84,10 +84,23 @@ namespace YemenGuide.Web.Areas.Admin.Controllers.Financials
 
                 shell.SelectedTab = activeTab;
 
+                AdminFinancialOverviewPageDto? initialOverview = null;
+                if (string.Equals(
+                        activeTab,
+                        AdminFinancialTabs.Overview,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    initialOverview =
+                        await _adminFinancialService.GetOverviewAsync(
+                            new AdminFinancialOverviewFilterDto(),
+                            cancellationToken);
+                }
+
                 var model = new AdminFinancialManagePageDto
                 {
                     Shell = shell,
-                    Access = access
+                    Access = access,
+                    InitialOverview = initialOverview
                 };
 
                 ViewData["Title"] = "الإدارة المالية";

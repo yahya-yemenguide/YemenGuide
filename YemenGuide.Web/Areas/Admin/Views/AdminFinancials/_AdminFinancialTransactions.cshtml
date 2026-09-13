@@ -29,8 +29,6 @@
 <section class="aft"
          data-transactions-root
          data-details-url="@Url.Action("Details", "AdminFinancialTransactions", new { area = "Admin" })">
-    <p class="financial-currency-note">@display.Note</p>
-
     <header class="aft-section-head">
         <div>
             <span class="aft-section-head__eyebrow">سجل غير قابل للالتباس</span>
@@ -81,7 +79,7 @@
             <input type="search"
                    name="Search"
                    value="@filter.Search"
-                   placeholder="منشأة، مالك، مرجع أو رقم حجز..." />
+                   placeholder="ابحث في المالك، المنشأة، المرجع، الحجز، الحركة أو الحالة..." />
         </div>
 
         <select name="TransactionType" aria-label="نوع الحركة">
@@ -106,7 +104,18 @@
             }
         </select>
 
-        <select name="PlaceId" aria-label="المنشأة">
+        <select name="OwnerId" class="aft-filterbar__entity" aria-label="المالك">
+            <option value="">كل الملاك</option>
+            @foreach (var owner in Model.Owners)
+            {
+                <option value="@owner.OwnerId"
+                        selected="@(filter.OwnerId == owner.OwnerId ? "selected" : null)">
+                    @owner.OwnerName
+                </option>
+            }
+        </select>
+
+        <select name="PlaceId" class="aft-filterbar__entity" aria-label="المنشأة">
             <option value="">كل المنشآت</option>
             @foreach (var place in Model.Places)
             {
@@ -116,11 +125,6 @@
                 </option>
             }
         </select>
-
-        <input type="text"
-               name="ReferenceNumber"
-               value="@filter.ReferenceNumber"
-               placeholder="المرجع" />
 
         <input type="date"
                name="FromDate"
@@ -139,25 +143,6 @@
     </form>
 
     <section class="aft-ledger-card">
-        <div class="aft-ledger-card__head">
-            <div>
-                <h3>السجل المالي</h3>
-                <p>
-                    عرض
-                    @Model.Result.Pagination.FirstItemNumber
-                    –
-                    @Model.Result.Pagination.LastItemNumber
-                    من
-                    @Model.Result.Pagination.TotalCount
-                </p>
-            </div>
-
-            <div class="aft-ledger-card__legend">
-                <span><i class="aft-legend aft-legend--in"></i> إضافة</span>
-                <span><i class="aft-legend aft-legend--out"></i> خصم/حجز</span>
-            </div>
-        </div>
-
         @if (Model.Result.Items.Count == 0)
         {
             <div class="aft-empty">
@@ -375,4 +360,3 @@
         </div>
     </div>
 </section>
-

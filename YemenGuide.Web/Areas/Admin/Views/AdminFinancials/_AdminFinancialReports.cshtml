@@ -6,6 +6,8 @@
     var display = await FinancialDisplayContext.CreateAsync(Context, Model, Context.RequestAborted);
     var filter = Model?.Filter ?? new AdminFinancialReportFilterDto();
     var capabilities = Model?.Capabilities ?? new AdminFinancialReportFilterCapabilitiesDto();
+    var hasSelectedReport = Context.Request.Query.ContainsKey("ReportType");
+    var selectedReport = Model?.ReportTypeOptions?.FirstOrDefault(option => option.IsSelected);
 
     string MetricTone(string? tone) =>
         string.IsNullOrWhiteSpace(tone) ? "neutral" : tone.Trim().ToLowerInvariant();
@@ -17,46 +19,72 @@
 }
 
 <section class="afr" data-reports-root>
-    <p class="financial-currency-note">@display.Note</p>
-    <header class="afr-section-head afr-section-head--compact">
-        <div>
-            <h2 class="afr-section-head__title">التقارير والمستندات</h2>
-            <p class="afr-section-head__text">
-                اختر نوع التقرير، طبّق الفلاتر، ثم اعرض أو اطبع.
-            </p>
+    @if (!hasSelectedReport)
+    {
+        <header class="afr-welcome">
+            <span class="afr-welcome__icon"><i class="bi bi-file-earmark-bar-graph"></i></span>
+            <div>
+                <span class="afr-welcome__eyebrow">مركز التقارير المالية</span>
+                <h2>ما التقرير الذي تريد عرضه؟</h2>
+                <p>اختر تقريرًا واحدًا، وستظهر فلاتره ونتائجه فقط دون أي أقسام إضافية.</p>
+            </div>
+        </header>
+
+        <div class="afr-report-selector" role="list" aria-label="أنواع التقارير">
+            @foreach (var option in Model.ReportTypeOptions)
+            {
+                <button type="button"
+                        class="afr-report-option"
+                        data-report-type="@option.Value"
+                        role="listitem">
+                    <span class="afr-report-option__icon">
+                        <i class="@(string.IsNullOrWhiteSpace(option.IconClass) ? "bi bi-file-earmark-text" : option.IconClass)"></i>
+                    </span>
+                    <span class="afr-report-option__text">
+                        <strong>@option.Label</strong>
+                        @if (!string.IsNullOrWhiteSpace(option.Description))
+                        {
+                            <small>@option.Description</small>
+                        }
+                    </span>
+                    <span class="afr-report-option__arrow"><i class="bi bi-arrow-left"></i></span>
+                </button>
+            }
         </div>
 
-        <div class="afr-section-head__actions">
-            <a class="afr-btn afr-btn--primary"
-               href="@Url.Action("Print", "AdminFinancialReports", new { area = "Admin", ReportType = Model.ReportType, FromDate = filter.FromDate?.ToString("yyyy-MM-dd"), ToDate = filter.ToDate?.ToString("yyyy-MM-dd"), OwnerId = filter.OwnerId, PlaceId = filter.PlaceId, autoPrint = true })"
-               target="_blank">
-                <i class="bi bi-printer"></i>
-                طباعة
-            </a>
+        <div class="afr-welcome-note">
+            <i class="bi bi-shield-check"></i>
+            <span>كل تقرير يعرض بياناته وفلاتره ومستنداته المرتبطة فقط.</span>
         </div>
-    </header>
+    }
+    else
+    {
+        <header class="afr-active-head">
+            <div class="afr-active-head__identity">
+                <span class="afr-active-head__icon">
+                    <i class="@(string.IsNullOrWhiteSpace(selectedReport?.IconClass) ? "bi bi-file-earmark-bar-graph" : selectedReport.IconClass)"></i>
+                </span>
+                <div>
+                    <span>التقرير المحدد</span>
+                    <h2>@Model.Title</h2>
+                    <p>@Model.Subtitle</p>
+                </div>
+            </div>
 
-    <div class="afr-report-selector" role="list" aria-label="أنواع التقارير">
-        @foreach (var option in Model.ReportTypeOptions)
-        {
-            <button type="button"
-                    class="afr-report-option @(option.IsSelected ? "is-active" : null)"
-                    data-report-type="@option.Value"
-                    role="listitem">
-                <span class="afr-report-option__icon">
-                    <i class="@(string.IsNullOrWhiteSpace(option.IconClass) ? "bi bi-file-earmark-text" : option.IconClass)"></i>
-                </span>
-                <span class="afr-report-option__text">
-                    <strong>@option.Label</strong>
-                    @if (!string.IsNullOrWhiteSpace(option.Description))
-                    {
-                        <small>@option.Description</small>
-                    }
-                </span>
-                <i class="bi bi-check2 afr-report-option__check"></i>
-            </button>
-        }
-    </div>
+            <div class="afr-active-head__actions">
+                <button type="button" class="afr-btn afr-btn--ghost" data-report-change>
+                    <i class="bi bi-grid"></i>
+                    تغيير التقرير
+                </button>
+                <a class="afr-btn afr-btn--primary"
+                   href="@Url.Action("Print", "AdminFinancialReports", new { area = "Admin", ReportType = Model.ReportType, autoPrint = true })"
+                   data-report-print
+                   target="_blank">
+                    <i class="bi bi-printer"></i>
+                    طباعة التقرير
+                </a>
+            </div>
+        </header>
 
     <form class="afr-filter-card"
           method="get"
@@ -546,5 +574,5 @@
             </div>
         </section>
     }
+    }
 </section>
-

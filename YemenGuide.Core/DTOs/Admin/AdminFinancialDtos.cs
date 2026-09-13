@@ -383,6 +383,10 @@ namespace YemenGuide.Core.DTOs.Admin
         public AdminFinancialShellDto Shell { get; set; } = new();
 
         public AdminFinancialAccessDto Access { get; set; } = new();
+
+        // الصفحة الأولى تُجهز من الخادم مع الغلاف حتى تظهر مباشرة دون
+        // طلب AJAX إضافي وشاشة تحميل عند فتح الإدارة المالية.
+        public AdminFinancialOverviewPageDto? InitialOverview { get; set; }
     }
 
     /* ========================================================================

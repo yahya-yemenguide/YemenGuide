@@ -397,8 +397,7 @@
         const number =
             parseInt(
                 raw,
-                16
-            );
+                16            );
 
         return `rgb(${(number >> 16) & 255},${(number >> 8) & 255},${number & 255})`;
     }
@@ -797,8 +796,7 @@
                                         .tooltip
                             }
                         }
-                    }
-                )
+                    }                )
             );
         }
 
@@ -1010,3 +1008,200 @@
     createCharts();
     watchTheme();
 })();
+
+/* === CHATGPT DASHBOARD ENHANCEMENT START === */
+/* =============================================================================
+   CHATGPT DASHBOARD UI ENHANCEMENT
+   إضافات بصرية فقط — لا تغيير للبيانات أو الطلبات
+   ============================================================================= */
+(() => {
+    "use strict";
+
+    const root = document.querySelector(".admin-command-center");
+
+    if (!root) {
+        return;
+    }
+
+    const reduceMotion = window.matchMedia(
+        "(prefers-reduced-motion: reduce)"
+    );
+
+    const finePointer = window.matchMedia(
+        "(hover: hover) and (pointer: fine)"
+    );
+
+    function addPointerGlow() {
+        if (reduceMotion.matches || !finePointer.matches) {
+            return;
+        }
+
+        const cards = root.querySelectorAll([
+            ".acc-hero",
+            ".acc-kpi",
+            ".acc-panel",
+            ".acc-attention-item",
+            ".acc-recent-item",
+            ".acc-quick a",
+            ".acc-hero__pulse article"
+        ].join(","));
+
+        cards.forEach(card => {
+            if (card.dataset.dashboardGlowReady === "1") {
+                return;
+            }
+
+            card.dataset.dashboardGlowReady = "1";
+            card.classList.add("acc-js-glow");
+
+            card.addEventListener(
+                "pointermove",
+                event => {
+                    const rect = card.getBoundingClientRect();
+
+                    card.style.setProperty(
+                        "--mx",
+                        `${event.clientX - rect.left}px`
+                    );
+
+                    card.style.setProperty(
+                        "--my",
+                        `${event.clientY - rect.top}px`
+                    );
+                },
+                { passive: true }
+            );
+        });
+    }
+
+    function enhanceCharts() {
+        if (!window.Chart || !window.Chart.instances) {
+            return;
+        }
+
+        const mobile = window.matchMedia(
+            "(max-width: 767.98px)"
+        ).matches;
+
+        const family =
+            getComputedStyle(root).fontFamily ||
+            "system-ui";
+
+        Object.values(window.Chart.instances).forEach(chart => {
+            if (!chart?.options) {
+                return;
+            }
+
+            const tooltip = chart.options.plugins?.tooltip;
+
+            if (tooltip) {
+                tooltip.padding = mobile ? 10 : 12;
+                tooltip.cornerRadius = 11;
+
+                tooltip.titleFont = {
+                    ...(tooltip.titleFont || {}),
+                    family,
+                    size: mobile ? 12 : 13,
+                    weight: "700"
+                };
+
+                tooltip.bodyFont = {
+                    ...(tooltip.bodyFont || {}),
+                    family,
+                    size: mobile ? 11 : 12,
+                    weight: "600"
+                };
+            }
+
+            ["x", "y"].forEach(axisName => {
+                const axis = chart.options.scales?.[axisName];
+
+                if (!axis?.ticks) {
+                    return;
+                }
+
+                axis.ticks.padding = mobile ? 6 : 8;
+                axis.ticks.font = {
+                    ...(axis.ticks.font || {}),
+                    family,
+                    size: mobile ? 10 : 11,
+                    weight: axisName === "x"
+                        ? "700"
+                        : "600"
+                };
+            });
+
+            if (Array.isArray(chart.data?.datasets)) {
+                chart.data.datasets.forEach(dataset => {
+                    if (chart.config?.type === "line") {
+                        dataset.borderWidth = Math.max(
+                            Number(dataset.borderWidth || 0),
+                            2.4
+                        );
+
+                        dataset.pointRadius = Math.max(
+                            Number(dataset.pointRadius || 0),
+                            mobile ? 2.6 : 3
+                        );
+
+                        dataset.pointHoverRadius = Math.max(
+                            Number(dataset.pointHoverRadius || 0),
+                            mobile ? 4.5 : 5.5
+                        );
+                    }
+
+                    if (chart.config?.type === "bar") {
+                        dataset.barThickness = Math.max(
+                            Number(dataset.barThickness || 0),
+                            mobile ? 10 : 12
+                        );
+                    }
+                });
+            }
+
+            try {
+                chart.update("none");
+            }
+            catch {
+                chart.update();
+            }
+        });
+    }
+
+    function refreshEnhancements() {
+        addPointerGlow();
+        enhanceCharts();
+    }
+
+    [0, 120, 450, 1000].forEach(delay => {
+        window.setTimeout(refreshEnhancements, delay);
+    });
+
+    let resizeTimer;
+
+    window.addEventListener(
+        "resize",
+        () => {
+            window.clearTimeout(resizeTimer);
+
+            resizeTimer = window.setTimeout(
+                enhanceCharts,
+                160
+            );
+        },
+        { passive: true }
+    );
+
+    const themeObserver = new MutationObserver(() => {
+        window.setTimeout(enhanceCharts, 140);
+    });
+
+    themeObserver.observe(
+        document.body,
+        {
+            attributes: true,
+            attributeFilter: ["class"]
+        }
+    );
+})();
+/* === CHATGPT DASHBOARD ENHANCEMENT END === */

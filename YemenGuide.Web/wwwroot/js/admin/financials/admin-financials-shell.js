@@ -1,1458 +1,1137 @@
-(() => {
-    'use strict';
+(function (window, document) {
+    "use strict";
 
-    const TAB_KEYS = [
-        'overview',
-        'bookings',
-        'balance',
-        'refunds',
-        'wallets',
-        'reports'
-    ];
+    const Finance = window.AdminFinance = window.AdminFinance || {};
 
-    const LEGACY_TAB_ALIASES = {
-        guarantee: 'balance',
-        topup: 'balance',
-        transactions: 'balance'
+    const state = {
+        root: null,
+        host: null,
+        activeTab: null,
+        activeUrl: null,
+        tabAbortController: null,
+        shellAbortController: null,
+        managementAbortController: null,
+        tabCache: new Map(),
+        prefetchingTabs: new Map(),
+        initialized: false
     };
 
-    const App = {
-        root: null,
-        tabsHost: null,
-        content: null,
-        refreshButton: null,
-        placeSelector: null,
-        selectedPlaceCaption: null,
-        titleElement: null,
-        descriptionElement: null,
-        iconElement: null,
-        updatedElement: null,
-        toastHost: null,
+    function qs(selector, scope) {
+        return (scope || document).querySelector(selector);
+    }
 
-        tabs: [],
-        activeTab: 'overview',
-        activeModule: null,
-        requestController: null,
-        requestNumber: 0,
-        isLoading: false,
-        tabQueries: new Map(),
-        handlers: {},
+    function qsa(selector, scope) {
+        return Array.from((scope || document).querySelectorAll(selector));
+    }
 
-        init() {
-            this.root = document.getElementById('ownerFinancialsShell');
+    function escapeHtml(value) {
+        const text = value == null ? "" : String(value);
+        return text
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
 
-            if (!this.root) {
-                return;
+    function pick(obj, ...keys) {
+        if (!obj || typeof obj !== "object") {
+            return undefined;
+        }
+
+        for (const key of keys) {
+            if (Object.prototype.hasOwnProperty.call(obj, key)) {
+                return obj[key];
             }
+        }
 
-            this.tabsHost = document.getElementById('ownerFinancialTabs');
-            this.content = document.getElementById('ownerFinancialTabContent');
-            this.refreshButton = document.getElementById('ownerFinancialRefreshButton');
-            this.placeSelector = document.getElementById('ownerFinancialPlaceSelector');
-            this.selectedPlaceCaption = document.getElementById('ownerFinancialSelectedPlaceName');
-            this.titleElement = document.getElementById('ownerFinancialActiveTabTitle');
-            this.descriptionElement = document.getElementById('ownerFinancialActiveTabDescription');
-            this.iconElement = document.getElementById('ownerFinancialActiveTabIcon');
-            this.updatedElement = document.getElementById('ownerFinancialLastUpdatedAt');
-            this.toastHost = document.getElementById('ownerFinancialToastHost');
+        const map = Object.keys(obj).reduce((acc, key) => {
+            acc[key.toLowerCase()] = key;
+            return acc;
+        }, {});
 
-            this.tabs = [
-                ...this.root.querySelectorAll('[data-financial-tab]')
-            ];
-
-            if (!this.tabsHost || !this.content || this.tabs.length === 0) {
-                console.error('Owner Financials: عناصر الصفحة الأساسية غير مكتملة.');
-                return;
+        for (const key of keys) {
+            const actual = map[String(key).toLowerCase()];
+            if (actual !== undefined) {
+                return obj[actual];
             }
+        }
 
-            window.OwnerFinancialTabs ??= {};
+        return undefined;
+    }
 
-            this.ensureRuntimeStyles();
-            this.repairPartialRootClasses(this.content);
-            this.prepareTabs();
-            this.captureInitialQuery();
-            this.bindEvents();
-            this.syncPlaceCaption();
+    function number(value, fallback) {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : (fallback == null ? 0 : fallback);
+    }
 
-            const currentUrl = new URL(window.location.href);
+    function bool(value) {
+        if (typeof value === "boolean") {
+            return value;
+        }
 
-            const initialTab =
-                this.normalizeTab(currentUrl.searchParams.get('financeTab')) ||
-                this.normalizeTab(this.root.dataset.defaultTab) ||
-                'overview';
+        if (typeof value === "number") {
+            return value !== 0;
+        }
 
-            this.openTab(initialTab, {
-                history: 'replace',
-                focus: false,
-                query: this.getInitialQuery()
+        if (typeof value === "string") {
+            return ["true", "1", "yes", "on"].includes(value.trim().toLowerCase());
+        }
+
+        return false;
+    }
+
+    function asArray(value) {
+        return Array.isArray(value) ? value : [];
+    }
+
+    function formatNumber(value, maxFractionDigits) {
+        const parsed = number(value, 0);
+
+        try {
+            return new Intl.NumberFormat("ar-YE", {
+                maximumFractionDigits: maxFractionDigits == null ? 2 : maxFractionDigits
+            }).format(parsed);
+        } catch (_) {
+            return parsed.toLocaleString();
+        }
+    }
+
+    function formatMoney(value, currency) {
+        const suffix = (currency || getCurrency() || "ريال يمني").trim();
+        return `${formatNumber(value, 2)} ${suffix}`;
+    }
+
+    function formatDate(value, includeTime) {
+        if (!value) {
+            return "—";
+        }
+
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) {
+            return String(value);
+        }
+
+        try {
+            return new Intl.DateTimeFormat("ar-YE", includeTime ? {
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit"
+            } : {
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit"
+            }).format(date);
+        } catch (_) {
+            return includeTime ? date.toLocaleString() : date.toLocaleDateString();
+        }
+    }
+
+    function getCurrency() {
+        const root = state.root || qs("#adminFinancialsRoot");
+        const currencyStrong = root ? qs(".af-meta-pill strong", root) : null;
+        return currencyStrong ? currencyStrong.textContent.trim() : "ريال يمني";
+    }
+
+    function buildUrl(baseUrl, params) {
+        const url = new URL(baseUrl, window.location.origin);
+
+        if (params instanceof URLSearchParams) {
+            params.forEach((value, key) => {
+                if (value !== "" && value != null) {
+                    url.searchParams.set(key, value);
+                } else {
+                    url.searchParams.delete(key);
+                }
             });
-        },
-
-        destroy() {
-            this.destroyActiveModule();
-
-            if (this.requestController) {
-                this.requestController.abort();
-                this.requestController = null;
-            }
-
-            if (this.handlers.click) {
-                this.tabsHost?.removeEventListener('click', this.handlers.click);
-            }
-
-            if (this.handlers.rootClick) {
-                this.root?.removeEventListener('click', this.handlers.rootClick);
-            }
-
-            if (this.handlers.keydown) {
-                this.tabsHost?.removeEventListener('keydown', this.handlers.keydown);
-            }
-
-            if (this.handlers.refresh) {
-                this.refreshButton?.removeEventListener('click', this.handlers.refresh);
-            }
-
-            if (this.handlers.popstate) {
-                window.removeEventListener('popstate', this.handlers.popstate);
-            }
-
-            if (this.handlers.placeChange) {
-                this.placeSelector?.removeEventListener('change', this.handlers.placeChange);
-            }
-
-            if (this.handlers.customPlaceChange) {
-                [
-                    'owner:active-place-changed',
-                    'owner:place-changed',
-                    'ownerActivePlaceChanged'
-                ].forEach(eventName => {
-                    window.removeEventListener(eventName, this.handlers.customPlaceChange);
-                });
-            }
-
-            this.root = null;
-            this.tabsHost = null;
-            this.content = null;
-            this.tabs = [];
-        },
-
-        prepareTabs() {
-            this.tabs.forEach(button => {
-                const key = this.normalizeTab(button.dataset.financialTab);
-
-                if (!key) {
-                    button.disabled = true;
-                    return;
+        } else if (params && typeof params === "object") {
+            Object.entries(params).forEach(([key, value]) => {
+                if (value !== "" && value != null) {
+                    url.searchParams.set(key, String(value));
+                } else {
+                    url.searchParams.delete(key);
                 }
-
-                button.dataset.financialTab = key;
             });
-        },
+        }
 
-        bindEvents() {
-            this.handlers.click = event => {
-                const button = event.target.closest('[data-financial-tab]');
+        return url.pathname + url.search;
+    }
 
-                if (!button || !this.tabsHost?.contains(button)) {
-                    return;
-                }
+    async function readError(response) {
+        const contentType = response.headers.get("content-type") || "";
 
-                event.preventDefault();
-
-                const key = this.normalizeTab(button.dataset.financialTab);
-
-                if (!key) {
-                    return;
-                }
-
-                this.openTab(key, {
-                    history: 'push',
-                    focus: true
-                });
-            };
-
-            this.handlers.keydown = event => {
-                if (
-                    event.key !== 'ArrowLeft' &&
-                    event.key !== 'ArrowRight' &&
-                    event.key !== 'Home' &&
-                    event.key !== 'End'
-                ) {
-                    return;
-                }
-
-                const current = event.target.closest('[data-financial-tab]');
-
-                if (!current) {
-                    return;
-                }
-
-                event.preventDefault();
-
-                const enabledTabs = this.tabs.filter(button => !button.disabled);
-                const currentIndex = enabledTabs.indexOf(current);
-
-                let nextIndex = currentIndex;
-
-                if (event.key === 'Home') {
-                    nextIndex = 0;
-                } else if (event.key === 'End') {
-                    nextIndex = enabledTabs.length - 1;
-                } else if (event.key === 'ArrowLeft') {
-                    nextIndex = (currentIndex + 1) % enabledTabs.length;
-                } else if (event.key === 'ArrowRight') {
-                    nextIndex = (currentIndex - 1 + enabledTabs.length) % enabledTabs.length;
-                }
-
-                const next = enabledTabs[nextIndex];
-
-                if (!next) {
-                    return;
-                }
-
-                next.focus({ preventScroll: true });
-                this.scrollActiveTabIntoView(next);
-
-                this.openTab(next.dataset.financialTab, {
-                    history: 'push',
-                    focus: false,
-                    keepScroll: true
-                });
-            };
-
-            this.handlers.refresh = event => {
-                event.preventDefault();
-
-                if (this.isLoading) {
-                    return;
-                }
-
-                this.reloadCurrent({
-                    history: 'replace',
-                    keepScroll: true
-                });
-            };
-
-            this.handlers.popstate = () => {
-                const url = new URL(window.location.href);
-
-                const key =
-                    this.normalizeTab(url.searchParams.get('financeTab')) ||
-                    'overview';
-
-                const query = this.extractTabQuery(url.searchParams);
-
-                this.tabQueries.set(key, query.toString());
-
-                this.openTab(key, {
-                    history: 'none',
-                    focus: false,
-                    query
-                });
-            };
-
-            this.handlers.placeChange = () => {
-                const option = this.placeSelector?.selectedOptions?.[0];
-
-                this.setSelectedPlace(
-                    this.placeSelector?.value || '',
-                    option?.dataset.placeName ||
-                    option?.textContent?.trim() ||
-                    '',
-                    true
-                );
-            };
-
-            this.handlers.customPlaceChange = event => {
-                const detail = event?.detail || {};
-
-                const placeId =
-                    detail.placeId ??
-                    detail.id ??
-                    detail.value ??
-                    '';
-
-                const placeName =
-                    detail.placeName ??
-                    detail.name ??
-                    detail.text ??
-                    '';
-
-                if (!placeId) {
-                    return;
-                }
-
-                this.setSelectedPlace(placeId, placeName, true);
-            };
-
-            this.handlers.rootClick = event => {
-                const navButton = event.target.closest('[data-financial-nav]');
-
-                if (!navButton || !this.root?.contains(navButton)) {
-                    return;
-                }
-
-                const targetTab = this.normalizeTab(navButton.dataset.financialNav);
-
-                if (!targetTab) {
-                    return;
-                }
-
-                event.preventDefault();
-                this.openTab(targetTab, {
-                    history: 'push',
-                    focus: true
-                });
-            };
-
-            this.root.addEventListener('click', this.handlers.rootClick);
-
-            this.tabsHost.addEventListener('click', this.handlers.click);
-            this.tabsHost.addEventListener('keydown', this.handlers.keydown);
-            this.refreshButton?.addEventListener('click', this.handlers.refresh);
-            window.addEventListener('popstate', this.handlers.popstate);
-            this.placeSelector?.addEventListener('change', this.handlers.placeChange);
-
-            [
-                'owner:active-place-changed',
-                'owner:place-changed',
-                'ownerActivePlaceChanged'
-            ].forEach(eventName => {
-                window.addEventListener(eventName, this.handlers.customPlaceChange);
-            });
-        },
-
-        captureInitialQuery() {
-            const url = new URL(window.location.href);
-
-            const tab =
-                this.normalizeTab(url.searchParams.get('financeTab')) ||
-                this.normalizeTab(this.root.dataset.defaultTab) ||
-                'overview';
-
-            const query = this.extractTabQuery(url.searchParams);
-
-            this.tabQueries.set(tab, query.toString());
-        },
-
-        getInitialQuery() {
-            const url = new URL(window.location.href);
-            return this.extractTabQuery(url.searchParams);
-        },
-
-        normalizeTab(value) {
-            if (!value) {
-                return '';
-            }
-
-            let key = String(value).trim().toLowerCase();
-
-            if (LEGACY_TAB_ALIASES[key]) {
-                key = LEGACY_TAB_ALIASES[key];
-            }
-
-            return TAB_KEYS.includes(key) ? key : '';
-        },
-
-        getTabButton(key) {
-            return this.tabs.find(button =>
-                this.normalizeTab(button.dataset.financialTab) === key
-            ) || null;
-        },
-
-        getStoredQuery(key) {
-            return new URLSearchParams(this.tabQueries.get(key) || '');
-        },
-
-        setStoredQuery(key, query) {
-            const params = this.toSearchParams(query);
-            this.tabQueries.set(key, params.toString());
-            return params;
-        },
-
-        async openTab(tabKey, options = {}) {
-            const key = this.normalizeTab(tabKey);
-
-            if (!key) {
-                return;
-            }
-
-            const button = this.getTabButton(key);
-            const endpoint = button?.dataset.endpoint;
-
-            if (!button || !endpoint) {
-                this.showToast('تعذر فتح هذا القسم.', 'error');
-                return;
-            }
-
-            const query =
-                options.query !== undefined
-                    ? this.setStoredQuery(key, options.query)
-                    : this.getStoredQuery(key);
-
-            const requestId = ++this.requestNumber;
-
-            if (this.requestController) {
-                this.requestController.abort();
-            }
-
-            const controller = new AbortController();
-            this.requestController = controller;
-
-            this.activeTab = key;
-            this.setActiveTabUI(key, button, options.focus === true);
-            this.setLoading(true);
-
+        if (contentType.includes("application/json")) {
             try {
-                const url = this.buildUrl(endpoint, query);
-
-                const response = await fetch(url, {
-                    method: 'GET',
-                    credentials: 'same-origin',
-                    cache: 'no-store',
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'Accept': 'text/html'
-                    },
-                    signal: controller.signal
-                });
-
-                if (requestId !== this.requestNumber) {
-                    return;
-                }
-
-                if (response.status === 401 || response.status === 403) {
-                    window.location.reload();
-                    return;
-                }
-
-                if (!response.ok) {
-                    const message = await this.readErrorMessage(
-                        response,
-                        'تعذر تحميل هذا القسم حاليًا.'
-                    );
-
-                    throw new Error(message);
-                }
-
-                const html = await response.text();
-
-                if (requestId !== this.requestNumber) {
-                    return;
-                }
-
-                this.destroyActiveModule();
-
-                this.content.innerHTML = html;
-                this.content.setAttribute('aria-busy', 'false');
-                this.repairPartialRootClasses(this.content);
-
-                this.initActiveModule(key);
-                this.applyVipEffects(this.content);
-                this.updateLastUpdated();
-
-                if (options.history !== 'none') {
-                    this.writeHistory(
-                        key,
-                        query,
-                        options.history === 'replace' ? 'replace' : 'push'
-                    );
-                }
-
-                if (!options.keepScroll) {
-                    this.scrollActiveTabIntoView(button);
-                }
-            } catch (error) {
-                if (error?.name === 'AbortError') {
-                    return;
-                }
-
-                console.error('Owner Financials:', error);
-
-                this.renderLoadError(
-                    error?.message ||
-                    'تعذر تحميل القسم المالي.'
-                );
-
-                this.showToast(
-                    error?.message ||
-                    'تعذر تحميل القسم المالي.',
-                    'error'
-                );
-            } finally {
-                if (requestId === this.requestNumber) {
-                    this.setLoading(false);
-                }
+                const payload = await response.json();
+                return pick(payload, "message", "Message") || `حدث خطأ (${response.status}).`;
+            } catch (_) {
+                return `حدث خطأ (${response.status}).`;
             }
-        },
+        }
 
-        reloadCurrent(options = {}) {
-            const query =
-                options.query !== undefined
-                    ? this.setStoredQuery(this.activeTab, options.query)
-                    : this.getStoredQuery(this.activeTab);
+        try {
+            const text = (await response.text()).trim();
+            return text || `حدث خطأ (${response.status}).`;
+        } catch (_) {
+            return `حدث خطأ (${response.status}).`;
+        }
+    }
 
-            return this.openTab(this.activeTab, {
-                history: options.history || 'replace',
-                focus: false,
-                query,
-                keepScroll: options.keepScroll !== false
-            });
-        },
+    async function fetchHtml(url, options) {
+        const response = await fetch(url, {
+            method: "GET",
+            credentials: "same-origin",
+            cache: "no-store",
+            headers: {
+                "X-Requested-With": "XMLHttpRequest",
+                "Accept": "text/html"
+            },
+            ...(options || {})
+        });
 
-        setActiveTabUI(key, activeButton, shouldFocus) {
-            this.tabs.forEach(button => {
-                const isActive =
-                    this.normalizeTab(button.dataset.financialTab) === key;
+        if (!response.ok) {
+            const error = new Error(await readError(response));
+            error.status = response.status;
+            throw error;
+        }
 
-                button.classList.toggle('is-active', isActive);
-                button.setAttribute('aria-selected', isActive ? 'true' : 'false');
-                button.tabIndex = isActive ? 0 : -1;
-            });
+        return response.text();
+    }
 
-            const title =
-                activeButton.dataset.title ||
-                activeButton.textContent.trim();
+    async function fetchJson(url, options) {
+        const response = await fetch(url, {
+            credentials: "same-origin",
+            cache: "no-store",
+            headers: {
+                "X-Requested-With": "XMLHttpRequest",
+                "Accept": "application/json",
+                ...((options && options.headers) || {})
+            },
+            ...(options || {})
+        });
 
-            const description =
-                activeButton.dataset.description ||
-                '';
+        if (!response.ok) {
+            const error = new Error(await readError(response));
+            error.status = response.status;
+            throw error;
+        }
 
-            const icon =
-                activeButton.dataset.icon ||
-                '';
+        const text = await response.text();
+        if (!text) {
+            return {};
+        }
 
-            if (this.titleElement) {
-                this.titleElement.textContent = title;
+        try {
+            return JSON.parse(text);
+        } catch (_) {
+            throw new Error("استجابة الخادم غير صالحة.");
+        }
+    }
+
+    async function postForm(form, submitter) {
+        if (!form) {
+            throw new Error("النموذج غير موجود.");
+        }
+
+        const formData = new FormData(form);
+
+        if (submitter && submitter.name) {
+            formData.append(submitter.name, submitter.value || "");
+        }
+
+        const response = await fetch(form.action, {
+            method: (form.method || "POST").toUpperCase(),
+            credentials: "same-origin",
+            cache: "no-store",
+            headers: {
+                "X-Requested-With": "XMLHttpRequest",
+                "Accept": "application/json"
+            },
+            body: formData
+        });
+
+        if (!response.ok) {
+            const error = new Error(await readError(response));
+            error.status = response.status;
+            throw error;
+        }
+
+        const text = await response.text();
+        return text ? JSON.parse(text) : {};
+    }
+
+    function setButtonBusy(button, isBusy, busyText) {
+        if (!button) {
+            return;
+        }
+
+        if (isBusy) {
+            if (!button.dataset.originalHtml) {
+                button.dataset.originalHtml = button.innerHTML;
             }
 
-            if (this.descriptionElement) {
-                this.descriptionElement.textContent = description;
+            button.disabled = true;
+            button.classList.add("is-loading");
+            button.innerHTML =
+                `<span class="af-global-loader__spinner" style="width:18px;height:18px;border-width:2px;"></span>` +
+                `<span>${escapeHtml(busyText || "جارٍ التنفيذ...")}</span>`;
+        } else {
+            button.disabled = false;
+            button.classList.remove("is-loading");
+
+            if (button.dataset.originalHtml) {
+                button.innerHTML = button.dataset.originalHtml;
+                delete button.dataset.originalHtml;
+            }
+        }
+    }
+
+    function showGlobalLoader(show) {
+        const loader = state.root ? qs("[data-finance-global-loader]", state.root) : null;
+        if (!loader) {
+            return;
+        }
+
+        loader.hidden = !show;
+    }
+
+    function showToast(message, type, title, duration) {
+        const stack = state.root ? qs("#adminFinanceToastStack", state.root) : null;
+        if (!stack) {
+            return;
+        }
+
+        const tone = ["success", "danger", "warning", "info"].includes(type)
+            ? type
+            : "info";
+
+        const icon = {
+            success: "bi-check2-circle",
+            danger: "bi-x-octagon",
+            warning: "bi-exclamation-triangle",
+            info: "bi-info-circle"
+        }[tone];
+
+        const toast = document.createElement("div");
+        toast.className = `af-toast af-toast--${tone}`;
+        toast.innerHTML = `
+            <span class="af-toast__icon"><i class="bi ${icon}"></i></span>
+            <div class="af-toast__body">
+                <strong>${escapeHtml(title || (
+                    tone === "success" ? "تم بنجاح" :
+                    tone === "danger" ? "تعذر التنفيذ" :
+                    tone === "warning" ? "تنبيه" : "معلومة"
+                ))}</strong>
+                <p>${escapeHtml(message || "")}</p>
+            </div>
+            <button type="button" class="af-toast__close" aria-label="إغلاق">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        `;
+
+        const remove = () => {
+            if (toast.parentNode) {
+                toast.remove();
+            }
+        };
+
+        qs(".af-toast__close", toast).addEventListener("click", remove);
+        stack.appendChild(toast);
+        window.setTimeout(remove, duration || 5000);
+    }
+
+    function updateActiveTab(tab) {
+        state.activeTab = tab;
+        if (state.root) {
+            state.root.dataset.selectedTab = tab;
+        }
+
+        qsa("[data-finance-tab]", state.root).forEach(button => {
+            const active = button.dataset.financeTab === tab &&
+                button.classList.contains("af-tab");
+
+            if (button.classList.contains("af-tab")) {
+                button.classList.toggle("is-active", active);
+                button.setAttribute("aria-selected", active ? "true" : "false");
+            }
+        });
+    }
+
+    function updateBrowserUrl(tab, mode) {
+        if (!tab || mode === "none") {
+            return;
+        }
+
+        const url = new URL(window.location.href);
+        url.searchParams.set("financeTab", tab);
+
+        if (mode === "push") {
+            window.history.pushState({ financeTab: tab }, "", url);
+        } else {
+            window.history.replaceState({ financeTab: tab }, "", url);
+        }
+    }
+
+    function positiveQueryInt(name) {
+        const url = new URL(window.location.href);
+        const value = Number.parseInt(
+            url.searchParams.get(name) || "0",
+            10
+        );
+
+        return Number.isInteger(value) && value > 0
+            ? value
+            : 0;
+    }
+
+    function consumeDeepLinkParameter(name) {
+        const url = new URL(window.location.href);
+
+        if (!url.searchParams.has(name)) {
+            return;
+        }
+
+        url.searchParams.delete(name);
+
+        window.history.replaceState(
+            window.history.state,
+            "",
+            url.pathname + url.search + url.hash
+        );
+    }
+
+    async function openDeepLinkTarget(tab) {
+        if (tab === "topups") {
+            const id = positiveQueryInt("focusTopUp");
+
+            if (id > 0 &&
+                window.AdminFinanceTopUps &&
+                typeof window.AdminFinanceTopUps.openDetails === "function") {
+                consumeDeepLinkParameter("focusTopUp");
+                await window.AdminFinanceTopUps.openDetails(id);
             }
 
-            if (this.iconElement) {
-                this.iconElement.className = `bi ${icon}`;
+            return;
+        }
+
+        if (tab === "transactions") {
+            const id =
+                positiveQueryInt("focusTransaction");
+
+            if (id > 0 &&
+                window.AdminFinanceTransactions &&
+                typeof window.AdminFinanceTransactions.openDetails === "function") {
+                consumeDeepLinkParameter("focusTransaction");
+                await window.AdminFinanceTransactions.openDetails(id);
             }
+        }
+    }
 
-            this.content?.setAttribute('aria-labelledby', activeButton.id);
+    function renderLoadError(error, tab, url) {
+        if (!state.host) {
+            return;
+        }
 
-            if (shouldFocus) {
-                activeButton.focus({ preventScroll: true });
-            }
-        },
+        const forbidden = error && (error.status === 401 || error.status === 403);
 
-        setLoading(value) {
-            this.isLoading = value;
-
-            this.content?.setAttribute('aria-busy', value ? 'true' : 'false');
-            this.refreshButton?.classList.toggle('is-loading', value);
-
-            if (this.refreshButton) {
-                this.refreshButton.disabled = value;
-            }
-
-            if (!value) {
-                return;
-            }
-
-            this.content.innerHTML = `
-                <div class="owner-financial-runtime-loading" role="status">
-                    <span aria-hidden="true"></span>
-                    <div>
-                        <strong>جاري تحميل البيانات</strong>
-                        <small>لحظات فقط...</small>
+        state.host.innerHTML = `
+            <div style="min-height:320px;display:grid;place-items:center;text-align:center;padding:36px;">
+                <div>
+                    <div style="width:58px;height:58px;display:grid;place-items:center;margin:0 auto 14px;border-radius:18px;background:#FFF0F2;color:#D84D5A;font-size:24px;">
+                        <i class="bi ${forbidden ? "bi-shield-lock" : "bi-exclamation-triangle"}"></i>
                     </div>
+                    <strong style="display:block;color:#162333;font-size:16px;font-weight:900;">
+                        ${forbidden ? "لا تملك صلاحية فتح هذا القسم" : "تعذر تحميل البيانات"}
+                    </strong>
+                    <p style="max-width:440px;margin:7px auto 16px;color:#708094;font-size:13px;">
+                        ${escapeHtml(error && error.message ? error.message : "أعد المحاولة بعد لحظات.")}
+                    </p>
+                    ${forbidden ? "" : `
+                        <button type="button"
+                                class="af-btn af-btn--primary"
+                                data-finance-retry
+                                data-tab="${escapeHtml(tab || "")}"
+                                data-url="${escapeHtml(url || "")}">
+                            <i class="bi bi-arrow-clockwise"></i>
+                            إعادة المحاولة
+                        </button>
+                    `}
+                </div>
+            </div>
+        `;
+    }
+
+    function tabCacheKey(tab, url) {
+        const resolved = new URL(url, window.location.origin);
+        return `${tab}|${resolved.pathname}${resolved.search}`;
+    }
+
+    async function renderTabHtml(tab, targetUrl, html) {
+        state.host.innerHTML = html;
+        state.host.setAttribute("aria-busy", "false");
+        state.activeUrl = targetUrl;
+
+        document.dispatchEvent(new CustomEvent("adminfinance:tabloaded", {
+            detail: {
+                tab,
+                url: targetUrl,
+                host: state.host
+            }
+        }));
+
+        await openDeepLinkTarget(tab);
+    }
+
+    function prefetchFinanceTabs(excludedTab) {
+        if (!state.root) {
+            return;
+        }
+
+        qsa(".af-tab[data-finance-tab][data-finance-tab-url]", state.root)
+            .filter(button => button.dataset.financeTab !== excludedTab)
+            .forEach(button => {
+                const tab = button.dataset.financeTab;
+                const url = button.dataset.financeTabUrl;
+                const key = tabCacheKey(tab, url);
+
+                if (state.tabCache.has(key) || state.prefetchingTabs.has(key)) {
+                    return;
+                }
+
+                const request = fetchHtml(url)
+                    .then(html => {
+                        state.tabCache.set(key, html);
+                        return html;
+                    })
+                    .catch(() => null)
+                    .finally(() => {
+                        state.prefetchingTabs.delete(key);
+                    });
+
+                state.prefetchingTabs.set(key, request);
+            });
+    }
+
+    async function loadTab(tab, url, options) {
+        const opts = {
+            historyMode: "push",
+            showLoader: true,
+            forceReload: false,
+            ...options
+        };
+
+        if (!state.root || !state.host) {
+            return false;
+        }
+
+        const fallbackButton = qsa(".af-tab[data-finance-tab]", state.root)
+            .find(button => button.dataset.financeTab === tab);
+
+        const targetUrl = url || (fallbackButton && fallbackButton.dataset.financeTabUrl);
+        if (!targetUrl) {
+            showToast("تعذر تحديد رابط التبويب.", "danger");
+            return false;
+        }
+
+        if (state.tabAbortController) {
+            state.tabAbortController.abort();
+            state.tabAbortController = null;
+        }
+
+        updateActiveTab(tab);
+        state.activeUrl = targetUrl;
+        updateBrowserUrl(tab, opts.historyMode);
+
+        const cacheKey = tabCacheKey(tab, targetUrl);
+        if (!opts.forceReload && state.tabCache.has(cacheKey)) {
+            await renderTabHtml(
+                tab,
+                targetUrl,
+                state.tabCache.get(cacheKey)
+            );
+            return true;
+        }
+
+        const controller = new AbortController();
+        state.tabAbortController = controller;
+
+        if (opts.showLoader) {
+            state.host.setAttribute("aria-busy", "true");
+            state.host.innerHTML = `
+                <div class="af-loading-state">
+                    <div class="af-loading-state__mark"><span></span><span></span><span></span></div>
+                    <strong>جارٍ تجهيز البيانات المالية</strong>
+                    <p>لحظات بسيطة...</p>
                 </div>
             `;
-        },
+        }
 
-        renderLoadError(message) {
-            if (!this.content) {
-                return;
+        try {
+            const html = await fetchHtml(targetUrl, {
+                signal: controller.signal
+            });
+
+            if (controller.signal.aborted) {
+                return false;
             }
 
-            this.content.innerHTML = '';
+            state.tabCache.set(cacheKey, html);
+            await renderTabHtml(tab, targetUrl, html);
+            prefetchFinanceTabs(tab);
 
-            const box = document.createElement('div');
-            box.className = 'owner-financial-runtime-error';
+            return true;
+        } catch (error) {
+            if (error && error.name === "AbortError") {
+                return false;
+            }
 
-            const icon = document.createElement('i');
-            icon.className = 'bi bi-exclamation-circle';
-
-            const title = document.createElement('strong');
-            title.textContent = 'تعذر تحميل القسم';
-
-            const text = document.createElement('span');
-            text.textContent = message;
-
-            const button = document.createElement('button');
-            button.type = 'button';
-            button.textContent = 'إعادة المحاولة';
-
-            button.addEventListener(
-                'click',
-                () => this.reloadCurrent({ history: 'replace' }),
-                { once: true }
+            renderLoadError(error, tab, targetUrl);
+            showToast(
+                error && error.message ? error.message : "تعذر تحميل التبويب.",
+                "danger"
             );
-
-            box.append(icon, title, text, button);
-            this.content.appendChild(box);
-        },
-
-        repairPartialRootClasses(scope) {
-            if (!scope) {
-                return;
+            return false;
+        } finally {
+            if (state.tabAbortController === controller) {
+                state.tabAbortController = null;
             }
+        }
+    }
 
-            const classMap = {
-                overview: ['owner-financial-overview'],
-                bookings: ['owner-booking-accounts', 'owner-booking-dossier'],
-                balance: ['owner-balance-center'],
-                refunds: ['refund-signature'],
-                wallets: ['wallet-vault'],
-                reports: ['ofir-editorial']
-            };
+    async function reloadCurrentTab(urlOverride) {
+        const tab = state.activeTab || (state.root && state.root.dataset.selectedTab);
+        if (!tab) {
+            return false;
+        }
 
-            scope.querySelectorAll('[data-owner-financial-partial]').forEach(element => {
-                const key = String(element.dataset.ownerFinancialPartial || '')
-                    .trim()
-                    .toLowerCase();
+        return loadTab(tab, urlOverride || state.activeUrl, {
+            historyMode: "replace",
+            showLoader: false,
+            forceReload: true
+        });
+    }
 
-                const requiredClasses = classMap[key];
+    async function refreshShell() {
+        if (!state.root) {
+            return null;
+        }
 
-                if (!requiredClasses) {
-                    return;
-                }
+        const shellUrl = state.root.dataset.shellUrl;
+        if (!shellUrl) {
+            return null;
+        }
 
-                requiredClasses.forEach(className => {
-                    element.classList.add(className);
-                });
-            });
-        },
+        if (state.shellAbortController) {
+            state.shellAbortController.abort();
+        }
 
-        initActiveModule(key) {
-            const module = window.OwnerFinancialTabs?.[key];
+        const controller = new AbortController();
+        state.shellAbortController = controller;
 
-            if (!module || typeof module.init !== 'function') {
-                this.activeModule = null;
-                return;
-            }
-
-            try {
-                module.init(
-                    this.content,
-                    this.createModuleApi(key)
-                );
-
-                this.activeModule = module;
-            } catch (error) {
-                console.error(`Owner Financials ${key}:`, error);
-
-                this.activeModule = null;
-
-                this.showToast(
-                    'تم تحميل القسم، لكن تعذر تشغيل بعض التفاعلات.',
-                    'warning'
-                );
-            }
-        },
-
-        destroyActiveModule() {
-            if (
-                this.activeModule &&
-                typeof this.activeModule.destroy === 'function'
-            ) {
-                try {
-                    this.activeModule.destroy();
-                } catch (error) {
-                    console.warn(
-                        'Owner Financials: فشل تنظيف الوحدة السابقة.',
-                        error
-                    );
-                }
-            }
-
-            this.activeModule = null;
-        },
-
-        createModuleApi(key) {
-            return {
-                tabKey: key,
-
-                reload: options => {
-                    const normalized = options || {};
-
-                    return this.reloadCurrent({
-                        query:
-                            normalized.query !== undefined
-                                ? normalized.query
-                                : this.getStoredQuery(key),
-                        history: normalized.history || 'replace',
-                        keepScroll: normalized.keepScroll !== false
-                    });
-                },
-
-                openTab: (targetKey, options = {}) => {
-                    const openOptions = {
-                        history: options.history || 'push',
-                        focus: options.focus !== false
-                    };
-
-                    if (options.query !== undefined) {
-                        openOptions.query = options.query;
-                    }
-
-                    return this.openTab(targetKey, openOptions);
-                },
-
-                getQuery: () => this.getStoredQuery(key),
-
-                setQuery: query => this.setStoredQuery(key, query),
-
-                serializeForm: (form, overrides = {}) =>
-                    this.serializeForm(form, overrides),
-
-                showToast: (message, type = 'info') =>
-                    this.showToast(message, type),
-
-                getAntiForgeryToken: () =>
-                    this.getAntiForgeryToken(),
-
-                fetchJson: (url, options = {}) =>
-                    this.fetchJson(url, options),
-
-                setButtonBusy: (button, busy, busyText) =>
-                    this.setButtonBusy(button, busy, busyText),
-
-                confirm: (message, title) =>
-                    this.confirmAction(message, title),
-
-                selectedPlaceId:
-                    this.root?.dataset.selectedPlaceId || '',
-
-                selectedPlaceName:
-                    this.root?.dataset.selectedPlaceName || '',
-
-                currency:
-                    this.root?.dataset.currency || 'ريال يمني'
-            };
-        },
-
-        serializeForm(form, overrides = {}) {
-            const params = new URLSearchParams();
-
-            if (form) {
-                const data = new FormData(form);
-
-                for (const [name, rawValue] of data.entries()) {
-                    if (!name || rawValue instanceof File) {
-                        continue;
-                    }
-
-                    const value = String(rawValue).trim();
-
-                    if (
-                        value === '' ||
-                        name === '__RequestVerificationToken'
-                    ) {
-                        continue;
-                    }
-
-                    params.set(name, value);
-                }
-            }
-
-            Object.entries(overrides || {}).forEach(([name, rawValue]) => {
-                if (
-                    rawValue === undefined ||
-                    rawValue === null ||
-                    rawValue === ''
-                ) {
-                    params.delete(name);
-                    return;
-                }
-
-                params.set(name, String(rawValue));
+        try {
+            const url = buildUrl(shellUrl, {
+                financeTab: state.activeTab || state.root.dataset.selectedTab || "overview"
             });
 
-            return params;
-        },
-
-        extractTabQuery(searchParams) {
-            const params = new URLSearchParams(searchParams);
-
-            params.delete('financeTab');
-            params.delete('placeId');
-
-            return params;
-        },
-
-        toSearchParams(value) {
-            if (value instanceof URLSearchParams) {
-                return new URLSearchParams(value.toString());
-            }
-
-            if (value instanceof FormData) {
-                const params = new URLSearchParams();
-
-                for (const [name, rawValue] of value.entries()) {
-                    if (rawValue instanceof File || rawValue === null) {
-                        continue;
-                    }
-
-                    const text = String(rawValue).trim();
-
-                    if (text) {
-                        params.set(name, text);
-                    }
-                }
-
-                return params;
-            }
-
-            if (typeof value === 'string') {
-                return new URLSearchParams(value.replace(/^\?/, ''));
-            }
-
-            const params = new URLSearchParams();
-
-            if (value && typeof value === 'object') {
-                Object.entries(value).forEach(([name, rawValue]) => {
-                    if (
-                        rawValue === undefined ||
-                        rawValue === null ||
-                        rawValue === ''
-                    ) {
-                        return;
-                    }
-
-                    params.set(name, String(rawValue));
-                });
-            }
-
-            return params;
-        },
-
-        buildUrl(endpoint, query) {
-            const url = new URL(endpoint, window.location.origin);
-            const params = this.toSearchParams(query);
-
-            // اختيار المنشأة في الهيدر هو مصدر الحقيقة لطلبات المالية.
-            // لا نعتمد على الكوكي وحده لأنه قد يبقى على المنشأة السابقة.
-            params.delete('PlaceId');
-            params.delete('placeId');
-
-            const selectedPlaceId =
-                String(this.root?.dataset.selectedPlaceId || '').trim();
-
-            if (selectedPlaceId) {
-                params.set('placeId', selectedPlaceId);
-            }
-
-            params.forEach((value, name) => {
-                url.searchParams.set(name, value);
+            const payload = await fetchJson(url, {
+                signal: controller.signal
             });
 
-            return url.toString();
-        },
+            const shell = pick(payload, "shell", "Shell") || {};
+            const pending = number(pick(shell, "pendingTopUpsCount", "PendingTopUpsCount"));
+            const low = number(pick(shell, "lowBalanceAccountsCount", "LowBalanceAccountsCount"));
+            const debt = number(pick(shell, "inDebtAccountsCount", "InDebtAccountsCount"));
+            const suspended = number(pick(shell, "suspendedAccountsCount", "SuspendedAccountsCount"));
 
-        writeHistory(key, query, mode) {
-            const manageUrl =
-                this.root?.dataset.manageUrl ||
-                '/Owner/Financials';
+            qsa('[data-shell-counter="pending-topups"]', state.root)
+                .forEach(el => { el.textContent = String(pending); });
+            qsa('[data-shell-counter="pending-topups-tab"]', state.root)
+                .forEach(el => { el.textContent = String(pending); });
+            qsa('[data-shell-counter="low-balance"]', state.root)
+                .forEach(el => { el.textContent = String(low); });
+            qsa('[data-shell-counter="in-debt"]', state.root)
+                .forEach(el => { el.textContent = String(debt); });
+            qsa('[data-shell-counter="suspended"]', state.root)
+                .forEach(el => { el.textContent = String(suspended); });
 
-            const url = new URL(manageUrl, window.location.origin);
-
-            url.searchParams.set('financeTab', key);
-
-            const selectedPlaceId =
-                String(this.root?.dataset.selectedPlaceId || '').trim();
-
-            if (selectedPlaceId) {
-                url.searchParams.set('placeId', selectedPlaceId);
+            return payload;
+        } catch (error) {
+            if (error && error.name === "AbortError") {
+                return null;
             }
 
-            const params = this.toSearchParams(query);
+            console.warn("Finance shell refresh failed:", error);
+            return null;
+        } finally {
+            if (state.shellAbortController === controller) {
+                state.shellAbortController = null;
+            }
+        }
+    }
 
-            params.forEach((value, name) => {
-                if (name !== 'financeTab' && name !== 'placeId') {
-                    url.searchParams.set(name, value);
-                }
+
+    function portalToBody(element) {
+        if (!element || element.__afPortalPlaceholder) {
+            return element;
+        }
+
+        const parent = element.parentNode;
+        if (!parent) {
+            return element;
+        }
+
+        const placeholder = document.createComment("admin-finance-portal");
+        parent.insertBefore(placeholder, element);
+
+        element.__afPortalPlaceholder = placeholder;
+        element.classList.add("af-finance-portaled");
+        document.body.appendChild(element);
+
+        return element;
+    }
+
+    function restoreFromBody(element) {
+        if (!element) {
+            return;
+        }
+
+        const placeholder = element.__afPortalPlaceholder;
+
+        if (placeholder && placeholder.parentNode) {
+            placeholder.parentNode.replaceChild(element, placeholder);
+        }
+
+        element.classList.remove("af-finance-portaled");
+        delete element.__afPortalPlaceholder;
+    }
+
+    function lockOverlayPage() {
+        document.documentElement.classList.add("af-finance-overlay-lock");
+        document.body.classList.add("af-finance-overlay-open");
+        document.documentElement.style.overflow = "hidden";
+        document.body.style.overflow = "hidden";
+    }
+
+    function unlockOverlayPageIfSafe() {
+        const opened =
+            document.querySelector(".af-management-drawer.is-open") ||
+            document.querySelector(".acg-modal.is-open") ||
+            document.querySelector(".atr-modal.is-open") ||
+            document.querySelector(".aft-modal.is-open") ||
+            document.querySelector(".afm-modal.is-open");
+
+        if (opened) {
+            return;
+        }
+
+        document.documentElement.classList.remove("af-finance-overlay-lock");
+        document.body.classList.remove("af-finance-overlay-open");
+        document.documentElement.style.overflow = "";
+        document.body.style.overflow = "";
+    }
+
+    function openOverlay(element) {
+        if (!element) {
+            return;
+        }
+
+        portalToBody(element);
+
+        element.hidden = false;
+        element.setAttribute("aria-hidden", "false");
+        element.style.setProperty("position", "fixed", "important");
+        element.style.setProperty("inset", "0", "important");
+        element.style.setProperty("width", "100vw", "important");
+        element.style.setProperty("height", "100vh", "important");
+        element.style.setProperty("z-index", "2000000005", "important");
+
+        void element.offsetWidth;
+        element.classList.add("is-open");
+
+        lockOverlayPage();
+    }
+
+    function closeOverlay(element) {
+        if (!element) {
+            return;
+        }
+
+        element.classList.remove("is-open");
+        element.setAttribute("aria-hidden", "true");
+
+        window.setTimeout(function () {
+            restoreFromBody(element);
+            unlockOverlayPageIfSafe();
+        }, 0);
+    }
+
+    function openManagementDrawerFrame() {
+        const drawer =
+            qs("[data-finance-management-drawer]", state.root) ||
+            qs("[data-finance-management-drawer]", document);
+
+        const backdrop =
+            qs("[data-finance-management-backdrop]", state.root) ||
+            qs("[data-finance-management-backdrop]", document);
+
+        if (backdrop) {
+            portalToBody(backdrop);
+            backdrop.hidden = false;
+            backdrop.classList.add("is-open");
+            backdrop.style.setProperty("position", "fixed", "important");
+            backdrop.style.setProperty("inset", "0", "important");
+            backdrop.style.setProperty("width", "100vw", "important");
+            backdrop.style.setProperty("height", "100vh", "important");
+            backdrop.style.setProperty("z-index", "2000000000", "important");
+        }
+
+        if (drawer) {
+            portalToBody(drawer);
+
+            drawer.hidden = false;
+            drawer.classList.remove("is-open");
+            drawer.setAttribute("aria-hidden", "false");
+
+            // Force the drawer to the LEFT side, opposite the RTL sidebar.
+            drawer.style.setProperty("position", "fixed", "important");
+            drawer.style.setProperty("top", "12px", "important");
+            drawer.style.setProperty("bottom", "12px", "important");
+            drawer.style.setProperty("left", "12px", "important");
+            drawer.style.setProperty("right", "auto", "important");
+            drawer.style.setProperty("transform", "none", "important");
+            drawer.style.setProperty("z-index", "2000000001", "important");
+
+            void drawer.offsetWidth;
+            drawer.classList.add("is-open");
+        }
+
+        lockOverlayPage();
+    }
+
+    function closeManagementDrawer() {
+        const drawer = qs("[data-finance-management-drawer]", document);
+        const backdrop = qs("[data-finance-management-backdrop]", document);
+
+        if (drawer) {
+            drawer.classList.remove("is-open");
+            drawer.setAttribute("aria-hidden", "true");
+            drawer.hidden = true;
+
+            drawer.style.removeProperty("left");
+            drawer.style.removeProperty("right");
+            drawer.style.removeProperty("top");
+            drawer.style.removeProperty("bottom");
+            drawer.style.removeProperty("transform");
+            drawer.style.removeProperty("z-index");
+            drawer.style.removeProperty("position");
+
+            restoreFromBody(drawer);
+        }
+
+        if (backdrop) {
+            backdrop.classList.remove("is-open");
+            backdrop.hidden = true;
+
+            backdrop.style.removeProperty("position");
+            backdrop.style.removeProperty("inset");
+            backdrop.style.removeProperty("width");
+            backdrop.style.removeProperty("height");
+            backdrop.style.removeProperty("z-index");
+
+            restoreFromBody(backdrop);
+        }
+
+        unlockOverlayPageIfSafe();
+    }
+
+    async function openManagement() {
+        if (!state.root) {
+            return;
+        }
+
+        const url = state.root.dataset.managementUrl;
+        const host = qs("[data-finance-management-host]", state.root);
+
+        if (!url || !host) {
+            return;
+        }
+
+        if (state.managementAbortController) {
+            state.managementAbortController.abort();
+        }
+
+        const controller = new AbortController();
+        state.managementAbortController = controller;
+
+        openManagementDrawerFrame();
+        host.innerHTML = `
+            <div class="af-loading-state" style="height:100%;">
+                <div class="af-loading-state__mark"><span></span><span></span><span></span></div>
+                <strong>جارٍ تجهيز إدارة المالية</strong>
+                <p>تحميل الإعدادات وحسابات المنصة...</p>
+            </div>
+        `;
+
+        try {
+            const html = await fetchHtml(url, {
+                signal: controller.signal
             });
 
-            const state = {
-                ownerFinancialTab: key,
-                query: params.toString()
-            };
+            host.innerHTML = html;
 
-            const relativeUrl =
-                url.pathname +
-                url.search;
-
-            if (mode === 'replace') {
-                history.replaceState(state, '', relativeUrl);
-            } else {
-                history.pushState(state, '', relativeUrl);
-            }
-        },
-
-        scrollActiveTabIntoView(button) {
-            if (!button) {
+            document.dispatchEvent(new CustomEvent("adminfinance:managementloaded", {
+                detail: { host }
+            }));
+        } catch (error) {
+            if (error && error.name === "AbortError") {
                 return;
             }
 
-            try {
-                button.scrollIntoView({
-                    behavior: 'smooth',
-                    block: 'nearest',
-                    inline: 'center'
-                });
-            } catch {
-                button.scrollIntoView(false);
-            }
-        },
-
-        syncPlaceCaption() {
-            if (!this.root) {
-                return;
-            }
-
-            const placeName =
-                this.root.dataset.selectedPlaceName ||
-                this.placeSelector?.selectedOptions?.[0]?.dataset.placeName ||
-                this.placeSelector?.selectedOptions?.[0]?.textContent?.trim() ||
-                'لا توجد منشأة';
-
-            this.root.dataset.selectedPlaceName = placeName;
-
-            if (this.selectedPlaceCaption) {
-                this.selectedPlaceCaption.textContent = placeName;
-            }
-        },
-
-        setSelectedPlace(placeId, placeName, reload = false) {
-            if (!this.root) {
-                return;
-            }
-
-            const normalizedId = String(placeId || '').trim();
-            const normalizedName = String(placeName || '').trim();
-
-            const changed =
-                this.root.dataset.selectedPlaceId !== normalizedId;
-
-            this.root.dataset.selectedPlaceId = normalizedId;
-
-            if (normalizedName) {
-                this.root.dataset.selectedPlaceName = normalizedName;
-            }
-
-            if (
-                this.placeSelector &&
-                this.placeSelector.value !== normalizedId
-            ) {
-                this.placeSelector.value = normalizedId;
-            }
-
-            this.syncPlaceCaption();
-
-            if (changed && reload) {
-                this.tabQueries.clear();
-
-                this.reloadCurrent({
-                    history: 'replace',
-                    query: new URLSearchParams()
-                });
-            }
-        },
-
-        getAntiForgeryToken() {
-            return (
-                document.querySelector(
-                    '#ownerFinancialAntiForgeryForm input[name="__RequestVerificationToken"]'
-                )?.value ||
-                this.content?.querySelector(
-                    'input[name="__RequestVerificationToken"]'
-                )?.value ||
-                ''
-            );
-        },
-
-        async fetchJson(url, options = {}) {
-            const headers = new Headers(options.headers || {});
-
-            headers.set('X-Requested-With', 'XMLHttpRequest');
-            headers.set('Accept', 'application/json, text/plain, */*');
-
-            const token =
-                options.antiForgeryToken ||
-                this.getAntiForgeryToken();
-
-            if (token) {
-                headers.set('RequestVerificationToken', token);
-            }
-
-            const response = await fetch(url, {
-                ...options,
-                headers,
-                credentials: 'same-origin',
-                cache: 'no-store'
-            });
-
-            let data = null;
-
-            const contentType =
-                response.headers.get('content-type') ||
-                '';
-
-            try {
-                if (contentType.includes('application/json')) {
-                    data = await response.json();
-                } else {
-                    const text = await response.text();
-
-                    if (text) {
-                        try {
-                            data = JSON.parse(text);
-                        } catch {
-                            data = { message: text };
-                        }
-                    }
-                }
-            } catch {
-                data = null;
-            }
-
-            if (!response.ok) {
-                const message =
-                    data?.message ||
-                    data?.title ||
-                    `فشلت العملية (${response.status}).`;
-
-                const error = new Error(message);
-                error.status = response.status;
-                error.data = data;
-
-                throw error;
-            }
-
-            return data || { success: true };
-        },
-
-        async readErrorMessage(response, fallback) {
-            try {
-                const contentType =
-                    response.headers.get('content-type') ||
-                    '';
-
-                if (contentType.includes('application/json')) {
-                    const data = await response.json();
-
-                    return (
-                        data?.message ||
-                        data?.title ||
-                        fallback
-                    );
-                }
-
-                const text = await response.text();
-
-                return text?.trim()
-                    ? text.trim()
-                    : fallback;
-            } catch {
-                return fallback;
-            }
-        },
-
-        setButtonBusy(button, busy, busyText = 'جاري التنفيذ...') {
-            if (!button) {
-                return;
-            }
-
-            if (busy) {
-                if (!button.dataset.ownerOriginalHtml) {
-                    button.dataset.ownerOriginalHtml = button.innerHTML;
-                }
-
-                button.disabled = true;
-                button.setAttribute('aria-busy', 'true');
-
-                button.innerHTML =
-                    `<span class="owner-financial-runtime-button-spinner" aria-hidden="true"></span>${this.escapeHtml(busyText)}`;
-            } else {
-                button.disabled = false;
-                button.removeAttribute('aria-busy');
-
-                if (button.dataset.ownerOriginalHtml) {
-                    button.innerHTML = button.dataset.ownerOriginalHtml;
-                    delete button.dataset.ownerOriginalHtml;
-                }
-            }
-        },
-
-        confirmAction(message, title = 'تأكيد العملية') {
-            if (window.Swal && typeof window.Swal.fire === 'function') {
-                return window.Swal.fire({
-                    title,
-                    text: message,
-                    icon: 'question',
-                    showCancelButton: true,
-                    confirmButtonText: 'تأكيد',
-                    cancelButtonText: 'رجوع',
-                    reverseButtons: true,
-                    focusCancel: true,
-                    allowOutsideClick: true,
-                    customClass: {
-                        popup: 'owner-financial-swal-popup',
-                        confirmButton: 'owner-financial-swal-confirm',
-                        cancelButton: 'owner-financial-swal-cancel'
-                    }
-                }).then(result => result.isConfirmed === true);
-            }
-
-            return Promise.resolve(
-                window.confirm(`${title}\n\n${message}`)
-            );
-        },
-
-        applyVipEffects(scope) {
-            if (!scope) {
-                return;
-            }
-
-            const reduceMotion =
-                window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true;
-
-            if (!reduceMotion && typeof Element.prototype.animate === 'function') {
-                const selectors = [
-                    '[data-vip-tilt]',
-                    'article',
-                    '.owner-financial-refunds__summary-card',
-                    '.owner-financial-invoices-reports__metric-card',
-                    '.owner-financial-receiving-wallets__account-card'
-                ].join(',');
-
-                [...scope.querySelectorAll(selectors)]
-                    .slice(0, 28)
-                    .forEach((element, index) => {
-                        if (element.dataset.ownerFinancialRevealed === '1') {
-                            return;
-                        }
-
-                        element.dataset.ownerFinancialRevealed = '1';
-                        element.animate(
-                            [
-                                { opacity: 0, transform: 'translateY(10px) scale(.992)' },
-                                { opacity: 1, transform: 'translateY(0) scale(1)' }
-                            ],
-                            {
-                                duration: 380,
-                                delay: Math.min(index * 24, 260),
-                                easing: 'cubic-bezier(.2,.8,.2,1)',
-                                fill: 'both'
-                            }
-                        );
-                    });
-            }
-
-            if (reduceMotion) {
-                return;
-            }
-
-            scope.querySelectorAll('[data-vip-tilt]').forEach(card => {
-                if (card.dataset.ownerFinancialTiltReady === '1') {
-                    return;
-                }
-
-                card.dataset.ownerFinancialTiltReady = '1';
-
-                const reset = () => {
-                    card.style.transform = '';
-                    card.style.removeProperty('--vip-x');
-                    card.style.removeProperty('--vip-y');
-                };
-
-                card.addEventListener('pointermove', event => {
-                    if (event.pointerType === 'touch') {
-                        return;
-                    }
-
-                    const rect = card.getBoundingClientRect();
-                    const px = (event.clientX - rect.left) / Math.max(1, rect.width);
-                    const py = (event.clientY - rect.top) / Math.max(1, rect.height);
-                    const rotateY = (px - .5) * 4.2;
-                    const rotateX = (.5 - py) * 3.4;
-
-                    card.style.setProperty('--vip-x', `${Math.round(px * 100)}%`);
-                    card.style.setProperty('--vip-y', `${Math.round(py * 100)}%`);
-                    card.style.transform =
-                        `perspective(950px) rotateX(${rotateX.toFixed(2)}deg) rotateY(${rotateY.toFixed(2)}deg) translateY(-2px)`;
-                }, { passive: true });
-
-                card.addEventListener('pointerleave', reset, { passive: true });
-                card.addEventListener('pointercancel', reset, { passive: true });
-            });
-        },
-
-        updateLastUpdated() {
-            if (!this.updatedElement) {
-                return;
-            }
-
-            try {
-                this.updatedElement.textContent =
-                    new Intl.DateTimeFormat(
-                        'ar-YE',
-                        {
-                            hour: '2-digit',
-                            minute: '2-digit'
-                        }
-                    ).format(new Date());
-            } catch {
-                this.updatedElement.textContent = 'الآن';
-            }
-        },
-
-        showToast(message, type = 'info') {
-            if (!message) {
-                return;
-            }
-
-            const host = this.toastHost || document.body;
-
-            const normalizedType =
-                ['success', 'error', 'warning', 'info'].includes(type)
-                    ? type
-                    : 'info';
-
-            const toast = document.createElement('div');
-            toast.className =
-                `owner-financial-runtime-toast is-${normalizedType}`;
-
-            toast.setAttribute(
-                'role',
-                normalizedType === 'error'
-                    ? 'alert'
-                    : 'status'
-            );
-
-            const icon = document.createElement('i');
-
-            icon.className =
-                normalizedType === 'success'
-                    ? 'bi bi-check2-circle'
-                    : normalizedType === 'error'
-                        ? 'bi bi-exclamation-circle'
-                        : normalizedType === 'warning'
-                            ? 'bi bi-exclamation-triangle'
-                            : 'bi bi-info-circle';
-
-            const text = document.createElement('span');
-            text.textContent = String(message);
-
-            toast.append(icon, text);
-            host.appendChild(toast);
-
-            requestAnimationFrame(() => {
-                toast.classList.add('is-visible');
-            });
-
-            window.setTimeout(
-                () => {
-                    toast.classList.remove('is-visible');
-
-                    window.setTimeout(
-                        () => toast.remove(),
-                        220
-                    );
-                },
-                normalizedType === 'error'
-                    ? 5200
-                    : 3600
-            );
-        },
-
-        ensureRuntimeStyles() {
-            if (document.getElementById('ownerFinancialRuntimeStyles')) {
-                return;
-            }
-
-            const style = document.createElement('style');
-            style.id = 'ownerFinancialRuntimeStyles';
-
-            style.textContent = `
-                .owner-financial-runtime-loading,
-                .owner-financial-runtime-error {
-                    display:flex;
-                    min-height:280px;
-                    align-items:center;
-                    justify-content:center;
-                    gap:12px;
-                    padding:24px;
-                    border:1px dashed rgba(0,166,218,.20);
-                    border-radius:18px;
-                    background:linear-gradient(135deg,#f6fcfe,#fff);
-                    color:#6f8295;
-                    text-align:right;
-                }
-                .owner-financial-runtime-loading > span,
-                .owner-financial-runtime-button-spinner {
-                    display:inline-block;
-                    width:34px;
-                    height:34px;
-                    flex:0 0 34px;
-                    border:3px solid #e4f8fe;
-                    border-top-color:#00a6da;
-                    border-radius:50%;
-                    animation:ownerFinancialRuntimeSpin .75s linear infinite;
-                }
-                .owner-financial-runtime-loading strong {
-                    display:block;
-                    color:#05203c;
-                    font-size:.82rem;
-                }
-                .owner-financial-runtime-loading small {
-                    display:block;
-                    margin-top:3px;
-                    font-size:.6rem;
-                }
-                .owner-financial-runtime-error {
-                    flex-direction:column;
-                    text-align:center;
-                }
-                .owner-financial-runtime-error > i {
-                    color:#d24e55;
-                    font-size:1.55rem;
-                }
-                .owner-financial-runtime-error strong {
-                    color:#05203c;
-                    font-size:.82rem;
-                }
-                .owner-financial-runtime-error span {
-                    max-width:520px;
-                    font-size:.62rem;
-                    line-height:1.7;
-                }
-                .owner-financial-runtime-error button {
-                    min-height:36px;
-                    padding:0 12px;
-                    border:0;
-                    border-radius:10px;
-                    color:#fff;
-                    background:#00a6da;
-                    font-size:.62rem;
-                    font-weight:900;
-                    cursor:pointer;
-                }
-                .owner-financial-runtime-button-spinner {
-                    width:15px;
-                    height:15px;
-                    flex-basis:15px;
-                    border-width:2px;
-                    border-color:rgba(255,255,255,.42);
-                    border-top-color:#fff;
-                    vertical-align:middle;
-                    margin-inline-end:6px;
-                }
-                .owner-financial-runtime-toast {
-                    display:flex;
-                    align-items:center;
-                    gap:9px;
-                    width:100%;
-                    padding:11px 13px;
-                    border:1px solid rgba(5,32,60,.08);
-                    border-radius:13px;
-                    background:#fff;
-                    box-shadow:0 15px 36px rgba(5,32,60,.14);
-                    color:#18344d;
-                    font-size:.66rem;
-                    font-weight:800;
-                    line-height:1.55;
-                    opacity:0;
-                    transform:translateY(8px);
-                    transition:opacity .2s ease,transform .2s ease;
-                    pointer-events:auto;
-                }
-                .owner-financial-runtime-toast.is-visible {
-                    opacity:1;
-                    transform:translateY(0);
-                }
-                .owner-financial-runtime-toast i {
-                    flex:0 0 auto;
-                    font-size:1rem;
-                }
-                .owner-financial-runtime-toast.is-success i { color:#16876b; }
-                .owner-financial-runtime-toast.is-error i { color:#d24e55; }
-                .owner-financial-runtime-toast.is-warning i { color:#b06d09; }
-                .owner-financial-runtime-toast.is-info i { color:#00a6da; }
-                .owner-financial-swal-popup {
-                    border-radius:24px !important;
-                    border:1px solid rgba(0,166,218,.10) !important;
-                    box-shadow:0 28px 80px rgba(5,32,60,.22) !important;
-                    font-family:inherit !important;
-                }
-                .owner-financial-swal-confirm,
-                .owner-financial-swal-cancel {
-                    border-radius:12px !important;
-                    font-weight:900 !important;
-                    box-shadow:none !important;
-                }
-                .owner-financial-swal-confirm {
-                    background:#00A6DA !important;
-                }
-                @keyframes ownerFinancialRuntimeSpin {
-                    to { transform:rotate(360deg); }
-                }
-                @media (max-width:600px) {
-                    .owner-financial-runtime-loading {
-                        flex-direction:column;
-                        text-align:center;
-                    }
-                }
-                @media (prefers-reduced-motion:reduce) {
-                    .owner-financial-runtime-loading > span,
-                    .owner-financial-runtime-button-spinner {
-                        animation:none !important;
-                    }
-                    .owner-financial-runtime-toast {
-                        transition:none !important;
-                    }
-                }
+            host.innerHTML = `
+                <div class="af-loading-state">
+                    <strong>تعذر تحميل إدارة المالية</strong>
+                    <p>${escapeHtml(error && error.message ? error.message : "أعد المحاولة.")}</p>
+                </div>
             `;
 
-            document.head.appendChild(style);
-        },
-
-        escapeHtml(value) {
-            return String(value ?? '')
-                .replaceAll('&', '&amp;')
-                .replaceAll('<', '&lt;')
-                .replaceAll('>', '&gt;')
-                .replaceAll('"', '&quot;')
-                .replaceAll("'", '&#039;');
+            showToast(
+                error && error.message ? error.message : "تعذر تحميل إدارة المالية.",
+                "danger"
+            );
+        } finally {
+            if (state.managementAbortController === controller) {
+                state.managementAbortController = null;
+            }
         }
-    };
-
-    window.OwnerFinancialApp = {
-        openTab: (key, options) => App.openTab(key, options),
-        reload: options => App.reloadCurrent(options),
-        showToast: (message, type) => App.showToast(message, type),
-        setSelectedPlace: (placeId, placeName, reload) =>
-            App.setSelectedPlace(placeId, placeName, reload),
-
-        get activeTab() {
-            return App.activeTab;
-        }
-    };
-
-    if (document.readyState === 'loading') {
-        document.addEventListener(
-            'DOMContentLoaded',
-            () => App.init(),
-            { once: true }
-        );
-    } else {
-        App.init();
     }
-})();
+
+    async function reloadManagement() {
+        const host = state.root ? qs("[data-finance-management-host]", state.root) : null;
+        const url = state.root ? state.root.dataset.managementUrl : null;
+
+        if (!host || !url) {
+            return false;
+        }
+
+        try {
+            const html = await fetchHtml(url);
+            host.innerHTML = html;
+
+            document.dispatchEvent(new CustomEvent("adminfinance:managementloaded", {
+                detail: { host }
+            }));
+
+            return true;
+        } catch (error) {
+            showToast(
+                error && error.message ? error.message : "تعذر تحديث إدارة المالية.",
+                "danger"
+            );
+            return false;
+        }
+    }
+
+    function onRootClick(event) {
+        const tabButton = event.target.closest("[data-finance-tab]");
+        if (tabButton && state.root.contains(tabButton)) {
+            const tab = tabButton.dataset.financeTab;
+            const url = tabButton.dataset.financeTabUrl;
+
+            if (tab && url) {
+                event.preventDefault();
+                loadTab(tab, url, {
+                    historyMode: tabButton.classList.contains("af-tab") ? "push" : "replace"
+                });
+            }
+            return;
+        }
+
+        const refreshButton = event.target.closest("[data-finance-refresh]");
+        if (refreshButton && state.root.contains(refreshButton)) {
+            event.preventDefault();
+
+            setButtonBusy(refreshButton, true, "تحديث...");
+            Promise.all([
+                reloadCurrentTab(),
+                refreshShell()
+            ]).finally(() => {
+                setButtonBusy(refreshButton, false);
+            });
+            return;
+        }
+
+        const managementOpen = event.target.closest("[data-finance-management-open]");
+        if (managementOpen && state.root.contains(managementOpen)) {
+            event.preventDefault();
+            openManagement();
+            return;
+        }
+
+        const managementClose = event.target.closest("[data-finance-management-close]");
+        if (managementClose) {
+            event.preventDefault();
+            closeManagementDrawer();
+            return;
+        }
+
+        const backdrop = event.target.closest("[data-finance-management-backdrop]");
+        if (backdrop) {
+            closeManagementDrawer();
+            return;
+        }
+
+        const retry = event.target.closest("[data-finance-retry]");
+        if (retry && state.root.contains(retry)) {
+            event.preventDefault();
+            loadTab(retry.dataset.tab, retry.dataset.url, {
+                historyMode: "replace"
+            });
+        }
+    }
+
+    function onPopState() {
+        if (!state.root) {
+            return;
+        }
+
+        const url = new URL(window.location.href);
+        const tab = url.searchParams.get("financeTab") || "overview";
+        const button = qsa(".af-tab[data-finance-tab]", state.root)
+            .find(item => item.dataset.financeTab === tab);
+
+        if (button) {
+            loadTab(tab, button.dataset.financeTabUrl, {
+                historyMode: "none"
+            });
+        }
+    }
+
+    function onKeyDown(event) {
+        if (event.key !== "Escape" || !state.root) {
+            return;
+        }
+
+        const drawer = qs("[data-finance-management-drawer]", document);
+        if (drawer && drawer.classList.contains("is-open")) {
+            closeManagementDrawer();
+        }
+    }
+
+    function init() {
+        if (state.initialized) {
+            return;
+        }
+
+        state.root = qs("#adminFinancialsRoot");
+        if (!state.root) {
+            return;
+        }
+
+        state.host = qs("#adminFinancialTabHost", state.root);
+        if (!state.host) {
+            return;
+        }
+
+        state.initialized = true;
+
+        const initialUrl =
+            new URL(window.location.href);
+
+        if (positiveQueryInt("focusTopUp") > 0) {
+            state.activeTab = "topups";
+        } else if (positiveQueryInt("focusTransaction") > 0) {
+            state.activeTab = "transactions";
+        } else {
+            state.activeTab =
+                initialUrl.searchParams.get("financeTab") ||
+                state.root.dataset.selectedTab ||
+                "overview";
+        }
+
+        // Always start with the financial management drawer fully closed.
+        const initialDrawer = qs("[data-finance-management-drawer]", state.root);
+        const initialBackdrop = qs("[data-finance-management-backdrop]", state.root);
+
+        if (initialDrawer) {
+            initialDrawer.classList.remove("is-open");
+            initialDrawer.setAttribute("aria-hidden", "true");
+            initialDrawer.hidden = true;
+        }
+
+        if (initialBackdrop) {
+            initialBackdrop.hidden = true;
+        }
+
+        document.documentElement.style.overflow = "";
+
+        document.addEventListener("click", onRootClick);
+        window.addEventListener("popstate", onPopState);
+        document.addEventListener("keydown", onKeyDown);
+
+        const activeButton =
+            qs(`.af-tab[data-finance-tab="${CSS.escape(state.activeTab)}"]`, state.root) ||
+            qs(".af-tab[data-finance-tab]", state.root);
+
+        if (activeButton) {
+            state.activeTab = activeButton.dataset.financeTab;
+            state.activeUrl = activeButton.dataset.financeTabUrl;
+
+            const initialTab = state.host.dataset.initialFinanceTab;
+            if (initialTab === state.activeTab && state.host.children.length > 0) {
+                const key = tabCacheKey(state.activeTab, state.activeUrl);
+                state.tabCache.set(key, state.host.innerHTML);
+                updateActiveTab(state.activeTab);
+                updateBrowserUrl(state.activeTab, "replace");
+                renderTabHtml(
+                    state.activeTab,
+                    state.activeUrl,
+                    state.host.innerHTML
+                ).then(() => prefetchFinanceTabs(state.activeTab));
+            } else {
+                loadTab(state.activeTab, state.activeUrl, {
+                    historyMode: "replace"
+                });
+            }
+        }
+    }
+
+    Finance.qs = qs;
+    Finance.qsa = qsa;
+    Finance.escapeHtml = escapeHtml;
+    Finance.pick = pick;
+    Finance.number = number;
+    Finance.bool = bool;
+    Finance.asArray = asArray;
+    Finance.formatNumber = formatNumber;
+    Finance.formatMoney = formatMoney;
+    Finance.formatDate = formatDate;
+    Finance.getCurrency = getCurrency;
+    Finance.buildUrl = buildUrl;
+    Finance.fetchHtml = fetchHtml;
+    Finance.fetchJson = fetchJson;
+    Finance.postForm = postForm;
+    Finance.setButtonBusy = setButtonBusy;
+    Finance.showGlobalLoader = showGlobalLoader;
+    Finance.showToast = showToast;
+    Finance.portalToBody = portalToBody;
+    Finance.restoreFromBody = restoreFromBody;
+    Finance.openOverlay = openOverlay;
+    Finance.closeOverlay = closeOverlay;
+    Finance.lockOverlayPage = lockOverlayPage;
+    Finance.unlockOverlayPageIfSafe = unlockOverlayPageIfSafe;
+    Finance.loadTab = loadTab;
+    Finance.reloadCurrentTab = reloadCurrentTab;
+    Finance.refreshShell = refreshShell;
+    Finance.openManagement = openManagement;
+    Finance.closeManagement = closeManagementDrawer;
+    Finance.reloadManagement = reloadManagement;
+    Finance.state = state;
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", init, { once: true });
+    } else {
+        init();
+    }
+})(window, document);

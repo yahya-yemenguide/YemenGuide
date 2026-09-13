@@ -1,16 +1,16 @@
-﻿(function (window, document) {
+(function (window, document) {
     "use strict";
 
-    function api() {
+    function financeApi() {
         return window.AdminFinance;
     }
 
-    function root() {
+    function reportsRoot() {
         return document.querySelector("[data-reports-root]");
     }
 
     function filterForm() {
-        return root()?.querySelector("[data-report-filter-form]") || null;
+        return reportsRoot()?.querySelector("[data-report-filter-form]") || null;
     }
 
     function cleanParams(form) {
@@ -25,50 +25,50 @@
         return params;
     }
 
-    function baseReportsPath(form) {
-        const url = new URL(form.action, window.location.origin);
+    function reportsPath(form) {
+        const action = form?.action || "/Admin/Financials/Reports";
+        const url = new URL(action, window.location.origin);
         return url.pathname.replace(/\/Index\/?$/i, "").replace(/\/+$/, "");
     }
 
-    function exportUrl(kind) {
+    async function loadUrl(url, historyMode) {
+        const Finance = financeApi();
+        if (!Finance) {
+            window.location.assign(url);
+            return;
+        }
+
+        await Finance.loadTab("reports", url, {
+            historyMode: historyMode || "replace"
+        });
+    }
+
+    async function loadReport(form) {
+        if (!form) {
+            return;
+        }
+
+        const params = cleanParams(form);
+        const url = `${form.action}${params.toString() ? `?${params.toString()}` : ""}`;
+        await loadUrl(url, "replace");
+    }
+
+    function exportUrl() {
         const form = filterForm();
         if (!form) {
             return "";
         }
 
         const params = cleanParams(form);
-        const base = baseReportsPath(form);
-
-        if (kind === "print") {
-            params.set("autoPrint", "true");
-            return `${base}/Print?${params.toString()}`;
-        }
-
-        return `${base}/Excel?${params.toString()}`;
-    }
-
-    async function loadReport(form) {
-        const Finance = api();
-        if (!Finance || !form) {
-            return;
-        }
-
-        const params = cleanParams(form);
-        const url = `${form.action}${params.toString() ? `?${params.toString()}` : ""}`;
-
-        await Finance.loadTab("reports", url, {
-            historyMode: "replace"
-        });
+        params.set("autoPrint", "true");
+        return `${reportsPath(form)}/Print?${params.toString()}`;
     }
 
     async function onSubmit(event) {
-        const currentRoot = root();
-        if (!currentRoot) {
-            return;
-        }
-
+        const currentRoot = reportsRoot();
         const form = event.target.closest("[data-report-filter-form]");
-        if (!form || !currentRoot.contains(form)) {
+
+        if (!currentRoot || !form || !currentRoot.contains(form)) {
             return;
         }
 
@@ -77,67 +77,52 @@
     }
 
     async function onClick(event) {
-        const currentRoot = root();
-        const Finance = api();
-
-        if (!currentRoot || !Finance) {
+        const currentRoot = reportsRoot();
+        if (!currentRoot) {
             return;
         }
 
         const typeButton = event.target.closest("[data-report-type]");
         if (typeButton && currentRoot.contains(typeButton)) {
             event.preventDefault();
-
-            const form = filterForm();
-            const input = currentRoot.querySelector("[data-report-type-input]");
-
-            if (!form || !input) {
+            const type = typeButton.dataset.reportType || "";
+            if (!type) {
                 return;
             }
 
-            input.value = typeButton.dataset.reportType || "";
-            await loadReport(form);
+            typeButton.classList.add("is-loading");
+            const url = `/Admin/Financials/Reports?ReportType=${encodeURIComponent(type)}`;
+            await loadUrl(url, "replace");
             return;
         }
 
-        const clear = event.target.closest("[data-report-clear-filters]");
-        if (clear && currentRoot.contains(clear)) {
+        const changeButton = event.target.closest("[data-report-change]");
+        if (changeButton && currentRoot.contains(changeButton)) {
             event.preventDefault();
+            await loadUrl("/Admin/Financials/Reports", "replace");
+            return;
+        }
 
+        const clearButton = event.target.closest("[data-report-clear-filters]");
+        if (clearButton && currentRoot.contains(clearButton)) {
+            event.preventDefault();
             const form = filterForm();
             if (!form) {
                 return;
             }
 
-            const currentType = currentRoot.querySelector("[data-report-type-input]")?.value || "";
-            form.reset();
-
-            const typeInput = currentRoot.querySelector("[data-report-type-input]");
-            if (typeInput) {
-                typeInput.value = currentType;
-            }
-
-            await loadReport(form);
+            const reportType = form.querySelector("[data-report-type-input]")?.value || "";
+            const url = `/Admin/Financials/Reports?ReportType=${encodeURIComponent(reportType)}`;
+            await loadUrl(url, "replace");
             return;
         }
 
-        const printLink = event.target.closest('.afr-section-head__actions a[href*="/Print"]');
+        const printLink = event.target.closest("[data-report-print]");
         if (printLink && currentRoot.contains(printLink)) {
             event.preventDefault();
-            const url = exportUrl("print");
+            const url = exportUrl();
             if (url) {
                 window.open(url, "_blank", "noopener,noreferrer");
-            }
-            return;
-        }
-
-        const excelLink = event.target.closest('.afr-section-head__actions a[href*="/Excel"]');
-        if (excelLink && currentRoot.contains(excelLink)) {
-            event.preventDefault();
-
-            const url = exportUrl("excel");
-            if (url) {
-                window.location.assign(url);
             }
         }
     }

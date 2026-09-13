@@ -386,60 +386,26 @@ namespace YemenGuide.Web.Services.Finance
                 int? selectedOwnerId,
                 CancellationToken cancellationToken)
         {
-            var owners = await _context.Places
+            // قائمة "الملاك" يجب أن تأتي من حسابات الملاك نفسها، لا من
+            // OwnerId الموجود في المنشآت؛ فقد تكون منشأة المنصة مرتبطة
+            // بحساب مدير أو موظف، وهذا لا يحوّل ذلك الحساب إلى مالك.
+            return await _context.Users
                 .AsNoTracking()
-                .Where(place => place.OwnerId.HasValue)
-                .GroupBy(place => place.OwnerId!.Value)
-                .Select(group => new
+                .Where(user => user.Role == "Owner")
+                .Select(user => new AdminFinancialOwnerOptionDto
                 {
-                    OwnerId = group.Key,
-                    PlacesCount = group.Count()
-                })
-                .OrderBy(item => item.OwnerId)
-                .ToListAsync(cancellationToken);
-
-            var ownerIds = owners
-                .Select(item => item.OwnerId)
-                .ToList();
-
-            var users = await _context.Users
-                .AsNoTracking()
-                .Where(user => ownerIds.Contains(user.UserId))
-                .Select(user => new
-                {
-                    user.UserId,
-                    user.FullName,
-                    user.Username,
-                    user.PhoneNumber,
-                    user.ContactInfo
-                })
-                .ToDictionaryAsync(
-                    user => user.UserId,
-                    cancellationToken);
-
-            return owners
-                .Select(item =>
-                {
-                    users.TryGetValue(
-                        item.OwnerId,
-                        out var user);
-
-                    return new AdminFinancialOwnerOptionDto
-                    {
-                        OwnerId = item.OwnerId,
-                        OwnerName = FirstNonEmpty(
-                            "مالك",
-                            user?.FullName,
-                            user?.Username),
-                        PhoneNumber = user?.PhoneNumber?.Trim(),
-                        ContactInfo = user?.ContactInfo?.Trim(),
-                        PlacesCount = item.PlacesCount,
-                        IsSelected =
-                            selectedOwnerId == item.OwnerId
-                    };
+                    OwnerId = user.UserId,
+                    OwnerName = string.IsNullOrWhiteSpace(user.FullName)
+                        ? user.Username
+                        : user.FullName,
+                    PhoneNumber = user.PhoneNumber,
+                    ContactInfo = user.ContactInfo,
+                    PlacesCount = user.Places.Count,
+                    IsSelected = selectedOwnerId == user.UserId
                 })
                 .OrderBy(item => item.OwnerName)
-                .ToList();
+                .ThenBy(item => item.OwnerId)
+                .ToListAsync(cancellationToken);
         }
 
         private async Task<List<AdminFinancialPlaceOptionDto>>
@@ -3543,16 +3509,48 @@ namespace YemenGuide.Web.Services.Finance
             {
                 var search = filter.Search.Trim();
                 var numeric = int.TryParse(search, out var numericSearch);
+                var matchedTransactionTypes =
+                    AdminFinanceTransactionTypes.All
+                        .Where(type =>
+                            TransactionTypeLabel(type).Contains(
+                                search,
+                                StringComparison.OrdinalIgnoreCase))
+                        .ToList();
+                var matchedStatuses =
+                    AdminFinanceTransactionStatuses.All
+                        .Where(status =>
+                            TransactionStatusLabel(status).Contains(
+                                search,
+                                StringComparison.OrdinalIgnoreCase))
+                        .ToList();
 
                 query = query.Where(transaction =>
                     transaction.Place.PlaceNameAndDesc.Contains(search) ||
+                    (transaction.Place.Owner != null &&
+                     (transaction.Place.Owner.FullName.Contains(search) ||
+                      transaction.Place.Owner.Username.Contains(search) ||
+                      (transaction.Place.Owner.PhoneNumber != null &&
+                       transaction.Place.Owner.PhoneNumber.Contains(search)))) ||
                     (transaction.ReferenceNumber != null &&
                      transaction.ReferenceNumber.Contains(search)) ||
                     (transaction.Notes != null &&
                      transaction.Notes.Contains(search)) ||
+                    (transaction.CreatedByUser != null &&
+                     (transaction.CreatedByUser.FullName.Contains(search) ||
+                      transaction.CreatedByUser.Username.Contains(search))) ||
+                    (transaction.ReviewedByUser != null &&
+                     (transaction.ReviewedByUser.FullName.Contains(search) ||
+                      transaction.ReviewedByUser.Username.Contains(search))) ||
+                    (transaction.PlatformWallet != null &&
+                     (transaction.PlatformWallet.AccountNumber.Contains(search) ||
+                      transaction.PlatformWallet.BeneficiaryName.Contains(search) ||
+                      transaction.PlatformWallet.Wallet.WalletName.Contains(search))) ||
+                    matchedTransactionTypes.Contains(transaction.TransactionType) ||
+                    matchedStatuses.Contains(transaction.Status) ||
                     (numeric &&
                      (transaction.CommissionTransactionId == numericSearch ||
-                      transaction.BookingId == numericSearch)));
+                      transaction.BookingId == numericSearch ||
+                      transaction.PlaceId == numericSearch)));
             }
 
             return query;
@@ -5346,6 +5344,7 @@ namespace YemenGuide.Web.Services.Finance
 
                 case AdminFinancialReportTypes.Comprehensive:
                     capabilities.ShowBookingId = false;
+                    capabilities.ShowDateScope = false;
                     break;
             }
 
@@ -5422,6 +5421,20 @@ namespace YemenGuide.Web.Services.Finance
                 AdminFinancialReportTypes.Comprehensive =>
                     "التقرير المالي الشامل للمنصة",
                 _ => "التقرير المالي"
+            };
+
+        private static string ReportIcon(string reportType) =>
+            reportType switch
+            {
+                AdminFinancialReportTypes.Comprehensive => "bi bi-grid-1x2",
+                AdminFinancialReportTypes.BookingCommissions => "bi bi-percent",
+                AdminFinancialReportTypes.TopUps => "bi bi-wallet2",
+                AdminFinancialReportTypes.CommissionAccounts => "bi bi-shield-check",
+                AdminFinancialReportTypes.Debts => "bi bi-exclamation-diamond",
+                AdminFinancialReportTypes.Transactions => "bi bi-arrow-left-right",
+                AdminFinancialReportTypes.LowBalanceAccounts => "bi bi-battery-half",
+                AdminFinancialReportTypes.SuspendedAccounts => "bi bi-lock",
+                _ => "bi bi-file-earmark-bar-graph"
             };
 
         private static string ReportSubtitle(string reportType) =>
@@ -5853,12 +5866,13 @@ namespace YemenGuide.Web.Services.Finance
                 GeneratedByName = generatedByName,
                 Filter = filter,
                 Capabilities = BuildReportCapabilities(filter.ReportType),
-                ReportTypeOptions = AdminFinancialReportTypes.All
+                ReportTypeOptions = AdminFinancialReportTypes.UiTypes
                     .Select(type => new AdminFinancialReportOptionDto
                     {
                         Value = type,
                         Label = ReportTitle(type),
                         Description = ReportSubtitle(type),
+                        IconClass = ReportIcon(type),
                         IsSelected = IsState(type, filter.ReportType)
                     })
                     .ToList(),
