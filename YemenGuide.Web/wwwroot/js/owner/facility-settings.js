@@ -9,7 +9,8 @@ const facilityPolicyState = {
     activePlaceId: 0,
     noShowGraceMinutes: 60,
     isLoading: false,
-    isSaving: false
+    isSaving: false,
+    legacyQuickReplies: []
 };
 
 function isVerificationPolicyFlow() {
@@ -535,14 +536,14 @@ function prepareNewFacilityPolicyForm() {
         "depositPoliciesContainer",
         "securityPoliciesContainer",
         "exceptionPoliciesContainer",
-        "shiftsContainer",
-        "quickRepliesContainer"
+        "shiftsContainer"
     ].forEach(containerId => {
         const container = document.getElementById(containerId);
         if (container) container.innerHTML = "";
     });
 
     facilityPolicyState.noShowGraceMinutes = 60;
+    facilityPolicyState.legacyQuickReplies = [];
     togglePenaltyInput();
     toggleChatSettings();
 }
@@ -977,6 +978,7 @@ function toggleOperationMode() {
 function toggleChatSettings() {
     const chatToggle = document.getElementById("isChatEnabled");
     const container = document.getElementById("chatSettingsContainer");
+    const quickQuestionsCard = document.getElementById("customerQuickQuestionsCard");
     const welcomeMessage = document.getElementById("welcomeMessage");
     const offlineToggle = document.getElementById("offlineReplyToggle");
 
@@ -986,6 +988,15 @@ function toggleChatSettings() {
     container.classList.toggle("is-disabled", !enabled);
     container.style.opacity = enabled ? "1" : "0.55";
     container.style.pointerEvents = enabled ? "auto" : "none";
+
+    if (quickQuestionsCard) {
+        quickQuestionsCard.classList.toggle("is-disabled", !enabled);
+        quickQuestionsCard.style.opacity = enabled ? "1" : "0.55";
+        quickQuestionsCard.style.pointerEvents = enabled ? "auto" : "none";
+        quickQuestionsCard
+            .querySelectorAll("[data-customer-quick-topic]")
+            .forEach(input => { input.disabled = !enabled; });
+    }
 
     if (welcomeMessage) welcomeMessage.disabled = !enabled;
     if (offlineToggle) offlineToggle.disabled = !enabled;
@@ -1542,6 +1553,32 @@ function rebuildShiftsList(jsonText) {
 }
 
 function serializeQuickRepliesList() {
+    const topicInputs = Array.from(
+        document.querySelectorAll("#quickRepliesContainer [data-customer-quick-topic]")
+    );
+
+    // الشكل الجديد يستخدم نفس QuickRepliesJson الموجود أصلًا بدون أي تعديل قاعدة بيانات.
+    // نضيف علامة إعداد صغيرة حتى نفرّق بين منشأة لم تضبط الميزة بعد ومنشأة اختارت
+    // إيقاف جميع الأسئلة. كما نحافظ على الردود القديمة داخل JSON دون حذف بياناتها.
+    if (topicInputs.length > 0) {
+        const topics = topicInputs
+            .filter(input => input.checked)
+            .map(input => ({
+                type: "customer-topic",
+                key: input.dataset.topicKey || "",
+                title: input.dataset.topicTitle || "",
+                question: input.dataset.topicQuestion || ""
+            }))
+            .filter(topic => topic.key && topic.title && topic.question);
+
+        return JSON.stringify([
+            { type: "customer-topic-config", version: 1 },
+            ...topics,
+            ...facilityPolicyState.legacyQuickReplies
+        ]);
+    }
+
+    // توافق خلفي مع واجهة الردود الجاهزة القديمة إن وُجدت في نسخة أخرى.
     const replies = [];
 
     document
@@ -1561,10 +1598,55 @@ function rebuildQuickRepliesList(jsonText) {
     const container = document.getElementById("quickRepliesContainer");
     if (!container) return;
 
+    const parsed = parseJsonArray(jsonText);
+    facilityPolicyState.legacyQuickReplies = parsed
+        .filter(item => {
+            if (!item || typeof item !== "object") return false;
+            const type = String(item.type ?? item.Type ?? "").trim().toLowerCase();
+            return type !== "customer-topic" && type !== "customer-topic-config";
+        })
+        .map(item => ({ ...item }));
+
+    const topicInputs = Array.from(
+        container.querySelectorAll("[data-customer-quick-topic]")
+    );
+
+    if (topicInputs.length > 0) {
+        const hasTopicConfig = parsed.some(item =>
+            item && typeof item === "object" &&
+            String(item.type ?? item.Type ?? "").trim().toLowerCase() === "customer-topic-config"
+        );
+
+        const selectedKeys = new Set(
+            parsed
+                .filter(item => item && typeof item === "object")
+                .filter(item =>
+                    String(item.type ?? item.Type ?? "").toLowerCase() === "customer-topic"
+                )
+                .map(item => String(
+                    item.key ?? item.Key ?? item.topicKey ?? item.TopicKey ?? ""
+                ).trim().toLowerCase())
+                .filter(Boolean)
+        );
+
+        // إذا كانت المنشأة لم تحفظ الشكل الجديد بعد، نترك القيم الافتراضية في الواجهة
+        // كما هي ولا نمسح أي اختيار بسبب JSON قديم.
+        if (hasTopicConfig || selectedKeys.size > 0) {
+            topicInputs.forEach(input => {
+                const key = String(input.dataset.topicKey || "").trim().toLowerCase();
+                input.checked = selectedKeys.has(key);
+            });
+        }
+        return;
+    }
+
+    // توافق خلفي مع الواجهة القديمة.
     container.innerHTML = "";
 
-    parseJsonArray(jsonText).forEach(reply => {
+    parsed.forEach(reply => {
         if (!reply || typeof reply !== "object") return;
+        const type = String(reply.type ?? reply.Type ?? "").toLowerCase();
+        if (type === "customer-topic" || type === "customer-topic-config") return;
         container.appendChild(createQuickReplyListItem(reply, false));
     });
 }

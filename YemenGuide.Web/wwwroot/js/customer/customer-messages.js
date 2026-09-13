@@ -139,6 +139,9 @@
         quickReplies: [],
         emergencyContact: "",
         welcomeMessage: "",
+        offlineReplyEnabled: false,
+        offlineMessage: "",
+        isWithinWorkingHours: true,
 
         connection: null,
         connectionStarted: false,
@@ -610,9 +613,16 @@
             state.activePlaceId = positiveInteger(result.activePlaceId) || placeId;
             state.activePlaceName = cleanText(result.activePlaceName) || state.activePlaceName;
             state.latestBooking = normalizeBooking(result.latestBooking) || state.latestBooking;
-            state.quickReplies = [];
+            state.quickReplies = normalizeQuickReplies(
+                Array.isArray(result.quickQuestions)
+                    ? result.quickQuestions
+                    : result.quickRepliesJson
+            );
             state.emergencyContact = cleanText(result.emergencyContact) || "";
             state.welcomeMessage = cleanText(result.welcomeMessage) || "";
+            state.offlineReplyEnabled = Boolean(result.offlineReplyEnabled);
+            state.offlineMessage = cleanText(result.offlineMessage) || "";
+            state.isWithinWorkingHours = result.isWithinWorkingHours !== false;
             state.messages = Array.isArray(result.data) ? result.data : [];
             state.renderStartIndex = Math.max(0, state.messages.length - limits.initialMessages);
 
@@ -622,18 +632,16 @@
 
             updatePresenceHeader();
             updateBookingBar(state.latestBooking);
-            renderQuickReplies([]);
+            renderQuickReplies(state.quickReplies);
             renderMessages({ scrollToBottom: true });
             focusRequestedNotificationMessage(id, placeId);
-
-            if (state.welcomeMessage && state.messages.length === 0) {
-                showSystemNotice(state.welcomeMessage, "info", 6000);
-            }
 
             setComposerEnabled(
                 state.chatEnabled && state.activeCustomerCanStart,
                 state.chatEnabled
-                    ? "اضغط Enter للإرسال وShift + Enter لسطر جديد"
+                    ? (!state.isWithinWorkingHours && state.offlineReplyEnabled
+                        ? "خارج وقت العمل؛ يمكنك الإرسال الآن وسيظهر لك الرد الآلي ثم يراجع المالك رسالتك لاحقًا"
+                        : "اضغط Enter للإرسال وShift + Enter لسطر جديد")
                     : "الدردشة متوقفة من إعدادات المنشأة"
             );
 
@@ -1079,10 +1087,6 @@
             return;
         }
 
-        const welcome = state.welcomeMessage
-            ? `<div class="chat-welcome-hint"><i class="bi bi-stars"></i><span>${escapeHtml(state.welcomeMessage)}</span></div>`
-            : "";
-
         elements.messagesArea.innerHTML = `
             <div class="chat-empty-state is-conversation-empty">
                 <span class="chat-empty-state__art" aria-hidden="true">
@@ -1090,7 +1094,6 @@
                 </span>
                 <h3>ابدأ المحادثة مع ${escapeHtml(state.activeCustomerName)}</h3>
                 <p>لا توجد رسائل سابقة داخل هذه المنشأة. اكتب أول رسالة من الأسفل.</p>
-                ${welcome}
             </div>
         `;
     }
@@ -1556,7 +1559,7 @@
        6. الإرسال والتعديل وحالة الفشل
        ========================================================================= */
 
-    async function submitComposer() {
+    async function submitComposer(quickTopic = "") {
         if (!composerIsUsable() || state.isSending) {
             return;
         }
@@ -1575,6 +1578,7 @@
         const payload = {
             receiverId: state.activeCustomerId,
             text,
+            quickTopic: cleanText(quickTopic).toLowerCase(),
             files: state.selectedFiles.map(item => item.file),
             quote: state.reply ? { ...state.reply } : null
         };
@@ -1633,6 +1637,7 @@
             formData.append("receiverId", String(payload.receiverId));
             formData.append("placeId", String(state.activePlaceId));
             formData.append("messageText", payload.text || "");
+            formData.append("quickTopic", payload.quickTopic || "");
             formData.append("quotedText", payload.quote?.text || "");
             formData.append("quotedSender", payload.quote?.sender || "");
             appendAntiForgery(formData);
@@ -1978,20 +1983,35 @@
         elements.quickRepliesTrack.innerHTML = "";
         elements.quickRepliesBar.classList.toggle("d-none", values.length === 0);
 
-        values.forEach(text => {
+        const label = elements.quickRepliesBar.querySelector(".quick-replies-label");
+        if (label) {
+            label.innerHTML = '<i class="bi bi-lightning-charge-fill"></i> أسئلة سريعة';
+        }
+
+        values.forEach(topic => {
             const button = document.createElement("button");
             button.type = "button";
             button.className = "quick-reply-chip";
-            button.innerHTML = `<i class="bi bi-lightning-charge-fill"></i><span>${escapeHtml(text)}</span>`;
+            button.dataset.topicKey = topic.key;
+            button.title = topic.question;
+            button.innerHTML = `<i class="bi bi-lightning-charge-fill"></i><span>${escapeHtml(topic.title)}</span>`;
             button.addEventListener("click", () => {
-                if (!composerIsUsable()) {
+                if (!composerIsUsable() || state.isSending) {
                     return;
                 }
 
                 const current = elements.input.value.trim();
-                elements.input.value = current ? `${current}\n${text}` : text;
+                if (current) {
+                    elements.input.value = `${current}
+${topic.question}`;
+                    elements.input.dispatchEvent(new Event("input", { bubbles: true }));
+                    elements.input.focus();
+                    return;
+                }
+
+                elements.input.value = topic.question;
                 elements.input.dispatchEvent(new Event("input", { bubbles: true }));
-                elements.input.focus();
+                void submitComposer(topic.key);
             });
             elements.quickRepliesTrack.appendChild(button);
         });
@@ -2961,7 +2981,7 @@
             try {
                 source = JSON.parse(trimmed);
             } catch {
-                source = trimmed.split(/\r?\n|,/g);
+                return [];
             }
         }
 
@@ -2969,10 +2989,31 @@
             return [];
         }
 
-        return [...new Set(source.map(item => {
-            if (typeof item === "string") return item.trim();
-            return cleanText(item?.text ?? item?.Text ?? item?.value ?? item?.Value);
-        }).filter(Boolean))].slice(0, 20);
+        const topics = [];
+        const seen = new Set();
+
+        source.forEach(item => {
+            if (!item || typeof item !== "object") return;
+
+            const type = cleanText(item.type ?? item.Type).toLowerCase();
+            const key = cleanText(
+                item.key ?? item.Key ?? item.topicKey ?? item.TopicKey
+            ).toLowerCase();
+
+            if (type !== "customer-topic" && !key) return;
+
+            const title = cleanText(item.title ?? item.Title);
+            const question = cleanText(
+                item.question ?? item.Question ?? item.text ?? item.Text
+            );
+
+            if (!key || !title || !question || seen.has(key)) return;
+
+            seen.add(key);
+            topics.push({ key, title, question });
+        });
+
+        return topics.slice(0, 10);
     }
 
     function escapeHtml(value) {
@@ -2989,7 +3030,16 @@
     }
 
     function textToSafeHtml(value) {
-        return escapeHtml(value).replace(/\n/g, "<br>");
+        const escaped = escapeHtml(value);
+
+        // روابط الموقع التي يولدها النظام فقط: نظهرها كرابط واضح قابل للفتح
+        // مع إبقاء بقية نصوص المحادثة escaped كما كانت دون السماح بـ HTML خام.
+        const withMapLinks = escaped.replace(
+            /https:\/\/www\.google\.com\/maps\/search\/\?api=1&amp;query=[^\s<]+/g,
+            url => `<a href="${url}" target="_blank" rel="noopener noreferrer" class="chat-location-link">فتح الموقع على الخريطة</a>`
+        );
+
+        return withMapLinks.replace(/\n/g, "<br>");
     }
 
     function insertAtCursor(input, text) {

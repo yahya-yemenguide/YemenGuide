@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -10,6 +10,7 @@ using System.IO;
 using System.Linq;
 using System.Security.Claims;
 using System.Text.RegularExpressions;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using YemenGuide.Core.DTOs.Customer;
@@ -292,10 +293,7 @@ namespace YemenGuide.Web.Controllers
                 if (!placesById.TryGetValue(key.PlaceId, out Place? place) ||
                     place.OwnerId != key.OwnerId ||
                     place.Owner == null ||
-                    (
-                        !string.Equals(place.Owner.Role, "Owner", StringComparison.OrdinalIgnoreCase) &&
-                        !string.Equals(place.Owner.Role, "Admin", StringComparison.OrdinalIgnoreCase)
-                    ))
+                    !string.Equals(place.Owner.Role, "Owner", StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
                 }
@@ -402,6 +400,47 @@ namespace YemenGuide.Web.Controllers
             if (conversation == null)
                 return JsonFailure("تعذر تحديد محادثة المنشأة المطلوبة.");
 
+            bool isWithinWorkingHours =
+                IsWithinWorkingHours(conversation.Policy, DateTime.Now);
+
+            // رسالة الترحيب رسالة Chat فعلية من المالك وليست تلميحًا بصريًا.
+            // إذا كانت شاشة المحادثة الحالية لا تحتوي أي رسالة ظاهرة للعميل،
+            // ننشئ رسالة الترحيب مرة واحدة لتظهر كفقاعة مرسلة من المالك.
+            // هذا يشمل حالة أن العميل مسح المحادثة من شاشته ثم فتحها من جديد.
+            if (conversation.Policy?.IsChatEnabled != false &&
+                !string.IsNullOrWhiteSpace(conversation.Policy?.WelcomeMessage))
+            {
+                bool hasVisibleConversation = await ScopedConversationQuery(
+                        customerId,
+                        ownerId,
+                        conversation.Place.PlaceId,
+                        conversation.IncludeLegacyMessages,
+                        includeDeletedForCustomer: false)
+                    .AnyAsync(cancellationToken);
+
+                if (!hasVisibleConversation)
+                {
+                    Chat welcomeMessage = new Chat
+                    {
+                        SenderId = ownerId,
+                        ReceiverId = customerId,
+                        PlaceId = conversation.Place.PlaceId,
+                        MessageText = conversation.Policy!.WelcomeMessage!.Trim(),
+                        AttachmentUrl = string.Empty,
+                        SendTime = DateTime.Now,
+                        IsRead = true,
+                        IsDeletedForSender = false,
+                        IsDeletedForReceiver = false,
+                        IsEdited = false,
+                        IsReportMessage = false,
+                        ReportId = null
+                    };
+
+                    _context.Chats.Add(welcomeMessage);
+                    await _context.SaveChangesAsync(cancellationToken);
+                }
+            }
+
             List<Chat> rawMessages = await ScopedConversationQuery(
                     customerId,
                     ownerId,
@@ -501,9 +540,13 @@ namespace YemenGuide.Web.Controllers
                     conversation.Place.LogoImage,
                     conversation.Place.CoverImage),
                 chatEnabled = conversation.Policy?.IsChatEnabled != false,
+                isWithinWorkingHours,
                 welcomeMessage = conversation.Policy?.WelcomeMessage ?? string.Empty,
                 offlineReplyEnabled = conversation.Policy?.OfflineReplyToggle ?? false,
                 offlineMessage = conversation.Policy?.OfflineMessage ?? string.Empty,
+                // نعيد الأسئلة الفعلية الجاهزة للعرض بدل الاعتماد على قراءة JSON في المتصفح فقط.
+                // إذا لم تُحفظ إعدادات الأسئلة الجديدة بعد نستخدم الاختيارات الافتراضية الظاهرة للمالك.
+                quickQuestions = BuildCustomerQuickQuestions(conversation.Policy?.QuickRepliesJson),
                 quickRepliesJson = conversation.Policy?.QuickRepliesJson ?? "[]",
                 emergencyContact = conversation.Policy?.EmergencyContact ?? string.Empty,
                 latestBooking
@@ -519,6 +562,7 @@ namespace YemenGuide.Web.Controllers
             [FromForm] int receiverId,
             [FromForm] int? placeId,
             [FromForm] string? messageText,
+            [FromForm] string? quickTopic,
             [FromForm] string? quotedText,
             [FromForm] string? quotedSender,
             CancellationToken cancellationToken)
@@ -555,6 +599,80 @@ namespace YemenGuide.Web.Controllers
             if (filesError != null)
                 return JsonFailure(filesError);
 
+            bool isWithinWorkingHours =
+                IsWithinWorkingHours(conversation.Policy, DateTime.Now);
+
+            bool isOfflineAutomaticReply = false;
+            bool isTopicAutomaticReply = false;
+            string? automaticReplyText = null;
+
+            // الأسئلة التي يستطيع النظام الإجابة عنها من البيانات الحالية تعمل طوال الوقت،
+            // حتى لو كانت المنشأة خارج وقت العمل؛ لأنها لا تحتاج حضور المالك.
+            // وإذا لم يفهم النظام السؤال بثقة، ننتقل لرسالة خارج أوقات العمل (إن كانت مفعلة).
+            // لا نخمّن في الرسائل التي تحتوي على مرفقات، ولا نحاول تفسير رسالة فارغة.
+            if (attachments.Count == 0 && !string.IsNullOrWhiteSpace(normalizedText))
+            {
+                HashSet<string> enabledTopics =
+                    GetEnabledCustomerTopics(conversation.Policy?.QuickRepliesJson);
+
+                string requestedQuickTopic =
+                    (quickTopic ?? string.Empty).Trim().ToLowerInvariant();
+
+                // عند الضغط على زر سؤال سريع يرسل العميل مفتاح الموضوع صراحةً،
+                // فلا نعتمد على تخمين النص. الكتابة الحرة فقط تمر عبر المطابقة اللغوية.
+                string? detectedTopic =
+                    IsQuickQuestionTopic(requestedQuickTopic) &&
+                    enabledTopics.Contains(requestedQuickTopic)
+                        ? requestedQuickTopic
+                        : DetectCustomerTopic(normalizedText);
+
+                if (!string.IsNullOrWhiteSpace(detectedTopic))
+                {
+                    // إذا سأل العميل عن قاعدة مخصصة كتبها المالك، نعطي القاعدة نفسها
+                    // بدل الاكتفاء بملخص القواعد الأربع الثابتة.
+                    if (detectedTopic == "rules" && string.IsNullOrWhiteSpace(requestedQuickTopic))
+                    {
+                        automaticReplyText = BuildCustomHouseRuleReply(
+                            normalizedText,
+                            conversation.Place.Terms);
+                    }
+
+                    if (string.IsNullOrWhiteSpace(automaticReplyText))
+                    {
+                        automaticReplyText = await BuildAutomaticTopicReplyAsync(
+                            detectedTopic,
+                            conversation,
+                            cancellationToken);
+                    }
+
+                    isTopicAutomaticReply =
+                        !string.IsNullOrWhiteSpace(automaticReplyText);
+                }
+
+                // حتى لو لم يقع السؤال تحت موضوع ثابت، نحاول مطابقته مع أي قاعدة
+                // إضافية حفظها المالك للمنشأة. إذا لم نجد تطابقًا واضحًا لا نخمن.
+                if (!isTopicAutomaticReply && string.IsNullOrWhiteSpace(requestedQuickTopic))
+                {
+                    automaticReplyText = BuildCustomHouseRuleReply(
+                        normalizedText,
+                        conversation.Place.Terms);
+
+                    isTopicAutomaticReply =
+                        !string.IsNullOrWhiteSpace(automaticReplyText);
+                }
+
+                // الرد خارج أوقات العمل هو fallback فقط للأسئلة/الرسائل التي
+                // لم يستطع النظام الإجابة عنها، وليس بديلًا عن الأسئلة السريعة.
+                if (!isTopicAutomaticReply &&
+                    !isWithinWorkingHours &&
+                    conversation.Policy?.OfflineReplyToggle == true &&
+                    !string.IsNullOrWhiteSpace(conversation.Policy.OfflineMessage))
+                {
+                    automaticReplyText = conversation.Policy.OfflineMessage!.Trim();
+                    isOfflineAutomaticReply = true;
+                }
+            }
+
             string finalMessage = BuildMessageWithQuote(
                 normalizedText,
                 quotedText,
@@ -576,7 +694,7 @@ namespace YemenGuide.Web.Controllers
                         MessageText = finalMessage,
                         AttachmentUrl = string.Empty,
                         SendTime = now,
-                        IsRead = false,
+                        IsRead = isTopicAutomaticReply,
                         IsDeletedForSender = false,
                         IsDeletedForReceiver = false,
                         IsEdited = false,
@@ -618,7 +736,7 @@ namespace YemenGuide.Web.Controllers
                             MessageText = index == 0 ? finalMessage : string.Empty,
                             AttachmentUrl = $"/uploads/chats/{storedFileName}",
                             SendTime = now.AddMilliseconds(index),
-                            IsRead = false,
+                            IsRead = isTopicAutomaticReply,
                             IsDeletedForSender = false,
                             IsDeletedForReceiver = false,
                             IsEdited = false,
@@ -637,6 +755,30 @@ namespace YemenGuide.Web.Controllers
                     TryDeletePhysicalFile(physicalPath);
 
                 return JsonFailure("تعذر حفظ الرسالة حاليًا، يرجى إعادة المحاولة.");
+            }
+
+            Chat? automaticReply = null;
+
+            if (!string.IsNullOrWhiteSpace(automaticReplyText))
+            {
+                automaticReply = new Chat
+                {
+                    SenderId = receiverId,
+                    ReceiverId = customerId,
+                    PlaceId = conversation.Place.PlaceId,
+                    MessageText = automaticReplyText.Trim(),
+                    AttachmentUrl = string.Empty,
+                    SendTime = now.AddMilliseconds(messagesToSave.Count + 5),
+                    IsRead = false,
+                    IsDeletedForSender = false,
+                    IsDeletedForReceiver = false,
+                    IsEdited = false,
+                    IsReportMessage = false,
+                    ReportId = null
+                };
+
+                _context.Chats.Add(automaticReply);
+                await _context.SaveChangesAsync(cancellationToken);
             }
 
             foreach (Chat message in messagesToSave)
@@ -667,8 +809,40 @@ namespace YemenGuide.Web.Controllers
                         cancellationToken);
             }
 
-            try
+            if (automaticReply != null)
             {
+                ChatMessageDto automaticDto = BuildMessageDto(
+                    automaticReply,
+                    customerId,
+                    conversation.Place.PlaceId);
+
+                await _hubContext.Clients.User(customerId.ToString())
+                    .SendAsync(
+                        "ReceiveMessage",
+                        new
+                        {
+                            messageId = automaticDto.MessageId,
+                            senderId = automaticDto.SenderId,
+                            receiverId = automaticDto.ReceiverId,
+                            placeId = automaticDto.PlaceId,
+                            text = automaticDto.Text ?? string.Empty,
+                            time = automaticDto.Time ?? string.Empty,
+                            attachmentUrl = automaticDto.AttachmentUrl ?? string.Empty,
+                            attachmentName = automaticDto.AttachmentName ?? string.Empty,
+                            attachmentSize = automaticDto.AttachmentSize ?? string.Empty,
+                            isImage = automaticDto.IsImage,
+                            isVideo = automaticDto.IsVideo,
+                            sendTimeRaw = automaticDto.SendTimeRaw
+                        },
+                        cancellationToken);
+            }
+
+            // السؤال الذي أجاب عنه النظام بثقة لا يحتاج إزعاج المالك بإشعار جديد.
+            // خارج وقت العمل تبقى رسالة العميل غير مقروءة ويصل إشعار للمالك ليتابعها لاحقًا.
+            if (!isTopicAutomaticReply || isOfflineAutomaticReply)
+            {
+                try
+                {
                 string messagePreview;
 
                 if (!string.IsNullOrWhiteSpace(normalizedText))
@@ -706,17 +880,22 @@ namespace YemenGuide.Web.Controllers
                             messagesToSave.FirstOrDefault()?.MessageId
                     },
                     cancellationToken);
-            }
-            catch (Exception notificationException)
-            {
-                Console.WriteLine(
-                    $"Chat notification error: {notificationException.Message}");
+                }
+                catch (Exception notificationException)
+                {
+                    Console.WriteLine(
+                        $"Chat notification error: {notificationException.Message}");
+                }
             }
 
             return Json(new
             {
                 success = true,
                 placeId = conversation.Place.PlaceId,
+                autoReplied = automaticReply != null,
+                autoReplyKind = isOfflineAutomaticReply
+                    ? "offline"
+                    : isTopicAutomaticReply ? "topic" : string.Empty,
                 messageIds = messagesToSave
                     .Select(message => message.MessageId)
                     .ToArray()
@@ -1084,10 +1263,7 @@ namespace YemenGuide.Web.Controllers
 
             if (place == null ||
                 place.Owner == null ||
-                (
-                        !string.Equals(place.Owner.Role, "Owner", StringComparison.OrdinalIgnoreCase) &&
-                        !string.Equals(place.Owner.Role, "Admin", StringComparison.OrdinalIgnoreCase)
-                    ))
+                !string.Equals(place.Owner.Role, "Owner", StringComparison.OrdinalIgnoreCase))
             {
                 return null;
             }
@@ -1358,7 +1534,8 @@ namespace YemenGuide.Web.Controllers
                 SenderId = message.SenderId,
                 ReceiverId = message.ReceiverId,
                 PlaceId = message.PlaceId ?? fallbackPlaceId,
-                Text = NormalizeMessageText(message.MessageText),
+                Text = StripLegacyAutomaticReplyLabel(
+                    NormalizeMessageText(message.MessageText)),
                 Time = FormatChatTime(message.SendTime),
                 IsSentByMe = message.SenderId == customerId,
                 IsRead = message.IsRead,
@@ -1370,6 +1547,21 @@ namespace YemenGuide.Web.Controllers
                 IsVideo = IsVideoExtension(extension),
                 SendTimeRaw = message.SendTime
             };
+        }
+
+        private static string StripLegacyAutomaticReplyLabel(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return string.Empty;
+
+            const string legacyLabel = "⚡ رد تلقائي من النظام:";
+            string trimmed = text.TrimStart();
+
+            if (!trimmed.StartsWith(legacyLabel, StringComparison.Ordinal))
+                return text;
+
+            return trimmed.Substring(legacyLabel.Length)
+                .TrimStart('\r', '\n', ' ');
         }
 
         private static string NormalizeMessageText(string? value)
@@ -1532,6 +1724,1137 @@ namespace YemenGuide.Web.Controllers
             return string.Equals(extension, ".mp4", StringComparison.OrdinalIgnoreCase) ||
                    string.Equals(extension, ".webm", StringComparison.OrdinalIgnoreCase) ||
                    string.Equals(extension, ".mov", StringComparison.OrdinalIgnoreCase);
+        }
+
+        // =====================================================================
+        // الأسئلة السريعة والردود الآلية للعميل
+        // =====================================================================
+
+        private static HashSet<string> GetEnabledCustomerTopics(string? jsonText)
+        {
+            HashSet<string> topics = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            bool hasExplicitTopicConfiguration = false;
+
+            if (!string.IsNullOrWhiteSpace(jsonText))
+            {
+                try
+                {
+                    using JsonDocument document = JsonDocument.Parse(jsonText);
+                    if (document.RootElement.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (JsonElement item in document.RootElement.EnumerateArray())
+                        {
+                            if (item.ValueKind != JsonValueKind.Object)
+                                continue;
+
+                            string type = GetJsonString(item, "type", "Type");
+
+                            if (string.Equals(
+                                type,
+                                "customer-topic-config",
+                                StringComparison.OrdinalIgnoreCase))
+                            {
+                                hasExplicitTopicConfiguration = true;
+                                continue;
+                            }
+
+                            string key = GetJsonString(
+                                item,
+                                "key",
+                                "Key",
+                                "topicKey",
+                                "TopicKey");
+
+                            if (!string.Equals(
+                                    type,
+                                    "customer-topic",
+                                    StringComparison.OrdinalIgnoreCase) &&
+                                string.IsNullOrWhiteSpace(key))
+                            {
+                                continue;
+                            }
+
+                            key = key.Trim().ToLowerInvariant();
+                            if (IsQuickQuestionTopic(key))
+                                topics.Add(key);
+                        }
+                    }
+                }
+                catch (JsonException)
+                {
+                    // بيانات قديمة أو غير صالحة لا نستخدمها للتخمين.
+                }
+            }
+
+            // واجهة المالك الجديدة تعرض هذه الخيارات مفعلة افتراضيًا.
+            // لذلك ما لم يكن المالك قد حفظ إعدادًا صريحًا، نجعل السلوك الفعلي
+            // مطابقًا لما يراه في الواجهة بدل أن تظهر الأزرار مفعلة ولا تصل للعميل.
+            if (!hasExplicitTopicConfiguration && topics.Count == 0)
+            {
+                topics.UnionWith(new[]
+                {
+                    "price",
+                    "availability",
+                    "cancellation",
+                    "checkinout",
+                    "payment"
+                });
+            }
+
+            return topics;
+        }
+
+        private static List<Dictionary<string, string>> BuildCustomerQuickQuestions(
+            string? jsonText)
+        {
+            HashSet<string> enabledTopics = GetEnabledCustomerTopics(jsonText);
+            List<Dictionary<string, string>> questions =
+                new List<Dictionary<string, string>>();
+
+            void Add(string key, string title, string question)
+            {
+                if (!enabledTopics.Contains(key))
+                    return;
+
+                questions.Add(new Dictionary<string, string>
+                {
+                    ["key"] = key,
+                    ["title"] = title,
+                    ["question"] = question
+                });
+            }
+
+            Add("price", "الأسعار", "بكم الأسعار حاليًا؟");
+            Add("availability", "التوفر", "هل توجد وحدات متاحة؟");
+            Add("cancellation", "الإلغاء والاسترداد", "ما سياسة الإلغاء والاسترداد؟");
+            Add("checkinout", "الدخول والخروج", "ما أوقات الدخول والخروج؟");
+            Add("payment", "العربون والدفع", "ما شروط العربون والدفع؟");
+
+            return questions;
+        }
+
+        private static bool IsQuickQuestionTopic(string key)
+        {
+            return key == "price" ||
+                   key == "availability" ||
+                   key == "cancellation" ||
+                   key == "checkinout" ||
+                   key == "payment";
+        }
+
+        private static string? DetectCustomerTopic(string messageText)
+        {
+            string text = NormalizeArabicIntentText(messageText);
+            if (string.IsNullOrWhiteSpace(text))
+                return null;
+
+            bool HasAny(params string[] values) =>
+                values.Any(value => text.Contains(value, StringComparison.Ordinal));
+
+            // الكتابة الحرة لا تعتمد على الأزرار التي اختار المالك إظهارها.
+            // الأزرار مجرد اختصارات، أما أي سؤال واضح عن بيانات المنشأة أو سياساتها
+            // فنحاول الإجابة عنه من البيانات الحالية فقط، بدون تخمين.
+
+            // نبدأ بالمعاني الأكثر تحديدًا حتى لا تُصنّف عبارة مثل "يرجع العربون؟"
+            // على أنها دفع بدل سياسة إلغاء واسترداد.
+            if (HasAny(
+                "الغاء", "الغي", "الغيه", "الغيت", "لغيت", "اللغاء",
+                "استرداد", "استرجاع", "كنسل", "كنسلت", "بطلت الحجز",
+                "يرجع العربون", "يرجع لي العربون", "ارجع العربون", "ارجاع العربون",
+                "الفلوس ترجع", "المبلغ يرجع", "يرجع لي المبلغ", "لو بطلت الحجز",
+                "عدم حضور", "ما حضرت", "ما جيت"))
+            {
+                return "cancellation";
+            }
+
+            if (HasAny(
+                "دخول", "خروج", "ادخل", "اخرج", "اطلع", "استلام", "تسليم",
+                "استلم", "اسلم", "شيك ان", "شيك اوت", "متى ندخل", "متى نطلع",
+                "متى الدخول", "متى الخروج", "وقت الوصول", "وقت المغادره"))
+            {
+                return "checkinout";
+            }
+
+            if (HasAny(
+                "متوفر", "متوفره", "متاح", "متاحه", "فاضي", "فاضيه", "فاضيين",
+                "شاغر", "شاغره", "في غرف", "فيه غرف", "عندكم غرف", "معكم غرف",
+                "في وحدات", "فيه وحدات", "عندكم وحدات", "توفر"))
+            {
+                return "availability";
+            }
+
+            if (HasAny(
+                "عربون", "دفع", "ادفع", "الدفع", "مقدم", "مقدما",
+                "مهله السداد", "مهلة السداد", "كاش", "نقد", "تحويل"))
+            {
+                return "payment";
+            }
+
+            if (HasAny(
+                "سعر", "اسعار", "بكم", "كم حق", "كم يكلف", "التكلفه", "تكلفه",
+                "قيمه", "قيمة", "حق الليله", "حق الليلة", "كم الليله", "كم الليلة",
+                "كم الغرفه", "كم الغرفة", "سعر الغرفه", "سعر الغرفة"))
+            {
+                return "price";
+            }
+
+            if (HasAny(
+                "سياسه التشغيل", "نظام التشغيل", "كيف التشغيل", "طريقه التشغيل",
+                "الية التشغيل", "اليه التشغيل", "نظام المواعيد", "نظام الفترات",
+                "فترات التشغيل", "فترات الحجز", "ورديات", "ورديه", "شفت", "شفتات",
+                "قبل كم احجز", "متى اقدر احجز", "اقدر احجز قبل", "كم شهر احجز",
+                "ايام الاغلاق", "ايام مغلقه"))
+            {
+                return "operation";
+            }
+
+            if (HasAny(
+                "ضمان", "ضمانات", "الضمانات", "ضمانه", "تأمين", "تامين",
+                "متطلبات الضمان", "الضمان المطلوب", "الضمانات المطلوبه",
+                "اثبات الهويه", "اثبات هوية", "بطاقه شخصيه", "بطاقة شخصية"))
+            {
+                return "security";
+            }
+
+            if (HasAny(
+                "تدخين", "دخان", "سيجاره", "سيجارة", "شيشه", "شيشة",
+                "مدخنين", "مسموح التدخين", "ممنوع التدخين"))
+            {
+                return "smoking";
+            }
+
+            if (HasAny(
+                "عوائل", "عائلات", "عائله", "عائلة", "عزاب", "عزابي",
+                "للعائلات", "للعوائل", "عائلي"))
+            {
+                return "families";
+            }
+
+            if (HasAny(
+                "حفله", "حفلة", "حفلات", "مناسبه", "مناسبة", "مناسبات",
+                "فعاليه", "فعالية", "فعاليات"))
+            {
+                return "parties";
+            }
+
+            if (HasAny(
+                "قات", "مضغ القات", "القات مسموح", "القات ممنوع"))
+            {
+                return "qat";
+            }
+
+            if (HasAny(
+                "القواعد", "قواعد المنشأه", "قواعد المنشاه", "سياسات المنشأه",
+                "سياسات المنشاه", "قوانين المنشأه", "قوانين المنشاه"))
+            {
+                return "rules";
+            }
+
+            if (HasAny(
+                "رسوم", "ضريبه", "ضريبة", "تنظيف", "رسوم التنظيف", "الضريبه",
+                "تكاليف اضافيه", "تكلفة اضافية", "رسوم اضافيه"))
+            {
+                return "fees";
+            }
+
+            if (HasAny(
+                "خدمات", "الخدمات", "مرافق", "المرافق", "مميزات", "ميزات",
+                "واي فاي", "وايفاي", "انترنت", "مسبح", "موقف", "مواقف",
+                "باقات", "الباقات"))
+            {
+                return "services";
+            }
+
+            // الموقع والاتجاهات: نلتقط الصيغ المباشرة والعامية، لكن لا نستخدم
+            // كلمة "الوصول" وحدها حتى لا نخلطها مع وقت الوصول/الدخول.
+            if (HasAny(
+                "كيف اوصل لكم", "كيف اوصل عندكم", "كيف اصل لكم", "كيف اصل عندكم",
+                "كيف اجيكم", "كيف اجي لكم", "كيف اجي عندكم", "كيف اروح لكم",
+                "وين موقعكم", "فين موقعكم", "اين موقعكم", "وين مكانكم", "فين مكانكم",
+                "وينكم", "فينكم", "موقعكم", "موقع المنشاه", "موقع المنشاه",
+                "ماهو الموقع", "ما هو الموقع", "ما الموقع", "العنوان", "عنوانكم",
+                "لوكيشن", "ارسل الموقع", "ارسل لي الموقع", "ابعث الموقع",
+                "الخريطه", "خريطه الموقع", "الاتجاهات", "طريق الوصول"))
+            {
+                return "location";
+            }
+
+            if (HasAny(
+                "رقم التواصل", "رقم الطوارئ", "هاتف", "جوال", "تواصل",
+                "البريد", "ايميل", "الايميل", "البريد الالكتروني"))
+            {
+                return "contact";
+            }
+
+            return null;
+        }
+
+        private async Task<string?> BuildAutomaticTopicReplyAsync(
+            string topic,
+            ConversationContext conversation,
+            CancellationToken cancellationToken)
+        {
+            switch (topic)
+            {
+                case "price":
+                    return await BuildPriceReplyAsync(
+                        conversation.Place,
+                        cancellationToken);
+
+                case "availability":
+                    return BuildAvailabilityReply(conversation.Place);
+
+                case "cancellation":
+                    return BuildCancellationReply(conversation.Policy);
+
+                case "checkinout":
+                    return BuildCheckInOutReply(
+                        conversation.Policy,
+                        conversation.Place);
+
+                case "payment":
+                    return BuildPaymentReply(
+                        conversation.Policy,
+                        conversation.Place);
+
+                case "operation":
+                    return BuildOperationReply(conversation.Policy);
+
+                case "security":
+                    return BuildSecurityReply(conversation.Policy);
+
+                case "smoking":
+                    return BuildSmokingReply(conversation.Policy);
+
+                case "families":
+                    return BuildFamiliesReply(conversation.Policy);
+
+                case "parties":
+                    return BuildPartiesReply(conversation.Policy);
+
+                case "qat":
+                    return BuildQatReply(conversation.Policy);
+
+                case "rules":
+                    return BuildFacilityRulesReply(
+                        conversation.Policy,
+                        conversation.Place.Terms);
+
+                case "fees":
+                    return BuildFeesReply(conversation.Policy);
+
+                case "services":
+                    return await BuildServicesReplyAsync(
+                        conversation.Place,
+                        cancellationToken);
+
+                case "location":
+                    return BuildLocationReply(conversation.Place);
+
+                case "contact":
+                    return BuildContactReply(conversation.Policy, conversation.Place);
+
+                default:
+                    return null;
+            }
+        }
+
+        private async Task<string> BuildPriceReplyAsync(
+            Place place,
+            CancellationToken cancellationToken)
+        {
+            List<decimal> roomPrices = await _context.Rooms
+                .AsNoTracking()
+                .Where(room =>
+                    room.PlaceId == place.PlaceId &&
+                    room.IsAvailable != false &&
+                    room.Price > 0)
+                .Select(room => room.Price)
+                .ToListAsync(cancellationToken);
+
+            List<decimal> packagePrices = await _context.PlacePackages
+                .AsNoTracking()
+                .Where(package =>
+                    package.PlaceId == place.PlaceId &&
+                    package.IsActive != false &&
+                    package.Price > 0)
+                .Select(package => package.Price)
+                .ToListAsync(cancellationToken);
+
+            List<decimal> prices = roomPrices
+                .Concat(packagePrices)
+                .Where(price => price > 0)
+                .ToList();
+
+            if (prices.Count == 0 && place.Price > 0)
+                prices.Add(place.Price);
+
+            if (prices.Count == 0)
+            {
+                return "لا يوجد سعر منشور يمكنني تأكيده الآن. افتح تفاصيل المنشأة أو اكتب للمالك وسيعطيك السعر المناسب دون تخمين.";
+            }
+
+            decimal minimum = prices.Min();
+            decimal maximum = prices.Max();
+
+            if (minimum == maximum)
+            {
+                return $"السعر الأساسي حاليًا هو {minimum:N0}. قد يتغير السعر النهائي حسب الوحدة أو الباقة والتاريخ والعروض، وسيظهر لك السعر النهائي قبل تأكيد الحجز.";
+            }
+
+            return $"الأسعار الأساسية حاليًا تبدأ من {minimum:N0} وتصل إلى {maximum:N0} حسب الوحدة أو الباقة. السعر النهائي قد يتغير حسب التاريخ والعروض وسيظهر لك قبل تأكيد الحجز.";
+        }
+
+        private static string BuildAvailabilityReply(Place place)
+        {
+            if (place.IsAvailable == false)
+            {
+                return "المنشأة لا تستقبل حجوزات جديدة حاليًا حسب حالة التوفر الحالية.";
+            }
+
+            return "التوفر يتغير حسب تاريخ بداية الحجز ونهايته والوحدة المطلوبة. حدّد التاريخ من صفحة الحجز ليتم فحص التوفر الفعلي؛ لا أؤكد وجود وحدة بدون فترة محددة حتى لا أعطيك معلومة غير دقيقة.";
+        }
+
+        private static string BuildCancellationReply(PlacePolicy? policy)
+        {
+            if (policy == null)
+                return "لم تُحفظ سياسة إلغاء يمكنني تأكيدها لهذه المنشأة بعد. يمكنك إرسال سؤالك للمالك مباشرة.";
+
+            List<string> parts = new List<string>();
+
+            if (policy.FreeCancellationHours > 0)
+            {
+                parts.Add($"الإلغاء المجاني متاح قبل موعد الحجز بـ {policy.FreeCancellationHours} ساعة");
+            }
+
+            if (policy.ImmediateGracePeriod == true)
+            {
+                parts.Add("وتوجد فترة تراجع مجانية خلال أول 24 ساعة من الدفع وفق شروط السياسة");
+            }
+
+            string penalty = BuildCancellationPenaltyText(policy);
+            if (!string.IsNullOrWhiteSpace(penalty))
+                parts.Add(penalty);
+
+            if (policy.ConfiscateOnNoShow == true)
+            {
+                parts.Add($"وفي حالة عدم الحضور يمكن تطبيق المصادرة بعد مهلة الحضور المحددة ({Math.Max(0, policy.NoShowGraceMinutes)} دقيقة)");
+            }
+
+            if (policy.RefundProcessingDays > 0)
+            {
+                parts.Add($"ومدة معالجة الاسترداد المتوقعة {policy.RefundProcessingDays} يوم عمل");
+            }
+
+            if (string.Equals(
+                policy.RefundTransferFee,
+                "CustomerPays",
+                StringComparison.OrdinalIgnoreCase))
+            {
+                parts.Add("ورسوم التحويل يتحملها الزبون");
+            }
+            else if (string.Equals(
+                policy.RefundTransferFee,
+                "FacilityPays",
+                StringComparison.OrdinalIgnoreCase))
+            {
+                parts.Add("ورسوم التحويل تتحملها المنشأة");
+            }
+
+            return parts.Count > 0
+                ? string.Join("، ", parts) + "."
+                : "سياسة الإلغاء محفوظة، لكن لا توجد تفاصيل كافية لإعطاء جواب دقيق تلقائيًا. يمكنك إرسال سؤالك للمالك.";
+        }
+
+        private static string BuildCancellationPenaltyText(PlacePolicy policy)
+        {
+            string type = policy.PenaltyType?.Trim() ?? string.Empty;
+
+            if (string.Equals(type, "LoseDeposit", StringComparison.OrdinalIgnoreCase))
+                return "وبعد انتهاء السماح قد تتم مصادرة العربون بالكامل";
+
+            if (string.Equals(type, "LoseFirstNight", StringComparison.OrdinalIgnoreCase))
+                return "وبعد انتهاء السماح قد تُخصم قيمة الليلة الأولى";
+
+            if (string.Equals(type, "DeductPercentage", StringComparison.OrdinalIgnoreCase) &&
+                policy.PenaltyValue > 0)
+            {
+                return $"وبعد انتهاء السماح تُطبق غرامة بنسبة {policy.PenaltyValue:N0}%";
+            }
+
+            if (string.Equals(type, "DeductFixed", StringComparison.OrdinalIgnoreCase) &&
+                policy.PenaltyValue > 0)
+            {
+                return $"وبعد انتهاء السماح تُطبق غرامة ثابتة بقيمة {policy.PenaltyValue:N0}";
+            }
+
+            return string.Empty;
+        }
+
+        private static string BuildCheckInOutReply(
+            PlacePolicy? policy,
+            Place place)
+        {
+            string checkIn = FirstNonEmpty(policy?.CheckInTime, place.CheckInTime) ?? string.Empty;
+            string checkOut = FirstNonEmpty(policy?.CheckOutTime, place.CheckOutTime) ?? string.Empty;
+
+            if (string.IsNullOrWhiteSpace(checkIn) && string.IsNullOrWhiteSpace(checkOut))
+            {
+                return "لم تُحدد أوقات الدخول والخروج في النظام لهذه المنشأة بعد. يمكنك سؤال المالك مباشرة.";
+            }
+
+            if (!string.IsNullOrWhiteSpace(checkIn) && !string.IsNullOrWhiteSpace(checkOut))
+                return $"وقت الدخول/الاستلام المعتمد حاليًا {checkIn}، ووقت الخروج/التسليم {checkOut}.";
+
+            return !string.IsNullOrWhiteSpace(checkIn)
+                ? $"وقت الدخول/الاستلام المعتمد حاليًا {checkIn}. وقت الخروج غير محدد في السياسة الحالية."
+                : $"وقت الخروج/التسليم المعتمد حاليًا {checkOut}. وقت الدخول غير محدد في السياسة الحالية.";
+        }
+
+        private static string BuildPaymentReply(
+            PlacePolicy? policy,
+            Place place)
+        {
+            List<string> parts = new List<string>();
+
+            if (policy != null)
+            {
+                List<string> depositRules = ParseDepositPolicyDescriptions(
+                    policy.DepositPoliciesJson);
+
+                if (depositRules.Count > 0)
+                    parts.Add(string.Join("، ", depositRules.Take(2)));
+
+                if (policy.PaymentTimeout > 0)
+                    parts.Add($"مهلة السداد الحالية {policy.PaymentTimeout} ساعة");
+            }
+
+            if (parts.Count == 0 && place.IsDepositRequired && place.DepositAmount > 0)
+            {
+                string currency = string.IsNullOrWhiteSpace(place.DepositCurrency)
+                    ? string.Empty
+                    : $" {place.DepositCurrency.Trim()}";
+
+                parts.Add($"العربون المطلوب حاليًا {place.DepositAmount:N0}{currency}");
+            }
+
+            if (place.AllowCashOnArrival == true || place.IsCashOnArrival == true)
+                parts.Add("والدفع النقدي عند الوصول متاح حسب إعدادات المنشأة");
+
+            return parts.Count > 0
+                ? string.Join("، ", parts) + "."
+                : "لا توجد تفاصيل دفع مؤكدة يمكنني عرضها تلقائيًا الآن. ستظهر لك طريقة الدفع المطلوبة ضمن خطوات الحجز، ويمكنك سؤال المالك عند الحاجة.";
+        }
+
+        private static string BuildOperationReply(PlacePolicy? policy)
+        {
+            if (policy == null)
+                return "لم تُحفظ إعدادات تشغيل يمكنني تأكيدها لهذه المنشأة بعد. يمكنك سؤال المالك مباشرة.";
+
+            List<string> parts = new List<string>();
+            string mode = (policy.OperationSystemMode ?? string.Empty).Trim();
+
+            if (string.Equals(mode, "FullDay", StringComparison.OrdinalIgnoreCase))
+            {
+                parts.Add("نظام التشغيل الحالي هو اليوم الكامل");
+
+                if (!string.IsNullOrWhiteSpace(policy.CheckInTime))
+                    parts.Add($"وقت الدخول/الاستلام {policy.CheckInTime}");
+
+                if (!string.IsNullOrWhiteSpace(policy.CheckOutTime))
+                    parts.Add($"وقت الخروج/التسليم {policy.CheckOutTime}");
+            }
+            else if (string.Equals(mode, "Shifts", StringComparison.OrdinalIgnoreCase))
+            {
+                List<string> shifts = ParseShiftDescriptions(policy.ShiftsJson);
+                parts.Add(shifts.Count > 0
+                    ? "نظام التشغيل الحالي يعتمد على الفترات: " + string.Join("، ", shifts.Take(5))
+                    : "نظام التشغيل الحالي يعتمد على الفترات، لكن تفاصيل الفترات غير مكتملة");
+            }
+            else if (!string.IsNullOrWhiteSpace(mode))
+            {
+                parts.Add($"نظام التشغيل الحالي هو {mode}");
+            }
+
+            if (policy.BufferTimeHours > 0)
+                parts.Add($"الفاصل التشغيلي بين الحجوزات {policy.BufferTimeHours} ساعة");
+
+            if (policy.MinimumNoticeHours > 0)
+                parts.Add($"أقل مهلة قبل الحجز {policy.MinimumNoticeHours} ساعة");
+
+            if (policy.MaximumHorizonMonths > 0)
+                parts.Add($"ويمكن الحجز مقدمًا حتى {policy.MaximumHorizonMonths} شهر");
+
+            List<string> closedDays = ParseClosedDays(policy.ClosedDaysCsv);
+            if (closedDays.Count > 0)
+                parts.Add("أيام الإغلاق الحالية: " + string.Join("، ", closedDays));
+
+            return parts.Count > 0
+                ? string.Join("، ", parts) + "."
+                : "إعدادات التشغيل موجودة، لكن لا توجد تفاصيل كافية لإعطاء إجابة دقيقة حاليًا. يمكنك سؤال المالك.";
+        }
+
+        private static string BuildSecurityReply(PlacePolicy? policy)
+        {
+            if (policy == null)
+                return "لم تُحفظ متطلبات ضمان يمكنني تأكيدها لهذه المنشأة بعد. يمكنك سؤال المالك مباشرة.";
+
+            List<string> guarantees = ParseSimpleStringList(policy.SecurityPoliciesJson);
+
+            if (guarantees.Count == 0)
+                return "لا توجد ضمانات أو متطلبات سلامة مفصلة حاليًا في سياسة المنشأة.";
+
+            return "الضمانات والمتطلبات الحالية: " +
+                   string.Join("، ", guarantees.Take(8)) + ".";
+        }
+
+        private static string BuildSmokingReply(PlacePolicy? policy)
+        {
+            if (policy == null)
+                return "لا أستطيع تأكيد سياسة التدخين الآن. يمكنك سؤال المالك مباشرة.";
+
+            return policy.AllowSmoking
+                ? "نعم، المنشأة تسمح بالتدخين."
+                : "لا، المنشأة لا تسمح بالتدخين.";
+        }
+
+        private static string BuildFamiliesReply(PlacePolicy? policy)
+        {
+            if (policy == null)
+                return "لا أستطيع تأكيد سياسة العائلات الآن. يمكنك سؤال المالك مباشرة.";
+
+            return policy.ForFamiliesOnly
+                ? "المنشأة مخصصة للعائلات فقط."
+                : "المنشأة ليست مخصصة للعائلات فقط.";
+        }
+
+        private static string BuildPartiesReply(PlacePolicy? policy)
+        {
+            if (policy == null)
+                return "لا أستطيع تأكيد سياسة الحفلات والمناسبات الآن. يمكنك سؤال المالك مباشرة.";
+
+            return policy.AllowParties
+                ? "نعم، المنشأة تسمح بالحفلات والمناسبات."
+                : "لا، المنشأة لا تسمح بالحفلات والمناسبات.";
+        }
+
+        private static string BuildQatReply(PlacePolicy? policy)
+        {
+            if (policy == null)
+                return "لا أستطيع تأكيد سياسة القات الآن. يمكنك سؤال المالك مباشرة.";
+
+            return policy.AllowQatInside
+                ? "نعم، المنشأة تسمح بالقات داخل المنشأة."
+                : "لا، المنشأة لا تسمح بالقات داخل المنشأة.";
+        }
+
+        private const string CustomHouseRulePrefix = "قاعدة إضافية:";
+
+        private static string? BuildCustomHouseRuleReply(
+            string question,
+            string? terms)
+        {
+            List<string> rules = ExtractCustomHouseRules(terms);
+            if (rules.Count == 0)
+                return null;
+
+            HashSet<string> questionTokens = BuildRuleMatchTokens(question);
+            if (questionTokens.Count == 0)
+                return null;
+
+            var matches = rules
+                .Select(rule => new
+                {
+                    Rule = rule,
+                    Tokens = BuildRuleMatchTokens(rule)
+                })
+                .Select(item => new
+                {
+                    item.Rule,
+                    Shared = item.Tokens.Count(token => questionTokens.Contains(token)),
+                    HasStrongSharedToken = item.Tokens.Any(token =>
+                        token.Length >= 5 && questionTokens.Contains(token))
+                })
+                .Where(item => item.Shared >= 2 || item.HasStrongSharedToken)
+                .OrderByDescending(item => item.Shared)
+                .ThenByDescending(item => item.Rule.Length)
+                .Take(3)
+                .Select(item => item.Rule)
+                .ToList();
+
+            if (matches.Count == 0)
+                return null;
+
+            return matches.Count == 1
+                ? matches[0].Trim().TrimEnd('،', '.', '؛') + "."
+                : string.Join("، ", matches.Select(rule =>
+                    rule.Trim().TrimEnd('،', '.', '؛'))) + ".";
+        }
+
+        private static List<string> ExtractCustomHouseRules(string? terms)
+        {
+            if (string.IsNullOrWhiteSpace(terms))
+                return new List<string>();
+
+            return terms
+                .Split(new[] { "\r\n", "\n", "\r" }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(line => line.Trim())
+                .Where(line => line.StartsWith(CustomHouseRulePrefix, StringComparison.Ordinal))
+                .Select(line => line.Substring(CustomHouseRulePrefix.Length).Trim())
+                .Where(rule => !string.IsNullOrWhiteSpace(rule))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(20)
+                .ToList();
+        }
+
+        private static HashSet<string> BuildRuleMatchTokens(string? value)
+        {
+            string normalized = NormalizeArabicIntentText(value);
+            if (string.IsNullOrWhiteSpace(normalized))
+                return new HashSet<string>(StringComparer.Ordinal);
+
+            HashSet<string> ignored = new HashSet<string>(StringComparer.Ordinal)
+            {
+                "هل", "ما", "ماذا", "ماهي", "ماهو", "ايش", "كيف", "في", "فيه",
+                "عندكم", "معكم", "المنشاه", "منشاه", "داخل", "خارج", "قاعده",
+                "قواعد", "سياسه", "سياسات", "يسمح", "مسموح", "ممنوع", "ممنوعه",
+                "مسموحه", "عادي", "يمكن", "اقدر", "نقدر", "ممكن", "او", "و"
+            };
+
+            return normalized
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                .Select(NormalizeRuleMatchToken)
+                .Where(token => token.Length >= 3 && !ignored.Contains(token))
+                .ToHashSet(StringComparer.Ordinal);
+        }
+
+        private static string NormalizeRuleMatchToken(string token)
+        {
+            string value = token?.Trim() ?? string.Empty;
+
+            // نفصل بعض حروف الجر/العطف الشائعة المتصلة بأل التعريف:
+            // بالحيوانات / للحيوانات / والحيوانات -> حيوانات.
+            foreach (string prefix in new[] { "بال", "وال", "فال" })
+            {
+                if (value.Length > prefix.Length + 3 &&
+                    value.StartsWith(prefix, StringComparison.Ordinal))
+                {
+                    value = value.Substring(prefix.Length);
+                    break;
+                }
+            }
+
+            if (value.Length > 4 && value.StartsWith("لل", StringComparison.Ordinal))
+                value = value.Substring(2);
+
+            if (value.Length > 4 && value.StartsWith("ال", StringComparison.Ordinal))
+                value = value.Substring(2);
+
+            // توحيد صيغ شائعة بسيطة حتى تتطابق العامية مع صياغة القاعدة.
+            if (value.EndsWith("ات", StringComparison.Ordinal) && value.Length > 5)
+                value = value.Substring(0, value.Length - 2);
+
+            return value;
+        }
+
+        private static string BuildFacilityRulesReply(
+            PlacePolicy? policy,
+            string? terms)
+        {
+            List<string> rules = new List<string>();
+
+            if (policy != null)
+            {
+                rules.Add(policy.ForFamiliesOnly
+                    ? "المنشأة مخصصة للعائلات فقط"
+                    : "المنشأة ليست مقيدة بالعائلات فقط");
+                rules.Add(policy.AllowSmoking
+                    ? "التدخين مسموح"
+                    : "التدخين غير مسموح");
+                rules.Add(policy.AllowParties
+                    ? "الحفلات والمناسبات مسموحة"
+                    : "الحفلات والمناسبات غير مسموحة");
+                rules.Add(policy.AllowQatInside
+                    ? "القات مسموح داخل المنشأة"
+                    : "القات غير مسموح داخل المنشأة");
+            }
+
+            rules.AddRange(ExtractCustomHouseRules(terms));
+
+            return rules.Count > 0
+                ? string.Join("، ", rules.Distinct(StringComparer.OrdinalIgnoreCase)) + "."
+                : "لا توجد قواعد واضحة يمكنني تأكيدها الآن. يمكنك سؤال المالك مباشرة.";
+        }
+
+        private static string BuildFeesReply(PlacePolicy? policy)
+        {
+            if (policy == null)
+                return "لا توجد تفاصيل رسوم مؤكدة يمكنني عرضها حاليًا. يمكنك سؤال المالك مباشرة.";
+
+            List<string> parts = new List<string>();
+
+            if (policy.CleaningFee > 0)
+                parts.Add($"رسوم التنظيف حاليًا {policy.CleaningFee:N0}");
+
+            if (policy.TaxPercentage > 0)
+                parts.Add($"نسبة الضريبة حاليًا {policy.TaxPercentage:N0}%");
+
+            return parts.Count > 0
+                ? string.Join("، ", parts) + ". السعر النهائي والرسوم المستحقة تظهر لك قبل تأكيد الحجز."
+                : "لا توجد رسوم تنظيف أو نسبة ضريبة إضافية حاليًا في سياسة المنشأة.";
+        }
+
+        private async Task<string> BuildServicesReplyAsync(
+            Place place,
+            CancellationToken cancellationToken)
+        {
+            List<string> services = await _context.PlaceAdditionalServices
+                .AsNoTracking()
+                .Where(item => item.PlaceId == place.PlaceId && item.IsActive != false)
+                .OrderBy(item => item.ServiceName)
+                .Select(item => item.ServiceName)
+                .Take(8)
+                .ToListAsync(cancellationToken);
+
+            List<string> amenities = await _context.PlaceAmenities
+                .AsNoTracking()
+                .Where(item => item.PlaceId == place.PlaceId && item.IsActive != false)
+                .OrderBy(item => item.AmenityName)
+                .Select(item => item.AmenityName)
+                .Take(8)
+                .ToListAsync(cancellationToken);
+
+            List<string> packages = await _context.PlacePackages
+                .AsNoTracking()
+                .Where(item => item.PlaceId == place.PlaceId && item.IsActive != false)
+                .OrderBy(item => item.PackageName)
+                .Select(item => item.PackageName)
+                .Take(6)
+                .ToListAsync(cancellationToken);
+
+            List<string> parts = new List<string>();
+            if (amenities.Count > 0)
+                parts.Add("المرافق: " + string.Join("، ", amenities));
+            if (services.Count > 0)
+                parts.Add("الخدمات: " + string.Join("، ", services));
+            if (packages.Count > 0)
+                parts.Add("الباقات: " + string.Join("، ", packages));
+
+            return parts.Count > 0
+                ? string.Join(". ", parts) + "."
+                : "لا توجد خدمات أو مرافق أو باقات مفعلة يمكنني تأكيدها حاليًا في النظام.";
+        }
+
+        private static string BuildLocationReply(Place place)
+        {
+            string address = place.AddressDetail?.Trim() ?? string.Empty;
+            string coordinates = place.Coordinates?.Trim() ?? string.Empty;
+
+            string mapQuery = string.Empty;
+
+            if (!string.IsNullOrWhiteSpace(coordinates))
+            {
+                // يدعم الصيغة الشائعة "lat,lng" وكذلك أي نص إحداثيات محفوظ سابقًا.
+                // إذا كانت القيمة رابطًا جاهزًا نستخدمه كما هو.
+                if (Uri.TryCreate(coordinates, UriKind.Absolute, out Uri? existingUrl) &&
+                    (existingUrl.Scheme == Uri.UriSchemeHttp ||
+                     existingUrl.Scheme == Uri.UriSchemeHttps))
+                {
+                    List<string> directParts = new List<string>();
+                    if (!string.IsNullOrWhiteSpace(address))
+                        directParts.Add($"📍 {address}");
+                    directParts.Add(coordinates);
+                    return string.Join(Environment.NewLine, directParts);
+                }
+
+                mapQuery = coordinates;
+            }
+            else if (!string.IsNullOrWhiteSpace(address))
+            {
+                mapQuery = address;
+            }
+
+            if (string.IsNullOrWhiteSpace(mapQuery))
+            {
+                return "لم يتم تحديد موقع المنشأة على الخريطة بعد. يمكنك سؤال المالك مباشرة عن الاتجاهات.";
+            }
+
+            string mapUrl =
+                "https://www.google.com/maps/search/?api=1&query=" +
+                Uri.EscapeDataString(mapQuery);
+
+            List<string> parts = new List<string>
+            {
+                "📍 موقع المنشأة"
+            };
+
+            if (!string.IsNullOrWhiteSpace(address))
+                parts.Add(address);
+
+            parts.Add(mapUrl);
+            return string.Join(Environment.NewLine, parts);
+        }
+
+        private static string BuildContactReply(PlacePolicy? policy, Place place)
+        {
+            string phone = FirstNonEmpty(policy?.EmergencyContact, place.PhoneNumber) ?? string.Empty;
+            string email = FirstNonEmpty(policy?.ContactEmail, place.EmailAddress) ?? string.Empty;
+
+            List<string> parts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(phone))
+                parts.Add($"رقم التواصل {phone}");
+            if (!string.IsNullOrWhiteSpace(email))
+                parts.Add($"البريد الإلكتروني {email}");
+
+            return parts.Count > 0
+                ? string.Join("، ", parts) + "."
+                : "لا توجد وسيلة تواصل إضافية منشورة يمكنني تأكيدها حاليًا.";
+        }
+
+        private static List<string> ParseSimpleStringList(string? jsonText)
+        {
+            List<string> result = new List<string>();
+            if (string.IsNullOrWhiteSpace(jsonText))
+                return result;
+
+            try
+            {
+                using JsonDocument document = JsonDocument.Parse(jsonText);
+                if (document.RootElement.ValueKind != JsonValueKind.Array)
+                    return result;
+
+                foreach (JsonElement item in document.RootElement.EnumerateArray())
+                {
+                    if (item.ValueKind != JsonValueKind.String)
+                        continue;
+
+                    string value = item.GetString()?.Trim() ?? string.Empty;
+                    if (!string.IsNullOrWhiteSpace(value))
+                        result.Add(value);
+                }
+            }
+            catch (JsonException)
+            {
+                // لا نخمن عند تعذر قراءة البيانات.
+            }
+
+            return result;
+        }
+
+        private static List<string> ParseShiftDescriptions(string? jsonText)
+        {
+            List<string> result = new List<string>();
+            if (string.IsNullOrWhiteSpace(jsonText))
+                return result;
+
+            try
+            {
+                using JsonDocument document = JsonDocument.Parse(jsonText);
+                if (document.RootElement.ValueKind != JsonValueKind.Array)
+                    return result;
+
+                foreach (JsonElement shift in document.RootElement.EnumerateArray())
+                {
+                    if (shift.ValueKind != JsonValueKind.Object)
+                        continue;
+
+                    string name = GetJsonString(shift, "name", "Name");
+                    string from = GetJsonString(shift, "from", "From");
+                    string to = GetJsonString(shift, "to", "To");
+
+                    if (string.IsNullOrWhiteSpace(name) &&
+                        string.IsNullOrWhiteSpace(from) &&
+                        string.IsNullOrWhiteSpace(to))
+                    {
+                        continue;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(from) && !string.IsNullOrWhiteSpace(to))
+                        result.Add($"{(string.IsNullOrWhiteSpace(name) ? "فترة" : name)} من {from} إلى {to}");
+                    else if (!string.IsNullOrWhiteSpace(name))
+                        result.Add(name);
+                }
+            }
+            catch (JsonException)
+            {
+                // لا نخمن عند تعذر قراءة البيانات.
+            }
+
+            return result;
+        }
+
+        private static List<string> ParseClosedDays(string? csv)
+        {
+            if (string.IsNullOrWhiteSpace(csv))
+                return new List<string>();
+
+            Dictionary<string, string> labels = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Sunday"] = "الأحد",
+                ["Monday"] = "الاثنين",
+                ["Tuesday"] = "الثلاثاء",
+                ["Wednesday"] = "الأربعاء",
+                ["Thursday"] = "الخميس",
+                ["Friday"] = "الجمعة",
+                ["Saturday"] = "السبت"
+            };
+
+            return csv
+                .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(day => day.Trim())
+                .Where(day => day.Length > 0)
+                .Select(day => labels.TryGetValue(day, out string? label) ? label : day)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        private static List<string> ParseDepositPolicyDescriptions(string? jsonText)
+        {
+            List<string> result = new List<string>();
+
+            if (string.IsNullOrWhiteSpace(jsonText))
+                return result;
+
+            try
+            {
+                using JsonDocument document = JsonDocument.Parse(jsonText);
+                if (document.RootElement.ValueKind != JsonValueKind.Array)
+                    return result;
+
+                foreach (JsonElement item in document.RootElement.EnumerateArray())
+                {
+                    if (item.ValueKind != JsonValueKind.Object)
+                        continue;
+
+                    string value = GetJsonString(item, "val", "Val");
+                    string type = GetJsonString(item, "type", "Type");
+                    string description = GetJsonString(item, "desc", "Desc", "description", "Description");
+
+                    if (string.IsNullOrWhiteSpace(description))
+                        continue;
+
+                    string prefix = string.IsNullOrWhiteSpace(value)
+                        ? string.Empty
+                        : type == "%"
+                            ? $"{value}% "
+                            : $"{value} ";
+
+                    result.Add((prefix + description).Trim());
+                }
+            }
+            catch (JsonException)
+            {
+                // لا نعيد نصًا غير موثوق عند فشل القراءة.
+            }
+
+            return result;
+        }
+
+        private static bool IsWithinWorkingHours(PlacePolicy? policy, DateTime now)
+        {
+            if (policy == null)
+                return true;
+
+            string closedDays = policy.ClosedDaysCsv ?? string.Empty;
+            if (closedDays
+                .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(day => day.Trim())
+                .Any(day => string.Equals(
+                    day,
+                    now.DayOfWeek.ToString(),
+                    StringComparison.OrdinalIgnoreCase)))
+            {
+                return false;
+            }
+
+            // في نظام اليوم الكامل لا توجد لدينا ساعات دعم مستقلة في قاعدة البيانات،
+            // لذلك لا نخمن باستخدام وقت Check-in/Check-out كساعات خدمة عملاء.
+            if (!string.Equals(
+                policy.OperationSystemMode,
+                "Shifts",
+                StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (string.IsNullOrWhiteSpace(policy.ShiftsJson))
+                return true;
+
+            try
+            {
+                using JsonDocument document = JsonDocument.Parse(policy.ShiftsJson);
+                if (document.RootElement.ValueKind != JsonValueKind.Array)
+                    return true;
+
+                TimeSpan current = now.TimeOfDay;
+                bool foundValidShift = false;
+
+                foreach (JsonElement shift in document.RootElement.EnumerateArray())
+                {
+                    if (shift.ValueKind != JsonValueKind.Object)
+                        continue;
+
+                    string fromText = GetJsonString(shift, "from", "From");
+                    string toText = GetJsonString(shift, "to", "To");
+
+                    if (!TimeSpan.TryParse(fromText, out TimeSpan from) ||
+                        !TimeSpan.TryParse(toText, out TimeSpan to))
+                    {
+                        continue;
+                    }
+
+                    foundValidShift = true;
+
+                    bool inside = from <= to
+                        ? current >= from && current <= to
+                        : current >= from || current <= to;
+
+                    if (inside)
+                        return true;
+                }
+
+                return !foundValidShift;
+            }
+            catch (JsonException)
+            {
+                return true;
+            }
+        }
+
+        private static string GetJsonString(
+            JsonElement element,
+            params string[] propertyNames)
+        {
+            foreach (string propertyName in propertyNames)
+            {
+                if (element.TryGetProperty(propertyName, out JsonElement property) &&
+                    property.ValueKind == JsonValueKind.String)
+                {
+                    return property.GetString()?.Trim() ?? string.Empty;
+                }
+            }
+
+            return string.Empty;
+        }
+
+        private static string NormalizeArabicIntentText(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return string.Empty;
+
+            string text = value
+                .Trim()
+                .ToLowerInvariant()
+                .Replace("ـ", string.Empty)
+                .Replace('أ', 'ا')
+                .Replace('إ', 'ا')
+                .Replace('آ', 'ا')
+                .Replace('ى', 'ي')
+                .Replace('ة', 'ه');
+
+            text = Regex.Replace(text, @"[\u064B-\u065F\u0670]", string.Empty);
+            text = Regex.Replace(text, @"[^\p{L}\p{Nd}]+", " ");
+            return Regex.Replace(text, @"\s+", " ").Trim();
         }
 
         // =====================================================================

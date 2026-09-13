@@ -1,4 +1,4 @@
-/**
+﻿/**
  * =============================================================================
  * دليلك اليمني — محرك دردشة المالك
  * File destination: wwwroot/js/owner/chat-actions.js
@@ -1915,18 +1915,20 @@
         elements.quickRepliesTrack.innerHTML = "";
         elements.quickRepliesBar.classList.toggle("d-none", values.length === 0);
 
-        values.forEach(text => {
+        values.forEach(reply => {
             const button = document.createElement("button");
             button.type = "button";
             button.className = "quick-reply-chip";
-            button.innerHTML = `<i class="bi bi-lightning-charge-fill"></i><span>${escapeHtml(text)}</span>`;
+            button.title = reply.text;
+            button.innerHTML = `<i class="bi bi-lightning-charge-fill"></i><span>${escapeHtml(reply.title)}</span>`;
             button.addEventListener("click", () => {
                 if (!composerIsUsable()) {
                     return;
                 }
 
                 const current = elements.input.value.trim();
-                elements.input.value = current ? `${current}\n${text}` : text;
+                const replyText = reply.text;
+                elements.input.value = current ? `${current}\n${replyText}` : replyText;
                 elements.input.dispatchEvent(new Event("input", { bubbles: true }));
                 elements.input.focus();
             });
@@ -2834,10 +2836,52 @@
             return [];
         }
 
-        return [...new Set(source.map(item => {
-            if (typeof item === "string") return item.trim();
-            return cleanText(item?.text ?? item?.Text ?? item?.value ?? item?.Value);
-        }).filter(Boolean))].slice(0, 20);
+        // بعد اعتماد إعداد "الأسئلة السريعة للعميل" لا نعرض الردود القديمة
+        // كأزرار للمالك، لكن بياناتها تظل محفوظة للتوافق ولا تُحذف.
+        const usesCustomerTopicConfig = source.some(item =>
+            item && typeof item === "object" &&
+            cleanText(item.type ?? item.Type).toLowerCase() === "customer-topic-config"
+        );
+        if (usesCustomerTopicConfig) {
+            return [];
+        }
+
+        const replies = [];
+        const seen = new Set();
+
+        source.forEach(item => {
+            let title = "";
+            let text = "";
+
+            if (typeof item === "string") {
+                text = item.trim();
+                title = text;
+            } else if (item && typeof item === "object") {
+                const itemType = cleanText(item.type ?? item.Type).toLowerCase();
+                if (itemType === "customer-topic" || itemType === "customer-topic-config") return;
+
+                title = cleanText(
+                    item.title ?? item.Title ?? item.name ?? item.Name
+                );
+                text = cleanText(
+                    item.reply ?? item.Reply ?? item.text ?? item.Text ??
+                    item.value ?? item.Value
+                );
+
+                if (!text && title) text = title;
+                if (!title && text) title = text;
+            }
+
+            if (!text) return;
+
+            const key = `${title}\n${text}`;
+            if (seen.has(key)) return;
+
+            seen.add(key);
+            replies.push({ title, text });
+        });
+
+        return replies.slice(0, 20);
     }
 
     function escapeHtml(value) {
