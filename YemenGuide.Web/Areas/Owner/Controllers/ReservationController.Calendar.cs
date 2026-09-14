@@ -1262,6 +1262,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 {
                     financial.TransferReferenceNumber = input.PaymentReferenceNumber.Trim();
                 }
+                financial.CollectedAt = now;
                 financial.UpdatedAt = now;
 
                 AddStructuredNotification(
