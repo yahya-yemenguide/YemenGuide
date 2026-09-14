@@ -518,9 +518,22 @@ namespace YemenGuide.Web.Controllers
             Booking existingBooking,
             int bufferHours)
         {
+            /*
+             * في نظام الفترات لا يجوز لحجز باقة صباحية أن يغلق اليوم كله
+             * أمام باقة مسائية مختلفة. الأساس هو مقارنة الوقت الفعلي لكل
+             * باقة مع احتساب وقت التجهيز بين الحجوزات.
+             *
+             * للسجلات القديمة التي لا تحتوي أوقاتًا كاملة لا نفترض أن كل
+             * باقات اليوم متعارضة؛ نمنع فقط نفس الباقة في نفس اليوم. بهذا
+             * نحافظ على الحجوزات القديمة من التكرار بدون إغلاق بقية الفترات.
+             */
             if (existingBooking.Package == null)
             {
-                return true;
+                return
+                    existingBooking.PackageId ==
+                        requestedPackage.PackageId &&
+                    existingBooking.StartDate.Date ==
+                        requestedDate.Date;
             }
 
             if (
@@ -529,7 +542,11 @@ namespace YemenGuide.Web.Controllers
                 !existingBooking.Package.StartTime.HasValue ||
                 !existingBooking.Package.EndTime.HasValue)
             {
-                return true;
+                return
+                    existingBooking.PackageId ==
+                        requestedPackage.PackageId &&
+                    existingBooking.StartDate.Date ==
+                        requestedDate.Date;
             }
 
             var requested =
@@ -744,12 +761,19 @@ namespace YemenGuide.Web.Controllers
             {
                 if (booking.Package == null)
                 {
-                    if (booking.StartDate.Date ==
-                        requestedDay)
+                    /*
+                     * سجل قديم بلا Navigation للباقة: لا نغلق اليوم كله.
+                     * نعتبره حاجزًا فقط لنفس الباقة وفي نفس اليوم.
+                     */
+                    if (
+                        booking.PackageId ==
+                            selectedPackage.PackageId &&
+                        booking.StartDate.Date ==
+                            requestedDay)
                     {
                         return (
                             false,
-                            "هذا الموعد محجوز بالفعل.");
+                            "هذه الباقة محجوزة في هذا اليوم. اختر فترة أو باقة أخرى.");
                     }
 
                     continue;
