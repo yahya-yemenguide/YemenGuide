@@ -358,6 +358,65 @@ namespace YemenGuide.Web.Areas.Owner.Controllers.OwnerFinancials
                 NormalizeText(
                     filter.Search);
 
+            if (!OwnerFinancialReportTypes.All.Contains(
+                    filter.ReportType,
+                    StringComparer.OrdinalIgnoreCase))
+            {
+                filter.ReportType =
+                    OwnerFinancialReportTypes.Comprehensive;
+            }
+
+            if (
+                filter.DocumentType != null &&
+                !OwnerFinancialDocumentTypes.All.Contains(
+                    filter.DocumentType,
+                    StringComparer.OrdinalIgnoreCase))
+            {
+                filter.DocumentType = null;
+            }
+
+            if (
+                filter.DateScope != null &&
+                !OwnerFinancialDateScopes.All.Contains(
+                    filter.DateScope,
+                    StringComparer.OrdinalIgnoreCase))
+            {
+                filter.DateScope = null;
+            }
+
+            if (
+                filter.PaymentChannel != null &&
+                !OwnerFinancialPaymentChannels.Values.Contains(
+                    filter.PaymentChannel,
+                    StringComparer.OrdinalIgnoreCase))
+            {
+                filter.PaymentChannel = null;
+            }
+
+            filter.ExportFormat =
+                NormalizeText(filter.ExportFormat)
+                ?? OwnerFinancialExportFormats.View;
+
+            if (!OwnerFinancialExportFormats.All.Contains(
+                    filter.ExportFormat,
+                    StringComparer.OrdinalIgnoreCase))
+            {
+                filter.ExportFormat =
+                    OwnerFinancialExportFormats.View;
+            }
+
+            if (filter.BookingId.HasValue && filter.BookingId.Value <= 0)
+            {
+                filter.BookingId = null;
+                ModelState.Remove(nameof(FinancialReportFilterDto.BookingId));
+            }
+
+            if (filter.CustomerId.HasValue && filter.CustomerId.Value <= 0)
+            {
+                filter.CustomerId = null;
+                ModelState.Remove(nameof(FinancialReportFilterDto.CustomerId));
+            }
+
             filter.PageNumber =
                 Math.Max(
                     1,
