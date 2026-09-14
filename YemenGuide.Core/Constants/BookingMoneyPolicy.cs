@@ -23,6 +23,14 @@ namespace YemenGuide.Core.Constants
         public static decimal Remaining(string? state, decimal remaining) =>
             IsClosed(state) ? 0m : Round(Math.Max(0m, remaining));
 
+        /// <summary>
+        /// العربون المطلوب التزام حالي، وليس قيمة تاريخية. بعد إغلاق الحجز
+        /// لا يبقى على العميل عربون مطلوب، بينما تظل القيمة الأصلية محفوظة
+        /// في FinancialRecord لأغراض التدقيق.
+        /// </summary>
+        public static decimal ActiveDepositRequirement(string? state, decimal deposit) =>
+            IsClosed(state) ? 0m : Round(Math.Max(0m, deposit));
+
         public static decimal ChargedCommission(string? status, decimal amount) =>
             string.Equals(status?.Trim(), "Charged", StringComparison.OrdinalIgnoreCase)
                 ? Round(Math.Max(0m, amount)) : 0m;

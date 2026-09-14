@@ -95,6 +95,20 @@
                 );
             }
 
+            if (this.container && this.handlers.paste) {
+                this.container.removeEventListener(
+                    'paste',
+                    this.handlers.paste
+                );
+            }
+
+            if (this.container && this.handlers.keydown) {
+                this.container.removeEventListener(
+                    'keydown',
+                    this.handlers.keydown
+                );
+            }
+
             if (this.container && this.handlers.dragover) {
                 this.container.removeEventListener(
                     'dragover',
@@ -353,6 +367,43 @@
                 }
             };
 
+            this.handlers.paste = event => {
+                const amountInput = event.target.closest(
+                    '[data-balance-positive-money]'
+                );
+
+                if (
+                    amountInput &&
+                    this.container.contains(amountInput)
+                ) {
+                    const pasted =
+                        String(
+                            event.clipboardData?.getData('text') || ''
+                        ).trim();
+
+                    if (!/^\d{1,16}(?:\.\d{0,2})?$/.test(pasted)) {
+                        event.preventDefault();
+                        this.setTopUpMessage(
+                            'مبلغ الشحن يقبل أرقامًا موجبة ومنزلتين عشريتين فقط.'
+                        );
+                    }
+                }
+            };
+
+            this.handlers.keydown = event => {
+                const amountInput = event.target.closest(
+                    '[data-balance-positive-money]'
+                );
+
+                if (
+                    amountInput &&
+                    this.container.contains(amountInput) &&
+                    ['-', '+', 'e', 'E', ' '].includes(event.key)
+                ) {
+                    event.preventDefault();
+                }
+            };
+
             this.handlers.dragover = event => {
                 const drop =
                     event.target.closest(
@@ -448,6 +499,16 @@
             this.container.addEventListener(
                 'change',
                 this.handlers.change
+            );
+
+            this.container.addEventListener(
+                'paste',
+                this.handlers.paste
+            );
+
+            this.container.addEventListener(
+                'keydown',
+                this.handlers.keydown
             );
 
             this.container.addEventListener(
@@ -843,9 +904,12 @@
                     '[name="Amount"]'
                 );
 
+            const amountText =
+                String(amountInput?.value || '').trim();
+
             const amount =
                 Number(
-                    amountInput?.value || 0
+                    amountText || 0
                 );
 
             const minimum =
@@ -883,11 +947,13 @@
             }
 
             if (
+                !/^(?=.*[1-9])\d{1,16}(?:\.\d{1,2})?$/.test(amountText) ||
                 !Number.isFinite(amount) ||
-                amount <= 0
+                amount <= 0 ||
+                amount > 9999999999999999.99
             ) {
                 this.setTopUpMessage(
-                    'أدخل مبلغ شحن صحيحًا.'
+                    'أدخل مبلغًا موجبًا بالأرقام فقط وبمنزلتين عشريتين كحد أقصى.'
                 );
                 return;
             }

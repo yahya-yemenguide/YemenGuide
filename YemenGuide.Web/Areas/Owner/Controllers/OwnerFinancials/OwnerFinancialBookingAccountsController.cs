@@ -112,7 +112,10 @@ namespace YemenGuide.Web.Areas.Owner.Controllers.OwnerFinancials
                 await _context.Places
                     .AsNoTracking()
                     .Where(place =>
-                        place.OwnerId == ownerId)
+                        place.OwnerId == ownerId &&
+                        place.Category != null &&
+                        place.Category.BookingSystemId >= 1 &&
+                        place.Category.BookingSystemId <= 4)
                     .OrderByDescending(place =>
                         place.Status == "Approved" ||
                         place.Status == "Active")

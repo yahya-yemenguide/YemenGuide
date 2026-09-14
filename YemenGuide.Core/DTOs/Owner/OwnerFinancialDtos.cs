@@ -435,12 +435,9 @@ namespace YemenGuide.Core.DTOs.Owner
         public decimal? DiscountValueSnapshot { get; set; }
 
         public bool HasPromotion =>
-            DiscountAmount > 0m &&
-            (
-                (PromotionId.HasValue && PromotionId.Value > 0) ||
-                !string.IsNullOrWhiteSpace(PromotionTitleSnapshot) ||
-                !string.IsNullOrWhiteSpace(DiscountTypeSnapshot)
-            );
+            (PromotionId.HasValue && PromotionId.Value > 0) ||
+            !string.IsNullOrWhiteSpace(PromotionTitleSnapshot) ||
+            !string.IsNullOrWhiteSpace(DiscountTypeSnapshot);
 
         public decimal DisplayOriginalTotalPrice =>
             OriginalTotalPrice > 0m
@@ -776,6 +773,16 @@ namespace YemenGuide.Core.DTOs.Owner
                 yield return
                     new ValidationResult(
                         "مبلغ الشحن أكبر من الحد المسموح.",
+                        new[]
+                        {
+                            nameof(Amount)
+                        });
+            }
+            else if (decimal.Round(Amount, 2, MidpointRounding.AwayFromZero) != Amount)
+            {
+                yield return
+                    new ValidationResult(
+                        "مبلغ الشحن يقبل منزلتين عشريتين كحد أقصى.",
                         new[]
                         {
                             nameof(Amount)
@@ -2423,7 +2430,10 @@ namespace YemenGuide.Core.DTOs.Owner
         public string? PromotionCodeSnapshot { get; set; }
         public string? DiscountTypeSnapshot { get; set; }
         public decimal? DiscountValueSnapshot { get; set; }
-        public bool HasPromotion => DiscountAmount > 0m;
+        public bool HasPromotion =>
+            (PromotionId.HasValue && PromotionId.Value > 0) ||
+            !string.IsNullOrWhiteSpace(PromotionTitleSnapshot) ||
+            !string.IsNullOrWhiteSpace(DiscountTypeSnapshot);
         public decimal FinalSavingsAmount =>
             Math.Round(
                 Math.Max(0m, OriginalTotalPrice - TotalPrice),
@@ -2504,7 +2514,10 @@ namespace YemenGuide.Core.DTOs.Owner
         public string? PromotionCodeSnapshot { get; set; }
         public string? DiscountTypeSnapshot { get; set; }
         public decimal? DiscountValueSnapshot { get; set; }
-        public bool HasPromotion => DiscountAmount > 0m;
+        public bool HasPromotion =>
+            (PromotionId.HasValue && PromotionId.Value > 0) ||
+            !string.IsNullOrWhiteSpace(PromotionTitleSnapshot) ||
+            !string.IsNullOrWhiteSpace(DiscountTypeSnapshot);
         public decimal FinalSavingsAmount =>
             Math.Round(
                 Math.Max(0m, OriginalTotalPrice - TotalPrice),
@@ -2578,7 +2591,10 @@ namespace YemenGuide.Core.DTOs.Owner
         public string? PromotionCodeSnapshot { get; set; }
         public string? DiscountTypeSnapshot { get; set; }
         public decimal? DiscountValueSnapshot { get; set; }
-        public bool HasPromotion => DiscountAmount > 0m;
+        public bool HasPromotion =>
+            (PromotionId.HasValue && PromotionId.Value > 0) ||
+            !string.IsNullOrWhiteSpace(PromotionTitleSnapshot) ||
+            !string.IsNullOrWhiteSpace(DiscountTypeSnapshot);
         public decimal FinalSavingsAmount =>
             Math.Round(
                 Math.Max(0m, OriginalTotalPrice - FinalTotalPrice),

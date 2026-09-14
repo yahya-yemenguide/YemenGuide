@@ -743,7 +743,11 @@ namespace YemenGuide.Web.Services.Finance
         private static string GetCurrency(SystemSetting? settings) => "ريال يمني";
 
         private IQueryable<Place> OwnerPlaces(int ownerId) =>
-            _context.Places.Where(place => place.OwnerId == ownerId);
+            _context.Places.Where(place =>
+                place.OwnerId == ownerId &&
+                place.Category != null &&
+                place.Category.BookingSystemId >= 1 &&
+                place.Category.BookingSystemId <= 4);
 
 
         private static bool IsBookingEnabledCategory(Category? category) =>
@@ -768,8 +772,8 @@ namespace YemenGuide.Web.Services.Finance
             int ownerId,
             int placeId,
             CancellationToken cancellationToken) =>
-            await _context.Places.AsNoTracking().AnyAsync(
-                place => place.PlaceId == placeId && place.OwnerId == ownerId,
+            await OwnerPlaces(ownerId).AsNoTracking().AnyAsync(
+                place => place.PlaceId == placeId,
                 cancellationToken);
 
         private async Task<bool> IsAdminOwnedPlaceAsync(
@@ -972,6 +976,20 @@ namespace YemenGuide.Web.Services.Finance
             int ownerId,
             CancellationToken cancellationToken)
         {
+            var isAdministrationAccount = await _context.Users
+                .AsNoTracking()
+                .AnyAsync(user =>
+                    user.UserId == ownerId &&
+                    user.Role == "Admin",
+                    cancellationToken);
+
+            // منشآت حساب الإدارة معفاة من الضمان والعمولة، لذلك لا ننشئ
+            // لها حسابات صفرية تظهر خطأً على أنها تحتاج إلى شحن.
+            if (isAdministrationAccount)
+            {
+                return;
+            }
+
             var settings = await GetSettingsAsync(cancellationToken);
             var placeIds = await OwnerPlaces(ownerId)
                 .Where(place => place.PlaceCommissionAccount == null)
@@ -1540,7 +1558,10 @@ namespace YemenGuide.Web.Services.Finance
                     overviewCollectedByBooking.TryGetValue(item.BookingId, out var collected) ? collected : 0m,
                     CompletedRefundFor(item.BookingId),
                     overviewRefunds.TryGetValue(item.BookingId, out var refund) ? refund.PendingRefundAmount : 0m)),
-                TotalDepositRequired = records.Sum(item => item.DepositAmount),
+                TotalDepositRequired = records.Sum(item =>
+                    BookingMoneyPolicy.ActiveDepositRequirement(
+                        item.BookingState,
+                        item.DepositAmount)),
                 TotalPaidOnline = records.Sum(item =>
                     NetOnlineCollected(
                         item.BookingId,
@@ -2017,7 +2038,8 @@ namespace YemenGuide.Web.Services.Finance
 
                             DiscountedBookingsCount =
                                 group.Count(booking =>
-                                    booking.DiscountAmount > 0m),
+                                    booking.DiscountAmount > 0m ||
+                                    booking.PromotionId.HasValue),
 
                             TotalBookingValue =
                                 group.Sum(booking =>
@@ -2073,6 +2095,10 @@ namespace YemenGuide.Web.Services.Finance
                 {
                     booking.BookingId,
                     booking.TotalPrice,
+                    DepositAmount =
+                        booking.FinancialRecord != null
+                            ? booking.FinancialRecord.DepositAmount
+                            : 0m,
                     AmountCollectedAtProperty = booking.FinancialRecord != null ? booking.FinancialRecord.AmountCollectedAtProperty : 0m,
                     BookingState =
                         booking.BookingState,
@@ -2127,6 +2153,12 @@ namespace YemenGuide.Web.Services.Finance
                             paid - Math.Min(paid, refunded)),
                         2);
                 });
+
+            summary.TotalDepositRequired =
+                bookingSummaryRows.Sum(item =>
+                    BookingMoneyPolicy.ActiveDepositRequirement(
+                        item.BookingState,
+                        item.DepositAmount));
 
             summary.TotalCollectedAtProperty = bookingSummaryRows.Sum(item =>
                 BookingMoneyPolicy.NetPaid(item.AmountCollectedAtProperty,
@@ -2407,9 +2439,9 @@ namespace YemenGuide.Web.Services.Finance
                                 booking.DiscountValueSnapshot,
 
                             DepositAmount =
-                                financial?
-                                    .DepositAmount ??
-                                0m,
+                                BookingMoneyPolicy.ActiveDepositRequirement(
+                                    booking.BookingState,
+                                    financial?.DepositAmount ?? 0m),
 
                             AmountPaidOnline = BookingMoneyPolicy.NetPaid(rawPaid, refunded),
 
@@ -2646,12 +2678,23 @@ namespace YemenGuide.Web.Services.Finance
             var settings = await GetSettingsAsync(cancellationToken);
             var minimum = Math.Max(0m, settings?.MinimumCommissionTopUp ?? 0m);
 
-            if (request.Amount <= 0m)
+            var normalizedAmount = Math.Round(
+                request.Amount,
+                2,
+                MidpointRounding.AwayFromZero);
+
+            if (normalizedAmount <= 0m)
             {
                 return FinanceOperationResult.Failed("مبلغ الشحن يجب أن يكون أكبر من صفر.");
             }
 
-            if (request.Amount < minimum)
+            if (normalizedAmount != request.Amount)
+            {
+                return FinanceOperationResult.Failed(
+                    "مبلغ الشحن يقبل منزلتين عشريتين كحد أقصى.");
+            }
+
+            if (normalizedAmount < minimum)
             {
                 return FinanceOperationResult.Failed(
                     $"الحد الأدنى للشحن هو {minimum:N2} {GetCurrency(settings)}.");
@@ -2708,7 +2751,7 @@ namespace YemenGuide.Web.Services.Finance
                     PlaceId = request.PlaceId,
                     PlatformWalletId = request.PlatformWalletId,
                     TransactionType = FinancialTransactionTypes.TopUp,
-                    Amount = Math.Round(request.Amount, 2),
+                    Amount = normalizedAmount,
                     AvailableBalanceBefore = account?.AvailableBalance ?? 0m,
                     AvailableBalanceAfter = account?.AvailableBalance ?? 0m,
                     HeldBalanceBefore = account?.HeldBalance ?? 0m,
@@ -6472,7 +6515,9 @@ namespace YemenGuide.Web.Services.Finance
                 DiscountValueSnapshot = booking.DiscountValueSnapshot,
                 TotalPrice = Math.Max(0m, booking.TotalPrice),
                 EffectiveBookingValue = BookingMoneyPolicy.EffectiveValue(booking.BookingState, booking.TotalPrice, actualCollected, completedRefund, refund?.PendingRefundAmount ?? 0m),
-                DepositAmount = Math.Max(0m, financial?.DepositAmount ?? 0m),
+                DepositAmount = BookingMoneyPolicy.ActiveDepositRequirement(
+                    booking.BookingState,
+                    financial?.DepositAmount ?? 0m),
                 AmountPaidOnline = Math.Max(0m, financial?.AmountPaidOnline ?? 0m),
                 AmountCollectedAtProperty = Math.Max(0m, financial?.AmountCollectedAtProperty ?? 0m),
                 ActualPaidOnline = BookingMoneyPolicy.NetPaid(actualOnline, completedRefund),
@@ -6714,7 +6759,9 @@ namespace YemenGuide.Web.Services.Finance
                     DiscountValueSnapshot = booking.DiscountValueSnapshot,
                     TotalPrice = Math.Max(0m, booking.TotalPrice),
                     EffectiveBookingValue = BookingMoneyPolicy.EffectiveValue(booking.BookingState, booking.TotalPrice, grossCollected, cashRefund, refund?.PendingRefundAmount ?? 0m),
-                    DepositAmount = Math.Max(0m, financial.DepositAmount),
+                    DepositAmount = BookingMoneyPolicy.ActiveDepositRequirement(
+                        booking.BookingState,
+                        financial.DepositAmount),
                     AmountPaidOnline = rawOnline,
                     AmountCollectedAtProperty = rawProperty,
                     ActualPaidOnline = actualOnline,
@@ -7172,7 +7219,9 @@ namespace YemenGuide.Web.Services.Finance
                         DiscountValueSnapshot = booking.DiscountValueSnapshot,
                         TotalPrice = Math.Max(0m, booking.TotalPrice),
                         EffectiveBookingValue = BookingMoneyPolicy.EffectiveValue(booking.BookingState, booking.TotalPrice, actualCollected, completedRefund, refundAggregate?.PendingRefundAmount ?? 0m),
-                        DepositAmount = Math.Max(0m, financial?.DepositAmount ?? 0m),
+                        DepositAmount = BookingMoneyPolicy.ActiveDepositRequirement(
+                            booking.BookingState,
+                            financial?.DepositAmount ?? 0m),
                         AmountPaidOnline = Math.Max(0m, financial?.AmountPaidOnline ?? 0m),
                         AmountCollectedAtProperty = Math.Max(0m, financial?.AmountCollectedAtProperty ?? 0m),
                         ActualPaidOnline = BookingMoneyPolicy.NetPaid(actualOnline, completedRefund),
@@ -7402,7 +7451,9 @@ namespace YemenGuide.Web.Services.Finance
                 DiscountTypeSnapshot = booking.DiscountTypeSnapshot?.Trim(),
                 DiscountValueSnapshot = booking.DiscountValueSnapshot,
                 TotalPrice = Math.Max(0m, booking.TotalPrice),
-                DepositAmount = Math.Max(0m, financial?.DepositAmount ?? 0m),
+                DepositAmount = BookingMoneyPolicy.ActiveDepositRequirement(
+                    booking.BookingState,
+                    financial?.DepositAmount ?? 0m),
                 AmountPaidOnline = paidOnline,
                 AmountCollectedAtProperty = collected,
                 RemainingAmount = BookingMoneyPolicy.Remaining(booking.BookingState, financial?.AmountToPayAtProperty ?? booking.TotalPrice - paidOnline - collected),
@@ -7838,7 +7889,7 @@ namespace YemenGuide.Web.Services.Finance
                         : row.TotalPrice + row.DiscountAmount),
                 TotalDiscountAmount = rows.Sum(row => Math.Max(0m, row.DiscountAmount)),
                 DiscountedBookingsCount = rows
-                    .Where(row => row.BookingId.HasValue && row.DiscountAmount > 0m)
+                    .Where(row => row.BookingId.HasValue && row.HasPromotion)
                     .Select(row => row.BookingId!.Value)
                     .Distinct()
                     .Count(),
@@ -11534,4 +11585,3 @@ namespace YemenGuide.Web.Services.Finance
 
     }
 }
-
