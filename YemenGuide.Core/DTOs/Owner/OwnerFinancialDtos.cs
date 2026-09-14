@@ -1880,14 +1880,14 @@ namespace YemenGuide.Core.DTOs.Owner
             ErrorMessage =
                 "أدخل رقم الحساب التجاري.")]
         [StringLength(
-            6,
+            9,
             MinimumLength = 6,
             ErrorMessage =
-                "رقم الحساب التجاري يجب أن يتكون من 6 أرقام.")]
+                "رقم الحساب التجاري يجب أن يكون بين 6 و9 أرقام.")]
         [RegularExpression(
-            "^[0-9]{6}$",
+            "^[0-9]{6,9}$",
             ErrorMessage =
-                "رقم الحساب التجاري يجب أن يتكون من 6 أرقام إنجليزية فقط.")]
+                "رقم الحساب التجاري يجب أن يكون بين 6 و9 أرقام إنجليزية فقط.")]
         public string AccountNumber { get; set; } =
             string.Empty;
 
