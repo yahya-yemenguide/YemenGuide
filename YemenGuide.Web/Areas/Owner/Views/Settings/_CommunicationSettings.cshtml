@@ -1,6 +1,484 @@
-<div class="royal-policies-wrapper policy-section-stack fade-in-up" dir="rtl">
+﻿<style>
+    /* ================================================================
+       قسم التواصل — تخطيط علوي بعمودين داخل الملف الموجود فقط
+       لا يغيّر أي ID أو أسماء حقول أو منطق حفظ.
+       ================================================================ */
+    .communication-settings-v2 {
+        --comm-cyan: #00a6da;
+        --comm-cyan-dark: #008fbd;
+        --comm-green: #18a875;
+        --comm-amber: #e7a51a;
+        --comm-navy: #05203c;
+        --comm-text: #26323d;
+        --comm-muted: #71808f;
+        --comm-line: #e4edf2;
+        --comm-soft: #f8fbfd;
+        --comm-cyan-soft: #effbff;
+        --comm-green-soft: #effbf7;
+        --comm-amber-soft: #fff9ec;
+        gap: 8px;
+    }
 
-    <section class="royal-card policy-card policy-card--cyan top-border-gold">
+    .communication-settings-v2 .communication-top-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        align-items: stretch;
+    }
+
+    .communication-settings-v2 .communication-top-grid .communication-chat-card {
+        grid-column: 2;
+        grid-row: 1;
+    }
+
+    .communication-settings-v2 .communication-top-grid .communication-contact-card {
+        grid-column: 1;
+        grid-row: 1;
+    }
+
+    .communication-settings-v2 .communication-top-grid > .communication-card {
+        height: 100%;
+        margin: 0;
+    }
+
+    .communication-settings-v2 .communication-card {
+        padding: 13px 14px;
+        border: 1px solid var(--comm-line);
+        border-radius: 11px;
+        background: linear-gradient(145deg, #ffffff 0%, #fbfdfe 100%);
+        box-shadow: 0 7px 20px rgba(5, 32, 60, 0.045);
+    }
+
+    .communication-settings-v2 .communication-card .policy-card__header {
+        position: relative;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 7px;
+        padding-bottom: 9px;
+        border-bottom: 1px solid rgba(5, 32, 60, 0.07);
+    }
+
+    .communication-settings-v2 .communication-card .policy-card__header::after {
+        content: "";
+        position: absolute;
+        inset-inline-start: 0;
+        bottom: -1px;
+        width: 64px;
+        height: 2px;
+        border-radius: 2px;
+        background: linear-gradient(90deg, var(--comm-cyan), rgba(0, 166, 218, 0));
+    }
+
+    .communication-settings-v2 .communication-card .policy-card__header h2 {
+        margin-bottom: 3px;
+        color: var(--comm-text);
+        font-size: 1rem;
+        font-weight: 900;
+    }
+
+    .communication-settings-v2 .communication-card .policy-card__header p {
+        margin: 0;
+        color: var(--comm-muted);
+        font-size: 0.75rem;
+        line-height: 1.6;
+    }
+
+    .communication-settings-v2 .communication-card .policy-card__kicker {
+        margin-bottom: 2px;
+        font-size: 0.68rem;
+        letter-spacing: 0;
+    }
+
+    .communication-settings-v2 .communication-card .policy-card__icon {
+        flex: 0 0 36px;
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        font-size: 0.94rem;
+    }
+
+    .communication-settings-v2 .communication-chat-card {
+        overflow: visible;
+    }
+
+    .communication-settings-v2 .communication-chat-card #chatSettingsContainer {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+
+    .communication-settings-v2 .communication-chat-card .policy-message-field {
+        min-width: 0;
+        margin: 0;
+        padding: 10px 11px;
+        border: 1px solid var(--comm-line);
+        border-radius: 11px;
+        background: #ffffff;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+    }
+
+    .communication-settings-v2 .communication-chat-card .policy-field-label {
+        gap: 7px;
+        margin-bottom: 5px;
+    }
+
+    .communication-settings-v2 .communication-chat-card textarea {
+        min-height: 48px;
+        padding: 7px 10px;
+        resize: vertical;
+        border-color: #dce8ee;
+        border-radius: 10px;
+        background: #fbfdfe;
+        font-size: 0.78rem;
+        line-height: 1.5;
+    }
+
+    .communication-settings-v2 .communication-chat-card textarea:focus {
+        border-color: rgba(0, 166, 218, 0.5);
+        background: #ffffff;
+        box-shadow: 0 0 0 3px rgba(0, 166, 218, 0.09);
+    }
+
+    .communication-settings-v2 .communication-quick-card {
+        position: relative;
+    }
+
+    .communication-settings-v2 #quickRepliesContainer {
+        align-items: stretch;
+        margin-top: 2px;
+    }
+
+    .communication-settings-v2 #quickRepliesContainer > .col {
+        display: flex;
+        min-width: 0;
+    }
+
+    .communication-settings-v2 #quickRepliesContainer .policy-toggle-card {
+        width: 100%;
+        min-height: 68px;
+        padding: 8px 10px;
+        border: 1px solid #e5edf1;
+        border-radius: 11px;
+        background: linear-gradient(145deg, #ffffff, #fbfdfe);
+        box-shadow: 0 5px 14px rgba(5, 32, 60, 0.035);
+        transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+    }
+
+    .communication-settings-v2 #quickRepliesContainer .policy-toggle-card:hover {
+        transform: translateY(-1px);
+        border-color: rgba(0, 166, 218, 0.24);
+        box-shadow: 0 8px 20px rgba(5, 32, 60, 0.055);
+    }
+
+    .communication-settings-v2 #quickRepliesContainer .policy-toggle-card__icon {
+        flex: 0 0 32px;
+        width: 32px;
+        height: 32px;
+        border-radius: 9px;
+        font-size: 0.76rem;
+    }
+
+    .communication-settings-v2 #quickRepliesContainer .policy-toggle-card__copy {
+        min-width: 0;
+    }
+
+    .communication-settings-v2 #quickRepliesContainer .policy-toggle-card__copy strong {
+        margin-bottom: 2px;
+        font-size: 0.76rem;
+    }
+
+    .communication-settings-v2 #quickRepliesContainer .policy-toggle-card__copy small {
+        color: var(--comm-muted);
+        font-size: 0.61rem;
+        line-height: 1.4;
+    }
+
+    .communication-settings-v2 .quick-add-slot {
+        width: 100%;
+        min-height: 68px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 7px;
+        border: 1px dashed rgba(0, 166, 218, 0.25);
+        border-radius: 11px;
+        background: linear-gradient(145deg, #fbfeff, var(--comm-cyan-soft));
+    }
+
+    .communication-settings-v2 .quick-add-button {
+        width: auto !important;
+        min-width: 145px;
+        min-height: 34px !important;
+        margin: 0 !important;
+        padding: 6px 12px !important;
+        gap: 7px;
+        border-radius: 11px !important;
+        font-size: 0.67rem !important;
+        box-shadow: 0 6px 14px rgba(24, 168, 117, 0.08) !important;
+    }
+
+    .communication-settings-v2 .quick-add-button i {
+        font-size: 0.9rem;
+    }
+
+    .communication-settings-v2 .custom-quick-zone {
+        margin-top: 2px;
+        padding: 10px;
+        border: 1px solid #e7edf1;
+        border-radius: 11px;
+        background: linear-gradient(145deg, #fbfdfe, #f7fbfd);
+    }
+
+    .communication-settings-v2 .custom-quick-zone__header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 7px;
+    }
+
+    .communication-settings-v2 .custom-quick-zone__title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--comm-text);
+        font-size: 0.78rem;
+        font-weight: 900;
+    }
+
+    .communication-settings-v2 .custom-quick-zone__title i {
+        display: grid;
+        width: 25px;
+        height: 25px;
+        place-items: center;
+        color: var(--comm-cyan-dark);
+        border-radius: 9px;
+        background: var(--comm-cyan-soft);
+    }
+
+    .communication-settings-v2 .custom-quick-zone__limit {
+        padding: 4px 8px;
+        color: var(--comm-muted);
+        border: 1px solid #e1e9ee;
+        border-radius: 999px;
+        background: #ffffff;
+        font-size: 0.62rem;
+        font-weight: 800;
+        white-space: nowrap;
+    }
+
+    .communication-settings-v2 #customQuickRepliesContainer:empty::before {
+        content: "لا توجد أسئلة خاصة مضافة حتى الآن.";
+        display: block;
+        padding: 7px 9px;
+        color: #8a98a5;
+        border: 1px dashed #dce7ec;
+        border-radius: 11px;
+        background: rgba(255, 255, 255, 0.65);
+        text-align: center;
+        font-size: 0.69rem;
+        font-weight: 700;
+    }
+
+    .communication-settings-v2 #customQuickRepliesContainer .policy-builder-item--reply {
+        margin: 0;
+        border: 1px solid #e2ebef;
+        border-radius: 12px;
+        background: #ffffff;
+        box-shadow: 0 4px 12px rgba(5, 32, 60, 0.035);
+    }
+
+    .communication-settings-v2 #customQuickRepliesContainer .policy-quick-reply-fields {
+        min-width: 0;
+    }
+
+    .communication-settings-v2 .communication-quick-note {
+        margin-top: 11px !important;
+        padding: 7px 9px;
+        border-color: rgba(24, 168, 117, 0.15);
+        border-radius: 12px;
+        background: var(--comm-green-soft);
+        color: #4f6d63;
+        font-size: 0.62rem;
+        line-height: 1.7;
+    }
+
+    .communication-settings-v2 .communication-contact-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .communication-settings-v2 .communication-contact-card .policy-form-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+
+    .communication-settings-v2 .communication-contact-card {
+        overflow: visible;
+    }
+
+    .communication-settings-v2 .communication-contact-card .policy-field {
+        min-height: 0;
+    }
+
+    .communication-settings-v2 .communication-contact-card .premium-input-group-phone,
+    .communication-settings-v2 .communication-contact-card .input-icon-wrapper {
+        width: 100%;
+    }
+
+    .communication-settings-v2 .communication-contact-card .policy-field {
+        margin: 0;
+        padding: 10px 11px;
+        border: 1px solid var(--comm-line);
+        border-radius: 13px;
+        background: #ffffff;
+    }
+
+    .communication-settings-v2 .communication-contact-card .policy-field > label {
+        margin-bottom: 5px;
+        font-size: 0.76rem;
+    }
+
+    .communication-settings-v2 .communication-contact-card .form-control {
+        min-height: 35px;
+        border-color: #dce7ec;
+        border-radius: 9px;
+        font-size: 0.78rem;
+    }
+
+    .communication-settings-v2 .communication-contact-card .policy-field small {
+        display: block;
+        margin-top: 4px;
+        color: var(--comm-muted);
+        font-size: 0.65rem;
+    }
+
+    .communication-settings-v2 .communication-hidden-settings {
+        display: none !important;
+    }
+
+    .communication-settings-v2 .communication-save-bar {
+        margin-top: 0;
+        padding: 9px 11px;
+        border: 1px solid #e2ebef;
+        border-radius: 11px;
+        background: linear-gradient(145deg, #ffffff, #f8fcfe);
+        box-shadow: 0 7px 18px rgba(5, 32, 60, 0.04);
+    }
+
+    .communication-settings-v2 .communication-save-bar .btn-royal-save {
+        min-height: 35px;
+        padding-inline: 17px;
+        border-radius: 11px;
+    }
+
+
+    @@media (min-width: 992px) {
+        .communication-settings-v2 .communication-top-grid {
+            align-items: stretch;
+        }
+
+        .communication-settings-v2 .communication-top-grid > .communication-card {
+            align-self: stretch;
+            height: 100%;
+        }
+    }
+    @@media (max-width: 991.98px) {
+        .communication-settings-v2 .communication-top-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .communication-settings-v2 .communication-top-grid .communication-chat-card,
+        .communication-settings-v2 .communication-top-grid .communication-contact-card {
+            grid-column: 1;
+            grid-row: auto;
+        }
+
+        .communication-settings-v2 .communication-top-grid .communication-chat-card {
+            order: 1;
+        }
+
+        .communication-settings-v2 .communication-top-grid .communication-contact-card {
+            order: 2;
+        }
+    }
+
+    @@media (max-width: 767.98px) {
+        .communication-settings-v2 {
+            gap: 12px;
+        }
+
+        .communication-settings-v2 .communication-card {
+            border-radius: 15px;
+        }
+
+        .communication-settings-v2 .communication-chat-card #chatSettingsContainer,
+        .communication-settings-v2 .communication-contact-card .policy-form-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .communication-settings-v2 .communication-card .policy-card__header {
+            gap: 10px;
+            padding-bottom: 11px;
+        }
+
+        .communication-settings-v2 .communication-card .policy-card__header h2 {
+            font-size: 0.94rem;
+        }
+
+        .communication-settings-v2 #quickRepliesContainer .policy-toggle-card,
+        .communication-settings-v2 .quick-add-slot {
+            min-height: 76px;
+        }
+
+        .communication-settings-v2 .quick-add-button {
+            min-width: 150px;
+        }
+
+        .communication-settings-v2 .custom-quick-zone__header {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+
+        .communication-settings-v2 .communication-save-bar {
+            gap: 10px;
+        }
+    }
+
+    @@media (max-width: 575.98px) {
+        .communication-settings-v2 #quickRepliesContainer > .col {
+            width: 100%;
+        }
+
+        .communication-settings-v2 .quick-add-slot {
+            min-height: 64px;
+        }
+
+        .communication-settings-v2 .quick-add-button {
+            width: 100% !important;
+            max-width: 230px;
+        }
+
+        .communication-settings-v2 #customQuickRepliesContainer .policy-builder-item--reply {
+            align-items: stretch;
+        }
+
+        .communication-settings-v2 #customQuickRepliesContainer .policy-quick-reply-fields {
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr);
+            width: 100%;
+        }
+
+        .communication-settings-v2 #customQuickRepliesContainer .policy-quick-reply-fields .form-control {
+            min-width: 0;
+        }
+    }
+</style>
+
+<div class="royal-policies-wrapper policy-section-stack fade-in-up communication-settings-v2" dir="rtl">
+
+    <div class="communication-top-grid" aria-label="إعدادات الدردشة وقنوات التواصل الرسمية">
+    <section class="royal-card policy-card policy-card--cyan top-border-gold communication-card communication-chat-card">
         <header class="policy-card__header policy-card__header--with-switch">
             <span class="icon-glow-wrapper policy-card__icon" aria-hidden="true">
                 <i class="bi bi-chat-dots-fill"></i>
@@ -33,11 +511,7 @@
                 </div>
                 <textarea class="form-control fw-bold"
                           id="welcomeMessage"
-                          rows="4">أهلاً بك في منشأتنا! كيف يمكننا خدمتك اليوم؟ يرجى العلم أنه يجب إبراز إثبات الهوية عند الوصول.</textarea>
-                <small>
-                    <i class="bi bi-info-circle"></i>
-                    تظهر للزبون عند فتح المحادثة أثناء وقت العمل.
-                </small>
+                          rows="2">أهلاً بك في منشأتنا! كيف يمكننا خدمتك اليوم؟ يرجى العلم أنه يجب إبراز إثبات الهوية عند الوصول.</textarea>
             </div>
 
             <div class="luxury-floating-input policy-message-field">
@@ -55,17 +529,65 @@
                 </div>
                 <textarea class="form-control fw-bold text-muted bg-light"
                           id="offlineMessage"
-                          rows="4"
+                          rows="2"
                           disabled>عذراً، نحن خارج أوقات العمل حالياً. يرجى ترك رسالتك وسنقوم بالرد عليك فور عودتنا.</textarea>
-                <small>
-                    <i class="bi bi-info-circle"></i>
-                    تُرسل آليًا عندما تصل الرسالة خارج وقت التشغيل.
-                </small>
             </div>
         </div>
     </section>
 
-    <section class="royal-card policy-card policy-card--green emerald-theme"
+    <section class="royal-card policy-card policy-card--amber gold-theme communication-card communication-contact-card">
+        <header class="policy-card__header policy-card__header--compact">
+            <span class="icon-glow-wrapper policy-card__icon" aria-hidden="true">
+                <i class="bi bi-headset"></i>
+            </span>
+            <div>
+                <span class="policy-card__kicker">بيانات التواصل</span>
+                <h2>قنوات الاتصال الرسمية</h2>
+                <p>هاتف الطوارئ والبريد المعتمد لاستقبال التنبيهات المهمة.</p>
+            </div>
+        </header>
+
+        <div class="policy-form-grid">
+            <div class="luxury-floating-input policy-field">
+                <label for="emergencyContact">
+                    <i class="bi bi-telephone-outbound"></i>
+                    هاتف الطوارئ
+                    <span class="text-danger">*</span>
+                </label>
+                <div dir="ltr"
+                     class="phone-wrapper-ltr premium-input-group-phone w-100">
+                    <input type="tel"
+                           class="form-control phone-input-vip w-100 fw-bold"
+                           id="emergencyContact"
+                           placeholder="777xxxxxx"
+                           autocomplete="tel" />
+                </div>
+                <span id="emergencyPhoneMsg"
+                      class="small mt-1 text-end d-block fw-bold"
+                      dir="rtl"></span>
+            </div>
+
+            <div class="luxury-floating-input policy-field">
+                <label for="contactEmail">
+                    <i class="bi bi-envelope-at"></i>
+                    البريد الإلكتروني
+                </label>
+                <div class="input-icon-wrapper">
+                    <i class="bi bi-envelope" aria-hidden="true"></i>
+                    <input type="email"
+                           class="form-control fw-bold"
+                           id="contactEmail"
+                           placeholder="info@example.com"
+                           autocomplete="email" />
+                </div>
+                <small>اختياري، ويُستخدم للتنبيهات والمراسلات الرسمية.</small>
+            </div>
+        </div>
+    </section>
+
+    </div>
+
+    <section class="royal-card policy-card policy-card--green emerald-theme communication-card communication-quick-card"
              id="customerQuickQuestionsCard">
         <header class="policy-card__header policy-card__header--compact">
             <span class="icon-glow-wrapper policy-card__icon" aria-hidden="true">
@@ -74,167 +596,152 @@
             <div>
                 <span class="policy-card__kicker">خدمة ذاتية للزبون</span>
                 <h2>الأسئلة السريعة للعميل</h2>
-                <p>حدد المواضيع التي تريد إظهارها للزبون داخل الدردشة. الإجابة لا تُكتب يدويًا؛ النظام يبنيها من بيانات المنشأة وسياساتها الحالية.</p>
+                <p>الأسئلة الأساسية يجيب عنها النظام من بيانات المنشأة، ويمكنك إضافة سؤال خاص مع إجابته الجاهزة.</p>
             </div>
         </header>
 
         <div id="quickRepliesContainer"
-             class="policy-toggle-list"
+             class="row row-cols-1 row-cols-md-2 g-2 mb-3"
              aria-label="الأسئلة السريعة التي تظهر للعميل">
 
-            <label class="policy-toggle-card">
-                <span class="policy-toggle-card__icon policy-toggle-card__icon--green">
-                    <i class="bi bi-cash-stack"></i>
-                </span>
-                <span class="policy-toggle-card__copy">
-                    <strong>الأسعار</strong>
-                    <small>مثال: بكم؟ كم حق الليلة؟ كم السعر؟</small>
-                </span>
-                <span class="form-check form-switch m-0">
-                    <input class="form-check-input"
-                           type="checkbox"
-                           data-customer-quick-topic
-                           data-topic-key="price"
-                           data-topic-title="الأسعار"
-                           data-topic-question="كم الأسعار؟"
-                           checked />
-                </span>
-            </label>
+            <div class="col">
+                <label class="policy-toggle-card h-100">
+                    <span class="policy-toggle-card__icon policy-toggle-card__icon--green">
+                        <i class="bi bi-cash-stack"></i>
+                    </span>
+                    <span class="policy-toggle-card__copy">
+                        <strong>الأسعار</strong>
+                        <small>مثال: بكم؟ كم حق الليلة؟ كم السعر؟</small>
+                    </span>
+                    <span class="form-check form-switch m-0">
+                        <input class="form-check-input"
+                               type="checkbox"
+                               data-customer-quick-topic
+                               data-topic-key="price"
+                               data-topic-title="الأسعار"
+                               data-topic-question="كم الأسعار؟"
+                               checked />
+                    </span>
+                </label>
+            </div>
 
-            <label class="policy-toggle-card">
-                <span class="policy-toggle-card__icon policy-toggle-card__icon--cyan">
-                    <i class="bi bi-calendar2-check"></i>
-                </span>
-                <span class="policy-toggle-card__copy">
-                    <strong>التوفر</strong>
-                    <small>مثال: في فاضي؟ هل توجد غرف متاحة؟</small>
-                </span>
-                <span class="form-check form-switch m-0">
-                    <input class="form-check-input"
-                           type="checkbox"
-                           data-customer-quick-topic
-                           data-topic-key="availability"
-                           data-topic-title="التوفر"
-                           data-topic-question="هل يوجد توفر؟"
-                           checked />
-                </span>
-            </label>
+            <div class="col">
+                <label class="policy-toggle-card h-100">
+                    <span class="policy-toggle-card__icon policy-toggle-card__icon--cyan">
+                        <i class="bi bi-calendar2-check"></i>
+                    </span>
+                    <span class="policy-toggle-card__copy">
+                        <strong>التوفر</strong>
+                        <small>مثال: في فاضي؟ هل توجد غرف متاحة؟</small>
+                    </span>
+                    <span class="form-check form-switch m-0">
+                        <input class="form-check-input"
+                               type="checkbox"
+                               data-customer-quick-topic
+                               data-topic-key="availability"
+                               data-topic-title="التوفر"
+                               data-topic-question="هل يوجد توفر؟"
+                               checked />
+                    </span>
+                </label>
+            </div>
 
-            <label class="policy-toggle-card">
-                <span class="policy-toggle-card__icon policy-toggle-card__icon--amber">
-                    <i class="bi bi-arrow-counterclockwise"></i>
-                </span>
-                <span class="policy-toggle-card__copy">
-                    <strong>الإلغاء والاسترداد</strong>
-                    <small>يعرض سياسة الإلغاء والاسترداد المعتمدة حاليًا.</small>
-                </span>
-                <span class="form-check form-switch m-0">
-                    <input class="form-check-input"
-                           type="checkbox"
-                           data-customer-quick-topic
-                           data-topic-key="cancellation"
-                           data-topic-title="الإلغاء والاسترداد"
-                           data-topic-question="ما سياسة الإلغاء والاسترداد؟"
-                           checked />
-                </span>
-            </label>
+            <div class="col">
+                <label class="policy-toggle-card h-100">
+                    <span class="policy-toggle-card__icon policy-toggle-card__icon--amber">
+                        <i class="bi bi-arrow-counterclockwise"></i>
+                    </span>
+                    <span class="policy-toggle-card__copy">
+                        <strong>الإلغاء والاسترداد</strong>
+                        <small>يعرض سياسة الإلغاء والاسترداد المعتمدة حاليًا.</small>
+                    </span>
+                    <span class="form-check form-switch m-0">
+                        <input class="form-check-input"
+                               type="checkbox"
+                               data-customer-quick-topic
+                               data-topic-key="cancellation"
+                               data-topic-title="الإلغاء والاسترداد"
+                               data-topic-question="ما سياسة الإلغاء والاسترداد؟"
+                               checked />
+                    </span>
+                </label>
+            </div>
 
-            <label class="policy-toggle-card">
-                <span class="policy-toggle-card__icon policy-toggle-card__icon--cyan">
-                    <i class="bi bi-clock-history"></i>
-                </span>
-                <span class="policy-toggle-card__copy">
-                    <strong>الدخول والخروج</strong>
-                    <small>يعرض أوقات الاستلام والتسليم الحالية للمنشأة.</small>
-                </span>
-                <span class="form-check form-switch m-0">
-                    <input class="form-check-input"
-                           type="checkbox"
-                           data-customer-quick-topic
-                           data-topic-key="checkinout"
-                           data-topic-title="الدخول والخروج"
-                           data-topic-question="ما أوقات الدخول والخروج؟"
-                           checked />
-                </span>
-            </label>
+            <div class="col">
+                <label class="policy-toggle-card h-100">
+                    <span class="policy-toggle-card__icon policy-toggle-card__icon--cyan">
+                        <i class="bi bi-clock-history"></i>
+                    </span>
+                    <span class="policy-toggle-card__copy">
+                        <strong>الدخول والخروج</strong>
+                        <small>يعرض أوقات الاستلام والتسليم الحالية للمنشأة.</small>
+                    </span>
+                    <span class="form-check form-switch m-0">
+                        <input class="form-check-input"
+                               type="checkbox"
+                               data-customer-quick-topic
+                               data-topic-key="checkinout"
+                               data-topic-title="الدخول والخروج"
+                               data-topic-question="ما أوقات الدخول والخروج؟"
+                               checked />
+                    </span>
+                </label>
+            </div>
 
-            <label class="policy-toggle-card">
-                <span class="policy-toggle-card__icon policy-toggle-card__icon--green">
-                    <i class="bi bi-wallet2"></i>
-                </span>
-                <span class="policy-toggle-card__copy">
-                    <strong>العربون والدفع</strong>
-                    <small>يعرض شروط العربون ومهلة الدفع من السياسة الحالية.</small>
-                </span>
-                <span class="form-check form-switch m-0">
-                    <input class="form-check-input"
-                           type="checkbox"
-                           data-customer-quick-topic
-                           data-topic-key="payment"
-                           data-topic-title="العربون والدفع"
-                           data-topic-question="كيف يكون العربون والدفع؟"
-                           checked />
-                </span>
-            </label>
+            <div class="col">
+                <label class="policy-toggle-card h-100">
+                    <span class="policy-toggle-card__icon policy-toggle-card__icon--green">
+                        <i class="bi bi-wallet2"></i>
+                    </span>
+                    <span class="policy-toggle-card__copy">
+                        <strong>العربون والدفع</strong>
+                        <small>يعرض شروط العربون ومهلة الدفع من السياسة الحالية.</small>
+                    </span>
+                    <span class="form-check form-switch m-0">
+                        <input class="form-check-input"
+                               type="checkbox"
+                               data-customer-quick-topic
+                               data-topic-key="payment"
+                               data-topic-title="العربون والدفع"
+                               data-topic-question="كيف يكون العربون والدفع؟"
+                               checked />
+                    </span>
+                </label>
+            </div>
+
+            <div class="col">
+                <div class="quick-add-slot">
+                    <button type="button"
+                        class="btn-royal-add emerald-add mt-0 quick-add-button"
+                        onclick="addQuickReply()"
+                        aria-label="إضافة سؤال سريع خاص">
+                    <i class="bi bi-plus-circle"></i>
+                    <span>إضافة سؤال سريع</span>
+                    </button>
+                </div>
+            </div>
         </div>
 
-        <div class="policy-card__note mt-3">
+        <div class="custom-quick-zone">
+            <div class="custom-quick-zone__header">
+                <div class="custom-quick-zone__title">
+                    <i class="bi bi-stars"></i>
+                    <span>أسئلتك المخصصة</span>
+                </div>
+                <span class="custom-quick-zone__limit">حتى 5 أسئلة خاصة</span>
+            </div>
+            <div id="customQuickRepliesContainer"
+                 class="policy-builder-list d-flex flex-column gap-2"
+                 aria-label="الأسئلة السريعة الخاصة التي أضافها المالك"></div>
+        </div>
+
+        <div class="policy-card__note mt-3 communication-quick-note">
             <i class="bi bi-shield-check"></i>
-            الأسئلة اختيارية للزبون. ويمكنه كتابة سؤاله بحرية؛ إذا تعرّف النظام على موضوع موثوق يجيب من البيانات الحالية، وإذا لم يتأكد تُرسل الرسالة للمالك كدردشة عادية دون تخمين.
+            الأسئلة الخمسة الأساسية يجيب عنها النظام من البيانات الحالية. أما السؤال الذي تضيفه بنفسك فيجب كتابة السؤال وإجابته، ويُرسل الرد الجاهز تلقائيًا عند اختيار العميل له.
         </div>
     </section>
 
-    <div class="policy-two-column-grid policy-two-column-grid--wide-first">
-        <section class="royal-card policy-card policy-card--amber gold-theme">
-            <header class="policy-card__header policy-card__header--compact">
-                <span class="icon-glow-wrapper policy-card__icon" aria-hidden="true">
-                    <i class="bi bi-headset"></i>
-                </span>
-                <div>
-                    <span class="policy-card__kicker">بيانات التواصل</span>
-                    <h2>قنوات الاتصال الرسمية</h2>
-                    <p>هاتف الطوارئ والبريد المعتمد لاستقبال التنبيهات المهمة.</p>
-                </div>
-            </header>
-
-            <div class="policy-form-grid">
-                <div class="luxury-floating-input policy-field">
-                    <label for="emergencyContact">
-                        <i class="bi bi-telephone-outbound"></i>
-                        هاتف الطوارئ
-                        <span class="text-danger">*</span>
-                    </label>
-                    <div dir="ltr"
-                         class="phone-wrapper-ltr premium-input-group-phone w-100">
-                        <input type="tel"
-                               class="form-control phone-input-vip w-100 fw-bold"
-                               id="emergencyContact"
-                               placeholder="777xxxxxx"
-                               autocomplete="tel" />
-                    </div>
-                    <span id="emergencyPhoneMsg"
-                          class="small mt-1 text-end d-block fw-bold"
-                          dir="rtl"></span>
-                </div>
-
-                <div class="luxury-floating-input policy-field">
-                    <label for="contactEmail">
-                        <i class="bi bi-envelope-at"></i>
-                        البريد الإلكتروني
-                    </label>
-                    <div class="input-icon-wrapper">
-                        <i class="bi bi-envelope" aria-hidden="true"></i>
-                        <input type="email"
-                               class="form-control fw-bold"
-                               id="contactEmail"
-                               placeholder="info@example.com"
-                               autocomplete="email" />
-                    </div>
-                    <small>اختياري، ويُستخدم للتنبيهات والمراسلات الرسمية.</small>
-                </div>
-            </div>
-        </section>
-
+    <div class="communication-hidden-settings" aria-hidden="true">
         <section class="royal-card policy-card policy-card--neutral silver-theme d-none" aria-hidden="true">
             <header class="policy-card__header policy-card__header--compact">
                 <span class="icon-glow-wrapper policy-card__icon" aria-hidden="true">
@@ -283,7 +790,7 @@
         </section>
     </div>
 
-    <footer class="policy-save-bar">
+    <footer class="policy-save-bar communication-save-bar">
         <div class="policy-save-bar__copy">
             <i class="bi bi-info-circle"></i>
             <span>تُطبق إعدادات التواصل والأسئلة السريعة على المنشأة الحالية فقط.</span>
@@ -294,3 +801,304 @@
         </button>
     </footer>
 </div>
+
+<script>
+    // تمديد منطق الأسئلة السريعة باستخدام الملفات الحالية فقط.
+    // لا نضيف جدولًا أو ملف JavaScript جديدًا، ونحافظ على QuickRepliesJson الموجود أصلًا.
+    document.addEventListener("DOMContentLoaded", function installOwnerCustomQuickQuestions() {
+        if (window.__yemenGuideCustomQuickQuestionsInstalled === true) return;
+        window.__yemenGuideCustomQuickQuestionsInstalled = true;
+
+        const customQuickReplyType = "custom-quick-reply";
+        const maximumCustomQuickQuestions = 5;
+
+        function createCustomQuickQuestionKey() {
+            if (window.crypto?.randomUUID) {
+                return `custom_${window.crypto.randomUUID().replace(/-/g, "")}`;
+            }
+
+            return `custom_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+        }
+
+        function getObjectValue(source, ...keys) {
+            for (const key of keys) {
+                const value = source?.[key];
+                if (value !== undefined && value !== null) return String(value);
+            }
+            return "";
+        }
+
+        function isOldQuickReply(item) {
+            if (!item || typeof item !== "object") return false;
+
+            const type = getObjectValue(item, "type", "Type").trim();
+            if (type) return false;
+
+            const question = getObjectValue(item, "question", "Question", "title", "Title").trim();
+            const answer = getObjectValue(item, "answer", "Answer", "reply", "Reply").trim();
+            return Boolean(question && answer);
+        }
+
+        function createCustomQuickReplyItem(reply = {}, editing = false) {
+            const item = document.createElement("div");
+            const question = getObjectValue(
+                reply,
+                "question",
+                "Question",
+                "title",
+                "Title"
+            ).trim();
+            const answer = getObjectValue(
+                reply,
+                "answer",
+                "Answer",
+                "reply",
+                "Reply"
+            ).trim();
+            const existingKey = getObjectValue(reply, "key", "Key").trim().toLowerCase();
+
+            item.className =
+                "luxury-list-item policy-builder-item policy-builder-item--reply fade-in-up";
+            item.dataset.quickQuestionKey =
+                existingKey.startsWith("custom_")
+                    ? existingKey
+                    : createCustomQuickQuestionKey();
+
+            item.innerHTML = `
+                <span class="item-icon policy-builder-item__icon" aria-hidden="true">
+                    <i class="bi bi-question-circle-fill"></i>
+                </span>
+                <div class="input-group input-group-sm flex-grow-1 policy-quick-reply-fields">
+                    <span class="input-group-text">السؤال</span>
+                    <input type="text"
+                           class="form-control fw-bold text-primary custom-quick-question ${editing ? "editing-mode" : ""}"
+                           value="${escapeAttribute(question)}"
+                           maxlength="140"
+                           placeholder="مثال: هل يوجد موقف سيارات؟"
+                           aria-label="السؤال السريع"
+                           ${editing ? "" : "readonly"}>
+                    <span class="input-group-text">الإجابة</span>
+                    <input type="text"
+                           class="form-control fw-bold policy-desc custom-quick-answer ${editing ? "editing-mode" : ""}"
+                           value="${escapeAttribute(answer)}"
+                           maxlength="1200"
+                           placeholder="اكتب الإجابة التي ستُرسل للعميل تلقائيًا..."
+                           aria-label="إجابة السؤال السريع"
+                           ${editing ? "" : "readonly"}>
+                </div>
+                ${buildItemActionsHtml("السؤال السريع", editing)}
+            `;
+
+            return item;
+        }
+
+        window.addQuickReply = function addQuickReply() {
+            const container = document.getElementById("customQuickRepliesContainer");
+            if (!container) return;
+
+            const existingItems = container.querySelectorAll(".policy-builder-item--reply");
+            if (existingItems.length >= maximumCustomQuickQuestions) {
+                Swal.fire({
+                    icon: "info",
+                    title: "الحد الأقصى للأسئلة الخاصة",
+                    text: "يمكن إضافة خمسة أسئلة خاصة كحد أقصى بالإضافة إلى الأسئلة الأساسية الخمسة.",
+                    confirmButtonColor: "#00A6DA"
+                });
+                return;
+            }
+
+            const item = createCustomQuickReplyItem({}, true);
+            container.appendChild(item);
+            item.querySelector(".custom-quick-question")?.focus();
+        };
+
+        window.serializeQuickRepliesList = function serializeQuickRepliesList() {
+            const topicInputs = Array.from(
+                document.querySelectorAll("#quickRepliesContainer [data-customer-quick-topic]")
+            );
+
+            const topics = topicInputs
+                .filter(input => input.checked)
+                .map(input => ({
+                    type: "customer-topic",
+                    key: input.dataset.topicKey || "",
+                    title: input.dataset.topicTitle || "",
+                    question: input.dataset.topicQuestion || ""
+                }))
+                .filter(topic => topic.key && topic.title && topic.question);
+
+            const customReplies = Array.from(
+                document.querySelectorAll(
+                    "#customQuickRepliesContainer .policy-builder-item--reply"
+                )
+            )
+                .map(item => {
+                    const question =
+                        item.querySelector(".custom-quick-question")?.value.trim() || "";
+                    const answer =
+                        item.querySelector(".custom-quick-answer")?.value.trim() || "";
+                    let key = String(item.dataset.quickQuestionKey || "")
+                        .trim()
+                        .toLowerCase();
+
+                    if (!key.startsWith("custom_")) {
+                        key = createCustomQuickQuestionKey();
+                        item.dataset.quickQuestionKey = key;
+                    }
+
+                    return {
+                        type: customQuickReplyType,
+                        key,
+                        question,
+                        answer,
+                        title: question,
+                        reply: answer
+                    };
+                })
+                .filter(item => item.question && item.answer)
+                .slice(0, maximumCustomQuickQuestions);
+
+            return JSON.stringify([
+                { type: "customer-topic-config", version: 2 },
+                ...topics,
+                ...customReplies,
+                ...facilityPolicyState.legacyQuickReplies
+            ]);
+        };
+
+        window.rebuildQuickRepliesList = function rebuildQuickRepliesList(jsonText) {
+            const fixedContainer = document.getElementById("quickRepliesContainer");
+            const customContainer = document.getElementById("customQuickRepliesContainer");
+            if (!fixedContainer) return;
+
+            const parsed = parseJsonArray(jsonText);
+            const topicInputs = Array.from(
+                fixedContainer.querySelectorAll("[data-customer-quick-topic]")
+            );
+
+            const hasTopicConfig = parsed.some(item =>
+                item &&
+                typeof item === "object" &&
+                getObjectValue(item, "type", "Type").trim().toLowerCase() ===
+                    "customer-topic-config"
+            );
+
+            const selectedKeys = new Set(
+                parsed
+                    .filter(item => item && typeof item === "object")
+                    .filter(item =>
+                        getObjectValue(item, "type", "Type").trim().toLowerCase() ===
+                        "customer-topic"
+                    )
+                    .map(item =>
+                        getObjectValue(
+                            item,
+                            "key",
+                            "Key",
+                            "topicKey",
+                            "TopicKey"
+                        ).trim().toLowerCase()
+                    )
+                    .filter(Boolean)
+            );
+
+            // لا نغير القيم الافتراضية للخمسة الأساسية إلا إذا وُجد حفظ صريح سابق.
+            if (hasTopicConfig || selectedKeys.size > 0) {
+                topicInputs.forEach(input => {
+                    const key = String(input.dataset.topicKey || "")
+                        .trim()
+                        .toLowerCase();
+                    input.checked = selectedKeys.has(key);
+                });
+            }
+
+            const customItems = [];
+            const preservedLegacyItems = [];
+
+            parsed.forEach(item => {
+                if (!item || typeof item !== "object") return;
+
+                const type = getObjectValue(item, "type", "Type")
+                    .trim()
+                    .toLowerCase();
+
+                if (type === "customer-topic" || type === "customer-topic-config") {
+                    return;
+                }
+
+                if (type === customQuickReplyType || isOldQuickReply(item)) {
+                    customItems.push(item);
+                    return;
+                }
+
+                // أي صيغة قديمة غير معروفة نحافظ عليها كما هي حتى لا نفقد بيانات.
+                preservedLegacyItems.push({ ...item });
+            });
+
+            facilityPolicyState.legacyQuickReplies = preservedLegacyItems;
+
+            if (!customContainer) return;
+            customContainer.innerHTML = "";
+
+            customItems
+                .slice(0, maximumCustomQuickQuestions)
+                .forEach(reply => {
+                    customContainer.appendChild(
+                        createCustomQuickReplyItem(reply, false)
+                    );
+                });
+        };
+
+        const originalValidateFacilitySettingsForm =
+            window.validateFacilitySettingsForm;
+
+        window.validateFacilitySettingsForm = function validateFacilitySettingsForm() {
+            const errors = typeof originalValidateFacilitySettingsForm === "function"
+                ? originalValidateFacilitySettingsForm()
+                : [];
+
+            const items = Array.from(
+                document.querySelectorAll(
+                    "#customQuickRepliesContainer .policy-builder-item--reply"
+                )
+            );
+            const normalizedQuestions = new Set();
+
+            for (const item of items) {
+                const questionInput = item.querySelector(".custom-quick-question");
+                const answerInput = item.querySelector(".custom-quick-answer");
+                const question = questionInput?.value.trim() || "";
+                const answer = answerInput?.value.trim() || "";
+
+                if (!question || !answer) {
+                    errors.push({
+                        tab: "communication-tab",
+                        target: !question
+                            ? "#customQuickRepliesContainer .custom-quick-question"
+                            : "#customQuickRepliesContainer .custom-quick-answer",
+                        message: "أكمل السؤال والإجابة للسؤال السريع المضاف، أو احذفه إذا لم تعد تحتاجه."
+                    });
+                    break;
+                }
+
+                const normalizedQuestion = question
+                    .toLowerCase()
+                    .replace(/\s+/g, " ")
+                    .trim();
+
+                if (normalizedQuestions.has(normalizedQuestion)) {
+                    errors.push({
+                        tab: "communication-tab",
+                        target: "#customQuickRepliesContainer",
+                        message: "يوجد سؤال سريع مكرر. عدّل السؤال المكرر أو احذفه."
+                    });
+                    break;
+                }
+
+                normalizedQuestions.add(normalizedQuestion);
+            }
+
+            return errors;
+        };
+    });
+</script>

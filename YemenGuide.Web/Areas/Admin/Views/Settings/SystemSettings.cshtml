@@ -1,4 +1,4 @@
-﻿@model YemenGuide.Core.Entities.SystemSetting
+@model YemenGuide.Core.Entities.SystemSetting
 @{
     ViewData["Title"] = "إعدادات النظام";
     Layout = "~/Areas/Admin/Views/Shared/_AdminLayout.cshtml";
@@ -730,7 +730,7 @@
                 </div>
 
                 <div class="col-12">
-                    <div class="settings-card p-4">
+                    <div class="settings-card p-4" id="exchangeRateModeCard">
                         <div class="d-flex align-items-start gap-3 mb-3">
                             <div class="card-icon">
                                 <i class="bi bi-arrow-repeat text-success"></i>
@@ -738,14 +738,42 @@
                             <div class="flex-grow-1">
                                 <div class="d-flex justify-content-between align-items-center">
                                     <div>
-                                        <label class="fw-bold mb-1">التحديث التلقائي لأسعار الصرف</label>
-                                        <small class="text-muted d-block">مجهز للتفعيل المستقبلي عبر الـ API</small>
+                                        <label class="fw-bold mb-1">طريقة إدارة أسعار الصرف</label>
+                                        <small class="text-muted d-block" id="exchangeRateModeDescription">
+                                            @(Model.AutoUpdateExchangeRates == true
+                                                ? "تلقائي: الأسعار مقفلة وتُجلب من المصدر المعتمد."
+                                                : "يدوي: يمكنك تعديل أسعار صنعاء وعدن ثم حفظها.")
+                                        </small>
                                     </div>
                                     <div class="form-check form-switch">
-                                        <input class="form-check-input" type="checkbox" id="autoUpdateExchangeRates" @(Model.AutoUpdateExchangeRates == true ? "checked" : null)>
+                                        <input class="form-check-input"
+                                               type="checkbox"
+                                               id="autoUpdateExchangeRates"
+                                               data-saved-value="@(Model.AutoUpdateExchangeRates == true ? "true" : "false")"
+                                               @(Model.AutoUpdateExchangeRates == true ? "checked" : null)>
                                     </div>
                                 </div>
                             </div>
+                        </div>
+                        <div class="d-flex flex-wrap align-items-center gap-2 mt-3">
+                            <span class="badge rounded-pill @(Model.ExchangeRateLastStatus == "Success" ? "bg-success" : Model.ExchangeRateLastStatus == "Failed" ? "bg-danger" : "bg-secondary")"
+                                  id="exchangeRateStatusBadge">
+                                @(Model.ExchangeRateLastStatus == "Success" ? "محدّث بنجاح" : Model.ExchangeRateLastStatus == "Failed" ? "تعذر آخر تحديث" : "لم يتم التحديث بعد")
+                            </span>
+                            <small class="text-muted">المصدر: <strong id="exchangeRateSourceText">@(string.IsNullOrWhiteSpace(Model.ExchangeRateLastSource) ? "—" : Model.ExchangeRateLastSource)</strong></small>
+                            <small class="text-muted">آخر نجاح: <strong id="exchangeRateLastUpdatedText">@(Model.ExchangeRateLastUpdatedAt?.ToString("yyyy/MM/dd HH:mm") ?? "—")</strong></small>
+                            <button type="button"
+                                    class="btn btn-outline-primary btn-sm me-auto"
+                                    id="refreshExchangeRatesNowBtn"
+                                    style="@(Model.AutoUpdateExchangeRates == true ? null : "display:none;")">
+                                <i class="bi bi-arrow-clockwise"></i>
+                                تحديث الأسعار الآن
+                            </button>
+                        </div>
+                        <div class="alert alert-danger py-2 px-3 mt-3 mb-0 @(string.IsNullOrWhiteSpace(Model.ExchangeRateLastError) ? "d-none" : "")"
+                             id="exchangeRateLastErrorBox">
+                            <i class="bi bi-exclamation-triangle me-1"></i>
+                            <span id="exchangeRateLastErrorText">@Model.ExchangeRateLastError</span>
                         </div>
                     </div>
                 </div>
@@ -757,13 +785,13 @@
                         <div class="row g-3">
                             <div class="col-12">
                                 <div class="form-floating border border-success border-opacity-25 rounded-3">
-                                    <input type="number" step="0.01" class="form-control" id="sanaaUsdRate" value="@Model.SanaaUsdRate.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)">
+                                    <input type="number" step="0.01" min="0.01" class="form-control exchange-rate-input" id="sanaaUsdRate" value="@Model.SanaaUsdRate.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)" @(Model.AutoUpdateExchangeRates == true ? "readonly" : null)>
                                     <label for="sanaaUsdRate">مقابل الريال (المناطق الشمالية)</label>
                                 </div>
                             </div>
                             <div class="col-12">
                                 <div class="form-floating border border-primary border-opacity-25 rounded-3">
-                                    <input type="number" step="0.01" class="form-control" id="adenUsdRate" value="@Model.AdenUsdRate.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)">
+                                    <input type="number" step="0.01" min="0.01" class="form-control exchange-rate-input" id="adenUsdRate" value="@Model.AdenUsdRate.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)" @(Model.AutoUpdateExchangeRates == true ? "readonly" : null)>
                                     <label for="adenUsdRate">مقابل الريال (المناطق الجنوبية)</label>
                                 </div>
                             </div>
@@ -778,13 +806,13 @@
                         <div class="row g-3">
                             <div class="col-12">
                                 <div class="form-floating border border-success border-opacity-25 rounded-3">
-                                    <input type="number" step="0.01" class="form-control" id="sanaaSarRate" value="@Model.SanaaSarRate.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)">
+                                    <input type="number" step="0.01" min="0.01" class="form-control exchange-rate-input" id="sanaaSarRate" value="@Model.SanaaSarRate.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)" @(Model.AutoUpdateExchangeRates == true ? "readonly" : null)>
                                     <label for="sanaaSarRate">مقابل الريال (المناطق الشمالية)</label>
                                 </div>
                             </div>
                             <div class="col-12">
                                 <div class="form-floating border border-primary border-opacity-25 rounded-3">
-                                    <input type="number" step="0.01" class="form-control" id="adenSarRate" value="@Model.AdenSarRate.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)">
+                                    <input type="number" step="0.01" min="0.01" class="form-control exchange-rate-input" id="adenSarRate" value="@Model.AdenSarRate.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)" @(Model.AutoUpdateExchangeRates == true ? "readonly" : null)>
                                     <label for="adenSarRate">مقابل الريال (المناطق الجنوبية)</label>
                                 </div>
                             </div>

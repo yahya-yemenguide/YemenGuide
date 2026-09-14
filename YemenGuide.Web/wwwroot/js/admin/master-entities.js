@@ -1,4 +1,4 @@
-﻿/**
+/**
 * ============================================================================
 * Dalilak Al-Yamani - Master Entities Management
 * الفئات + المدن | Premium / Responsive Edition
@@ -253,8 +253,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const nameInput = qs('.city-name-input', form);
         const colorPicker = qs('.city-color-picker', form);
+        const exchangeMarket = document.getElementById('cityExchangeRateRegion');
 
         nameInput?.addEventListener('input', updateCityPreviewName);
+        exchangeMarket?.addEventListener('change', updateCityExchangeMarketPreview);
         colorPicker?.addEventListener('input', () => {
             selectedCityColor = colorPicker.value || DEFAULT_COLOR;
             updateCityColorUI();
@@ -262,6 +264,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         form.addEventListener('submit', submitCityForm);
         updateCityColorUI();
+        updateCityExchangeMarketPreview();
     }
 
     window.openAddCategory = function openAddCategory() {
@@ -323,6 +326,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         updateCityPreviewName();
         updateCityColorUI();
+        updateCityExchangeMarketPreview();
     }
 
     function updateCategoryPreviewName() {
@@ -335,6 +339,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const input = qs('.city-name-input');
         const preview = document.getElementById('previewCityName');
         if (preview) preview.textContent = input?.value.trim() || 'مدينة جديدة';
+    }
+
+    function updateCityExchangeMarketPreview() {
+        const select = document.getElementById('cityExchangeRateRegion');
+        const preview = document.getElementById('previewCityExchangeMarket');
+        if (!preview) return;
+
+        preview.textContent = select?.value === 'North'
+            ? 'سوق صنعاء'
+            : select?.value === 'South'
+                ? 'سوق عدن'
+                : 'اختر سوق الصرف';
     }
 
     function updateCategoryColorUI() {
@@ -534,6 +550,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const cityId = Number.parseInt(document.getElementById('cityId')?.value || '0', 10);
         const cityName = qs('.city-name-input', form)?.value.trim() || '';
         const cityNameEn = qs('.city-name-en-input', form)?.value.trim() || '';
+        const exchangeRateRegion = document.getElementById('cityExchangeRateRegion')?.value || '';
 
         if (!cityName) {
             showWarning('اسم المدينة مطلوب', 'اكتب اسم المدينة بالعربية قبل الحفظ.');
@@ -553,6 +570,12 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        if (exchangeRateRegion !== 'North' && exchangeRateRegion !== 'South') {
+            showWarning('سوق الصرف مطلوب', 'حدد سوق صنعاء أو سوق عدن لهذه المدينة قبل الحفظ.');
+            document.getElementById('cityExchangeRateRegion')?.focus();
+            return;
+        }
+
         const url = cityId === 0
             ? '/Admin/MasterEntities/AddCity'
             : '/Admin/MasterEntities/EditCity';
@@ -567,7 +590,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     CityId: cityId,
                     CityName: cityName,
                     CityNameEn: cityNameEn,
-                    ThemeColor: selectedCityColor || DEFAULT_COLOR
+                    ThemeColor: selectedCityColor || DEFAULT_COLOR,
+                    ExchangeRateRegion: exchangeRateRegion
                 })
             });
 
@@ -687,6 +711,14 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('cityId').value = String(data.cityId);
             qs('.city-name-input', form).value = data.cityName || '';
             qs('.city-name-en-input', form).value = data.cityNameEn || '';
+            const exchangeMarket = document.getElementById('cityExchangeRateRegion');
+            if (exchangeMarket) {
+                exchangeMarket.value = data.exchangeRateRegion === 'South'
+                    ? 'South'
+                    : data.exchangeRateRegion === 'North'
+                        ? 'North'
+                        : '';
+            }
             document.getElementById('addCityLabel').textContent = 'تعديل المدينة';
             qs('.btn-save-entity-text', form).textContent = 'حفظ التعديلات';
 
@@ -696,6 +728,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             updateCityPreviewName();
             updateCityColorUI();
+            updateCityExchangeMarketPreview();
             getOffcanvas(document.getElementById('addCityOffcanvas'))?.show();
         } catch (error) {
             showError('تعذر فتح المدينة', error.message || 'حدث خطأ أثناء تحميل بيانات المدينة.');

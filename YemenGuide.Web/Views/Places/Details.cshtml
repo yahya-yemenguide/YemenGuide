@@ -1,4 +1,4 @@
-@using System.Security.Claims
+﻿@using System.Security.Claims
 @using System.Linq
 @using System.Collections.Generic
 @model YemenGuide.Core.DTOs.Customer.PlaceDetailsViewModel
@@ -398,6 +398,182 @@
             null or "" => "غير محدد",
             var value => value
         };
+
+    // الفترات التشغيلية الفعلية محفوظة داخل PlacePolicy.ShiftsJson،
+    // وليست داخل AvailableTimeSlots. لذلك نقرأها مباشرة لعرضها للعميل.
+    var configuredShiftLabels = new List<string>();
+
+    if (
+        string.Equals(
+            Model.PlacePolicy?.OperationSystemMode,
+            "Shifts",
+            StringComparison.OrdinalIgnoreCase
+        ) &&
+        !string.IsNullOrWhiteSpace(Model.PlacePolicy?.ShiftsJson)
+    )
+    {
+        try
+        {
+            using var shiftsDocument =
+                System.Text.Json.JsonDocument.Parse(
+                    Model.PlacePolicy.ShiftsJson
+                );
+
+            if (
+                shiftsDocument.RootElement.ValueKind ==
+                System.Text.Json.JsonValueKind.Array
+            )
+            {
+                foreach (
+                    var shiftElement in
+                    shiftsDocument.RootElement.EnumerateArray()
+                )
+                {
+                    if (
+                        shiftElement.ValueKind !=
+                        System.Text.Json.JsonValueKind.Object
+                    )
+                    {
+                        continue;
+                    }
+
+                    string shiftName = string.Empty;
+                    string shiftFrom = string.Empty;
+                    string shiftTo = string.Empty;
+
+                    foreach (var property in shiftElement.EnumerateObject())
+                    {
+                        if (
+                            string.Equals(
+                                property.Name,
+                                "name",
+                                StringComparison.OrdinalIgnoreCase
+                            ) &&
+                            property.Value.ValueKind ==
+                            System.Text.Json.JsonValueKind.String
+                        )
+                        {
+                            shiftName =
+                                property.Value.GetString()?.Trim() ??
+                                string.Empty;
+                        }
+                        else if (
+                            (
+                                string.Equals(
+                                    property.Name,
+                                    "from",
+                                    StringComparison.OrdinalIgnoreCase
+                                ) ||
+                                string.Equals(
+                                    property.Name,
+                                    "start",
+                                    StringComparison.OrdinalIgnoreCase
+                                ) ||
+                                string.Equals(
+                                    property.Name,
+                                    "startTime",
+                                    StringComparison.OrdinalIgnoreCase
+                                )
+                            ) &&
+                            property.Value.ValueKind ==
+                            System.Text.Json.JsonValueKind.String
+                        )
+                        {
+                            shiftFrom =
+                                property.Value.GetString()?.Trim() ??
+                                string.Empty;
+                        }
+                        else if (
+                            (
+                                string.Equals(
+                                    property.Name,
+                                    "to",
+                                    StringComparison.OrdinalIgnoreCase
+                                ) ||
+                                string.Equals(
+                                    property.Name,
+                                    "end",
+                                    StringComparison.OrdinalIgnoreCase
+                                ) ||
+                                string.Equals(
+                                    property.Name,
+                                    "endTime",
+                                    StringComparison.OrdinalIgnoreCase
+                                )
+                            ) &&
+                            property.Value.ValueKind ==
+                            System.Text.Json.JsonValueKind.String
+                        )
+                        {
+                            shiftTo =
+                                property.Value.GetString()?.Trim() ??
+                                string.Empty;
+                        }
+                    }
+
+                    if (
+                        shiftFrom.Length > 5 &&
+                        shiftFrom.Contains(':')
+                    )
+                    {
+                        shiftFrom = shiftFrom.Substring(0, 5);
+                    }
+
+                    if (
+                        shiftTo.Length > 5 &&
+                        shiftTo.Contains(':')
+                    )
+                    {
+                        shiftTo = shiftTo.Substring(0, 5);
+                    }
+
+                    if (
+                        string.IsNullOrWhiteSpace(shiftName) &&
+                        string.IsNullOrWhiteSpace(shiftFrom) &&
+                        string.IsNullOrWhiteSpace(shiftTo)
+                    )
+                    {
+                        continue;
+                    }
+
+                    string shiftLabel;
+
+                    if (
+                        !string.IsNullOrWhiteSpace(shiftFrom) &&
+                        !string.IsNullOrWhiteSpace(shiftTo)
+                    )
+                    {
+                        shiftLabel =
+                            string.IsNullOrWhiteSpace(shiftName)
+                                ? $"من {shiftFrom} إلى {shiftTo}"
+                                : $"{shiftName}: من {shiftFrom} إلى {shiftTo}";
+                    }
+                    else
+                    {
+                        shiftLabel =
+                            !string.IsNullOrWhiteSpace(shiftName)
+                                ? shiftName
+                                : $"{shiftFrom} {shiftTo}".Trim();
+                    }
+
+                    if (
+                        !string.IsNullOrWhiteSpace(shiftLabel) &&
+                        !configuredShiftLabels.Contains(
+                            shiftLabel,
+                            StringComparer.OrdinalIgnoreCase
+                        )
+                    )
+                    {
+                        configuredShiftLabels.Add(shiftLabel);
+                    }
+                }
+            }
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            // إذا كانت القيمة القديمة غير صالحة، لا نكسر صفحة التفاصيل.
+        }
+    }
 
     bool hasValidCoordinates =
         Model.HasValidCoordinates;
@@ -1871,23 +2047,59 @@
                                                 </span>
                                             </li>
 
-                                            <li>
-                                                <i class="bi bi-box-arrow-in-left"></i>
+                                            @if (
+                                                string.Equals(
+                                                    Model.PlacePolicy?.OperationSystemMode,
+                                                    "Shifts",
+                                                    StringComparison.OrdinalIgnoreCase
+                                                )
+                                            )
+                                            {
+                                                @if (configuredShiftLabels.Any())
+                                                {
+                                                    @foreach (var shift in configuredShiftLabels)
+                                                    {
+                                                        <li>
+                                                            <i class="bi bi-clock-history"></i>
 
-                                                <span>
-                                                    وقت الدخول:
-                                                    @checkInTime
-                                                </span>
-                                            </li>
+                                                            <span>
+                                                                @shift
+                                                            </span>
+                                                        </li>
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    <li>
+                                                        <i class="bi bi-info-circle"></i>
 
-                                            <li>
-                                                <i class="bi bi-box-arrow-right"></i>
+                                                        <span>
+                                                            لم تُحدد فترات تشغيلية حاليًا.
+                                                        </span>
+                                                    </li>
+                                                }
+                                            }
+                                            else
+                                            {
+                                                <li>
+                                                    <i class="bi bi-box-arrow-in-left"></i>
 
-                                                <span>
-                                                    وقت الخروج:
-                                                    @checkOutTime
-                                                </span>
-                                            </li>
+                                                    <span>
+                                                        وقت الدخول:
+                                                        @checkInTime
+                                                    </span>
+                                                </li>
+
+                                                <li>
+                                                    <i class="bi bi-box-arrow-right"></i>
+
+                                                    <span>
+                                                        وقت الخروج:
+                                                        @checkOutTime
+                                                    </span>
+                                                </li>
+                                            }
+
                                         </ul>
                                     </div>
                                 </div>

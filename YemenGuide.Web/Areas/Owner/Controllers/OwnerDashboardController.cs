@@ -159,22 +159,25 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
             // =========================================================
             // حالة الفترة التجريبية المستمرة داخل الداشبورد.
-            // التجربة نفسها تخص حساب المالك، بينما الرصيد والتشغيل
-            // يظلان حسب المنشأة المختارة من الهيدر.
+            // جميع بيانات التجربة والرصيد والتشغيل تخص المنشأة
+            // المختارة حاليًا من الهيدر، وليس حساب المالك ككل.
             // =========================================================
-            var ownerTrial = await _context.Users
+            var selectedPlaceTrial = await _context.Places
                 .AsNoTracking()
-                .Where(user => user.UserId == ownerId)
-                .Select(user => new
+                .Where(place =>
+                    model.PlaceId.HasValue &&
+                    place.PlaceId == model.PlaceId.Value &&
+                    place.OwnerId == ownerId)
+                .Select(place => new
                 {
-                    user.FreeTrialStartedAt,
-                    user.FreeTrialEndsAt
+                    place.FreeTrialStartedAt,
+                    place.FreeTrialEndsAt
                 })
                 .FirstOrDefaultAsync(cancellationToken);
 
-            if (ownerTrial == null)
+            if (selectedPlaceTrial == null)
             {
-                return Challenge();
+                return View(model);
             }
 
             var settings = await _context.SystemSettings
@@ -188,8 +191,8 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 .FirstOrDefaultAsync(cancellationToken);
 
             var now = DateTime.Now;
-            var startedAt = ownerTrial.FreeTrialStartedAt;
-            var endsAt = ownerTrial.FreeTrialEndsAt;
+            var startedAt = selectedPlaceTrial.FreeTrialStartedAt;
+            var endsAt = selectedPlaceTrial.FreeTrialEndsAt;
 
             var hasCompleteTrialDates =
                 startedAt.HasValue &&
@@ -315,7 +318,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 Currency = currency,
                 AlertLevel = alertLevel,
                 ReminderKey = hasCompleteTrialDates
-                    ? $"ygOwnerTrialReminder_v2_{ownerId}_" +
+                    ? $"ygOwnerTrialReminder_v3_{ownerId}_{model.PlaceId.Value}_" +
                       $"{endsAt!.Value:yyyyMMddHHmmss}_{reminderStage}"
                     : string.Empty
             };
@@ -359,9 +362,9 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
             var selectedPlace = bookingPlaces
                 .FirstOrDefault(place =>
-                    place.PlaceId == requestedPlaceId &&
-                    IsOperationalPlace(place))
-                ?? bookingPlaces.FirstOrDefault(IsOperationalPlace);
+                    model.PlaceId.HasValue &&
+                    place.PlaceId == model.PlaceId.Value &&
+                    IsOperationalPlace(place));
 
             if (selectedPlace == null)
             {
@@ -381,11 +384,11 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
             var welcomeStartedAt =
                 financialAccess.FreeTrialStartedAt ??
-                ownerTrial.FreeTrialStartedAt;
+                selectedPlaceTrial.FreeTrialStartedAt;
 
             var welcomeEndsAt =
                 financialAccess.FreeTrialEndsAt ??
-                ownerTrial.FreeTrialEndsAt;
+                selectedPlaceTrial.FreeTrialEndsAt;
 
             if (!welcomeStartedAt.HasValue || !welcomeEndsAt.HasValue)
             {
@@ -430,7 +433,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 CanAcceptNewBookings =
                     financialAccess.CanAcceptNewBookings,
                 StorageKey =
-                    $"ygOwnerTrialWelcome_v1_{ownerId}_" +
+                    $"ygOwnerTrialWelcome_v2_{ownerId}_{selectedPlace.PlaceId}_" +
                     welcomeStartedAt.Value.ToString("yyyyMMddHHmmss")
             };
 

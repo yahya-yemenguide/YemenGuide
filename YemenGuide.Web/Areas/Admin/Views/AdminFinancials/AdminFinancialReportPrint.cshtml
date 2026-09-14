@@ -12,8 +12,9 @@
     var isArabic = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
     var uiLang = isArabic ? "ar" : "en";
     var uiDir = isArabic ? "rtl" : "ltr";
+    // Export columns are already filtered by AdminFinancialService.
     var useLandscape = report.Sections.Any(section =>
-        section.Columns.Count(column => column.IsVisible) > 6);
+        section.Columns.Count > 6);
 }
 
 <!DOCTYPE html>
@@ -142,7 +143,6 @@
                 {
                     var visibleColumns = reportSection.Columns
                         .Select((column, index) => new { column, index })
-                        .Where(entry => entry.column.IsVisible)
                         .ToList();
 
                     <table class="afp-table">

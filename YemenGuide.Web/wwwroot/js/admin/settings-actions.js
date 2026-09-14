@@ -1,4 +1,4 @@
-﻿/**
+/**
  * =======================================================================================
  * 👑 دليلك اليمني - المحرك الذكي الموحد لتبويبات الإعدادات (نظام الصفحة الواحدة VIP)
  * Asset: wwwroot/js/admin/settings-actions.js
@@ -241,6 +241,129 @@ function getCurrentSettingsSection() {
     return map[activeTarget] || '';
 }
 
+function getSavedExchangeAutoMode() {
+    return document.getElementById('autoUpdateExchangeRates')?.dataset.savedValue === 'true';
+}
+
+function applyExchangeRateModeUi() {
+    const toggle = document.getElementById('autoUpdateExchangeRates');
+    if (!toggle) return;
+
+    const savedAuto = getSavedExchangeAutoMode();
+    const requestedAuto = toggle.checked === true;
+    const inputs = document.querySelectorAll('.exchange-rate-input');
+
+    // عند تعطيل التلقائي تظل الحقول مقفلة حتى يُحفظ التعطيل فعلياً في السيرفر.
+    const lockManualInputs = requestedAuto || savedAuto;
+    inputs.forEach(input => {
+        input.readOnly = lockManualInputs;
+        input.classList.toggle('bg-light', lockManualInputs);
+        input.title = lockManualInputs
+            ? 'الأسعار مقفلة أثناء الوضع التلقائي. عطّل التحديث واحفظ أولاً.'
+            : '';
+    });
+
+    const description = document.getElementById('exchangeRateModeDescription');
+    if (description) {
+        description.textContent = savedAuto && !requestedAuto
+            ? 'سيتم تعطيل التحديث التلقائي عند الحفظ، وبعدها ستُفتح الأسعار للتعديل اليدوي.'
+            : requestedAuto
+                ? 'تلقائي: الأسعار مقفلة وتُجلب من المصدر المعتمد.'
+                : 'يدوي: يمكنك تعديل أسعار صنعاء وعدن ثم حفظها.';
+    }
+
+    const refreshButton = document.getElementById('refreshExchangeRatesNowBtn');
+    if (refreshButton) {
+        refreshButton.style.display = savedAuto && requestedAuto ? '' : 'none';
+    }
+}
+
+function applyExchangeRatePayload(payload) {
+    if (!payload) return;
+
+    const values = {
+        sanaaUsdRate: payload.sanaaUsdRate,
+        sanaaSarRate: payload.sanaaSarRate,
+        adenUsdRate: payload.adenUsdRate,
+        adenSarRate: payload.adenSarRate
+    };
+
+    Object.entries(values).forEach(([id, value]) => {
+        const input = document.getElementById(id);
+        if (input && value !== null && value !== undefined) {
+            input.value = Number(value).toFixed(2);
+        }
+    });
+
+    const toggle = document.getElementById('autoUpdateExchangeRates');
+    if (toggle) {
+        toggle.checked = payload.autoUpdate === true;
+        toggle.dataset.savedValue = payload.autoUpdate === true ? 'true' : 'false';
+    }
+
+    const badge = document.getElementById('exchangeRateStatusBadge');
+    if (badge) {
+        badge.textContent = payload.statusLabel || 'لم يتم التحديث بعد';
+        badge.classList.remove('bg-success', 'bg-danger', 'bg-secondary');
+        badge.classList.add(payload.status === 'Success'
+            ? 'bg-success'
+            : payload.status === 'Failed'
+                ? 'bg-danger'
+                : 'bg-secondary');
+    }
+
+    const source = document.getElementById('exchangeRateSourceText');
+    if (source) source.textContent = payload.sourceLabel || payload.source || '—';
+
+    const updated = document.getElementById('exchangeRateLastUpdatedText');
+    if (updated) updated.textContent = payload.lastUpdatedText || '—';
+
+    const errorBox = document.getElementById('exchangeRateLastErrorBox');
+    const errorText = document.getElementById('exchangeRateLastErrorText');
+    const error = String(payload.lastError || '').trim();
+    if (errorText) errorText.textContent = error;
+    errorBox?.classList.toggle('d-none', !error);
+
+    applyExchangeRateModeUi();
+}
+
+async function refreshExchangeRatesNow() {
+    const button = document.getElementById('refreshExchangeRatesNowBtn');
+    if (!button || button.disabled) return;
+
+    button.disabled = true;
+    const originalHtml = button.innerHTML;
+    button.innerHTML = '<span class="spinner-border spinner-border-sm"></span> جارٍ التحديث...';
+
+    try {
+        const result = await settingsPostJson(
+            '/Admin/Settings/RefreshExchangeRatesNow',
+            new FormData()
+        );
+
+        applyExchangeRatePayload(result.exchangeRates);
+
+        await Swal.fire({
+            icon: result.success ? 'success' : 'error',
+            title: result.success ? 'تم تحديث الأسعار' : 'تعذر التحديث',
+            text: result.message || '',
+            confirmButtonColor: '#00A6DA'
+        });
+    }
+    catch (error) {
+        Swal.fire({
+            icon: 'error',
+            title: 'تعذر تحديث الأسعار',
+            text: error?.message || 'حدث خطأ أثناء الاتصال بالخادم.',
+            confirmButtonColor: '#00A6DA'
+        });
+    }
+    finally {
+        button.disabled = false;
+        button.innerHTML = originalHtml;
+    }
+}
+
 
 /* ==========================================================================
  * 🟢 القسم الأول: المحرك الأساسي (إدارة التبويبات والملاحة)
@@ -297,6 +420,12 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
     initializeMaintenanceControls();
+
+    const exchangeModeToggle = document.getElementById('autoUpdateExchangeRates');
+    exchangeModeToggle?.addEventListener('change', applyExchangeRateModeUi);
+    document.getElementById('refreshExchangeRatesNowBtn')
+        ?.addEventListener('click', refreshExchangeRatesNow);
+    applyExchangeRateModeUi();
 
 });
 
@@ -371,6 +500,50 @@ async function saveAllSettings() {
             if (!confirmation.isConfirmed) {
                 return;
             }
+        }
+    }
+
+    if (section === 'policies') {
+        const toggle = document.getElementById('autoUpdateExchangeRates');
+        const savedAuto = getSavedExchangeAutoMode();
+        const requestedAuto = toggle?.checked === true;
+
+        if (!savedAuto && !requestedAuto) {
+            const rateInputs = [...document.querySelectorAll('.exchange-rate-input')];
+            const invalidRate = rateInputs.find(input =>
+                !Number.isFinite(Number(input.value)) || Number(input.value) <= 0
+            );
+
+            if (invalidRate) {
+                await Swal.fire({
+                    icon: 'warning',
+                    title: 'راجع أسعار الصرف',
+                    text: 'في الوضع اليدوي يجب إدخال أسعار صنعاء وعدن الأربعة بقيم أكبر من صفر.',
+                    confirmButtonColor: '#00A6DA'
+                });
+                invalidRate.focus();
+                return;
+            }
+        }
+
+        if (savedAuto !== requestedAuto) {
+            const confirmation = await Swal.fire({
+                icon: 'question',
+                title: requestedAuto
+                    ? 'تفعيل التحديث التلقائي؟'
+                    : 'تعطيل التحديث التلقائي؟',
+                text: requestedAuto
+                    ? 'ستُقفل الأسعار اليدوية وسيحاول النظام جلب أسعار صنعاء وعدن فورًا.'
+                    : 'سيتم تعطيل التحديث فقط مع الاحتفاظ بآخر أسعار سليمة. بعد الحفظ ستتمكن من تعديلها يدويًا.',
+                showCancelButton: true,
+                confirmButtonText: requestedAuto ? 'نعم، تفعيل' : 'نعم، تعطيل',
+                cancelButtonText: 'رجوع',
+                confirmButtonColor: '#00A6DA',
+                cancelButtonColor: '#64748b',
+                reverseButtons: true
+            });
+
+            if (!confirmation.isConfirmed) return;
         }
     }
 

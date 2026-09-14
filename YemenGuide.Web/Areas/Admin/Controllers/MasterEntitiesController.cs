@@ -1,4 +1,4 @@
-﻿// =============================================================
+// =============================================================
 // MasterEntitiesController.cs
 // إدارة الفئات والمدن - النسخة المحدثة
 // =============================================================
@@ -27,16 +27,13 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
     {
         private readonly AppDbContext _context;
         private readonly IWebHostEnvironment _webHostEnvironment;
-        private readonly ExchangeRateRegionResolver _exchangeRateRegionResolver;
 
         public MasterEntitiesController(
             AppDbContext context,
-            IWebHostEnvironment webHostEnvironment,
-            ExchangeRateRegionResolver exchangeRateRegionResolver)
+            IWebHostEnvironment webHostEnvironment)
         {
             _context = context;
             _webHostEnvironment = webHostEnvironment;
-            _exchangeRateRegionResolver = exchangeRateRegionResolver;
         }
 
         // =============================================================
@@ -391,6 +388,18 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
             obj.CityName = obj.CityName.Trim();
             obj.CityNameEn = obj.CityNameEn.Trim();
 
+            if (!ExchangeRateRegionResolver.IsValidRegion(obj.ExchangeRateRegion))
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = "حدد سوق الصرف للمدينة: سوق صنعاء أو سوق عدن."
+                });
+            }
+
+            obj.ExchangeRateRegion =
+                ExchangeRateRegionResolver.NormalizeRegion(obj.ExchangeRateRegion);
+
             if (ContainsArabicCharacters(obj.CityNameEn))
             {
                 return Json(new
@@ -401,11 +410,6 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
             }
 
             obj.ThemeColor = NormalizeColor(obj.ThemeColor);
-
-            // تحديد سوق الصرف تلقائياً من اسم المدينة داخل السيرفر.
-            // لا يعتمد النظام على أي قيمة يرسلها المتصفح لهذا الحقل.
-            obj.ExchangeRateRegion =
-                _exchangeRateRegionResolver.Resolve(obj.CityName);
 
             var normalizedInput = NormalizeName(obj.CityName);
             var existingNames = await _context.Cities
@@ -508,6 +512,18 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
             obj.CityName = obj.CityName.Trim();
             obj.CityNameEn = obj.CityNameEn.Trim();
 
+            if (!ExchangeRateRegionResolver.IsValidRegion(obj.ExchangeRateRegion))
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = "حدد سوق الصرف للمدينة: سوق صنعاء أو سوق عدن."
+                });
+            }
+
+            string requestedExchangeRateRegion =
+                ExchangeRateRegionResolver.NormalizeRegion(obj.ExchangeRateRegion);
+
             if (ContainsArabicCharacters(obj.CityNameEn))
             {
                 return Json(new
@@ -574,10 +590,7 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                 existingCity.CityName = obj.CityName;
                 existingCity.CityNameEn = obj.CityNameEn;
                 existingCity.ThemeColor = NormalizeColor(obj.ThemeColor);
-
-                // عند تغيير اسم المدينة يعاد تحديد سوق الصرف تلقائياً أيضاً.
-                existingCity.ExchangeRateRegion =
-                    _exchangeRateRegionResolver.Resolve(existingCity.CityName);
+                existingCity.ExchangeRateRegion = requestedExchangeRateRegion;
 
                 await _context.SaveChangesAsync();
 

@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Linq;
 using YemenGuide.Data;
@@ -139,6 +139,10 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
 
                 settings ??=
                     new SystemSetting();
+
+                bool shouldRefreshExchangeRatesAfterSave = false;
+                bool exchangeAutoModeDisabledOnly = false;
+                string? exchangeRateRefreshWarning = null;
 
                 if (string.IsNullOrWhiteSpace(
                         settings.DefaultWalletLogoPath))
@@ -470,96 +474,15 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                         bool requestedAutoExchangeMode =
                             formData.AutoUpdateExchangeRates == true;
 
+                        bool previousAutoMode =
+                            settings.AutoUpdateExchangeRates == true;
+
                         string requestedDefaultCurrency =
                             NormalizeDefaultCurrency(
                                 formData.DefaultCurrency);
 
-                        decimal? sanaaUsd = null;
-                        decimal? sanaaSar = null;
-                        decimal? adenUsd = null;
-                        decimal? adenSar = null;
-
-                        bool mustValidateRates =
-                            !requestedAutoExchangeMode ||
-                            isNewRecord;
-
-                        if (mustValidateRates)
-                        {
-                            if (!TryReadPositiveDecimal(
-                                    "sanaaUsdRate",
-                                    out decimal parsedSanaaUsd) ||
-                                !TryReadPositiveDecimal(
-                                    "sanaaSarRate",
-                                    out decimal parsedSanaaSar) ||
-                                !TryReadPositiveDecimal(
-                                    "adenUsdRate",
-                                    out decimal parsedAdenUsd) ||
-                                !TryReadPositiveDecimal(
-                                    "adenSarRate",
-                                    out decimal parsedAdenSar))
-                            {
-                                return Json(new
-                                {
-                                    success = false,
-                                    message = requestedAutoExchangeMode
-                                        ? "لا يمكن إنشاء إعدادات الصرف لأول مرة بقيم صفرية. أدخل أسعاراً سليمة أولاً ثم فعّل التحديث التلقائي."
-                                        : "في الوضع اليدوي يجب إدخال أسعار صنعاء وعدن الأربعة بقيم أكبر من صفر."
-                                });
-                            }
-
-                            var manualRates =
-                                new YemenExchangeRateResult
-                                {
-                                    SanaaUsdRate =
-                                        parsedSanaaUsd,
-                                    SanaaSarRate =
-                                        parsedSanaaSar,
-                                    AdenUsdRate =
-                                        parsedAdenUsd,
-                                    AdenSarRate =
-                                        parsedAdenSar,
-                                    SourceName =
-                                        "Manual",
-                                    FetchedAtUtc =
-                                        DateTime.UtcNow,
-                                    RateType =
-                                        "Sell"
-                                };
-
-                            if (!manualRates.IsValid(
-                                    out string validationError))
-                            {
-                                return Json(new
-                                {
-                                    success = false,
-                                    message =
-                                        "أسعار الصرف المدخلة غير صالحة: " +
-                                        validationError
-                                });
-                            }
-
-                            sanaaUsd =
-                                parsedSanaaUsd;
-
-                            sanaaSar =
-                                parsedSanaaSar;
-
-                            adenUsd =
-                                parsedAdenUsd;
-
-                            adenSar =
-                                parsedAdenSar;
-                        }
-
-                        bool previousAutoMode =
-                            settings.AutoUpdateExchangeRates ==
-                            true;
-
                         settings.DefaultCurrency =
                             requestedDefaultCurrency;
-
-                        settings.AutoUpdateExchangeRates =
-                            requestedAutoExchangeMode;
 
                         if (parsedCommission.HasValue)
                         {
@@ -567,31 +490,92 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                                 parsedCommission.Value;
                         }
 
-                        if (!requestedAutoExchangeMode ||
-                            isNewRecord)
+                        if (previousAutoMode && !requestedAutoExchangeMode)
                         {
+                            // خطوة مستقلة: نعطّل التلقائي ونحتفظ بآخر أسعار سليمة.
+                            // لا نقبل أي أسعار أرسلها المتصفح في طلب التعطيل نفسه.
+                            settings.AutoUpdateExchangeRates = false;
+                            exchangeAutoModeDisabledOnly = true;
+                        }
+                        else if (requestedAutoExchangeMode)
+                        {
+                            var currentRates = new YemenExchangeRateResult
+                            {
+                                SanaaUsdRate = settings.SanaaUsdRate,
+                                SanaaSarRate = settings.SanaaSarRate,
+                                AdenUsdRate = settings.AdenUsdRate,
+                                AdenSarRate = settings.AdenSarRate,
+                                SourceName = settings.ExchangeRateLastSource ?? "Stored",
+                                FetchedAtUtc = DateTime.UtcNow,
+                                RateType = "Sell"
+                            };
+
+                            if (!currentRates.IsValid(out string currentRatesError))
+                            {
+                                return Json(new
+                                {
+                                    success = false,
+                                    message = "لا يمكن تفعيل التحديث التلقائي قبل وجود أربعة أسعار محفوظة وسليمة: " + currentRatesError
+                                });
+                            }
+
+                            // في الوضع التلقائي لا نقرأ أسعار المتصفح ولا نسمح بتعديلها.
+                            settings.AutoUpdateExchangeRates = true;
+                            shouldRefreshExchangeRatesAfterSave = !previousAutoMode;
+                        }
+                        else
+                        {
+                            if (!TryReadPositiveDecimal("sanaaUsdRate", out decimal parsedSanaaUsd) ||
+                                !TryReadPositiveDecimal("sanaaSarRate", out decimal parsedSanaaSar) ||
+                                !TryReadPositiveDecimal("adenUsdRate", out decimal parsedAdenUsd) ||
+                                !TryReadPositiveDecimal("adenSarRate", out decimal parsedAdenSar))
+                            {
+                                return Json(new
+                                {
+                                    success = false,
+                                    message = "في الوضع اليدوي يجب إدخال أسعار صنعاء وعدن الأربعة بقيم أكبر من صفر."
+                                });
+                            }
+
+                            var manualRates = new YemenExchangeRateResult
+                            {
+                                SanaaUsdRate = parsedSanaaUsd,
+                                SanaaSarRate = parsedSanaaSar,
+                                AdenUsdRate = parsedAdenUsd,
+                                AdenSarRate = parsedAdenSar,
+                                SourceName = "Manual",
+                                FetchedAtUtc = DateTime.UtcNow,
+                                RateType = "Sell"
+                            };
+
+                            if (!manualRates.IsValid(out string validationError))
+                            {
+                                return Json(new
+                                {
+                                    success = false,
+                                    message = "أسعار الصرف المدخلة غير صالحة: " + validationError
+                                });
+                            }
+
                             bool manualRatesChanged =
-                                settings.SanaaUsdRate !=
-                                    sanaaUsd!.Value ||
-                                settings.SanaaSarRate !=
-                                    sanaaSar!.Value ||
-                                settings.AdenUsdRate !=
-                                    adenUsd!.Value ||
-                                settings.AdenSarRate !=
-                                    adenSar!.Value ||
-                                previousAutoMode;
+                                settings.SanaaUsdRate != parsedSanaaUsd ||
+                                settings.SanaaSarRate != parsedSanaaSar ||
+                                settings.AdenUsdRate != parsedAdenUsd ||
+                                settings.AdenSarRate != parsedAdenSar;
 
                             settings.SanaaUsdRate =
-                                sanaaUsd.Value;
+                                parsedSanaaUsd;
 
                             settings.SanaaSarRate =
-                                sanaaSar.Value;
+                                parsedSanaaSar;
 
                             settings.AdenUsdRate =
-                                adenUsd.Value;
+                                parsedAdenUsd;
 
                             settings.AdenSarRate =
-                                adenSar.Value;
+                                parsedAdenSar;
+
+                            settings.AutoUpdateExchangeRates = false;
 
                             if (manualRatesChanged)
                             {
@@ -780,6 +764,63 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                 await _context.SaveChangesAsync(
                     cancellationToken);
 
+                if (section == "policies" &&
+                    shouldRefreshExchangeRatesAfterSave)
+                {
+                    using IDisposable updateLock =
+                        await _exchangeRateService
+                            .AcquireUpdateLockAsync(cancellationToken);
+
+                    try
+                    {
+                        YemenExchangeRateResult latestRates =
+                            await _exchangeRateService
+                                .GetLatestExchangeRatesAsync(cancellationToken);
+
+                        bool autoModeStillEnabled =
+                            await _context.SystemSettings
+                                .AsNoTracking()
+                                .Where(s => s.Id == settings.Id)
+                                .Select(s => s.AutoUpdateExchangeRates == true)
+                                .FirstOrDefaultAsync(cancellationToken);
+
+                        if (autoModeStillEnabled)
+                        {
+                            settings.SanaaUsdRate = latestRates.SanaaUsdRate;
+                            settings.SanaaSarRate = latestRates.SanaaSarRate;
+                            settings.AdenUsdRate = latestRates.AdenUsdRate;
+                            settings.AdenSarRate = latestRates.AdenSarRate;
+                            settings.ExchangeRateLastAttemptAt = DateTime.UtcNow;
+                            settings.ExchangeRateLastUpdatedAt = DateTime.UtcNow;
+                            settings.ExchangeRateLastSource =
+                                string.IsNullOrWhiteSpace(latestRates.SourceName)
+                                    ? _exchangeRateService.SourceName
+                                    : latestRates.SourceName.Trim();
+                            settings.ExchangeRateLastStatus = "Success";
+                            settings.ExchangeRateLastError = null;
+
+                            await _context.SaveChangesAsync(cancellationToken);
+                        }
+                    }
+                    catch (OperationCanceledException)
+                        when (cancellationToken.IsCancellationRequested)
+                    {
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        settings.ExchangeRateLastAttemptAt = DateTime.UtcNow;
+                        settings.ExchangeRateLastSource = _exchangeRateService.SourceName;
+                        settings.ExchangeRateLastStatus = "Failed";
+                        settings.ExchangeRateLastError =
+                            Truncate(GetUsefulErrorMessage(ex), 500);
+
+                        await _context.SaveChangesAsync(cancellationToken);
+                        exchangeRateRefreshWarning =
+                            "تم تفعيل الوضع التلقائي، لكن تعذر جلب أسعار جديدة الآن. احتفظ النظام بآخر أسعار سليمة وسيعيد المحاولة تلقائيًا.";
+                    }
+                }
+
                 string message =
                     section switch
                     {
@@ -794,6 +835,19 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                         _ =>
                             "تم حفظ الإعدادات بنجاح."
                     };
+
+                if (exchangeAutoModeDisabledOnly)
+                {
+                    message = "تم تعطيل التحديث التلقائي مع الاحتفاظ بآخر أسعار سليمة. يمكنك الآن تعديل الأسعار يدويًا ثم حفظها.";
+                }
+                else if (!string.IsNullOrWhiteSpace(exchangeRateRefreshWarning))
+                {
+                    message = exchangeRateRefreshWarning;
+                }
+                else if (shouldRefreshExchangeRatesAfterSave)
+                {
+                    message = "تم تفعيل التحديث التلقائي وجلب أسعار صنعاء وعدن بنجاح.";
+                }
 
                 return Json(new
                 {
@@ -871,6 +925,10 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
             var cancellationToken =
                 HttpContext.RequestAborted;
 
+            using IDisposable updateLock =
+                await _exchangeRateService
+                    .AcquireUpdateLockAsync(cancellationToken);
+
             var settings =
                 await _context.SystemSettings
                     .OrderBy(s => s.Id)
@@ -911,6 +969,27 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                     await _exchangeRateService
                         .GetLatestExchangeRatesAsync(
                             cancellationToken);
+
+                bool autoModeStillEnabled =
+                    await _context.SystemSettings
+                        .AsNoTracking()
+                        .Where(s => s.Id == settings.Id)
+                        .Select(s => s.AutoUpdateExchangeRates == true)
+                        .FirstOrDefaultAsync(cancellationToken);
+
+                if (!autoModeStillEnabled)
+                {
+                    await _context.Entry(settings)
+                        .ReloadAsync(cancellationToken);
+
+                    return Json(new
+                    {
+                        success = false,
+                        code = "AUTO_MODE_DISABLED_DURING_REFRESH",
+                        message = "تم تعطيل التحديث التلقائي أثناء جلب الأسعار؛ لذلك لم تُحفظ النتيجة.",
+                        exchangeRates = BuildExchangeRatePayload(settings)
+                    });
+                }
 
                 settings.SanaaUsdRate =
                     latestRates.SanaaUsdRate;
@@ -956,6 +1035,27 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
             }
             catch (Exception ex)
             {
+                bool autoModeStillEnabled =
+                    await _context.SystemSettings
+                        .AsNoTracking()
+                        .Where(s => s.Id == settings.Id)
+                        .Select(s => s.AutoUpdateExchangeRates == true)
+                        .FirstOrDefaultAsync(cancellationToken);
+
+                if (!autoModeStillEnabled)
+                {
+                    await _context.Entry(settings)
+                        .ReloadAsync(cancellationToken);
+
+                    return Json(new
+                    {
+                        success = false,
+                        code = "AUTO_MODE_DISABLED_DURING_REFRESH",
+                        message = "تم تعطيل التحديث التلقائي أثناء المحاولة؛ لم تتغير الأسعار.",
+                        exchangeRates = BuildExchangeRatePayload(settings)
+                    });
+                }
+
                 settings.ExchangeRateLastStatus =
                     "Failed";
 

@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Linq;
+using System.Collections.Generic;
+using System.Text.Json;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -252,6 +254,201 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             policy.AllowQatInside = model.AllowQatInside;
         }
 
+        private sealed class OperationalShiftWindow
+        {
+            public string Name { get; init; } = string.Empty;
+            public int StartMinutes { get; init; }
+            public int EndMinutes { get; init; }
+        }
+
+        private static string? ValidateOperationalShiftSchedule(
+            FacilitySettingsDto model)
+        {
+            if (!string.Equals(
+                    model.OperationSystemMode,
+                    "Shifts",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            if (model.BufferTimeHours < 0 || model.BufferTimeHours > 12)
+            {
+                return "وقت التجهيز والتنظيف يجب أن يكون بين 0 و12 ساعة.";
+            }
+
+            if (string.IsNullOrWhiteSpace(model.ShiftsJson))
+            {
+                return "أضف فترة تشغيلية واحدة على الأقل قبل الحفظ.";
+            }
+
+            try
+            {
+                using var document = JsonDocument.Parse(model.ShiftsJson);
+
+                if (document.RootElement.ValueKind != JsonValueKind.Array)
+                {
+                    return "بيانات الفترات التشغيلية غير صحيحة.";
+                }
+
+                var windows = new List<OperationalShiftWindow>();
+                int rowNumber = 0;
+
+                foreach (var item in document.RootElement.EnumerateArray())
+                {
+                    rowNumber++;
+
+                    if (item.ValueKind != JsonValueKind.Object)
+                    {
+                        return $"بيانات الفترة رقم {rowNumber} غير صحيحة.";
+                    }
+
+                    string name = GetJsonText(item, "name", "title", "label");
+                    string from = GetJsonText(item, "from", "start", "startTime");
+                    string to = GetJsonText(item, "to", "end", "endTime");
+
+                    if (string.IsNullOrWhiteSpace(name))
+                    {
+                        return $"اكتب اسم الفترة رقم {rowNumber}.";
+                    }
+
+                    if (!TryParseClockMinutes(from, out var startMinutes) ||
+                        !TryParseClockMinutes(to, out var endMinutes))
+                    {
+                        return $"حدد وقت البداية والنهاية للفترة «{name}».";
+                    }
+
+                    if (startMinutes == endMinutes)
+                    {
+                        return $"لا يمكن أن تبدأ وتنتهي الفترة «{name}» في نفس الوقت.";
+                    }
+
+                    windows.Add(new OperationalShiftWindow
+                    {
+                        Name = name.Trim(),
+                        StartMinutes = startMinutes,
+                        EndMinutes = endMinutes
+                    });
+                }
+
+                if (windows.Count == 0)
+                {
+                    return "أضف فترة تشغيلية واحدة على الأقل قبل الحفظ.";
+                }
+
+                for (int firstIndex = 0; firstIndex < windows.Count; firstIndex++)
+                {
+                    for (int secondIndex = firstIndex + 1;
+                         secondIndex < windows.Count;
+                         secondIndex++)
+                    {
+                        var first = windows[firstIndex];
+                        var second = windows[secondIndex];
+
+                        if (!ShiftWindowsOverlap(first, second))
+                        {
+                            continue;
+                        }
+
+                        return
+                            $"لا يمكن الحفظ لأن الفترة «{first.Name}» تتداخل مع الفترة «{second.Name}». عدّل أوقات الفترات أولًا.";
+                    }
+                }
+
+                return null;
+            }
+            catch (JsonException)
+            {
+                return "تعذر قراءة الفترات التشغيلية. أعد تحديد الأوقات ثم حاول الحفظ.";
+            }
+        }
+
+        private static string GetJsonText(
+            JsonElement item,
+            params string[] names)
+        {
+            foreach (var property in item.EnumerateObject())
+            {
+                if (property.Value.ValueKind != JsonValueKind.String)
+                {
+                    continue;
+                }
+
+                foreach (var name in names)
+                {
+                    if (!string.Equals(
+                            property.Name,
+                            name,
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    return property.Value.GetString()?.Trim() ?? string.Empty;
+                }
+            }
+
+            return string.Empty;
+        }
+
+        private static bool TryParseClockMinutes(
+            string? value,
+            out int minutes)
+        {
+            minutes = 0;
+
+            if (string.IsNullOrWhiteSpace(value) ||
+                !TimeSpan.TryParse(value.Trim(), out var clock) ||
+                clock < TimeSpan.Zero ||
+                clock >= TimeSpan.FromDays(1))
+            {
+                return false;
+            }
+
+            minutes = (int)clock.TotalMinutes;
+            return true;
+        }
+
+        private static bool ShiftWindowsOverlap(
+            OperationalShiftWindow first,
+            OperationalShiftWindow second)
+        {
+            var firstSegments = BuildShiftSegments(first);
+            var secondSegments = BuildShiftSegments(second);
+
+            foreach (var firstSegment in firstSegments)
+            {
+                foreach (var secondSegment in secondSegments)
+                {
+                    if (Math.Max(firstSegment.Start, secondSegment.Start) <
+                        Math.Min(firstSegment.End, secondSegment.End))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        private static List<(int Start, int End)> BuildShiftSegments(
+            OperationalShiftWindow window)
+        {
+            if (window.StartMinutes < window.EndMinutes)
+            {
+                return new List<(int Start, int End)>
+                {
+                    (window.StartMinutes, window.EndMinutes)
+                };
+            }
+
+            return new List<(int Start, int End)>
+            {
+                (window.StartMinutes, 24 * 60),
+                (0, window.EndMinutes)
+            };
+        }
+
         private JsonResult InvalidModelJson()
         {
             var message = ModelState.Values
@@ -481,6 +678,18 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             if (!ModelState.IsValid)
             {
                 return InvalidModelJson();
+            }
+
+            var operationalValidationMessage =
+                ValidateOperationalShiftSchedule(model);
+
+            if (!string.IsNullOrWhiteSpace(operationalValidationMessage))
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = operationalValidationMessage
+                });
             }
 
             var canAccessPlace = await CanAccessPolicyEndpointAsync(

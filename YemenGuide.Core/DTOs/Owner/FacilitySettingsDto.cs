@@ -69,14 +69,10 @@ namespace YemenGuide.Core.DTOs.Owner
 
         public string? ShiftsJson { get; set; }
 
-        // تم إلغاء خيار وقت التجهيز والتنظيف من الواجهة.
-        // نبقي الخاصية للتوافق مع الـ API الحالي، لكن بدون أي فاصل مخفي.
-        [Range(0, 24)]
-        public int BufferTimeHours
-        {
-            get => 0;
-            set { }
-        }
+        // وقت فعلي للتجهيز والتنظيف بين حجز وآخر.
+        // كان هذا الحقل يُعاد دائمًا بصفر، لذلك لم تكن قيمة المالك تُحفظ.
+        [Range(0, 12)]
+        public int BufferTimeHours { get; set; } = 2;
 
         [Range(0, 8760)]
         public int MinimumNoticeHours { get; set; } = 24;

@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -118,6 +118,22 @@ namespace YemenGuide.Web.Services.ExchangeRates
                 return;
             }
 
+            using IDisposable updateLock =
+                await exchangeRateService.AcquireUpdateLockAsync(cancellationToken);
+
+            // قد يكون الأدمن عطّل الوضع التلقائي أثناء انتظار القفل.
+            context.ChangeTracker.Clear();
+            settings = await context.SystemSettings
+                .OrderBy(s => s.Id)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (settings == null ||
+                settings.AutoUpdateExchangeRates != true ||
+                !NeedsRefresh(settings.ExchangeRateLastUpdatedAt))
+            {
+                return;
+            }
+
             settings.ExchangeRateLastAttemptAt = DateTime.UtcNow;
             settings.ExchangeRateLastSource = exchangeRateService.SourceName;
 
@@ -126,6 +142,20 @@ namespace YemenGuide.Web.Services.ExchangeRates
                 YemenExchangeRateResult latestRates =
                     await exchangeRateService
                         .GetLatestExchangeRatesAsync(cancellationToken);
+
+                bool autoModeStillEnabled =
+                    await context.SystemSettings
+                        .AsNoTracking()
+                        .Where(s => s.Id == settings.Id)
+                        .Select(s => s.AutoUpdateExchangeRates == true)
+                        .FirstOrDefaultAsync(cancellationToken);
+
+                if (!autoModeStillEnabled)
+                {
+                    _logger.LogInformation(
+                        "تم تجاهل نتيجة تحديث أسعار الصرف لأن الأدمن عطّل الوضع التلقائي أثناء الجلب.");
+                    return;
+                }
 
                 settings.SanaaUsdRate = latestRates.SanaaUsdRate;
                 settings.SanaaSarRate = latestRates.SanaaSarRate;
@@ -162,6 +192,18 @@ namespace YemenGuide.Web.Services.ExchangeRates
                 settings.ExchangeRateLastSource = exchangeRateService.SourceName;
                 settings.ExchangeRateLastError =
                     Truncate(GetUsefulErrorMessage(ex), 500);
+
+                bool autoModeStillEnabled =
+                    await context.SystemSettings
+                        .AsNoTracking()
+                        .Where(s => s.Id == settings.Id)
+                        .Select(s => s.AutoUpdateExchangeRates == true)
+                        .FirstOrDefaultAsync(cancellationToken);
+
+                if (!autoModeStillEnabled)
+                {
+                    return;
+                }
 
                 try
                 {

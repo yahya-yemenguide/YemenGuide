@@ -297,7 +297,6 @@ namespace YemenGuide.Web.Controllers
                 {
                     continue;
                 }
-
                 chatsByConversation.TryGetValue(key, out List<Chat>? conversationChats);
                 conversationChats ??= new List<Chat>();
 
@@ -620,11 +619,39 @@ namespace YemenGuide.Web.Controllers
 
                 // عند الضغط على زر سؤال سريع يرسل العميل مفتاح الموضوع صراحةً،
                 // فلا نعتمد على تخمين النص. الكتابة الحرة فقط تمر عبر المطابقة اللغوية.
-                string? detectedTopic =
-                    IsQuickQuestionTopic(requestedQuickTopic) &&
-                    enabledTopics.Contains(requestedQuickTopic)
-                        ? requestedQuickTopic
-                        : DetectCustomerTopic(normalizedText);
+                string? detectedTopic = null;
+
+                // السؤال المخصص يختلف عن المواضيع الخمسة الثابتة:
+                // الإجابة هنا كتبها المالك بنفسه داخل إعدادات التواصل.
+                // ندعمه بطريقتين:
+                // 1) عند ضغط العميل على زر السؤال السريع يصل المفتاح داخل quickTopic.
+                // 2) إذا كتب العميل نفس السؤال يدويًا (أو لم يرسل المتصفح المفتاح لأي سبب)،
+                //    نطابق نص السؤال نفسه حتى لا تضيع الإجابة المخصصة.
+                if (!string.IsNullOrWhiteSpace(requestedQuickTopic))
+                {
+                    automaticReplyText = GetCustomQuickReplyAnswer(
+                        conversation.Policy?.QuickRepliesJson,
+                        requestedQuickTopic);
+                }
+
+                if (string.IsNullOrWhiteSpace(automaticReplyText))
+                {
+                    automaticReplyText = GetCustomQuickReplyAnswerByQuestion(
+                        conversation.Policy?.QuickRepliesJson,
+                        normalizedText);
+                }
+
+                isTopicAutomaticReply =
+                    !string.IsNullOrWhiteSpace(automaticReplyText);
+
+                if (!isTopicAutomaticReply)
+                {
+                    detectedTopic =
+                        IsQuickQuestionTopic(requestedQuickTopic) &&
+                        enabledTopics.Contains(requestedQuickTopic)
+                            ? requestedQuickTopic
+                            : DetectCustomerTopic(normalizedText);
+                }
 
                 if (!string.IsNullOrWhiteSpace(detectedTopic))
                 {
@@ -1830,7 +1857,146 @@ namespace YemenGuide.Web.Controllers
             Add("checkinout", "الدخول والخروج", "ما أوقات الدخول والخروج؟");
             Add("payment", "العربون والدفع", "ما شروط العربون والدفع؟");
 
+            // الأسئلة المخصصة: السؤال والإجابة يكتبهما المالك،
+            // ونستخدم نفس QuickRepliesJson الموجود أصلًا دون تعديل قاعدة البيانات.
+            foreach (var customReply in GetCustomQuickReplyDefinitions(jsonText))
+            {
+                questions.Add(new Dictionary<string, string>
+                {
+                    ["key"] = customReply.Key,
+                    ["title"] = customReply.Question,
+                    ["question"] = customReply.Question
+                });
+            }
+
             return questions;
+        }
+
+        private static List<(string Key, string Question, string Answer)>
+            GetCustomQuickReplyDefinitions(string? jsonText)
+        {
+            var replies =
+                new List<(string Key, string Question, string Answer)>();
+
+            if (string.IsNullOrWhiteSpace(jsonText))
+                return replies;
+
+            try
+            {
+                using JsonDocument document = JsonDocument.Parse(jsonText);
+
+                if (document.RootElement.ValueKind != JsonValueKind.Array)
+                    return replies;
+
+                HashSet<string> seenKeys =
+                    new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                foreach (JsonElement item in document.RootElement.EnumerateArray())
+                {
+                    if (item.ValueKind != JsonValueKind.Object)
+                        continue;
+
+                    string type = GetJsonString(item, "type", "Type");
+                    if (!string.Equals(
+                            type,
+                            "custom-quick-reply",
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    string key = GetJsonString(item, "key", "Key").Trim();
+                    string question = GetJsonString(
+                        item,
+                        "question",
+                        "Question",
+                        "title",
+                        "Title").Trim();
+                    string answer = GetJsonString(
+                        item,
+                        "reply",
+                        "Reply",
+                        "answer",
+                        "Answer").Trim();
+
+                    if (string.IsNullOrWhiteSpace(key) ||
+                        string.IsNullOrWhiteSpace(question) ||
+                        string.IsNullOrWhiteSpace(answer) ||
+                        !seenKeys.Add(key))
+                    {
+                        continue;
+                    }
+
+                    if (!key.StartsWith("custom_", StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    if (question.Length > 140)
+                        question = question.Substring(0, 140);
+
+                    if (answer.Length > 1200)
+                        answer = answer.Substring(0, 1200);
+
+                    replies.Add((key.ToLowerInvariant(), question, answer));
+
+                    // خمسة أسئلة مخصصة كحد أعلى: مع الخمسة الأساسية = 10 أزرار.
+                    if (replies.Count >= 5)
+                        break;
+                }
+            }
+            catch (JsonException)
+            {
+                // JSON قديم أو غير صالح: لا نعطل الدردشة بسببه.
+            }
+
+            return replies;
+        }
+
+        private static string? GetCustomQuickReplyAnswer(
+            string? jsonText,
+            string requestedKey)
+        {
+            if (string.IsNullOrWhiteSpace(requestedKey))
+                return null;
+
+            return GetCustomQuickReplyDefinitions(jsonText)
+                .FirstOrDefault(reply =>
+                    string.Equals(
+                        reply.Key,
+                        requestedKey.Trim(),
+                        StringComparison.OrdinalIgnoreCase))
+                .Answer;
+        }
+
+        private static string? GetCustomQuickReplyAnswerByQuestion(
+            string? jsonText,
+            string messageText)
+        {
+            if (string.IsNullOrWhiteSpace(messageText))
+                return null;
+
+            string normalizedMessage = NormalizeArabicIntentText(messageText);
+            if (string.IsNullOrWhiteSpace(normalizedMessage))
+                return null;
+
+            foreach (var reply in GetCustomQuickReplyDefinitions(jsonText))
+            {
+                string normalizedQuestion = NormalizeArabicIntentText(reply.Question);
+
+                if (string.IsNullOrWhiteSpace(normalizedQuestion))
+                    continue;
+
+                // مطابقة السؤال المخصص نفسه بعد توحيد الهمزات والتشكيل والمسافات.
+                // لا نستخدم Contains حتى لا نرسل إجابة مخصصة لسؤال مختلف بالخطأ.
+                if (string.Equals(
+                    normalizedMessage,
+                    normalizedQuestion,
+                    StringComparison.Ordinal))
+                {
+                    return reply.Answer;
+                }
+            }
+
+            return null;
         }
 
         private static bool IsQuickQuestionTopic(string key)
@@ -2997,7 +3163,6 @@ namespace YemenGuide.Web.Controllers
                 .Distinct()
                 .Take(2)
                 .ToList();
-
             return ownedPlaceIds.Count == 1
                 ? ownedPlaceIds[0]
                 : null;

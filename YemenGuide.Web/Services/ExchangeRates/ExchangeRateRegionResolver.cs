@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -26,7 +26,21 @@ namespace YemenGuide.Web.Services.ExchangeRates
                 "ريمه",
                 "الحديده",
                 "البيضاء",
-                "الجوف"
+                "الجوف",
+                "sanaa",
+                "sana a",
+                "amanat al asimah",
+                "saada",
+                "amran",
+                "dhamar",
+                "ibb",
+                "hajjah",
+                "al mahwit",
+                "raymah",
+                "al hudaydah",
+                "hodeidah",
+                "al bayda",
+                "al jawf"
             };
 
         private static readonly HashSet<string> AdenMarketNames =
@@ -53,45 +67,63 @@ namespace YemenGuide.Web.Services.ExchangeRates
                 "الغيضه",
                 "سقطري",
                 "سقطرى",
-                "حديبو"
+                "حديبو",
+                "aden",
+                "taiz",
+                "marib",
+                "ma rib",
+                "hadramout",
+                "hadramawt",
+                "mukalla",
+                "seiyun",
+                "tarim",
+                "ash shihr",
+                "shabwah",
+                "shabwa",
+                "ataq",
+                "abyan",
+                "zinjibar",
+                "lahij",
+                "al hawtah",
+                "al dhale e",
+                "al mahrah",
+                "al ghaydah",
+                "socotra",
+                "hadibu"
             };
 
-        public string Resolve(string? cityName)
+        public static bool IsValidRegion(string? region)
         {
-            string normalized = Normalize(cityName);
+            return string.Equals(region, SanaaMarket, StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(region, AdenMarket, StringComparison.OrdinalIgnoreCase);
+        }
 
-            if (string.IsNullOrWhiteSpace(normalized))
+        public static string NormalizeRegion(string? region)
+        {
+            if (string.Equals(region, SanaaMarket, StringComparison.OrdinalIgnoreCase))
             {
                 return SanaaMarket;
             }
 
-            if (AdenMarketNames.Contains(normalized))
+            if (string.Equals(region, AdenMarket, StringComparison.OrdinalIgnoreCase))
             {
                 return AdenMarket;
             }
 
-            if (SanaaMarketNames.Contains(normalized))
+            throw new ArgumentException(
+                "سوق الصرف يجب أن يكون سوق صنعاء (North) أو سوق عدن (South).",
+                nameof(region));
+        }
+
+        public string Resolve(string? cityName)
+        {
+            if (TryResolve(cityName, out string region))
             {
-                return SanaaMarket;
+                return region;
             }
 
-            foreach (string name in AdenMarketNames)
-            {
-                if (ContainsWholeNormalizedName(normalized, name))
-                {
-                    return AdenMarket;
-                }
-            }
-
-            foreach (string name in SanaaMarketNames)
-            {
-                if (ContainsWholeNormalizedName(normalized, name))
-                {
-                    return SanaaMarket;
-                }
-            }
-
-            return SanaaMarket;
+            throw new InvalidOperationException(
+                $"المدينة '{cityName?.Trim()}' غير مصنفة ضمن سوق صنعاء أو سوق عدن. راجع إدارة المدن وحدد سوق الصرف.");
         }
 
         public bool TryResolve(string? cityName, out string region)
@@ -100,7 +132,7 @@ namespace YemenGuide.Web.Services.ExchangeRates
 
             if (string.IsNullOrWhiteSpace(normalized))
             {
-                region = SanaaMarket;
+                region = string.Empty;
                 return false;
             }
 
@@ -134,7 +166,7 @@ namespace YemenGuide.Web.Services.ExchangeRates
                 }
             }
 
-            region = SanaaMarket;
+            region = string.Empty;
             return false;
         }
 

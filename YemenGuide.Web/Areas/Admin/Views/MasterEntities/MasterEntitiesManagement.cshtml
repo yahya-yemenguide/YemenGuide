@@ -334,10 +334,17 @@
                 @foreach (var city in cities)
                 {
                     cityCounts.TryGetValue(city.CityId, out var placesCount);
+                    var isNorthMarket = string.Equals(city.ExchangeRateRegion, "North", StringComparison.OrdinalIgnoreCase);
+                    var isSouthMarket = string.Equals(city.ExchangeRateRegion, "South", StringComparison.OrdinalIgnoreCase);
+                    var exchangeMarketLabel = isNorthMarket
+                        ? "سوق صنعاء"
+                        : isSouthMarket
+                            ? "سوق عدن"
+                            : "غير مصنفة";
 
                     <article class="master-entity-card city-card"
                          data-city-card
-                         data-search-text="@city.CityName.ToLowerInvariant()"
+                         data-search-text="@($"{city.CityName} {city.CityNameEn} {exchangeMarketLabel}".ToLowerInvariant())"
                          data-city-id="@city.CityId"
                          style="--entity-accent:@(string.IsNullOrWhiteSpace(city.ThemeColor) ? "#00A6DA" : city.ThemeColor);">
 
@@ -359,12 +366,19 @@
                             </div>
                         </div>
 
-                        <div class="master-entity-card__meta-grid master-entity-card__meta-grid--single">
+                        <div class="master-entity-card__meta-grid">
                             <div class="master-meta-chip">
                                 <span class="master-meta-chip__icon"><i class="bi bi-building-fill"></i></span>
                                 <span class="master-meta-chip__copy">
                                     <small>المنشآت المرتبطة</small>
                                     <strong>@placesCount منشأة</strong>
+                                </span>
+                            </div>
+                            <div class="master-meta-chip">
+                                <span class="master-meta-chip__icon"><i class="bi bi-currency-exchange"></i></span>
+                                <span class="master-meta-chip__copy">
+                                    <small>سوق الصرف</small>
+                                    <strong>@exchangeMarketLabel</strong>
                                 </span>
                             </div>
                         </div>

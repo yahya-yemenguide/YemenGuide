@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Owner Dashboard Pro
  * ApexCharts = الرسوم، FullCalendar = التقويم.
  * في حال لم تُحمّل مكتبة خارجية تبقى البيانات النصية تعمل بدون تعطل الصفحة.
@@ -466,20 +466,42 @@
         const balanceUrl = String(trialNode.dataset.trialBalanceUrl || '/Owner/Financials?financeTab=balance');
         const countdownValue = trialNode.querySelector('[data-trial-countdown] strong');
         const endsAt = endsAtRaw ? new Date(endsAtRaw) : null;
+        let countdownTimer = null;
 
         const updateCountdown = () => {
             if (!countdownValue || !endsAt || Number.isNaN(endsAt.getTime())) return;
-            const diff = Math.max(0, endsAt.getTime() - Date.now());
+
+            const diff = endsAt.getTime() - Date.now();
+
+            if (diff <= 0) {
+                countdownValue.textContent = 'انتهت الفترة التجريبية';
+                trialNode.dataset.trialActive = 'false';
+                trialNode.dataset.trialExpired = 'true';
+
+                if (countdownTimer !== null) {
+                    window.clearInterval(countdownTimer);
+                    countdownTimer = null;
+                }
+
+                return;
+            }
+
             const totalHours = Math.floor(diff / 3600000);
             const days = Math.floor(totalHours / 24);
             const hours = totalHours % 24;
             const minutes = Math.floor((diff % 3600000) / 60000);
-            countdownValue.textContent = `${days} يوم · ${hours} ساعة · ${minutes} دقيقة`;
+            const seconds = Math.floor((diff % 60000) / 1000);
+
+            countdownValue.textContent =
+                `${days} يوم · ${hours} ساعة · ${minutes} دقيقة · ${seconds} ثانية`;
         };
 
         if (isActiveTrial) {
             updateCountdown();
-            window.setInterval(updateCountdown, 60000);
+
+            if (endsAt && endsAt.getTime() > Date.now()) {
+                countdownTimer = window.setInterval(updateCountdown, 1000);
+            }
         }
 
         const shouldShowPopup = isExpiredTrial || endingSoon;

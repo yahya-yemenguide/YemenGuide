@@ -1,5 +1,6 @@
-﻿using System;
+using System;
 using System.Linq;
+using Microsoft.EntityFrameworkCore;
 using YemenGuide.Data;
 using YemenGuide.Core.Constants;
 using YemenGuide.Web.Services.ExchangeRates;
@@ -18,16 +19,15 @@ namespace YemenGuide.Web.Services
     /// </summary>
     public class CurrencyService
     {
-        private const decimal DefaultSanaaUsdRate = 537m;
-        private const decimal DefaultSanaaSarRate = 140m;
-        private const decimal DefaultAdenUsdRate = 1900m;
-        private const decimal DefaultAdenSarRate = 500m;
-
         private readonly AppDbContext _context;
+        private readonly ExchangeRateRegionResolver _regionResolver;
 
-        public CurrencyService(AppDbContext context)
+        public CurrencyService(
+            AppDbContext context,
+            ExchangeRateRegionResolver regionResolver)
         {
-            _context = context;
+            _context = context ?? throw new ArgumentNullException(nameof(context));
+            _regionResolver = regionResolver ?? throw new ArgumentNullException(nameof(regionResolver));
         }
 
         /// <summary>
@@ -186,17 +186,39 @@ namespace YemenGuide.Web.Services
             return $"{convertedAmount:N2} ر.ي";
         }
 
-        private string? GetRegionByCityId(int cityId)
+        private string GetRegionByCityId(int cityId)
         {
             if (cityId <= 0)
             {
-                return ExchangeRateRegionResolver.SanaaMarket;
+                throw new ArgumentOutOfRangeException(
+                    nameof(cityId),
+                    "رقم المدينة غير صالح ولا يمكن تحديد سوق الصرف.");
             }
 
-            return _context.Cities
+            var city = _context.Cities
+                .AsNoTracking()
                 .Where(city => city.CityId == cityId)
-                .Select(city => city.ExchangeRateRegion)
+                .Select(city => new
+                {
+                    city.CityName,
+                    city.ExchangeRateRegion
+                })
                 .FirstOrDefault();
+
+            if (city == null)
+            {
+                throw new InvalidOperationException(
+                    $"المدينة رقم {cityId} غير موجودة ولا يمكن تحديد سوق الصرف.");
+            }
+
+            if (ExchangeRateRegionResolver.IsValidRegion(city.ExchangeRateRegion))
+            {
+                return ExchangeRateRegionResolver.NormalizeRegion(city.ExchangeRateRegion);
+            }
+
+            // توافق آمن مع المدن القديمة التي كان تصنيفها فارغاً.
+            // لا يوجد رجوع صامت إلى صنعاء: الاسم غير المعروف يسبب رسالة واضحة.
+            return _regionResolver.Resolve(city.CityName);
         }
 
         private (decimal UsdRate, decimal SarRate) GetRates(
@@ -207,11 +229,11 @@ namespace YemenGuide.Web.Services
                     .OrderBy(setting => setting.Id)
                     .FirstOrDefault();
 
+            string normalizedRegion =
+                ExchangeRateRegionResolver.NormalizeRegion(exchangeRateRegion);
+
             bool useAdenMarket =
-                string.Equals(
-                    exchangeRateRegion,
-                    ExchangeRateRegionResolver.AdenMarket,
-                    StringComparison.OrdinalIgnoreCase);
+                normalizedRegion == ExchangeRateRegionResolver.AdenMarket;
 
             if (settings == null)
                 throw new InvalidOperationException("إعدادات أسعار الصرف غير موجودة.");
@@ -224,4 +246,3 @@ namespace YemenGuide.Web.Services
         }
     }
 }
-

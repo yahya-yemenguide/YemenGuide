@@ -1,4 +1,4 @@
-<div class="royal-policies-wrapper policy-section-stack fade-in-up" dir="rtl">
+﻿<div class="royal-policies-wrapper policy-section-stack fade-in-up" dir="rtl">
 
     <section class="royal-card policy-card policy-card--cyan top-border-gold">
         <header class="policy-card__header">
@@ -166,24 +166,35 @@
                 </button>
             </div>
 
-            <aside class="policy-buffer-panel border">
-                <span class="policy-buffer-panel__icon" aria-hidden="true">
-                    <i class="bi bi-stars"></i>
-                </span>
-                <div>
-                    <h3>وقت التجهيز والتنظيف</h3>
-                    <p>فاصل زمني يُحجب آليًا بين حجز وآخر.</p>
+            <aside class="policy-buffer-panel policy-buffer-panel--compact border">
+                <div class="policy-buffer-panel__heading">
+                    <span class="policy-buffer-panel__icon" aria-hidden="true">
+                        <i class="bi bi-stars"></i>
+                    </span>
+                    <div class="policy-buffer-panel__copy">
+                        <span class="policy-buffer-panel__kicker">فاصل بين الحجوزات</span>
+                        <h3>وقت التجهيز والتنظيف</h3>
+                        <p>حدد المدة التي تحتاجها المنشأة للتجهيز قبل بدء الحجز التالي.</p>
+                    </div>
                 </div>
-                <div class="input-group">
-                    <input type="number"
-                           class="form-control text-center fw-bold show-spinners"
-                           id="bufferTimeHours"
-                           value="2"
-                           min="0"
-                           max="12" />
-                    <span class="input-group-text">ساعة</span>
+
+                <div class="policy-buffer-panel__controls">
+                    <label for="bufferTimeHours">مدة التجهيز</label>
+                    <div class="input-group">
+                        <input type="number"
+                               class="form-control text-center fw-bold show-spinners"
+                               id="bufferTimeHours"
+                               value="2"
+                               min="0"
+                               max="12" />
+                        <span class="input-group-text">ساعة</span>
+                    </div>
                 </div>
-                <small>مثال: إذا انتهى الحجز 2:00، يبدأ التالي بعد وقت التجهيز.</small>
+
+                <div class="policy-buffer-panel__example">
+                    <i class="bi bi-info-circle" aria-hidden="true"></i>
+                    <small>مثال: إذا انتهى الحجز 2:00 وكانت مدة التجهيز ساعتين، يبدأ الحجز التالي 4:00.</small>
+                </div>
             </aside>
         </div>
     </section>
@@ -299,3 +310,986 @@
         </button>
     </footer>
 </div>
+
+<style id="facilityPoliciesResponsiveFix">
+    /*
+       استجابة جميع أقسام صفحة السياسات للهاتف والتابلت.
+       هذا النمط موجود داخل ملف قائم أصلًا، ولا يضيف ملف CSS جديدًا للمشروع.
+    */
+    #facilitySettingsPage,
+    #facilitySettingsPage .tab-pane-content,
+    #facilitySettingsPage .royal-policies-wrapper,
+    #facilitySettingsPage .policy-section-stack,
+    #facilitySettingsPage .royal-card,
+    #facilitySettingsPage .policy-card {
+        min-width: 0;
+        max-width: 100%;
+        box-sizing: border-box;
+    }
+
+    #facilitySettingsPage .royal-policies-wrapper,
+    #facilitySettingsPage .policy-section-stack {
+        overflow-x: clip;
+    }
+
+    #facilitySettingsPage .policy-card__header > div,
+    #facilitySettingsPage .policy-choice-card__copy,
+    #facilitySettingsPage .policy-save-bar__copy,
+    #facilitySettingsPage .policy-builder-item,
+    #facilitySettingsPage .policy-field,
+    #facilitySettingsPage .policy-number-field {
+        min-width: 0;
+    }
+
+    #facilitySettingsPage .policy-card__header h2,
+    #facilitySettingsPage .policy-card__header h3,
+    #facilitySettingsPage .policy-card__header p,
+    #facilitySettingsPage .policy-choice-card__copy strong,
+    #facilitySettingsPage .policy-choice-card__copy small,
+    #facilitySettingsPage .policy-buffer-panel h3,
+    #facilitySettingsPage .policy-buffer-panel p,
+    #facilitySettingsPage .policy-buffer-panel small {
+        overflow-wrap: anywhere;
+        word-break: normal;
+    }
+
+    #shiftsSettingsCard .policy-buffer-panel {
+        align-self: stretch;
+        height: auto !important;
+        min-height: 0 !important;
+    }
+
+    /*
+       بطاقة وقت التجهيز والتنظيف: نعرضها عموديًا بشكل واضح بدل ضغط
+       العنوان والوصف والحقل في صف واحد، وهو ما كان يكسّر الكلمات.
+    */
+    #shiftsSettingsCard .policy-buffer-panel--compact {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        justify-content: flex-start !important;
+        gap: 14px !important;
+        padding: 18px !important;
+        text-align: start !important;
+        overflow: hidden;
+    }
+
+    #shiftsSettingsCard .policy-buffer-panel__heading {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        gap: 11px;
+        align-items: start;
+        width: 100%;
+        min-width: 0;
+    }
+
+    #shiftsSettingsCard .policy-buffer-panel__copy {
+        min-width: 0;
+    }
+
+    #shiftsSettingsCard .policy-buffer-panel__kicker {
+        display: block;
+        margin-bottom: 3px;
+        font-size: .78rem;
+        font-weight: 800;
+        color: #d49a08;
+    }
+
+    #shiftsSettingsCard .policy-buffer-panel h3 {
+        margin: 0 0 5px !important;
+        font-size: 1.08rem !important;
+        line-height: 1.45 !important;
+        white-space: normal !important;
+        overflow-wrap: normal !important;
+        word-break: keep-all !important;
+    }
+
+    #shiftsSettingsCard .policy-buffer-panel p {
+        margin: 0 !important;
+        line-height: 1.65 !important;
+        white-space: normal !important;
+        overflow-wrap: normal !important;
+        word-break: normal !important;
+    }
+
+    #shiftsSettingsCard .policy-buffer-panel__controls {
+        width: 100%;
+        min-width: 0;
+        padding: 12px;
+        border-radius: 14px;
+        background: rgba(245, 158, 11, .06);
+        border: 1px solid rgba(245, 158, 11, .16);
+    }
+
+    #shiftsSettingsCard .policy-buffer-panel__controls > label {
+        display: block;
+        margin-bottom: 7px;
+        font-size: .88rem;
+        font-weight: 800;
+    }
+
+    #shiftsSettingsCard .policy-buffer-panel .input-group {
+        width: 100% !important;
+        max-width: none !important;
+        min-width: 0;
+        flex-wrap: nowrap;
+    }
+
+    #shiftsSettingsCard .policy-buffer-panel #bufferTimeHours {
+        min-width: 0;
+        height: 44px;
+        font-size: 1rem;
+    }
+
+    #shiftsSettingsCard .policy-buffer-panel__example {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        width: 100%;
+        min-width: 0;
+        padding: 10px 12px;
+        border-radius: 12px;
+        background: rgba(0, 166, 218, .06);
+        line-height: 1.65;
+    }
+
+    #shiftsSettingsCard .policy-buffer-panel__example i {
+        flex: 0 0 auto;
+        margin-top: 2px;
+        color: #00a6da;
+    }
+
+    #shiftsSettingsCard .policy-buffer-panel__example small {
+        min-width: 0;
+        white-space: normal !important;
+        overflow-wrap: normal !important;
+        word-break: normal !important;
+    }
+
+    #shiftScheduleWarning {
+        border-radius: 14px;
+        line-height: 1.7;
+    }
+
+    #shiftsContainer .policy-val.is-invalid,
+    #shiftsContainer .policy-desc.is-invalid,
+    #bufferTimeHours.is-invalid {
+        border-color: #dc3545 !important;
+        box-shadow: 0 0 0 .16rem rgba(220, 53, 69, .12) !important;
+    }
+
+    /* لا يظهر زر اعتماد الفترة كأنه متاح قبل اكتمالها وصحة وقتها. */
+    #shiftsContainer .btn-edit:disabled {
+        opacity: .38 !important;
+        cursor: not-allowed !important;
+        pointer-events: none !important;
+        filter: grayscale(.35);
+    }
+
+    #shiftsContainer .shift-row-validation-hint {
+        margin: 6px 4px 0;
+        padding: 7px 10px;
+        border-radius: 10px;
+        background: rgba(220, 53, 69, .07);
+        font-size: .84rem;
+        font-weight: 700;
+        line-height: 1.55;
+    }
+
+    /* مساحة منطقية لبطاقة وقت التجهيز على الشاشات الكبيرة. */
+    @@media (min-width: 992px) {
+        #shiftsSettingsCard .policy-shifts-grid {
+            grid-template-columns: minmax(0, 1fr) minmax(330px, 380px) !important;
+            align-items: stretch !important;
+        }
+
+        #shiftsSettingsCard .policy-buffer-panel {
+            width: 100% !important;
+            min-width: 330px !important;
+            max-width: 380px !important;
+            padding: 18px !important;
+        }
+
+        #shiftsSettingsCard .policy-buffer-panel h3,
+        #shiftsSettingsCard .policy-buffer-panel p,
+        #shiftsSettingsCard .policy-buffer-panel small {
+            overflow-wrap: normal !important;
+            word-break: normal !important;
+            white-space: normal !important;
+        }
+    }
+
+    @@media (max-width: 991.98px) {
+        #facilitySettingsPage .policy-shifts-grid,
+        #facilitySettingsPage .policy-two-column-grid,
+        #facilitySettingsPage .policy-choice-grid,
+        #facilitySettingsPage .policy-form-grid {
+            grid-template-columns: minmax(0, 1fr) !important;
+        }
+
+        #facilitySettingsPage .policy-buffer-panel,
+        #facilitySettingsPage .policy-shifts-builder {
+            width: 100% !important;
+            max-width: 100% !important;
+        }
+
+        #facilitySettingsPage .policy-two-column-grid > *,
+        #facilitySettingsPage .policy-form-grid > *,
+        #facilitySettingsPage .policy-choice-grid > * {
+            width: 100%;
+            min-width: 0;
+        }
+    }
+
+    @@media (max-width: 767.98px) {
+        #facilitySettingsPage {
+            width: 100%;
+            overflow-x: hidden;
+        }
+
+        #facilitySettingsPage .tab-pane-content {
+            padding-inline: 0 !important;
+        }
+
+        #facilitySettingsPage .royal-policies-wrapper,
+        #facilitySettingsPage .policy-section-stack {
+            gap: 12px !important;
+        }
+
+        #facilitySettingsPage .royal-card,
+        #facilitySettingsPage .policy-card {
+            padding: 14px !important;
+            border-radius: 18px !important;
+        }
+
+        #facilitySettingsPage .policy-card__header,
+        #facilitySettingsPage .policy-card__header--compact {
+            display: grid !important;
+            grid-template-columns: auto minmax(0, 1fr) !important;
+            align-items: start !important;
+            gap: 10px !important;
+        }
+
+        #facilitySettingsPage .policy-card__header h2 {
+            font-size: 1.05rem !important;
+            line-height: 1.45 !important;
+            margin-bottom: 4px !important;
+        }
+
+        #facilitySettingsPage .policy-card__header p,
+        #facilitySettingsPage .policy-choice-card__copy small,
+        #facilitySettingsPage .policy-buffer-panel p,
+        #facilitySettingsPage .policy-buffer-panel small {
+            font-size: .84rem !important;
+            line-height: 1.65 !important;
+        }
+
+        #facilitySettingsPage .policy-choice-grid,
+        #facilitySettingsPage .policy-form-grid,
+        #facilitySettingsPage .policy-two-column-grid,
+        #facilitySettingsPage .policy-shifts-grid {
+            display: grid !important;
+            grid-template-columns: minmax(0, 1fr) !important;
+            gap: 10px !important;
+        }
+
+        #facilitySettingsPage .policy-choice-card,
+        #facilitySettingsPage .royal-radio-card,
+        #facilitySettingsPage .policy-field,
+        #facilitySettingsPage .policy-number-field,
+        #facilitySettingsPage .policy-buffer-panel {
+            width: 100% !important;
+            min-width: 0 !important;
+            max-width: none !important;
+        }
+
+        #facilitySettingsPage .policy-choice-card__content,
+        #facilitySettingsPage .card-content {
+            min-width: 0 !important;
+            gap: 10px !important;
+            padding: 12px !important;
+        }
+
+        #facilitySettingsPage .policy-builder-list {
+            width: 100%;
+            min-width: 0;
+        }
+
+        #facilitySettingsPage .policy-builder-item {
+            display: grid !important;
+            grid-template-columns: auto minmax(0, 1fr) auto !important;
+            gap: 9px !important;
+            align-items: center !important;
+            width: 100% !important;
+            min-width: 0 !important;
+            padding: 11px !important;
+        }
+
+        #facilitySettingsPage .policy-builder-item > .policy-desc,
+        #facilitySettingsPage .policy-builder-item > .policy-shift-time,
+        #facilitySettingsPage .policy-builder-item > .input-group:not(.policy-shift-time) {
+            grid-column: 2 / -1;
+            width: 100% !important;
+            min-width: 0 !important;
+        }
+
+        #facilitySettingsPage .policy-builder-item__actions,
+        #facilitySettingsPage .actions-wrapper {
+            grid-column: 1 / -1;
+            justify-self: end;
+            display: flex !important;
+            flex-wrap: wrap;
+            gap: 8px !important;
+        }
+
+        #facilitySettingsPage .policy-shift-time {
+            display: grid !important;
+            grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr) !important;
+            width: 100% !important;
+        }
+
+        #facilitySettingsPage .policy-shift-time .form-control,
+        #facilitySettingsPage .policy-shift-time .input-group-text,
+        #facilitySettingsPage .input-group .form-control,
+        #facilitySettingsPage .input-group .input-group-text {
+            min-width: 0 !important;
+        }
+
+        #facilitySettingsPage .policy-buffer-panel {
+            display: flex !important;
+            flex-direction: column !important;
+            gap: 12px !important;
+            align-items: stretch !important;
+            padding: 14px !important;
+            text-align: start !important;
+        }
+
+        #facilitySettingsPage .policy-buffer-panel__heading {
+            grid-template-columns: auto minmax(0, 1fr) !important;
+            gap: 9px !important;
+        }
+
+        #facilitySettingsPage .policy-buffer-panel__controls,
+        #facilitySettingsPage .policy-buffer-panel__example {
+            width: 100% !important;
+            max-width: none !important;
+        }
+
+        #facilitySettingsPage .policy-days-grid {
+            display: grid !important;
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            gap: 8px !important;
+        }
+
+        #facilitySettingsPage .policy-day-chip,
+        #facilitySettingsPage .policy-day-chip > span {
+            width: 100% !important;
+            min-width: 0 !important;
+        }
+
+        #facilitySettingsPage .policy-save-bar {
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: stretch !important;
+            gap: 10px !important;
+            padding: 12px !important;
+        }
+
+        #facilitySettingsPage .policy-save-bar .btn-royal-save,
+        #facilitySettingsPage .btn-royal-add {
+            width: 100% !important;
+            justify-content: center !important;
+        }
+
+        #facilitySettingsPage input,
+        #facilitySettingsPage select,
+        #facilitySettingsPage textarea,
+        #facilitySettingsPage .form-control,
+        #facilitySettingsPage .form-select {
+            max-width: 100% !important;
+        }
+    }
+
+
+    @@media (max-width: 575.98px) {
+        #shiftsSettingsCard .policy-buffer-panel h3 {
+            font-size: 1rem !important;
+        }
+
+        #shiftsSettingsCard .policy-buffer-panel__kicker {
+            font-size: .74rem;
+        }
+
+        #shiftsSettingsCard .policy-buffer-panel__controls {
+            padding: 10px;
+        }
+
+        #shiftsSettingsCard .policy-buffer-panel__example {
+            padding: 9px 10px;
+        }
+    }
+
+    @@media (max-width: 420px) {
+        #facilitySettingsPage .royal-card,
+        #facilitySettingsPage .policy-card {
+            padding: 11px !important;
+        }
+
+        #facilitySettingsPage .policy-builder-item {
+            grid-template-columns: 1fr !important;
+        }
+
+        #facilitySettingsPage .policy-builder-item > *,
+        #facilitySettingsPage .policy-builder-item > .policy-desc,
+        #facilitySettingsPage .policy-builder-item > .policy-shift-time,
+        #facilitySettingsPage .policy-builder-item > .input-group:not(.policy-shift-time),
+        #facilitySettingsPage .policy-builder-item__actions,
+        #facilitySettingsPage .actions-wrapper {
+            grid-column: 1 !important;
+        }
+
+        #facilitySettingsPage .policy-builder-item__icon,
+        #facilitySettingsPage .item-icon {
+            justify-self: center;
+        }
+
+        #facilitySettingsPage .policy-shift-time {
+            grid-template-columns: auto minmax(0, 1fr) !important;
+        }
+
+        #facilitySettingsPage .policy-shift-time .input-group-text:nth-of-type(2) {
+            grid-column: 1;
+        }
+
+        #facilitySettingsPage .policy-days-grid {
+            grid-template-columns: minmax(0, 1fr) !important;
+        }
+    }
+</style>
+
+<script>
+    (function installOperationalShiftValidation() {
+        if (window.__yemenGuideOperationalShiftValidationInstalled) {
+            return;
+        }
+
+        const container = document.getElementById("shiftsContainer");
+        const page = document.getElementById("facilitySettingsPage") || document;
+        const bufferInput = document.getElementById("bufferTimeHours");
+
+        if (!container) {
+            return;
+        }
+
+        window.__yemenGuideOperationalShiftValidationInstalled = true;
+
+        function normalizeDigits(value) {
+            const arabic = "٠١٢٣٤٥٦٧٨٩";
+            const eastern = "۰۱۲۳۴۵۶۷۸۹";
+
+            return String(value || "")
+                .replace(/[٠-٩]/g, digit => String(arabic.indexOf(digit)))
+                .replace(/[۰-۹]/g, digit => String(eastern.indexOf(digit)));
+        }
+
+        function readTimeMinutes(input) {
+            if (!input) {
+                return null;
+            }
+
+            if (Number.isFinite(input.valueAsNumber)) {
+                return Math.floor(input.valueAsNumber / 60000);
+            }
+
+            const value = normalizeDigits(input.value).trim();
+            const match = /^(\d{1,2}):(\d{2})$/.exec(value);
+
+            if (!match) {
+                return null;
+            }
+
+            const hours = Number(match[1]);
+            const minutes = Number(match[2]);
+
+            if (
+                !Number.isInteger(hours) ||
+                !Number.isInteger(minutes) ||
+                hours < 0 ||
+                hours > 23 ||
+                minutes < 0 ||
+                minutes > 59
+            ) {
+                return null;
+            }
+
+            return (hours * 60) + minutes;
+        }
+
+        function buildSegments(start, end) {
+            if (start === null || end === null || start === end) {
+                return [];
+            }
+
+            return start < end
+                ? [[start, end]]
+                : [[start, 1440], [0, end]];
+        }
+
+        function segmentsOverlap(firstSegments, secondSegments) {
+            return firstSegments.some(first =>
+                secondSegments.some(second =>
+                    Math.max(first[0], second[0]) <
+                    Math.min(first[1], second[1])
+                )
+            );
+        }
+
+        function readRows() {
+            return Array.from(
+                container.querySelectorAll(".luxury-list-item")
+            ).map((item, index) => {
+                const nameInput = item.querySelector(".policy-desc");
+                const timeInputs = item.querySelectorAll('input[type="time"]');
+                const fromInput = timeInputs[0] || null;
+                const toInput = timeInputs[1] || null;
+                const rawName = nameInput?.value?.trim() || "";
+                const start = readTimeMinutes(fromInput);
+                const end = readTimeMinutes(toInput);
+
+                return {
+                    item,
+                    index,
+                    nameInput,
+                    fromInput,
+                    toInput,
+                    rawName,
+                    name: rawName || `الفترة ${index + 1}`,
+                    from: fromInput?.value || "",
+                    to: toInput?.value || "",
+                    start,
+                    end,
+                    segments: buildSegments(start, end)
+                };
+            });
+        }
+
+        function getOperationMode() {
+            return document.querySelector(
+                'input[name="operationSystemMode"]:checked'
+            )?.value || "";
+        }
+
+        function readBufferHours() {
+            if (!bufferInput) {
+                return 0;
+            }
+
+            const value = Number(normalizeDigits(bufferInput.value));
+            return Number.isFinite(value) ? value : NaN;
+        }
+
+        function findIssue() {
+            if (getOperationMode() !== "Shifts") {
+                return null;
+            }
+
+            const rows = readRows();
+
+            if (rows.length === 0) {
+                return {
+                    message: "أضف فترة تشغيلية واحدة على الأقل قبل الحفظ.",
+                    target: null,
+                    rows: []
+                };
+            }
+
+            const bufferHours = readBufferHours();
+            if (
+                !Number.isInteger(bufferHours) ||
+                bufferHours < 0 ||
+                bufferHours > 12
+            ) {
+                return {
+                    message: "وقت التجهيز والتنظيف يجب أن يكون بين 0 و12 ساعة.",
+                    target: bufferInput,
+                    rows: []
+                };
+            }
+
+            for (const row of rows) {
+                if (!row.rawName) {
+                    return {
+                        message: `اكتب اسم الفترة رقم ${row.index + 1}.`,
+                        target: row.nameInput,
+                        rows: [row]
+                    };
+                }
+
+                if (row.start === null || row.end === null) {
+                    return {
+                        message: `حدد وقت البداية والنهاية للفترة «${row.name}».`,
+                        target: row.fromInput || row.toInput,
+                        rows: [row]
+                    };
+                }
+
+                if (row.start === row.end) {
+                    return {
+                        message: `لا يمكن أن تبدأ وتنتهي الفترة «${row.name}» في نفس الوقت.`,
+                        target: row.fromInput,
+                        rows: [row]
+                    };
+                }
+            }
+
+            for (let firstIndex = 0; firstIndex < rows.length; firstIndex += 1) {
+                for (
+                    let secondIndex = firstIndex + 1;
+                    secondIndex < rows.length;
+                    secondIndex += 1
+                ) {
+                    const first = rows[firstIndex];
+                    const second = rows[secondIndex];
+
+                    if (!segmentsOverlap(first.segments, second.segments)) {
+                        continue;
+                    }
+
+                    return {
+                        message:
+                            `لا يمكن الحفظ: الفترة «${first.name}» تتداخل مع الفترة «${second.name}». غيّر وقت إحدى الفترتين أولًا.`,
+                        target: first.fromInput,
+                        rows: [first, second]
+                    };
+                }
+            }
+
+            return null;
+        }
+
+        function clearVisualState() {
+            container
+                .querySelectorAll(".is-invalid")
+                .forEach(element => {
+                    element.classList.remove("is-invalid");
+                    element.removeAttribute("aria-invalid");
+                });
+
+            bufferInput?.classList.remove("is-invalid");
+            bufferInput?.removeAttribute("aria-invalid");
+            document.getElementById("shiftScheduleWarning")?.remove();
+        }
+
+        function markInvalid(element) {
+            if (!element) {
+                return;
+            }
+
+            element.classList.add("is-invalid");
+            element.setAttribute("aria-invalid", "true");
+        }
+
+        function renderIssue(issue) {
+            clearVisualState();
+
+            if (!issue) {
+                return;
+            }
+
+            issue.rows?.forEach(row => {
+                markInvalid(row.nameInput);
+                markInvalid(row.fromInput);
+                markInvalid(row.toInput);
+            });
+
+            markInvalid(issue.target);
+
+            const warning = document.createElement("div");
+            warning.id = "shiftScheduleWarning";
+            warning.className =
+                "alert alert-danger d-flex align-items-start gap-2 mt-2 mb-0 py-2 px-3 fw-bold small";
+            warning.setAttribute("role", "alert");
+            warning.innerHTML =
+                '<i class="bi bi-exclamation-triangle-fill mt-1"></i><span></span>';
+            warning.querySelector("span").textContent = issue.message;
+            container.insertAdjacentElement("afterend", warning);
+        }
+
+        function refreshValidation() {
+            const issue = findIssue();
+            renderIssue(issue);
+            return issue;
+        }
+
+        function focusIssue(issue) {
+            try {
+                if (typeof window.activateFacilityTab === "function") {
+                    window.activateFacilityTab("operational-tab", false);
+                }
+            } catch (_) {
+            }
+
+            window.setTimeout(() => {
+                issue?.target?.scrollIntoView?.({
+                    behavior: "smooth",
+                    block: "center"
+                });
+                issue?.target?.focus?.({ preventScroll: true });
+            }, 120);
+        }
+
+        async function notifyBlockedSave(issue) {
+            if (!issue) {
+                return;
+            }
+
+            focusIssue(issue);
+
+            if (window.Swal?.fire) {
+                await window.Swal.fire({
+                    icon: "error",
+                    title: "لا يمكن حفظ إعدادات التشغيل",
+                    text: issue.message,
+                    confirmButtonText: "تعديل الفترات",
+                    confirmButtonColor: "#FF5A5F"
+                });
+            }
+        }
+
+        function isRowEditing(item) {
+            if (!item) return false;
+
+            return Array.from(
+                item.querySelectorAll("input, select")
+            ).some(field =>
+                field.tagName === "SELECT"
+                    ? !field.disabled
+                    : !field.readOnly
+            );
+        }
+
+        function getRowConfirmButton(item) {
+            return item?.querySelector(".btn-edit") || null;
+        }
+
+        function updateNewRowTimeTouched(item) {
+            if (!item || item.dataset.requiresTimeChange !== "true") {
+                return;
+            }
+
+            const timeInputs = item.querySelectorAll('input[type="time"]');
+            const currentFrom = timeInputs[0]?.value || "";
+            const currentTo = timeInputs[1]?.value || "";
+
+            item.dataset.timeTouched =
+                currentFrom !== (item.dataset.initialFrom || "") ||
+                currentTo !== (item.dataset.initialTo || "")
+                    ? "true"
+                    : "false";
+        }
+
+        function findIssueForRow(row, rows) {
+            if (!row) return null;
+
+            if (!row.rawName) {
+                return {
+                    message: `اكتب اسم الفترة رقم ${row.index + 1}.`,
+                    target: row.nameInput
+                };
+            }
+
+            if (row.start === null || row.end === null) {
+                return {
+                    message: `حدد وقت البداية والنهاية للفترة «${row.name}».`,
+                    target: row.fromInput || row.toInput
+                };
+            }
+
+            if (row.start === row.end) {
+                return {
+                    message: `لا يمكن أن تبدأ وتنتهي الفترة «${row.name}» في نفس الوقت.`,
+                    target: row.fromInput
+                };
+            }
+
+            if (
+                row.item.dataset.requiresTimeChange === "true" &&
+                row.item.dataset.timeTouched !== "true"
+            ) {
+                return {
+                    message: "غيّر وقت البداية أو النهاية أولًا، ثم يمكنك اعتماد الفترة.",
+                    target: row.fromInput
+                };
+            }
+
+            for (const other of rows) {
+                if (other.item === row.item) continue;
+                if (!other.segments.length || !row.segments.length) continue;
+
+                if (segmentsOverlap(row.segments, other.segments)) {
+                    return {
+                        message: `الفترة «${row.name}» تتداخل مع الفترة «${other.name}». غيّر الوقت أولًا.`,
+                        target: row.fromInput
+                    };
+                }
+            }
+
+            return null;
+        }
+
+        function updateEditConfirmButtons() {
+            const rows = readRows();
+
+            container
+                .querySelectorAll(".shift-row-validation-hint")
+                .forEach(element => element.remove());
+
+            rows.forEach(row => {
+                const button = getRowConfirmButton(row.item);
+                if (!button || !isRowEditing(row.item)) {
+                    if (button) {
+                        button.disabled = false;
+                        button.removeAttribute("aria-disabled");
+                    }
+                    return;
+                }
+
+                updateNewRowTimeTouched(row.item);
+                const currentRows = readRows();
+                const currentRow = currentRows.find(value => value.item === row.item);
+                const issue = findIssueForRow(currentRow, currentRows);
+
+                button.disabled = Boolean(issue);
+                button.setAttribute(
+                    "aria-disabled",
+                    issue ? "true" : "false"
+                );
+                button.title = issue
+                    ? issue.message
+                    : "اعتماد الفترة";
+
+                if (issue) {
+                    const hint = document.createElement("div");
+                    hint.className =
+                        "shift-row-validation-hint text-danger";
+                    hint.textContent = issue.message;
+                    row.item.insertAdjacentElement("afterend", hint);
+                }
+            });
+        }
+
+        function refreshOperationalValidation() {
+            const issue = refreshValidation();
+            updateEditConfirmButtons();
+            return issue;
+        }
+
+        function handleShiftFieldChange(event) {
+            const item = event.target.closest(".luxury-list-item");
+            if (item && event.target.matches('input[type="time"]')) {
+                updateNewRowTimeTouched(item);
+            }
+
+            window.requestAnimationFrame(refreshOperationalValidation);
+        }
+
+        container.addEventListener("input", handleShiftFieldChange);
+        container.addEventListener("change", handleShiftFieldChange);
+
+        // بعد اعتماد فترة صحيحة نزيل شرط "يجب تغيير الوقت" الخاص بالفترة الجديدة.
+        container.addEventListener("click", event => {
+            const button = event.target.closest(".btn-edit");
+            if (!button || button.disabled) return;
+
+            const item = button.closest(".luxury-list-item");
+            if (!item) return;
+
+            window.setTimeout(() => {
+                if (!isRowEditing(item)) {
+                    delete item.dataset.requiresTimeChange;
+                    delete item.dataset.timeTouched;
+                    delete item.dataset.initialFrom;
+                    delete item.dataset.initialTo;
+                }
+
+                refreshOperationalValidation();
+            }, 0);
+        });
+
+        bufferInput?.addEventListener("input", refreshOperationalValidation);
+        bufferInput?.addEventListener("change", refreshOperationalValidation);
+
+        document
+            .querySelectorAll('input[name="operationSystemMode"]')
+            .forEach(input => {
+                input.addEventListener("change", refreshOperationalValidation);
+            });
+
+        const observer = new MutationObserver(mutations => {
+            mutations.forEach(mutation => {
+                mutation.addedNodes.forEach(node => {
+                    if (!(node instanceof HTMLElement)) return;
+                    if (!node.matches(".luxury-list-item")) return;
+                    if (!isRowEditing(node)) return;
+
+                    const timeInputs = node.querySelectorAll('input[type="time"]');
+                    node.dataset.requiresTimeChange = "true";
+                    node.dataset.timeTouched = "false";
+                    node.dataset.initialFrom = timeInputs[0]?.value || "";
+                    node.dataset.initialTo = timeInputs[1]?.value || "";
+                });
+            });
+
+            window.requestAnimationFrame(refreshOperationalValidation);
+        });
+
+        observer.observe(container, {
+            childList: true,
+            subtree: false
+        });
+
+        // أهم جزء: نوقف حدث الحفظ في مرحلة capture قبل وصوله إلى
+        // facility-settings.js إذا كانت الفترات متداخلة أو ناقصة.
+        page.addEventListener(
+            "click",
+            function blockInvalidOperationalSave(event) {
+                const saveButton = event.target.closest(
+                    ".btn-royal-save, #verificationPolicySaveButton"
+                );
+
+                if (!saveButton) {
+                    return;
+                }
+
+                const issue = refreshValidation();
+                if (!issue) {
+                    return;
+                }
+
+                event.preventDefault();
+                event.stopPropagation();
+                event.stopImmediatePropagation();
+                notifyBlockedSave(issue);
+            },
+            true
+        );
+
+        document.getElementById("settingsForm")?.addEventListener(
+            "submit",
+            function blockInvalidOperationalSubmit(event) {
+                const issue = refreshValidation();
+                if (!issue) {
+                    return;
+                }
+
+                event.preventDefault();
+                event.stopPropagation();
+                event.stopImmediatePropagation();
+                notifyBlockedSave(issue);
+            },
+            true
+        );
+
+        refreshOperationalValidation();
+    })();
+</script>
