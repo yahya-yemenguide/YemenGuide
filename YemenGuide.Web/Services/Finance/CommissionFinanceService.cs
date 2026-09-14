@@ -4717,14 +4717,15 @@ namespace YemenGuide.Web.Services.Finance
             }
 
             if (
-                accountNumber.Length != 6 ||
+                accountNumber.Length < 6 ||
+                accountNumber.Length > 9 ||
                 accountNumber.Any(character =>
                     character < '0' ||
                     character > '9')
             )
             {
                 return FinanceOperationResult.Failed(
-                    "رقم الحساب التجاري يجب أن يتكون من 6 أرقام إنجليزية فقط.");
+                    "رقم الحساب التجاري يجب أن يكون بين 6 و9 أرقام إنجليزية فقط.");
             }
 
             if (

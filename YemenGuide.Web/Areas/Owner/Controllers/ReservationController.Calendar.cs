@@ -692,8 +692,14 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                                 : $"{assignment.RoomUnit.RoomNumber} · {assignment.RoomUnit.FloorLabel}")),
                         CanRecordManualPayment =
                             IsState(item.BookingSource, "OwnerManual") &&
-                            IsState(item.BookingState, "AwaitingPayment") &&
-                            (!item.TimerExpiredAt.HasValue || item.TimerExpiredAt.Value > DateTime.Now)
+                            remaining > 0m &&
+                            (string.IsNullOrWhiteSpace(item.RefundStatus) || IsState(item.RefundStatus, "NotApplicable")) &&
+                            (
+                                (IsState(item.BookingState, "AwaitingPayment") &&
+                                 (!item.TimerExpiredAt.HasValue || item.TimerExpiredAt.Value > DateTime.Now)) ||
+                                IsState(item.BookingState, "Confirmed") ||
+                                IsState(item.BookingState, "Completed")
+                            )
                     };
                 }).ToList()
             };
@@ -1146,15 +1152,26 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
                 var currency = await GetOwnerCurrencyContextAsync(booking.PlaceId);
                 var inputPaidAmountYer = Math.Round(Math.Max(0m, ToYer(input.PaidAmount, currency)), 2);
+                var isInitialPayment = IsState(booking.BookingState, "AwaitingPayment");
+                var canCollectRemaining =
+                    IsState(booking.BookingState, "Confirmed") ||
+                    IsState(booking.BookingState, "Completed");
 
-                if (!IsState(booking.BookingState, "AwaitingPayment"))
+                if (!isInitialPayment && !canCollectRemaining)
                 {
                     await transaction.RollbackAsync();
-                    return BadRequest(new { success = false, message = "الحجز لا ينتظر دفعة حاليًا." });
+                    return BadRequest(new { success = false, message = "حالة الحجز الحالية لا تسمح بتسجيل دفعة." });
+                }
+
+                if (!string.IsNullOrWhiteSpace(booking.RefundStatus) &&
+                    !IsState(booking.RefundStatus, "NotApplicable"))
+                {
+                    await transaction.RollbackAsync();
+                    return BadRequest(new { success = false, message = "لا يمكن تسجيل دفعة أثناء وجود عملية استرداد على الحجز." });
                 }
 
                 var now = DateTime.Now;
-                if (booking.TimerExpiredAt.HasValue && booking.TimerExpiredAt.Value <= now)
+                if (isInitialPayment && booking.TimerExpiredAt.HasValue && booking.TimerExpiredAt.Value <= now)
                 {
                     booking.BookingState = "Expired";
                     booking.PaymentStatus = "Expired";
@@ -1188,8 +1205,19 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     return BadRequest(new { success = false, message = "السجل المالي للحجز غير موجود." });
                 }
 
+                var paidBefore = Math.Round(
+                    Math.Max(0m, financial.AmountPaidOnline) +
+                    Math.Max(0m, financial.AmountCollectedAtProperty),
+                    2);
+                var outstandingAmount = Math.Round(Math.Max(0m, booking.TotalPrice - paidBefore), 2);
+                if (outstandingAmount <= 0m)
+                {
+                    await transaction.RollbackAsync();
+                    return BadRequest(new { success = false, message = "تم سداد كامل مبلغ هذا الحجز مسبقًا." });
+                }
+
                 var paidAmount = inputPaidAmountYer;
-                if (paidAmount < financial.DepositAmount)
+                if (isInitialPayment && paidAmount < financial.DepositAmount)
                 {
                     await transaction.RollbackAsync();
                     return BadRequest(new
@@ -1198,43 +1226,58 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                         message = $"المبلغ أقل من العربون المطلوب ({DisplayMoney(financial.DepositAmount, currency)})."
                     });
                 }
-                if (paidAmount > booking.TotalPrice)
+                if (paidAmount > outstandingAmount)
                 {
                     await transaction.RollbackAsync();
-                    return BadRequest(new { success = false, message = "المبلغ لا يمكن أن يتجاوز إجمالي الحجز." });
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = $"المبلغ يتجاوز المتبقي على الحجز ({DisplayMoney(outstandingAmount, currency)})."
+                    });
                 }
 
-                booking.BookingState = "Confirmed";
-                booking.PaymentStatus = paidAmount >= booking.TotalPrice ? "Paid" : "PartiallyPaid";
+                var remainingAmount = Math.Round(Math.Max(0m, outstandingAmount - paidAmount), 2);
+                if (isInitialPayment)
+                {
+                    booking.BookingState = "Confirmed";
+                    booking.TimerExpiredAt = null;
+
+                    foreach (var assignment in booking.BookingRoomUnits.Where(item => IsState(item.AssignmentStatus, "Held")))
+                    {
+                        assignment.AssignmentStatus = "Confirmed";
+                        assignment.ReleasedAt = null;
+                    }
+                }
+
+                booking.PaymentStatus = remainingAmount <= 0m ? "Paid" : "PartiallyPaid";
                 booking.PaymentMethod = input.PaymentMethod.Trim();
-                booking.PaymentApprovedAt = now;
-                booking.TimerExpiredAt = null;
+                booking.PaymentApprovedAt ??= now;
                 booking.LastStatusChangedAt = now;
 
-                foreach (var assignment in booking.BookingRoomUnits.Where(item => IsState(item.AssignmentStatus, "Held")))
+                financial.AmountCollectedAtProperty = Math.Round(
+                    Math.Max(0m, financial.AmountCollectedAtProperty) + paidAmount,
+                    2);
+                financial.AmountToPayAtProperty = remainingAmount;
+                if (!string.IsNullOrWhiteSpace(input.PaymentReferenceNumber))
                 {
-                    assignment.AssignmentStatus = "Confirmed";
-                    assignment.ReleasedAt = null;
+                    financial.TransferReferenceNumber = input.PaymentReferenceNumber.Trim();
                 }
-
-                financial.AmountCollectedAtProperty = paidAmount;
-                financial.AmountPaidOnline = 0m;
-                financial.AmountToPayAtProperty = Math.Round(Math.Max(0m, booking.TotalPrice - paidAmount), 2);
-                financial.TransferReferenceNumber = string.IsNullOrWhiteSpace(input.PaymentReferenceNumber)
-                    ? null : input.PaymentReferenceNumber.Trim();
+                financial.CollectedAt = now;
                 financial.UpdatedAt = now;
 
                 AddStructuredNotification(
                     booking.CustomerId,
-                    "تم اعتماد الدفع وتأكيد الحجز",
-                    $"تم اعتماد دفعة الحجز المباشر رقم {booking.BookingId} وتأكيد الحجز.",
+                    remainingAmount <= 0m ? "تم سداد كامل مبلغ الحجز" : "تم تسجيل دفعة على الحجز",
+                    remainingAmount <= 0m
+                        ? $"تم تسجيل الدفعة الأخيرة للحجز رقم {booking.BookingId} وأصبح المبلغ مسددًا بالكامل."
+                        : $"تم تسجيل دفعة جديدة للحجز رقم {booking.BookingId}. المتبقي {DisplayMoney(remainingAmount, currency)}.",
                     NotificationTypes.PaymentApproved,
                     $"/Places/BookingDetails/{booking.BookingId}",
                     NotificationReferenceTypes.Booking,
                     booking.BookingId);
 
                 await _context.SaveChangesAsync();
-                if (financial.PlatformCommission > 0m)
+                if (isInitialPayment && financial.PlatformCommission > 0m)
                 {
                     var commissionResult = await _commissionFinanceService.HoldBookingCommissionAsync(
                         booking.BookingId, ownerId, HttpContext.RequestAborted);
@@ -1252,11 +1295,17 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     bookingId = booking.BookingId,
                     bookingState = booking.BookingState,
                     paymentStatus = booking.PaymentStatus,
-                    remainingAmount = ToDisplayCurrency(financial.AmountToPayAtProperty, currency),
+                    paidAmount = ToDisplayCurrency(paidAmount, currency),
+                    totalPaidAmount = ToDisplayCurrency(paidBefore + paidAmount, currency),
+                    remainingAmount = ToDisplayCurrency(remainingAmount, currency),
                     currency = currency.Currency,
                     currencyCode = currency.CurrencyCode,
                     currencySymbol = currency.CurrencySymbol,
-                    message = "تم تسجيل الدفعة وتأكيد الحجز بنجاح."
+                    message = remainingAmount <= 0m
+                        ? "تم تحصيل المبلغ المتبقي وسداد الحجز بالكامل."
+                        : isInitialPayment
+                            ? "تم تسجيل العربون وتأكيد الحجز بنجاح."
+                            : "تم تسجيل الدفعة وتحديث المبلغ المتبقي بنجاح."
                 });
             }
             catch (Exception)

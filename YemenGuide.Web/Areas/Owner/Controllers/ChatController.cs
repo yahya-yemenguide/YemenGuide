@@ -553,17 +553,6 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
                 _context.Chats.AddRange(messagesToSave);
                 await _context.SaveChangesAsync(cancellationToken);
-
-                _notificationService.Queue(new CreateNotificationDto
-                {
-                    UserId = receiverId,
-                    NotificationTitle = "رسالة جديدة",
-                    NotificationText = "لديك رسالة جديدة من صاحب المنشأة.",
-                    NotificationType = "Message",
-                    TargetUrl = $"/Messages/Index?placeId={activePlace.PlaceId}",
-                    ReferenceType = "Chat",
-                    ReferenceId = messagesToSave.FirstOrDefault()?.MessageId
-                });
             }
             catch
             {
@@ -573,6 +562,47 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 }
 
                 throw;
+            }
+
+            // نفس أسلوب إشعار الدردشة الذي يصل للمالك عند رسالة العميل:
+            // ننشئ الإشعار ونحفظه فعليًا، ونربطه بنفس المنشأة والمحادثة.
+            try
+            {
+                string messagePreview;
+
+                if (!string.IsNullOrWhiteSpace(normalizedText))
+                {
+                    messagePreview = normalizedText.Trim();
+                    if (messagePreview.Length > 120)
+                    {
+                        messagePreview = messagePreview[..120] + "…";
+                    }
+                }
+                else
+                {
+                    messagePreview = attachments.Count == 1
+                        ? "أرسل لك صاحب المنشأة مرفقًا جديدًا."
+                        : $"أرسل لك صاحب المنشأة {attachments.Count} مرفقات جديدة.";
+                }
+
+                await _notificationService.CreateAsync(
+                    new CreateNotificationDto
+                    {
+                        UserId = receiverId,
+                        NotificationTitle = "رسالة جديدة من المنشأة",
+                        NotificationText = $"{activePlace.PlaceNameAndDesc}: {messagePreview}",
+                        NotificationType = "Message",
+                        TargetUrl = $"/Messages/MyMessages?placeId={activePlace.PlaceId}&withOwnerId={ownerId}",
+                        ReferenceType = "Chat",
+                        ReferenceId = messagesToSave.FirstOrDefault()?.MessageId
+                    },
+                    cancellationToken);
+            }
+            catch (Exception notificationException)
+            {
+                // فشل الإشعار لا يلغي الرسالة التي تم إرسالها وحفظها بنجاح.
+                Console.WriteLine(
+                    $"Customer chat notification error: {notificationException.Message}");
             }
 
             foreach (Chat chat in messagesToSave)

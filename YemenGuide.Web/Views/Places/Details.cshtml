@@ -76,6 +76,13 @@
             : "الوقت غير محدد";
     }
 
+    string GetPackageMachineClock(TimeSpan? value)
+    {
+        return value.HasValue
+            ? value.Value.ToString(@"hh\:mm")
+            : string.Empty;
+    }
+
     // نستخدم التعريف المركزي الموجود في PlaceDetailsViewModel
     // حتى لا تُستبعد BookingSystemId = 4 من رحلة القاعات/الباقات مرة أخرى.
     bool isHotel = Model.IsHotelSystem;
@@ -2614,6 +2621,8 @@
                                         data-package-price="@GetPackageDisplayPriceText(package.PackageId, package.Price)"
                                         data-package-capacity="سعة @package.Capacity شخص"
                                         data-package-time="@packageTimeText"
+                                        data-package-start="@GetPackageMachineClock(package.StartTime)"
+                                        data-package-end="@GetPackageMachineClock(package.EndTime)"
                                         data-package-max="@package.Capacity"
                                         data-promotion-id="@(packagePromotion?.PromotionId.ToString() ?? "0")"
                                         onclick="openPackageModalFromButton(this)"
@@ -4458,6 +4467,242 @@
 
     <script src="~/js/customer/Details.js"
         asp-append-version="true">
+    </script>
+
+    <script>
+        (() => {
+            "use strict";
+
+            const selectedPackageTiming = {
+                start: "",
+                end: ""
+            };
+
+            const originalOpenPackageModalFromButton =
+                window.openPackageModalFromButton;
+
+            if (typeof originalOpenPackageModalFromButton === "function") {
+                window.openPackageModalFromButton = function (button) {
+                    selectedPackageTiming.start =
+                        button?.dataset?.packageStart || "";
+                    selectedPackageTiming.end =
+                        button?.dataset?.packageEnd || "";
+
+                    return originalOpenPackageModalFromButton.apply(
+                        this,
+                        arguments
+                    );
+                };
+            }
+
+            function formatLocalDate(date) {
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, "0");
+                const day = String(date.getDate()).padStart(2, "0");
+                return `${year}-${month}-${day}`;
+            }
+
+            function getSelectedPackageDate() {
+                const calendar =
+                    document.getElementById("packageInlineCalendar");
+
+                const selectedFromInstance =
+                    calendar?._flatpickr?.selectedDates?.[0];
+
+                if (selectedFromInstance instanceof Date) {
+                    return formatLocalDate(selectedFromInstance);
+                }
+
+                const selectedDay =
+                    document.querySelector(
+                        "#packageDatePickerModal .flatpickr-day.selected"
+                    );
+
+                if (selectedDay?.dateObj instanceof Date) {
+                    return formatLocalDate(selectedDay.dateObj);
+                }
+
+                return "";
+            }
+
+            function parseClock(clock) {
+                const match =
+                    /^(\d{1,2}):(\d{2})$/.exec(
+                        String(clock || "").trim()
+                    );
+
+                if (!match) {
+                    return null;
+                }
+
+                const hours = Number.parseInt(match[1], 10);
+                const minutes = Number.parseInt(match[2], 10);
+
+                if (
+                    !Number.isInteger(hours) ||
+                    !Number.isInteger(minutes) ||
+                    hours < 0 || hours > 23 ||
+                    minutes < 0 || minutes > 59
+                ) {
+                    return null;
+                }
+
+                return { hours, minutes };
+            }
+
+            function buildPackageInterval(dateText, startClock, endClock) {
+                const dateMatch =
+                    /^(\d{4})-(\d{2})-(\d{2})$/.exec(
+                        String(dateText || "").trim()
+                    );
+
+                const startValue = parseClock(startClock);
+                const endValue = parseClock(endClock);
+
+                if (!dateMatch || !startValue || !endValue) {
+                    return null;
+                }
+
+                const year = Number.parseInt(dateMatch[1], 10);
+                const month = Number.parseInt(dateMatch[2], 10) - 1;
+                const day = Number.parseInt(dateMatch[3], 10);
+
+                const start = new Date(
+                    year,
+                    month,
+                    day,
+                    startValue.hours,
+                    startValue.minutes,
+                    0,
+                    0
+                );
+
+                const end = new Date(
+                    year,
+                    month,
+                    day,
+                    endValue.hours,
+                    endValue.minutes,
+                    0,
+                    0
+                );
+
+                if (end <= start) {
+                    end.setDate(end.getDate() + 1);
+                }
+
+                return { start, end };
+            }
+
+            function formatDuration(milliseconds) {
+                const totalMinutes = Math.max(
+                    0,
+                    Math.floor(milliseconds / 60000)
+                );
+
+                if (totalMinutes <= 0) {
+                    return "أقل من دقيقة";
+                }
+
+                const hours = Math.floor(totalMinutes / 60);
+                const minutes = totalMinutes % 60;
+
+                if (hours > 0 && minutes > 0) {
+                    return `${hours} ساعة و${minutes} دقيقة`;
+                }
+
+                if (hours > 0) {
+                    return `${hours} ساعة`;
+                }
+
+                return `${minutes} دقيقة`;
+            }
+
+            async function confirmStartedPackageBeforeCheckout() {
+                const dateText = getSelectedPackageDate();
+
+                if (
+                    !dateText ||
+                    !selectedPackageTiming.start ||
+                    !selectedPackageTiming.end
+                ) {
+                    return true;
+                }
+
+                const interval = buildPackageInterval(
+                    dateText,
+                    selectedPackageTiming.start,
+                    selectedPackageTiming.end
+                );
+
+                if (!interval) {
+                    return true;
+                }
+
+                const now = new Date();
+
+                if (now < interval.start) {
+                    return true;
+                }
+
+                if (now >= interval.end) {
+                    await window.Swal.fire({
+                        icon: "warning",
+                        title: "انتهى وقت الباقة",
+                        text: "انتهى وقت هذه الباقة لهذا اليوم. اختر يومًا أو باقة أخرى.",
+                        confirmButtonText: "اختيار موعد آخر",
+                        allowOutsideClick: false
+                    });
+
+                    return false;
+                }
+
+                const elapsedText =
+                    formatDuration(now - interval.start);
+
+                const remainingText =
+                    formatDuration(interval.end - now);
+
+                const result = await window.Swal.fire({
+                    icon: "warning",
+                    title: "الباقة بدأت بالفعل",
+                    html:
+                        `<div style="text-align:right;line-height:1.9">` +
+                        `بدأ وقت هذه الباقة بالفعل.<br>` +
+                        `<strong>الوقت الذي مضى:</strong> ${elapsedText}<br>` +
+                        `<strong>الوقت المتبقي:</strong> ${remainingText}<br><br>` +
+                        `إذا تابعت فسيكون الحجز للوقت المتبقي من الباقة فقط. هل تريد المتابعة؟` +
+                        `</div>`,
+                    showCancelButton: true,
+                    confirmButtonText: "نعم، متابعة الحجز",
+                    cancelButtonText: "اختيار باقة أو يوم آخر",
+                    reverseButtons: true,
+                    allowOutsideClick: false,
+                    allowEscapeKey: false
+                });
+
+                return result.isConfirmed === true;
+            }
+
+            function wrapCheckoutFunction(functionName) {
+                const original = window[functionName];
+
+                if (typeof original !== "function") {
+                    return;
+                }
+
+                window[functionName] = async function () {
+                    if (!(await confirmStartedPackageBeforeCheckout())) {
+                        return;
+                    }
+
+                    return original.apply(this, arguments);
+                };
+            }
+
+            wrapCheckoutFunction("goToFinalCheckout");
+            wrapCheckoutFunction("goToFinalCheckoutForHall");
+        })();
     </script>
 
     @if (Model.AttributionAdvertisementId.HasValue)

@@ -1,0 +1,212 @@
+/*
+ * Print safety layer for owner financial reports and documents.
+ * Prevents clipped columns, blank overflow pages and split financial rows.
+ */
+
+body.owner-financial-report-print-page,
+body.financial-print-page {
+    font-family: "Tajawal", "IBM Plex Sans Arabic", "Cairo", "Segoe UI", Tahoma, Arial, sans-serif;
+    color: #17354d;
+}
+
+body.owner-financial-report-print-page .financial-currency-note,
+body.financial-print-page .financial-currency-note {
+    margin: 0 0 8px;
+    color: #647f8e;
+    font-size: 10px;
+    line-height: 1.5;
+    font-weight: 700;
+}
+
+body.owner-financial-report-print-page .ofir-print-book,
+body.owner-financial-report-print-page .ofir-print-page,
+body.financial-print-page .financial-document-sheet {
+    width: 100%;
+    max-width: 100%;
+}
+
+body.owner-financial-report-print-page .ofir-print-table-wrap,
+body.financial-print-page .financial-document-sheet__table-wrap {
+    width: 100%;
+    max-width: 100%;
+    overflow: visible;
+}
+
+body.owner-financial-report-print-page .ofir-print-table,
+body.financial-print-page table {
+    width: 100%;
+    max-width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+}
+
+body.owner-financial-report-print-page .ofir-print-table th,
+body.owner-financial-report-print-page .ofir-print-table td,
+body.financial-print-page th,
+body.financial-print-page td {
+    overflow-wrap: anywhere;
+    word-break: normal;
+    white-space: normal;
+}
+
+body.owner-financial-report-print-page .ofir-print-table td.is-money,
+body.financial-print-page td.is-money {
+    direction: ltr;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+body.owner-financial-report-print-page :where(
+    .ofir-print-brandline,
+    .ofir-print-meta,
+    .ofir-print-kpis,
+    .ofir-print-audit,
+    .ofir-print-mini-card,
+    .ofir-print-reconciliation article,
+    .ofir-print-section-head,
+    tr
+),
+body.financial-print-page :where(
+    .financial-document-sheet__topline,
+    .financial-document-sheet__parties,
+    .financial-document-sheet__summary,
+    .financial-document-sheet__verification,
+    tr
+) {
+    break-inside: avoid;
+    page-break-inside: avoid;
+}
+
+@media screen {
+    body.owner-financial-report-print-page .ofir-print-page,
+    body.financial-print-page .financial-document-sheet {
+        margin-inline: auto;
+    }
+}
+
+@media print {
+    @page {
+        size: A4 landscape;
+        margin: 7mm;
+    }
+
+    html,
+    body.owner-financial-report-print-page {
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        background: #fff;
+    }
+
+    body.owner-financial-report-print-page .ofir-print-toolbar {
+        display: none !important;
+    }
+
+    body.owner-financial-report-print-page .ofir-print-book {
+        display: block;
+        margin: 0;
+    }
+
+    body.owner-financial-report-print-page .ofir-print-page {
+        min-height: 0;
+        margin: 0;
+        padding: 7mm 7mm 10mm;
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
+        overflow: visible;
+        break-after: page;
+        page-break-after: always;
+    }
+
+    body.owner-financial-report-print-page .ofir-print-page:last-child {
+        break-after: auto;
+        page-break-after: auto;
+    }
+
+    body.owner-financial-report-print-page .ofir-print-title {
+        padding: 10px 0 8px;
+    }
+
+    body.owner-financial-report-print-page .ofir-print-title h1 {
+        font-size: 18pt;
+    }
+
+    body.owner-financial-report-print-page .ofir-print-meta,
+    body.owner-financial-report-print-page .ofir-print-kpis {
+        gap: 5px;
+    }
+
+    body.owner-financial-report-print-page .ofir-print-section {
+        margin-top: 10px;
+    }
+
+    body.owner-financial-report-print-page .ofir-print-table {
+        font-size: 7.2pt;
+    }
+
+    body.owner-financial-report-print-page .ofir-print-table th {
+        padding: 5px 4px;
+        font-size: 7pt;
+        line-height: 1.3;
+    }
+
+    body.owner-financial-report-print-page .ofir-print-table td {
+        padding: 5px 4px;
+        font-size: 7.1pt;
+        line-height: 1.35;
+    }
+
+    body.owner-financial-report-print-page .ofir-print-table:has(th:nth-child(10)) th,
+    body.owner-financial-report-print-page .ofir-print-table:has(th:nth-child(10)) td {
+        padding-inline: 3px;
+        font-size: 6.4pt;
+    }
+
+    body.owner-financial-report-print-page .ofir-print-footer {
+        right: 7mm;
+        left: 7mm;
+        bottom: 3mm;
+    }
+
+    @page document-sheet {
+        size: A4 portrait;
+        margin: 9mm;
+    }
+
+    html:has(body.financial-print-page),
+    body.financial-print-page {
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        background: #fff;
+    }
+
+    body.financial-print-page {
+        page: document-sheet;
+    }
+
+    body.financial-print-page .financial-print-toolbar {
+        display: none !important;
+    }
+
+    body.financial-print-page .financial-document-sheet {
+        min-height: 0;
+        margin: 0;
+        padding: 9mm;
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
+        overflow: visible;
+    }
+
+    body.financial-print-page table {
+        font-size: 8.5pt;
+    }
+
+    body.financial-print-page th,
+    body.financial-print-page td {
+        padding: 6px 5px;
+        line-height: 1.35;
+    }
+}

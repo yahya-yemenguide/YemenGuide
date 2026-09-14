@@ -1,0 +1,404 @@
+﻿@using System.Globalization
+@using System.Text.Json
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.Extensions.Localization
+@inject IStringLocalizer<YemenGuide.Web.SharedResource> L
+@inject YemenGuide.Data.AppDbContext _context
+
+@{
+    var language = string.Equals(
+        CultureInfo.CurrentUICulture.TwoLetterISOLanguageName,
+        "en",
+        StringComparison.OrdinalIgnoreCase)
+        ? "en"
+        : "ar";
+
+    var exact = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    // نصوص نظام ديناميكية معروفة فقط (JavaScript / أنواع نتائج البحث / أنواع الإشعارات).
+    exact["لا توجد نتائج مطابقة للبحث..."] = L["Admin_JS_NoSearchResults"].Value;
+    exact["جاري تغيير لغة النظام..."] = L["Admin_JS_ChangingLanguage"].Value;
+    exact["يرجى الانتظار لحين إعادة تهيئة الواجهة"] = L["Admin_JS_Wait"].Value;
+    exact["خطأ"] = L["Admin_JS_Error"].Value;
+    exact["حدث خطأ غير متوقع"] = L["Admin_JS_UnexpectedError"].Value;
+    exact["فشل الاتصال بالخادم"] = L["Admin_JS_ServerConnectionFailed"].Value;
+    exact["فئة"] = L["Admin_Type_Category"].Value;
+    exact["مستخدم"] = L["Admin_Type_User"].Value;
+    exact["مكان"] = L["Admin_Type_Place"].Value;
+    exact["قضية"] = L["Admin_Notification_Case"].Value;
+    exact["إجراء قضية"] = L["Admin_Notification_CaseAction"].Value;
+    exact["مالية"] = L["Admin_Notification_Finance"].Value;
+    exact["استرداد"] = L["Admin_Notification_Refund"].Value;
+    exact["إجراء مالي"] = L["Admin_Notification_FinanceAction"].Value;
+    exact["إعلان"] = L["Admin_Notification_Ad"].Value;
+    exact["مراجعة إعلان"] = L["Admin_Notification_AdReview"].Value;
+    exact["منشأة"] = L["Admin_Notification_Place"].Value;
+    exact["حساب"] = L["Admin_Notification_Account"].Value;
+    exact["أمان"] = L["Admin_Notification_Security"].Value;
+    exact["النظام"] = L["Admin_Notification_System"].Value;
+    exact["إشعار"] = L["Admin_Notification_Notification"].Value;
+    exact["حجز"] = L["Admin_Notification_Booking"].Value;
+    exact["تقييم"] = L["Admin_Notification_Review"].Value;
+    exact["رسالة"] = L["Admin_Notification_Message"].Value;
+    exact["إعادة المحاولة"] = L["Admin_JS_Retry"].Value;
+    exact["تعذر تحميل الإشعارات"] = L["Admin_JS_NotificationsLoadFailed"].Value;
+    exact["تعذر الوصول إلى مركز الإشعارات مؤقتًا. بقية لوحة الإدارة تعمل بشكل طبيعي."] = L["Admin_JS_NotificationsUnavailable"].Value;
+    exact["لا توجد تنبيهات إدارية حاليًا"] = L["Admin_JS_NoAdminAlerts"].Value;
+    exact["تعذر التحديث مؤقتًا"] = L["Admin_JS_TemporaryUpdateFailure"].Value;
+    exact["تم تعليم جميع الإشعارات كمقروءة"] = L["Admin_JS_AllMarkedRead"].Value;
+    exact["تعذر تنفيذ قراءة الكل"] = L["Admin_JS_MarkAllFailed"].Value;
+    exact["لا توجد إشعارات في هذا القسم"] = L["Admin_JS_NoNotificationsSection"].Value;
+    exact["عندما يصل حدث مرتبط بصلاحياتك سيظهر هنا مباشرة."] = L["Admin_JS_NotificationWillAppear"].Value;
+    exact["تحقق من الاتصال ثم أعد المحاولة."] = L["Admin_JS_CheckConnection"].Value;
+    exact["نتيجة"] = L["Admin_JS_Result"].Value;
+
+
+    // =========================================================
+    // Phase 2: Employees + Users
+    // نترجم فقط رسائل النظام الديناميكية المعروفة والواضحة.
+    // لا نضيف هنا أسماء المستخدمين/الملاك/الموظفين/الأدوار أو أي بيانات كتبها المستخدم.
+    // =========================================================
+    exact["تأكيد الحذف النهائي"] = L["Admin_Users_ConfirmPermanentDelete"].Value;
+    exact["سيتم حذف هذا الحساب وكل وثائقه نهائيًا، ولا يمكن التراجع عن هذا الإجراء."] = L["Admin_Users_DeletePermanentWarning"].Value;
+    exact["جاري حذف الحساب نهائيًا..."] = L["Admin_Users_DeletingPermanently"].Value;
+    exact["تأكيد الموافقة على الطلب"] = L["Admin_Users_ConfirmApproval"].Value;
+    exact["تأكيد تنشيط الحساب"] = L["Admin_Users_ConfirmActivation"].Value;
+    exact["هل تريد الموافقة على طلب هذا المالك وتفعيل حسابه؟"] = L["Admin_Users_ApproveOwnerQuestion"].Value;
+    exact["هل تريد تنشيط هذا الحساب؟"] = L["Admin_Users_ActivateQuestion"].Value;
+    exact["جاري قبول الطلب..."] = L["Admin_Users_Approving"].Value;
+    exact["جاري تنشيط الحساب..."] = L["Admin_Users_Activating"].Value;
+    exact["تأكيد إلغاء الحظر"] = L["Admin_Users_ConfirmUnblock"].Value;
+    exact["هل تريد إلغاء الحظر وإعادة تفعيل هذا الحساب؟"] = L["Admin_Users_UnblockQuestion"].Value;
+    exact["جاري إلغاء الحظر..."] = L["Admin_Users_Unblocking"].Value;
+    exact["تأكيد تعليق الحساب"] = L["Admin_Users_ConfirmSuspension"].Value;
+    exact["هل تريد تعليق هذا الحساب مؤقتًا؟ لن يتم حذف أي بيانات مرتبطة به."] = L["Admin_Users_SuspensionQuestion"].Value;
+    exact["جاري تعليق الحساب..."] = L["Admin_Users_Suspending"].Value;
+    exact["تأكيد حظر الحساب"] = L["Admin_Users_ConfirmBlock"].Value;
+    exact["هل تريد حظر هذا المستخدم ومنعه من تسجيل الدخول؟"] = L["Admin_Users_BlockQuestion"].Value;
+    exact["جاري حظر الحساب..."] = L["Admin_Users_Blocking"].Value;
+    exact["تأكيد رفض الطلب"] = L["Admin_Users_ConfirmRejection"].Value;
+    exact["هل تريد رفض طلب هذا المالك ونقله إلى قائمة المرفوضين؟"] = L["Admin_Users_RejectionQuestion"].Value;
+    exact["جاري رفض الطلب..."] = L["Admin_Users_Rejecting"].Value;
+    exact["تعذر تنفيذ الإجراء"] = L["Admin_Users_ActionFailedTitle"].Value;
+    exact["معرّف المستخدم غير صالح."] = L["Admin_Users_InvalidUserId"].Value;
+    exact["إجراء غير معروف"] = L["Admin_Users_UnknownAction"].Value;
+    exact["تعذر تحديد العملية المطلوبة لهذا الحساب."] = L["Admin_Users_UnknownActionHelp"].Value;
+    exact["استجابة الخادم غير صالحة."] = L["Admin_Users_InvalidServerResponse"].Value;
+    exact["رفض الخادم تنفيذ العملية."] = L["Admin_Users_ServerRejected"].Value;
+    exact["لم تكتمل العملية"] = L["Admin_Users_ActionNotCompleted"].Value;
+    exact["تعذر تنفيذ الإجراء المطلوب."] = L["Admin_Users_ActionNotCompletedHelp"].Value;
+    exact["تمت العملية بنجاح"] = L["Admin_Users_ActionSuccess"].Value;
+    exact["تم تحديث بيانات المستخدم بنجاح."] = L["Admin_Users_UserUpdated"].Value;
+    exact["تمت العملية بنجاح."] = L["Admin_Users_ActionSuccessShort"].Value;
+    exact["خطأ في الاتصال"] = L["Admin_Users_ConnectionError"].Value;
+    exact["تعذر الوصول إلى الخادم، يرجى المحاولة لاحقًا."] = L["Admin_Users_ServerUnreachable"].Value;
+    exact["تعذر تحميل الوثائق"] = L["Admin_Users_LoadDocumentsFailed"].Value;
+    exact["جاري جلب وثائق المالك..."] = L["Admin_Users_LoadingDocuments"].Value;
+    exact["بيانات غير صالحة"] = L["Admin_Users_Server_InvalidData"].Value;
+    exact["المستخدم غير موجود"] = L["Admin_Users_Server_UserNotFound"].Value;
+    exact["المستخدم غير موجود."] = L["Admin_Users_Server_UserNotFoundDot"].Value;
+    exact["حساب المدير الرئيسي محمي، والموظفون تتم إدارتهم من صفحة الموظفين والصلاحيات."] = L["Admin_Users_Server_AdminProtected"].Value;
+    exact["نوع الحساب غير مدعوم في إدارة المستخدمين."] = L["Admin_Users_Server_UnsupportedType"].Value;
+    exact["الحالة المطلوبة غير مدعومة."] = L["Admin_Users_Server_UnsupportedState"].Value;
+    exact["تم توقيف الحساب مؤقتًا. يستطيع المستخدم تسجيل الدخول والتصفح فقط دون تنفيذ عمليات."] = L["Admin_Users_Server_Suspended"].Value;
+    exact["تم حظر الحساب ومنعه من تسجيل الدخول."] = L["Admin_Users_Server_Blocked"].Value;
+    exact["تم تنشيط الحساب وإعادة صلاحياته الطبيعية."] = L["Admin_Users_Server_Activated"].Value;
+    exact["تم قبول حساب المالك فقط. المنشآت التابعة له لا تزال تحتاج اعتمادًا مستقلًا من إدارة المنشآت."] = L["Admin_Users_Server_OwnerAccepted"].Value;
+    exact["تم رفض طلب انضمام المالك."] = L["Admin_Users_Server_OwnerRejected"].Value;
+    exact["تم تحديث حالة المستخدم بنجاح."] = L["Admin_Users_Server_Updated"].Value;
+    exact["تم حذف الحساب نهائياً وبنجاح من قاعدة البيانات!"] = L["Admin_Users_Server_Deleted"].Value;
+
+    // ===== Phase 3: Admin Place Management =====
+    // نصوص نظام ثابتة فقط. لا تضاف هنا أي بيانات يكتبها المستخدم.
+    exact["إدارة المنشآت"] = L["Admin_Places_PageTitle"].Value;
+    exact["راجع المنشآت وتحكم بحالتها وبياناتها من مكان واحد."] = L["Admin_Places_HeroDescription"].Value;
+    exact["ابحث بالاسم، المالك، الفئة أو المدينة"] = L["Admin_Places_SearchPlaceholder"].Value;
+    exact["البحث في المنشآت"] = L["Admin_Places_SearchAria"].Value;
+    exact["مسح البحث"] = L["Admin_Places_ClearSearch"].Value;
+    exact["إضافة منشأة"] = L["Admin_Places_AddPlace"].Value;
+    exact["حالات المنشآت"] = L["Admin_Places_StatusTabsAria"].Value;
+    exact["منشآت الإدارة"] = L["Admin_Places_AdminPlaces"].Value;
+    exact["قيد المراجعة"] = L["Admin_Places_PendingReview"].Value;
+    exact["بانتظار المالك"] = L["Admin_Places_WaitingOwner"].Value;
+    exact["النشطة"] = L["Admin_Places_Active"].Value;
+    exact["المرفوضة"] = L["Admin_Places_Rejected"].Value;
+    exact["المعلّقة"] = L["Admin_Places_Suspended"].Value;
+    exact["المنشآت التي أُنشئت أو تدار بواسطة حسابات الإدارة."] = L["Admin_Places_AdminPlacesHelp"].Value;
+    exact["المالك المقترح"] = L["Admin_Places_ProposedOwner"].Value;
+    exact["غير محدد"] = L["Admin_Places_Unspecified"].Value;
+    exact["بانتظار السياسات"] = L["Admin_Places_WaitingPolicies"].Value;
+    exact["لن تصبح المنشأة نشطة أو تستقبل حجوزات قبل إكمال السياسات."] = L["Admin_Places_WaitingPoliciesTitle"].Value;
+    exact["إدارية وجاهزة"] = L["Admin_Places_AdminReady"].Value;
+    exact["عرض التفاصيل"] = L["Admin_Places_ViewDetailsTitle"].Value;
+    exact["التفاصيل"] = L["Admin_Places_Details"].Value;
+    exact["إكمال السياسات"] = L["Admin_Places_CompletePolicies"].Value;
+    exact["أكمل سياسات الحجز لتفعيل المنشأة"] = L["Admin_Places_CompletePoliciesTitle"].Value;
+    exact["إدارة كاملة"] = L["Admin_Places_FullManagement"].Value;
+    exact["إدارة المنشأة بجميع أدوات المالك"] = L["Admin_Places_FullManagementTitle"].Value;
+    exact["فتح إجراءات المنشأة"] = L["Admin_Places_OpenActions"].Value;
+    exact["إجراءات المنشأة"] = L["Admin_Places_ActionMenuTitle"].Value;
+    exact["اختر الإجراء المطلوب"] = L["Admin_Places_ChooseAction"].Value;
+    exact["إغلاق قائمة الإجراءات"] = L["Admin_Places_CloseActionMenu"].Value;
+    exact["إدارة صور المنشأة"] = L["Admin_Places_ManagePhotos"].Value;
+    exact["حذف المنشأة"] = L["Admin_Places_DeletePlace"].Value;
+    exact["لا توجد منشآت إدارية"] = L["Admin_Places_NoAdminPlaces"].Value;
+    exact["ستظهر هنا المنشآت التي تنشئها الإدارة."] = L["Admin_Places_NoAdminPlacesHelp"].Value;
+    exact["لا توجد نتائج مطابقة"] = L["Admin_Places_NoMatching"].Value;
+    exact["جرّب كلمة بحث أخرى."] = L["Admin_Places_TryAnotherSearch"].Value;
+    exact["طلبات قيد المراجعة"] = L["Admin_Places_PendingRequests"].Value;
+    exact["راجع بيانات المنشأة والسياسات ثم اتخذ قرار الاعتماد."] = L["Admin_Places_PendingRequestsHelp"].Value;
+    exact["لا توجد طلبات مراجعة"] = L["Admin_Places_NoPendingRequests"].Value;
+    exact["كل طلبات المنشآت تمت معالجتها حاليًا."] = L["Admin_Places_NoPendingRequestsHelp"].Value;
+    exact["بانتظار موافقة المالك"] = L["Admin_Places_WaitingOwnerApproval"].Value;
+    exact["منشآت أرسلت إلى مالك موجود أو جديد لاستكمال الموافقة والسياسات."] = L["Admin_Places_WaitingOwnerApprovalHelp"].Value;
+    exact["تغيير المالك"] = L["Admin_Places_ChangeOwner"].Value;
+    exact["لا توجد منشآت منتظرة"] = L["Admin_Places_NoWaiting"].Value;
+    exact["لا توجد منشآت تنتظر موافقة المالك حاليًا."] = L["Admin_Places_NoWaitingHelp"].Value;
+    exact["المنشآت النشطة"] = L["Admin_Places_ActivePlaces"].Value;
+    exact["المنشآت المعتمدة والمتاحة ضمن المنصة."] = L["Admin_Places_ActivePlacesHelp"].Value;
+    exact["لا توجد منشآت نشطة"] = L["Admin_Places_NoActive"].Value;
+    exact["ستظهر هنا المنشآت بعد اعتمادها."] = L["Admin_Places_NoActiveHelp"].Value;
+    exact["المنشآت المرفوضة"] = L["Admin_Places_RejectedPlaces"].Value;
+    exact["طلبات تم رفضها ويمكن مراجعة سبب الرفض أو حذفها نهائيًا."] = L["Admin_Places_RejectedPlacesHelp"].Value;
+    exact["لا توجد منشآت مرفوضة"] = L["Admin_Places_NoRejected"].Value;
+    exact["لا توجد طلبات مرفوضة حاليًا."] = L["Admin_Places_NoRejectedHelp"].Value;
+    exact["المنشآت المعلّقة"] = L["Admin_Places_SuspendedPlaces"].Value;
+    exact["منشآت أوقفت مؤقتًا ويمكن إعادة تنشيطها بعد المراجعة."] = L["Admin_Places_SuspendedPlacesHelp"].Value;
+    exact["لا توجد منشآت معلّقة"] = L["Admin_Places_NoSuspended"].Value;
+    exact["لا توجد منشآت موقوفة مؤقتًا."] = L["Admin_Places_NoSuspendedHelp"].Value;
+    exact["صورة المنشأة"] = L["Admin_Places_PlacePhoto"].Value;
+    exact["ملف المنشأة"] = L["Admin_Places_Profile"].Value;
+    exact["جاري التحميل..."] = L["Admin_Places_Loading"].Value;
+    exact["أقسام تفاصيل المنشأة"] = L["Admin_Places_DetailSectionsAria"].Value;
+    exact["الأساسية"] = L["Admin_Places_Overview"].Value;
+    exact["الصور والمرافق"] = L["Admin_Places_PhotosAmenities"].Value;
+    exact["الوحدات والخدمات"] = L["Admin_Places_UnitsServices"].Value;
+    exact["وصف المنشأة"] = L["Admin_Places_Description"].Value;
+    exact["النبذة والمواصفات المسجلة"] = L["Admin_Places_DescriptionHelp"].Value;
+    exact["التواصل والموقع"] = L["Admin_Places_ContactLocation"].Value;
+    exact["بيانات الوصول الأساسية"] = L["Admin_Places_ContactLocationHelp"].Value;
+    exact["فتح الموقع على الخريطة"] = L["Admin_Places_OpenMap"].Value;
+    exact["الخدمات والمميزات المسجلة"] = L["Admin_Places_AmenitiesHelp"].Value;
+    exact["معرض الصور"] = L["Admin_Places_PhotoGallery"].Value;
+    exact["صور المنشأة الإضافية"] = L["Admin_Places_PhotoGalleryHelp"].Value;
+    exact["الغرف والباقات"] = L["Admin_Places_RoomsPackages"].Value;
+    exact["الوحدات المتاحة وأسعارها"] = L["Admin_Places_RoomsPackagesHelp"].Value;
+    exact["الخدمات الإضافية"] = L["Admin_Places_AdditionalServices"].Value;
+    exact["خدمات يمكن إضافتها للحجز"] = L["Admin_Places_AdditionalServicesHelp"].Value;
+    exact["نشطة ومعتمدة"] = L["Admin_Places_StatusActiveApproved"].Value;
+    exact["قيد المراجعة"] = L["Admin_Places_StatusPendingReview"].Value;
+    exact["بانتظار المالك"] = L["Admin_Places_StatusWaitingOwner"].Value;
+    exact["مرفوضة"] = L["Admin_Places_StatusRejected"].Value;
+    exact["معلّقة"] = L["Admin_Places_StatusSuspended"].Value;
+    exact["غير محددة"] = L["Admin_Places_StatusUnspecified"].Value;
+    exact["لا يوجد وصف مضاف لهذه المنشأة."] = L["Admin_Places_NoDescription"].Value;
+    exact["لا توجد نبذة عامة."] = L["Admin_Places_NoOverview"].Value;
+    exact["لا توجد مرافق مضافة."] = L["Admin_Places_NoAmenities"].Value;
+    exact["لم يتم رفع صور إضافية."] = L["Admin_Places_NoAdditionalPhotos"].Value;
+    exact["تكبير الصورة"] = L["Admin_Places_EnlargePhoto"].Value;
+    exact["مفعّلة"] = L["Admin_Places_Enabled"].Value;
+    exact["متوقفة"] = L["Admin_Places_Disabled"].Value;
+    exact["الفترة غير محددة"] = L["Admin_Places_PeriodNotSpecified"].Value;
+    exact["بدون صور"] = L["Admin_Places_NoPhotos"].Value;
+    exact["جناح فعلي"] = L["Admin_Places_ActualSuites"].Value;
+    exact["غرفة فعلية"] = L["Admin_Places_ActualRooms"].Value;
+    exact["غرف داخلية في الجناح"] = L["Admin_Places_InternalRoomsSuite"].Value;
+    exact["لا توجد غرف أو أجنحة أو باقات مضافة."] = L["Admin_Places_NoUnits"].Value;
+    exact["الخدمة"] = L["Admin_Places_Service"].Value;
+    exact["خدمة إضافية"] = L["Admin_Places_AdditionalService"].Value;
+    exact["لا يوجد وصف مضاف لهذه الخدمة."] = L["Admin_Places_NoServiceDescription"].Value;
+    exact["عرض بقية الخدمات"] = L["Admin_Places_ShowMoreServices"].Value;
+    exact["مصادرة العربون بالكامل"] = L["Admin_Places_ForfeitDeposit"].Value;
+    exact["خصم قيمة أول ليلة"] = L["Admin_Places_FirstNight"].Value;
+    exact["بدون غرامة"] = L["Admin_Places_NoPenalty"].Value;
+    exact["نظام التشغيل"] = L["Admin_Places_OperationSystem"].Value;
+    exact["يوم كامل"] = L["Admin_Places_FullDay"].Value;
+    exact["وقت الدخول"] = L["Admin_Places_CheckIn"].Value;
+    exact["وقت الخروج"] = L["Admin_Places_CheckOut"].Value;
+    exact["لم يتم تحديدها"] = L["Admin_Places_ShiftsNotSet"].Value;
+    exact["نظام فترات"] = L["Admin_Places_ShiftSystem"].Value;
+    exact["السياسات غير مكتملة"] = L["Admin_Places_PoliciesIncomplete"].Value;
+    exact["لم يقم المالك بإدخال سياسات الحجز والإلغاء لهذه المنشأة حتى الآن."] = L["Admin_Places_PoliciesIncompleteHelp"].Value;
+    exact["النظام التشغيلي"] = L["Admin_Places_OperationalSystem"].Value;
+    exact["مواعيد وآلية تشغيل المنشأة"] = L["Admin_Places_OperationalSystemHelp"].Value;
+    exact["سياسة الإلغاء"] = L["Admin_Places_CancellationPolicy"].Value;
+    exact["الفترة المجانية والغرامة"] = L["Admin_Places_CancellationPolicyHelp"].Value;
+    exact["إلغاء مجاني قبل"] = L["Admin_Places_FreeCancellationBefore"].Value;
+    exact["نوع الغرامة"] = L["Admin_Places_PenaltyType"].Value;
+    exact["العربون والدفع"] = L["Admin_Places_DepositPayment"].Value;
+    exact["دفعات الحجز والمهلة المتاحة"] = L["Admin_Places_DepositPaymentHelp"].Value;
+    exact["لا توجد سياسة عربون محددة."] = L["Admin_Places_NoDepositPolicy"].Value;
+    exact["مهلة السداد:"] = L["Admin_Places_PaymentDeadline"].Value;
+    exact["شروط وضمانات السلامة"] = L["Admin_Places_SafetyGuarantees"].Value;
+    exact["الضمانات المطلوبة من العميل"] = L["Admin_Places_SafetyGuaranteesHelp"].Value;
+    exact["لا توجد ضمانات محددة."] = L["Admin_Places_NoGuarantees"].Value;
+    exact["منشأة بدون اسم"] = L["Admin_Places_Unnamed"].Value;
+    exact["غير متوفر"] = L["Admin_Places_Unavailable"].Value;
+    exact["لم يتم إدخال عنوان تفصيلي"] = L["Admin_Places_NoDetailedAddress"].Value;
+    exact["متاحة للعملاء"] = L["Admin_Places_AvailableCustomers"].Value;
+    exact["غير متاحة حاليًا"] = L["Admin_Places_CurrentlyUnavailable"].Value;
+    exact["سبب الرفض السابق بعد إعادة الإرسال: "] = L["Admin_Places_PreviousRejectionReason"].Value;
+    exact["سبب الرفض أو التعليق: "] = L["Admin_Places_RejectionSuspensionReason"].Value;
+    exact["حدثت مشكلة أثناء جلب بيانات المنشأة."] = L["Admin_Places_DetailsLoadError"].Value;
+    exact["تأكيد الإجراء"] = L["Admin_Places_ConfirmAction"].Value;
+    exact["هل تريد تنفيذ هذا الإجراء؟"] = L["Admin_Places_ConfirmActionQuestion"].Value;
+    exact["نعم، نفّذ"] = L["Admin_Places_YesExecute"].Value;
+    exact["تم تنفيذ الإجراء بنجاح."] = L["Admin_Places_ActionSuccessFallback"].Value;
+    exact["جاري تنفيذ الإجراء..."] = L["Admin_Places_Processing"].Value;
+    exact["توضيح سبب الإجراء"] = L["Admin_Places_ActionReason"].Value;
+    exact["اكتب السبب الذي سيظهر للمالك"] = L["Admin_Places_ReasonLabel"].Value;
+    exact["اكتب السبب بوضوح..."] = L["Admin_Places_ReasonPlaceholder"].Value;
+    exact["تأكيد وإرسال"] = L["Admin_Places_ConfirmSend"].Value;
+    exact["يجب كتابة السبب قبل المتابعة."] = L["Admin_Places_ReasonRequired"].Value;
+    exact["يرجى كتابة سبب أوضح."] = L["Admin_Places_ReasonClearer"].Value;
+    exact["جاري حفظ القرار..."] = L["Admin_Places_SavingDecision"].Value;
+    exact["تم حفظ القرار بنجاح."] = L["Admin_Places_DecisionSaved"].Value;
+    exact["جاري جلب قائمة الملاك..."] = L["Admin_Places_LoadingOwners"].Value;
+    exact["إعادة تعيين المالك"] = L["Admin_Places_ReassignOwner"].Value;
+    exact["اختر المالك الذي ستُرسل إليه المنشأة من جديد."] = L["Admin_Places_ReassignOwnerHelp"].Value;
+    exact["اختر المالك"] = L["Admin_Places_SelectOwner"].Value;
+    exact["يجب اختيار مالك من القائمة."] = L["Admin_Places_OwnerRequired"].Value;
+    exact["جاري إعادة التعيين..."] = L["Admin_Places_Reassigning"].Value;
+    exact["تم إعادة تعيين المنشأة بنجاح."] = L["Admin_Places_ReassignedSuccess"].Value;
+    exact["اعتماد المنشأة"] = L["Admin_Places_ApproveTitle"].Value;
+    exact["سيتم تفعيل المنشأة وإتاحتها وفق إعداداتها الحالية."] = L["Admin_Places_ApproveHelp"].Value;
+    exact["اعتماد"] = L["Admin_Places_ApproveConfirm"].Value;
+    exact["حذف المنشأة نهائيًا"] = L["Admin_Places_DeletePermanentTitle"].Value;
+    exact["لن تتمكن من استرجاع المنشأة بعد الحذف."] = L["Admin_Places_DeletePermanentHelp"].Value;
+    exact["حذف نهائي"] = L["Admin_Places_DeletePermanentConfirm"].Value;
+    exact["إعادة تنشيط المنشأة"] = L["Admin_Places_ReactivateTitle"].Value;
+    exact["ستعود المنشأة إلى الحالة النشطة."] = L["Admin_Places_ReactivateHelp"].Value;
+    exact["إعادة التنشيط"] = L["Admin_Places_ReactivateConfirm"].Value;
+    exact["رفض طلب المنشأة"] = L["Admin_Places_RejectTitle"].Value;
+    exact["سبب الرفض الذي سيظهر للمالك"] = L["Admin_Places_RejectReasonLabel"].Value;
+    exact["مثال: الصور غير واضحة أو البيانات ناقصة..."] = L["Admin_Places_RejectReasonPlaceholder"].Value;
+    exact["تعليق المنشأة"] = L["Admin_Places_SuspendTitle"].Value;
+    exact["سبب التعليق الذي سيظهر للمالك"] = L["Admin_Places_SuspendReasonLabel"].Value;
+    exact["اكتب سبب التعليق بوضوح..."] = L["Admin_Places_SuspendReasonPlaceholder"].Value;
+    exact["المنشأة غير موجودة."] = L["Admin_Places_Server_NotFound"].Value;
+    exact["تعذر تحميل تفاصيل المنشأة."] = L["Admin_Places_Server_DetailsFailed"].Value;
+    exact["لم يتم العثور على المنشأة."] = L["Admin_Places_Server_NotFoundAlt"].Value;
+    exact["لا يمكن اعتماد المنشأة قبل اكتمال تفعيل حساب المالك. اعتماد المالك واعتماد المنشأة خطوتان منفصلتان."] = L["Admin_Places_Server_OwnerNotActive"].Value;
+    exact["لا يمكن تفعيل المنشأة قبل إكمال سياسات الحجز."] = L["Admin_Places_Server_PoliciesRequired"].Value;
+    exact["تم اعتماد المنشأة، وسيعاد التحقق من الفترة التجريبية تلقائيًا عند أول عملية حجز."] = L["Admin_Places_Server_TrialCheck"].Value;
+    exact["تم اعتماد المنشأة بنجاح."] = L["Admin_Places_Server_Approved"].Value;
+    exact["تم رفض المنشأة وإرسال السبب للمالك."] = L["Admin_Places_Server_Rejected"].Value;
+    exact["تم تعليق المنشأة."] = L["Admin_Places_Server_Suspended"].Value;
+    exact["تم حذف المنشأة نهائيًا."] = L["Admin_Places_Server_Deleted"].Value;
+    exact["تمت إعادة تنشيط المنشأة بنجاح."] = L["Admin_Places_Server_Reactivated"].Value;
+    exact["حساب المالك المحدد غير موجود."] = L["Admin_Places_Server_OwnerAccountNotFound"].Value;
+    exact["تم إعادة تعيين المنشأة وإرسال إشعار للمالك بنجاح!"] = L["Admin_Places_Server_Reassigned"].Value;
+    // ===== End Phase 3 =====
+
+    void AddDynamicTranslation(string? arabicValue, string? englishValue)
+    {
+        if (language != "en" ||
+            string.IsNullOrWhiteSpace(arabicValue) ||
+            string.IsNullOrWhiteSpace(englishValue))
+        {
+            return;
+        }
+
+        exact[arabicValue.Trim()] = englishValue.Trim();
+    }
+
+    // نفس قاعدة العميل: لا نترجم ما كتبه المستخدم من عندنا.
+    // نستخدم الإنجليزية فقط عندما يكون للبيان حقل English فعلي في قاعدة البيانات.
+    if (language == "en")
+    {
+        var categories = await _context.Categories
+            .AsNoTracking()
+            .Select(c => new { c.CategoryName, c.CategoryNameEn })
+            .ToListAsync();
+
+        foreach (var category in categories)
+        {
+            AddDynamicTranslation(category.CategoryName, category.CategoryNameEn);
+        }
+
+        var cities = await _context.Cities
+            .AsNoTracking()
+            .Select(c => new { c.CityName, c.CityNameEn })
+            .ToListAsync();
+
+        foreach (var city in cities)
+        {
+            AddDynamicTranslation(city.CityName, city.CityNameEn);
+        }
+
+        var settings = await _context.SystemSettings
+            .AsNoTracking()
+            .OrderBy(s => s.Id)
+            .Select(s => new
+            {
+                s.SiteName,
+                s.SiteNameEn,
+                s.SiteDescription,
+                s.SiteDescriptionEn
+            })
+            .FirstOrDefaultAsync();
+
+        if (settings != null)
+        {
+            AddDynamicTranslation(settings.SiteName, settings.SiteNameEn);
+            AddDynamicTranslation(settings.SiteDescription, settings.SiteDescriptionEn);
+        }
+    }
+
+    var strings = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["Admin_Currency_AED"] = L["Admin_Currency_AED"].Value,
+        ["Admin_Currency_SAR"] = L["Admin_Currency_SAR"].Value,
+        ["Admin_Currency_USD"] = L["Admin_Currency_USD"].Value,
+        ["Admin_Currency_YER"] = L["Admin_Currency_YER"].Value,
+        ["Admin_JS_AllMarkedRead"] = L["Admin_JS_AllMarkedRead"].Value,
+        ["Admin_JS_ChangingLanguage"] = L["Admin_JS_ChangingLanguage"].Value,
+        ["Admin_JS_CheckConnection"] = L["Admin_JS_CheckConnection"].Value,
+        ["Admin_JS_Error"] = L["Admin_JS_Error"].Value,
+        ["Admin_JS_MarkAllFailed"] = L["Admin_JS_MarkAllFailed"].Value,
+        ["Admin_JS_NoAdminAlerts"] = L["Admin_JS_NoAdminAlerts"].Value,
+        ["Admin_JS_NoNotificationsSection"] = L["Admin_JS_NoNotificationsSection"].Value,
+        ["Admin_JS_NoSearchResults"] = L["Admin_JS_NoSearchResults"].Value,
+        ["Admin_JS_NotificationWillAppear"] = L["Admin_JS_NotificationWillAppear"].Value,
+        ["Admin_JS_NotificationsLoadFailed"] = L["Admin_JS_NotificationsLoadFailed"].Value,
+        ["Admin_JS_NotificationsUnavailable"] = L["Admin_JS_NotificationsUnavailable"].Value,
+        ["Admin_JS_Result"] = L["Admin_JS_Result"].Value,
+        ["Admin_JS_Retry"] = L["Admin_JS_Retry"].Value,
+        ["Admin_JS_ServerConnectionFailed"] = L["Admin_JS_ServerConnectionFailed"].Value,
+        ["Admin_JS_TemporaryUpdateFailure"] = L["Admin_JS_TemporaryUpdateFailure"].Value,
+        ["Admin_JS_UnexpectedError"] = L["Admin_JS_UnexpectedError"].Value,
+        ["Admin_JS_Wait"] = L["Admin_JS_Wait"].Value,
+        ["Admin_Notification_Account"] = L["Admin_Notification_Account"].Value,
+        ["Admin_Notification_Ad"] = L["Admin_Notification_Ad"].Value,
+        ["Admin_Notification_AdReview"] = L["Admin_Notification_AdReview"].Value,
+        ["Admin_Notification_Booking"] = L["Admin_Notification_Booking"].Value,
+        ["Admin_Notification_Case"] = L["Admin_Notification_Case"].Value,
+        ["Admin_Notification_CaseAction"] = L["Admin_Notification_CaseAction"].Value,
+        ["Admin_Notification_Finance"] = L["Admin_Notification_Finance"].Value,
+        ["Admin_Notification_FinanceAction"] = L["Admin_Notification_FinanceAction"].Value,
+        ["Admin_Notification_Message"] = L["Admin_Notification_Message"].Value,
+        ["Admin_Notification_Notification"] = L["Admin_Notification_Notification"].Value,
+        ["Admin_Notification_Place"] = L["Admin_Notification_Place"].Value,
+        ["Admin_Notification_Refund"] = L["Admin_Notification_Refund"].Value,
+        ["Admin_Notification_Review"] = L["Admin_Notification_Review"].Value,
+        ["Admin_Notification_Security"] = L["Admin_Notification_Security"].Value,
+        ["Admin_Notification_System"] = L["Admin_Notification_System"].Value,
+        ["Admin_Type_Category"] = L["Admin_Type_Category"].Value,
+        ["Admin_Type_Place"] = L["Admin_Type_Place"].Value,
+        ["Admin_Type_User"] = L["Admin_Type_User"].Value,
+    };
+
+    var payload = new
+    {
+        language,
+        locale = language == "en" ? "en-US" : "ar-YE",
+        direction = language == "en" ? "ltr" : "rtl",
+        exact,
+        strings
+    };
+}
+
+<script>
+    window.YemenGuideAdminI18n = @Html.Raw(
+        JsonSerializer.Serialize(payload));
+</script>

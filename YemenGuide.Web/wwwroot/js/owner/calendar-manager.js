@@ -99,6 +99,7 @@
         let mobileViewMode = "month";
         let calendarScope = "active";
         let countdownInterval = 0;
+        let paymentRequestInFlight = false;
         let lockedScrollY = null;
         let previousBodyPaddingRight = "";
         let previousBodyPosition = "";
@@ -708,7 +709,11 @@
             on(elements.dayBookingsList, "click", event => {
                 const paymentButton = event.target.closest("[data-record-payment]");
                 if (paymentButton) {
-                    recordManualPayment(Number(paymentButton.dataset.recordPayment || 0));
+                    recordManualPayment(
+                        Number(paymentButton.dataset.recordPayment || 0),
+                        Number(paymentButton.dataset.paymentRemaining || 0),
+                        paymentButton.dataset.paymentMode || "initial"
+                    );
                     return;
                 }
 
@@ -1674,8 +1679,16 @@
                 ? '<span class="yg-mini-badge yg-mini-badge--manual"><i class="bi bi-telephone-inbound-fill"></i> مباشر</span>'
                 : '<span class="yg-mini-badge"><i class="bi bi-globe2"></i> أونلاين</span>';
 
+            const isInitialManualPayment = item.bookingState === "AwaitingPayment";
             const paymentAction = item.canRecordManualPayment
-                ? `<button type="button" class="yg-record-payment-btn" data-record-payment="${item.bookingId}"><i class="bi bi-cash-coin"></i> تسجيل العربون</button>`
+                ? `<button type="button"
+                           class="yg-record-payment-btn"
+                           data-record-payment="${item.bookingId}"
+                           data-payment-remaining="${Number(item.remainingAmount || 0)}"
+                           data-payment-mode="${isInitialManualPayment ? "initial" : "remaining"}">
+                       <i class="bi bi-cash-coin"></i>
+                       ${isInitialManualPayment ? "تسجيل العربون" : "تحصيل المتبقي"}
+                   </button>`
                 : "";
 
             const countdown = item.bookingState === "AwaitingPayment" && item.timerExpiredAt
@@ -2953,19 +2966,36 @@
             return Boolean(request && preview);
         }
 
-        async function recordManualPayment(bookingId) {
-            if (!bookingId) return;
+        async function recordManualPayment(bookingId, remainingAmount, paymentMode) {
+            if (!bookingId || paymentRequestInFlight) return;
+
+            const remaining = Math.max(0, Number(remainingAmount || 0));
+            const isRemainingPayment = paymentMode === "remaining";
             let amount = "";
             let method = "Cash";
             let reference = "";
 
             if (window.Swal) {
                 const response = await Swal.fire({
-                    title: `تسجيل دفعة الحجز #${bookingId}`,
+                    title: isRemainingPayment
+                        ? `تحصيل المتبقي للحجز #${bookingId}`
+                        : `تسجيل عربون الحجز #${bookingId}`,
                     html: `
                         <div style="text-align:right;display:grid;gap:10px">
+                            ${remaining > 0 ? `
+                                <div style="padding:10px 12px;border-radius:12px;background:#eff9ff;color:#17324d;font-weight:800">
+                                    المتبقي الحالي: ${formatNumber(remaining)}
+                                </div>` : ""}
                             <label style="font-size:.75rem;font-weight:800;color:#42566A">المبلغ المستلم
-                                <input id="ygSwalPaid" type="number" min="0.01" step="0.01" class="swal2-input" style="margin:6px 0 0;width:100%" />
+                                <input id="ygSwalPaid"
+                                       type="number"
+                                       inputmode="decimal"
+                                       min="0.01"
+                                       ${remaining > 0 ? `max="${remaining}"` : ""}
+                                       step="0.01"
+                                       value="${isRemainingPayment && remaining > 0 ? remaining : ""}"
+                                       class="swal2-input"
+                                       style="margin:6px 0 0;width:100%" />
                             </label>
                             <label style="font-size:.75rem;font-weight:800;color:#42566A">طريقة الدفع
                                 <select id="ygSwalMethod" class="swal2-select" style="margin:6px 0 0;width:100%">
@@ -2977,13 +3007,17 @@
                             </label>
                         </div>`,
                     showCancelButton: true,
-                    confirmButtonText: "تسجيل وتأكيد",
+                    confirmButtonText: isRemainingPayment ? "تسجيل التحصيل" : "تسجيل وتأكيد",
                     cancelButtonText: "إلغاء",
                     confirmButtonColor: "#10B981",
                     preConfirm: () => {
                         const paid = Number(document.getElementById("ygSwalPaid")?.value || 0);
-                        if (paid <= 0) {
-                            Swal.showValidationMessage("أدخل المبلغ المستلم.");
+                        if (!Number.isFinite(paid) || paid <= 0) {
+                            Swal.showValidationMessage("أدخل مبلغًا صحيحًا أكبر من صفر.");
+                            return false;
+                        }
+                        if (remaining > 0 && paid > remaining) {
+                            Swal.showValidationMessage(`المبلغ لا يمكن أن يتجاوز المتبقي (${formatNumber(remaining)}).`);
                             return false;
                         }
                         return {
@@ -2998,10 +3032,18 @@
                 method = response.value.method;
                 reference = response.value.reference;
             } else {
-                amount = Number(window.prompt("المبلغ المستلم:", "") || 0);
-                if (!amount) return;
+                amount = Number(window.prompt(
+                    isRemainingPayment ? "المبلغ المحصل من المتبقي:" : "مبلغ العربون المستلم:",
+                    isRemainingPayment && remaining > 0 ? String(remaining) : ""
+                ) || 0);
+                if (!Number.isFinite(amount) || amount <= 0) return;
+                if (remaining > 0 && amount > remaining) {
+                    window.alert("المبلغ لا يمكن أن يتجاوز المتبقي.");
+                    return;
+                }
             }
 
+            paymentRequestInFlight = true;
             try {
                 const result = await postJson(ENDPOINTS.payment, {
                     bookingId,
@@ -3010,10 +3052,16 @@
                     paymentReferenceNumber: reference || null
                 });
                 if (!result.success) throw new Error(result.message || "تعذر تسجيل الدفعة.");
-                toast("success", "تم تسجيل الدفعة", result.message || "تم تأكيد الحجز.");
+                toast(
+                    "success",
+                    Number(result.remainingAmount || 0) <= 0 ? "اكتمل السداد" : "تم تسجيل الدفعة",
+                    result.message || "تم تحديث مالية الحجز."
+                );
                 await refreshAll();
             } catch (error) {
                 handleError(error);
+            } finally {
+                paymentRequestInFlight = false;
             }
         }
 

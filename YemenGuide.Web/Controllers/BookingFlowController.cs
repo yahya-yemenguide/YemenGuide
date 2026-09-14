@@ -798,7 +798,15 @@ namespace YemenGuide.Web.Controllers
                 !existingPackage.StartTime.HasValue ||
                 !existingPackage.EndTime.HasValue)
             {
-                return true;
+                /*
+                 * توافق السجلات القديمة: نقص الوقت لا يغلق اليوم كاملًا.
+                 * نمنع فقط تكرار نفس الباقة في نفس التاريخ.
+                 */
+                return
+                    requestedPackage.PackageId ==
+                        existingPackage.PackageId &&
+                    requestedDate.Date ==
+                        existingDate.Date;
             }
 
             var requested =
@@ -833,35 +841,18 @@ namespace YemenGuide.Web.Controllers
                 DateTime referenceTime)
         {
             /*
-             * قاعدة التوفر الصحيحة للقاعات والشاليهات والباقات:
-             *
-             * 1) اليوم الكامل / أي وضع غير Shifts:
-             *    الحجز يمنع اليوم نفسه فقط.
-             *    حجز يوم 20 لا يمنع 21 أو 22 أو 26.
-             *
-             * 2) نظام Shifts:
-             *    نحتاج فحص اليوم السابق واليوم التالي أيضًا فقط لأن
-             *    الباقة قد تعبر منتصف الليل أو لأن BufferTimeHours
-             *    قد يصنع تعارضًا زمنيًا حقيقيًا بين يومين متجاورين.
+             * الباقات دائمًا تعتمد على StartTime / EndTime الفعليين،
+             * سواء كانت سياسة المنشأة Shifts أو FullDay.
+             * لا نحجب اليوم كاملًا لمجرد وجود حجز آخر في التاريخ نفسه.
              */
-            var shiftMode =
-                IsState(
-                    place.PlacePolicy?
-                        .OperationSystemMode,
-                    "Shifts");
-
             var requestedDay =
                 requestedDate.Date;
 
             var searchFrom =
-                shiftMode
-                    ? requestedDay.AddDays(-1)
-                    : requestedDay;
+                requestedDay.AddDays(-1);
 
             var searchTo =
-                shiftMode
-                    ? requestedDay.AddDays(1)
-                    : requestedDay;
+                requestedDay.AddDays(1);
 
             var existingBookings =
                 await _context.Bookings
@@ -902,17 +893,6 @@ namespace YemenGuide.Web.Controllers
                 return false;
             }
 
-            if (!shiftMode)
-            {
-                /*
-                 * الاستعلام في هذا الوضع محصور أصلًا في requestedDay،
-                 * لذلك وجود أي حجز حاجز يعني أن اليوم نفسه مشغول.
-                 */
-                return existingBookings.Any(booking =>
-                    booking.StartDate.Date ==
-                    requestedDay);
-            }
-
             var bufferHours =
                 Math.Clamp(
                     place.PlacePolicy?
@@ -926,12 +906,11 @@ namespace YemenGuide.Web.Controllers
             {
                 if (booking.Package == null)
                 {
-                    /*
-                     * سجل قديم بدون بيانات باقة كافية:
-                     * نحجبه فقط إذا كان في اليوم نفسه بدل منع أيام بعيدة.
-                     */
-                    if (booking.StartDate.Date ==
-                        requestedDay)
+                    if (
+                        booking.PackageId ==
+                            selectedPackage.PackageId &&
+                        booking.StartDate.Date ==
+                            requestedDay)
                     {
                         return true;
                     }
@@ -1028,6 +1007,28 @@ namespace YemenGuide.Web.Controllers
                 PlacePackage? package,
                 DateTime now)
         {
+            /*
+             * إذا كانت باقة فعلية فلا يجوز إنشاء حجز بعد انتهاء وقتها،
+             * حتى عندما تكون مهلة الحجز المسبق = صفر.
+             * أما بعد بدايتها وقبل نهايتها فنسمح بالحجز الفوري،
+             * ويظهر تنبيه العميل في واجهة تفاصيل المنشأة.
+             */
+            if (
+                package?.StartTime.HasValue == true &&
+                package.EndTime.HasValue)
+            {
+                var interval =
+                    GetPackageOperationalInterval(
+                        startDate,
+                        package);
+
+                if (now >= interval.End)
+                {
+                    return
+                        "انتهى وقت هذه الباقة لهذا اليوم. اختر يومًا أو باقة أخرى.";
+                }
+            }
+
             var minimumNoticeHours =
                 Math.Max(
                     0,

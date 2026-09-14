@@ -1,8 +1,10 @@
-@using System.Globalization
+﻿@using System.Globalization
 @using System.Linq
 @using Microsoft.EntityFrameworkCore
+@using Microsoft.Extensions.Localization
 @inject YemenGuide.Data.AppDbContext _context
 @inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+@inject IStringLocalizer<YemenGuide.Web.SharedResource> L
 
 @{
     var settings = _context.SystemSettings
@@ -10,19 +12,38 @@
         .OrderBy(s => s.Id)
         .FirstOrDefault();
 
-    string siteName = settings?.SiteName ?? "YemenGuide";
-    string siteDesc = settings?.SiteDescription
-        ?? "الدليل السياحي والتجاري الأول في اليمن";
+    var currentUiCulture = CultureInfo.CurrentUICulture;
+    var langCode = string.Equals(
+        currentUiCulture.TwoLetterISOLanguageName,
+        "en",
+        StringComparison.OrdinalIgnoreCase)
+        ? "en"
+        : "ar";
+
+    var isRtl = langCode == "ar";
+    var direction = isRtl ? "rtl" : "ltr";
+    var bootstrapCss = isRtl ? "bootstrap.rtl.min.css" : "bootstrap.min.css";
+
+    string siteName =
+        isRtl
+            ? settings?.SiteName ?? "YemenGuide"
+            : !string.IsNullOrWhiteSpace(settings?.SiteNameEn)
+                ? settings!.SiteNameEn!
+                : "YemenGuide";
+
+    string siteDesc =
+        isRtl
+            ? settings?.SiteDescription
+                ?? L["Admin_Layout_DefaultDescription"].Value
+            : !string.IsNullOrWhiteSpace(settings?.SiteDescriptionEn)
+                ? settings!.SiteDescriptionEn!
+                : L["Admin_Layout_DefaultDescription"].Value;
+
     string favicon = settings?.FaviconPath ?? "/favicon.ico";
 
     ViewData["AdminLayoutSettingsLoaded"] = true;
     ViewData["AdminSiteName"] = siteName;
     ViewData["AdminLogoPath"] = settings?.LogoPath ?? "/images/logo1.png";
-
-    var isRtl = CultureInfo.CurrentCulture.TextInfo.IsRightToLeft;
-    var direction = isRtl ? "rtl" : "ltr";
-    var langCode = CultureInfo.CurrentCulture.Name;
-    var bootstrapCss = isRtl ? "bootstrap.rtl.min.css" : "bootstrap.min.css";
 
     var uId = User.Identity?.IsAuthenticated == true
         ? User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "0"
@@ -52,7 +73,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-    <title>@ViewData["Title"] - لوحة التحكم | @siteName</title>
+    <title>@ViewData["Title"] - @L["Admin_Layout_Dashboard"] | @siteName</title>
     <meta name="description" content="@siteDesc" />
 
     <link rel="icon" type="image/x-icon" href="@favicon" />
@@ -60,49 +81,31 @@
 
     <link rel="stylesheet" href="~/lib/bootstrap/css/@bootstrapCss" />
     <link rel="stylesheet" href="~/lib/bootstrap-icons/bootstrap-icons.css" />
-
-    <link rel="stylesheet"
-          href="~/lib/fonts/fonts.css"
-          asp-append-version="true" />
-
-    <link rel="stylesheet"
-          href="~/css/shared/site.css"
-          asp-append-version="true" />
-
-    <link rel="stylesheet"
-          href="~/css/admin/admin-layout.css"
-          asp-append-version="true" />
-
-    <link rel="stylesheet"
-          href="~/css/admin/admin-dark-theme.css"
-          asp-append-version="true" />
+    <link rel="stylesheet" href="~/lib/fonts/fonts.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/shared/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/admin/admin-layout.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/admin/admin-dark-theme.css" asp-append-version="true" />
 
     @if (showEmployeePasswordGate)
     {
         <link rel="stylesheet"
-          href="~/css/admin/admin-employee-password-modal.css"
-          asp-append-version="true" />
+              href="~/css/admin/admin-employee-password-modal.css"
+              asp-append-version="true" />
     }
 
     @if (!isRtl)
     {
         <link rel="stylesheet"
-          href="~/css/shared/_Admin_OwnerLayout.ltr.css"
-          asp-append-version="true" />
+              href="~/css/shared/_Admin_OwnerLayout.ltr.css"
+              asp-append-version="true" />
     }
 
     @await RenderSectionAsync("Styles", required: false)
 
-    <!-- آخر ملف في الهيدر ليضمن توحيد الوضع الليلي للـLayout والهيدر والقائمة -->
     <link rel="stylesheet"
           href="~/css/admin/admin-dark-unified.css"
           asp-append-version="true" />
 
-    <!--
-        توزيع روابط القائمة الجانبية حسب الصلاحيات:
-        العناصر غير المسموح بها لا تحجز أي مساحة،
-        والعناصر الظاهرة تُرتب من الأعلى مباشرة مهما كان عددها.
-    -->
     <style>
         .dashboard-sidebar .sidebar-nav {
             min-height: 0;
@@ -111,14 +114,17 @@
             gap: 6px;
         }
 
-            .dashboard-sidebar .sidebar-nav .nav-item {
-                flex: 0 0 auto;
-            }
+        .dashboard-sidebar .sidebar-nav .nav-item {
+            flex: 0 0 auto;
+        }
     </style>
 </head>
 
 <body class="dashboard-body yg-living-luxe-v4 yg-performance-mode @(darkModeEnabled ? "dark-mode" : "")"
-      data-current-user-id="@uId">
+      data-current-user-id="@uId"
+      data-language="@langCode"
+      data-direction="@direction">
+
     <div class="dashboard-wrapper">
         <partial name="~/Areas/Admin/Views/Shared/_HeaderAdmin.cshtml" />
 
@@ -136,17 +142,21 @@
         <partial name="~/Areas/Admin/Views/Shared/_EmployeePasswordModal.cshtml" />
     }
 
+    <partial name="~/Areas/Admin/Views/Shared/_AdminLocalizationData.cshtml" />
+
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Must load before the existing Admin JS so dynamic messages can use the same dictionary. -->
+    <script src="~/js/admin/admin-localization.js" asp-append-version="true"></script>
     <script src="~/js/admin/_AdminLayout.js" asp-append-version="true"></script>
 
     @if (showEmployeePasswordGate)
     {
         <script src="~/js/admin/admin-employee-password-modal.js"
-            asp-append-version="true"></script>
+                asp-append-version="true"></script>
     }
 
-    <!-- إصلاح مودال الصورة بدون ملف JavaScript إضافي -->
     <script>
         (function () {
             'use strict';
@@ -154,38 +164,23 @@
             const avatarModalElement =
                 document.getElementById('avatarManageModal');
 
-            if (!avatarModalElement) {
-                return;
-            }
+            if (!avatarModalElement) return;
 
-            // إخراج المودال من stacking context الخاص بمحتوى لوحة التحكم.
             if (avatarModalElement.parentElement !== document.body) {
                 document.body.appendChild(avatarModalElement);
             }
 
             avatarModalElement.addEventListener('show.bs.modal', function () {
-                avatarModalElement.style.setProperty(
-                    'z-index',
-                    '20020',
-                    'important'
-                );
+                avatarModalElement.style.setProperty('z-index', '20020', 'important');
             });
 
             avatarModalElement.addEventListener('shown.bs.modal', function () {
-                const backdrops =
-                    document.querySelectorAll('.modal-backdrop');
-
+                const backdrops = document.querySelectorAll('.modal-backdrop');
                 const currentBackdrop =
-                    backdrops.length
-                        ? backdrops[backdrops.length - 1]
-                        : null;
+                    backdrops.length ? backdrops[backdrops.length - 1] : null;
 
                 if (currentBackdrop) {
-                    currentBackdrop.style.setProperty(
-                        'z-index',
-                        '20010',
-                        'important'
-                    );
+                    currentBackdrop.style.setProperty('z-index', '20010', 'important');
                 }
             });
 
@@ -199,7 +194,7 @@
 
     @if (!(ViewData["DisableGoogleMaps"] as bool? ?? false))
     {
-        <script src="https://maps.googleapis.com/maps/api/js?key=@Configuration["GoogleMaps:ApiKey"]"></script>
+        <script src="https://maps.googleapis.com/maps/api/js?key=@Configuration["GoogleMaps:ApiKey"]&language=@langCode&region=YE"></script>
     }
 </body>
 </html>

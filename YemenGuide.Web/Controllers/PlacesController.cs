@@ -590,9 +590,9 @@ namespace YemenGuide.Web.Controllers
             int bufferHours)
         {
             /*
-             * في نظام الفترات لا يجوز لحجز باقة صباحية أن يغلق اليوم كله
-             * أمام باقة مسائية مختلفة. الأساس هو مقارنة الوقت الفعلي لكل
-             * باقة مع احتساب وقت التجهيز بين الحجوزات.
+             * لا يجوز لحجز باقة صباحية أن يغلق اليوم كله أمام باقة
+             * مسائية مختلفة، سواء كان وضع التشغيل Shifts أو FullDay.
+             * الأساس هو مقارنة الوقت الفعلي لكل باقة مع احتساب وقت التجهيز.
              *
              * للسجلات القديمة التي لا تحتوي أوقاتًا كاملة لا نفترض أن كل
              * باقات اليوم متعارضة؛ نمنع فقط نفس الباقة في نفس اليوم. بهذا
@@ -684,6 +684,23 @@ namespace YemenGuide.Web.Controllers
              * الخاصة بهذه الباقة. لا نمنعها بسبب ShiftsJson هنا،
              * لأن ذلك كان يجعل الباقة ظاهرة ثم يمنع تحميل التقويم.
              */
+            if (
+                selectedPackage.StartTime.HasValue &&
+                selectedPackage.EndTime.HasValue)
+            {
+                var requestedInterval =
+                    GetPackageOperationalInterval(
+                        requestedDay,
+                        selectedPackage);
+
+                if (referenceTime >= requestedInterval.End)
+                {
+                    return (
+                        false,
+                        "انتهى وقت هذه الباقة لهذا اليوم. اختر يومًا أو باقة أخرى.");
+                }
+            }
+
             var minimumNoticeHours =
                 Math.Max(
                     0,
@@ -751,22 +768,15 @@ namespace YemenGuide.Web.Controllers
                     "Confirmed"
                 };
 
-            var shiftMode =
-                string.Equals(
-                    place.PlacePolicy?
-                        .OperationSystemMode,
-                    "Shifts",
-                    StringComparison.OrdinalIgnoreCase);
-
+            /*
+             * حتى في FullDay قد تكون المنشأة تستخدم باقات زمنية صباحية
+             * ومسائية؛ لذلك نبحث حول اليوم ونقرر بالتداخل الفعلي دائمًا.
+             */
             var searchFrom =
-                shiftMode
-                    ? requestedDay.AddDays(-1)
-                    : requestedDay;
+                requestedDay.AddDays(-1);
 
             var searchTo =
-                shiftMode
-                    ? requestedDay.AddDays(1)
-                    : requestedDay;
+                requestedDay.AddDays(1);
 
             var existingBookings =
                 await _context.Bookings
@@ -801,23 +811,6 @@ namespace YemenGuide.Web.Controllers
                         booking.StartDate.Date <=
                             searchTo)
                     .ToListAsync();
-
-            if (!shiftMode)
-            {
-                var sameDayBooked =
-                    existingBookings.Any(
-                        booking =>
-                            booking.StartDate.Date ==
-                            requestedDay);
-
-                return sameDayBooked
-                    ? (
-                        false,
-                        "هذا اليوم محجوز بالفعل. اختر يومًا آخر متاحًا.")
-                    : (
-                        true,
-                        string.Empty);
-            }
 
             var bufferHours =
                 Math.Clamp(
@@ -2086,9 +2079,9 @@ namespace YemenGuide.Web.Controllers
 
             /*
              * القاعات والشاليهات والباقات:
-             * في اليوم الكامل يبقى سلوك الحجز اليومي كما هو.
-             * في نظام الفترات نحجب فقط الأيام التي تتعارض فيها أوقات
-             * الباقة المختارة مع حجز قائم بعد احتساب وقت التجهيز.
+             * نعتمد دائمًا على وقت الباقة الفعلي، سواء كان وضع التشغيل
+             * FullDay أو Shifts، ونحجب فقط التداخل الحقيقي بعد احتساب
+             * وقت التجهيز بين الحجوزات.
              */
             if (packageId.HasValue)
             {
@@ -2142,22 +2135,15 @@ namespace YemenGuide.Web.Controllers
                             ) &&
 
                             booking.StartDate >=
-                                today &&
+                                today.AddDays(-1) &&
 
                             booking.StartDate <=
-                                horizonEnd)
+                                horizonEnd.AddDays(1))
                         .ToListAsync();
 
                 var bookedPackageDates =
                     new HashSet<DateTime>(
                         closedDates);
-
-                var shiftMode =
-                    string.Equals(
-                        place.PlacePolicy?
-                            .OperationSystemMode,
-                        "Shifts",
-                        StringComparison.OrdinalIgnoreCase);
 
                 var bufferHours =
                     Math.Clamp(
@@ -2166,18 +2152,14 @@ namespace YemenGuide.Web.Controllers
                         0,
                         24);
 
+                /*
+                 * لا يوجد حجب يوم كامل هنا: كل باقة تختبر مقابل الوقت
+                 * الفعلي للحجز القائم مع BufferTimeHours، في جميع أوضاع التشغيل.
+                 */
                 foreach (
                     var booking in
                     existingPackageBookings)
                 {
-                    if (!shiftMode)
-                    {
-                        bookedPackageDates.Add(
-                            booking.StartDate.Date);
-
-                        continue;
-                    }
-
                     foreach (
                         var candidateDate in
                         new[]
@@ -2203,6 +2185,21 @@ namespace YemenGuide.Web.Controllers
                             bookedPackageDates.Add(
                                 candidateDate);
                         }
+                    }
+                }
+
+                if (
+                    selectedPackage.StartTime.HasValue &&
+                    selectedPackage.EndTime.HasValue)
+                {
+                    var todayInterval =
+                        GetPackageOperationalInterval(
+                            today,
+                            selectedPackage);
+
+                    if (now >= todayInterval.End)
+                    {
+                        bookedPackageDates.Add(today);
                     }
                 }
 

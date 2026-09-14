@@ -471,10 +471,18 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                         .NoShowGraceMinutes ?? 60),
                 CanAccept =
                     IsState(booking.BookingState, "Pending") &&
-                    now < operationalStartAt,
+                    (
+                        booking.PackageId.HasValue
+                            ? now < operationalEndAt
+                            : now < operationalStartAt
+                    ),
                 CanApprovePayment =
                     IsState(booking.BookingState, "PaymentReview") &&
-                    now < operationalStartAt &&
+                    (
+                        booking.PackageId.HasValue
+                            ? now < operationalEndAt
+                            : now < operationalStartAt
+                    ) &&
                     !string.IsNullOrWhiteSpace(
                         booking.PaymentNotificationImage),
                 CanRejectPermanently =
@@ -729,6 +737,108 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             return booking.StartDate.Date.AddDays(1);
         }
 
+        private static (
+            DateTime Start,
+            DateTime End)
+            GetPackageOperationalInterval(
+                DateTime bookingDate,
+                PlacePackage package)
+        {
+            var start = bookingDate.Date.Add(
+                package.StartTime ?? TimeSpan.Zero);
+
+            var end = bookingDate.Date.Add(
+                package.EndTime ??
+                package.StartTime ??
+                TimeSpan.Zero);
+
+            if (end <= start)
+            {
+                end = end.AddDays(1);
+            }
+
+            return (start, end);
+        }
+
+        private static bool PackageIntervalsConflict(
+            DateTime requestedDate,
+            PlacePackage requestedPackage,
+            DateTime existingDate,
+            PlacePackage existingPackage,
+            int bufferHours)
+        {
+            /*
+             * الاعتماد يكون على الوقت الفعلي للباقة دائمًا، وليس على
+             * مجرد تطابق التاريخ أو اسم الباقة/وضع التشغيل.
+             * للسجلات القديمة ناقصة الوقت نمنع تكرار نفس الباقة فقط
+             * بدل إغلاق اليوم كاملًا أمام بقية الباقات.
+             */
+            if (!requestedPackage.StartTime.HasValue ||
+                !requestedPackage.EndTime.HasValue ||
+                !existingPackage.StartTime.HasValue ||
+                !existingPackage.EndTime.HasValue)
+            {
+                return
+                    requestedPackage.PackageId ==
+                        existingPackage.PackageId &&
+                    requestedDate.Date ==
+                        existingDate.Date;
+            }
+
+            var requested =
+                GetPackageOperationalInterval(
+                    requestedDate,
+                    requestedPackage);
+
+            var existing =
+                GetPackageOperationalInterval(
+                    existingDate,
+                    existingPackage);
+
+            var buffer =
+                TimeSpan.FromHours(
+                    Math.Clamp(
+                        bufferHours,
+                        0,
+                        24));
+
+            return
+                existing.Start <
+                    requested.End.Add(buffer) &&
+                existing.End.Add(buffer) >
+                    requested.Start;
+        }
+
+        private static string FormatOperationalDuration(
+            TimeSpan duration)
+        {
+            var totalMinutes =
+                Math.Max(
+                    0,
+                    (int)Math.Floor(
+                        duration.TotalMinutes));
+
+            if (totalMinutes <= 0)
+            {
+                return "أقل من دقيقة";
+            }
+
+            var hours = totalMinutes / 60;
+            var minutes = totalMinutes % 60;
+
+            if (hours > 0 && minutes > 0)
+            {
+                return $"{hours} ساعة و{minutes} دقيقة";
+            }
+
+            if (hours > 0)
+            {
+                return $"{hours} ساعة";
+            }
+
+            return $"{minutes} دقيقة";
+        }
+
         private static DateTime GetNoShowAvailableAt(Booking booking)
         {
             var graceMinutes = Math.Max(
@@ -748,9 +858,19 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             var endAt = GetOperationalEndAt(booking);
             var noShowAt = GetNoShowAvailableAt(booking);
 
+            var lateBookingNotice =
+                booking.PackageId.HasValue &&
+                booking.CreatedAt.HasValue &&
+                booking.CreatedAt.Value > startAt &&
+                booking.CreatedAt.Value < endAt
+                    ? $"تنبيه: تم إنشاء هذا الطلب بعد بدء الباقة بـ " +
+                      $"{FormatOperationalDuration(booking.CreatedAt.Value - startAt)}. "
+                    : string.Empty;
+
             if (now < startAt)
             {
                 return
+                    lateBookingNotice +
                     $"موعد بداية الحجز: {startAt:yyyy-MM-dd HH:mm}. " +
                     $"تسجيل عدم الحضور يتاح في {noShowAt:yyyy-MM-dd HH:mm}، " +
                     $"والإنهاء في {endAt:yyyy-MM-dd HH:mm}.";
@@ -758,6 +878,15 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
             if (now < noShowAt)
             {
+                if (booking.PackageId.HasValue)
+                {
+                    return
+                        lateBookingNotice +
+                        $"بدأ موعد الحجز، وما زال القبول/اعتماد الدفع متاحًا حتى نهاية الباقة " +
+                        $"في {endAt:yyyy-MM-dd HH:mm}. يتاح تسجيل عدم الحضور بعد مهلة السماح في " +
+                        $"{noShowAt:yyyy-MM-dd HH:mm}.";
+                }
+
                 return
                     $"بدأ موعد الحجز. يتاح تسجيل عدم الحضور بعد مهلة السماح في " +
                     $"{noShowAt:yyyy-MM-dd HH:mm}.";
@@ -765,9 +894,25 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
             if (now < endAt)
             {
+                if (booking.PackageId.HasValue)
+                {
+                    return
+                        lateBookingNotice +
+                        $"الباقة قيد التنفيذ، وما زال القبول/اعتماد الدفع متاحًا حتى " +
+                        $"{endAt:yyyy-MM-dd HH:mm}. يمكن تسجيل عدم حضور الآن حسب الواقع.";
+                }
+
                 return
                     $"يمكن تسجيل عدم حضور الآن، أما إنهاء الحجز فيتاح في " +
                     $"{endAt:yyyy-MM-dd HH:mm}.";
+            }
+
+            if (booking.PackageId.HasValue)
+            {
+                return
+                    lateBookingNotice +
+                    "انتهى وقت الباقة؛ لا يمكن قبول الطلب أو اعتماد دفعه الآن. " +
+                    "الحجز جاهز للإنهاء أو لتسجيل عدم حضور حسب الواقع.";
             }
 
             return
@@ -1050,26 +1195,41 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
             if (booking.PackageId.HasValue)
             {
-                var packageExists =
+                var selectedPackage =
+                    booking.Package ??
                     await _context.PlacePackages
                         .AsNoTracking()
-                        .AnyAsync(package =>
+                        .FirstOrDefaultAsync(package =>
                             package.PackageId == booking.PackageId.Value &&
                             package.PlaceId == booking.PlaceId &&
                             package.IsActive == true);
 
-                if (!packageExists)
+                if (selectedPackage == null ||
+                    selectedPackage.IsActive != true)
                 {
                     return
                         "الباقة المرتبطة بهذا الحجز لم تعد موجودة أو غير مفعلة.";
                 }
 
-                var requestedDate = booking.StartDate.Date;
+                var requestedDay =
+                    booking.StartDate.Date;
 
-                var hasConflictingBooking =
+                /*
+                 * قد تعبر الباقة منتصف الليل، وقد يمتد BufferTimeHours
+                 * إلى اليوم السابق/التالي؛ لذلك نبحث يومًا على الجانبين
+                 * ثم نقرر بالتداخل الزمني الفعلي، لا بمجرد نفس التاريخ.
+                 */
+                var searchFrom =
+                    requestedDay.AddDays(-1);
+
+                var searchTo =
+                    requestedDay.AddDays(1);
+
+                var otherBookings =
                     await _context.Bookings
                         .AsNoTracking()
-                        .AnyAsync(other =>
+                        .Include(other => other.Package)
+                        .Where(other =>
                             other.BookingId != booking.BookingId &&
                             other.PlaceId == booking.PlaceId &&
                             other.PackageId.HasValue &&
@@ -1085,12 +1245,43 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                                 (other.CreatedAt ?? SqlMinimumDate) <=
                                 currentCreatedAt
                             ) &&
-                            other.StartDate.Date == requestedDate);
+                            other.StartDate.Date >= searchFrom &&
+                            other.StartDate.Date <= searchTo)
+                        .ToListAsync();
 
-                if (hasConflictingBooking)
+                var bufferHours =
+                    Math.Clamp(
+                        booking.Place?.PlacePolicy?
+                            .BufferTimeHours ?? 0,
+                        0,
+                        24);
+
+                foreach (var other in otherBookings)
                 {
-                    return
-                        "المنشأة مرتبطة بحجز آخر في نفس التاريخ، ولا يمكن قبول الطلب.";
+                    if (other.Package == null)
+                    {
+                        if (other.PackageId ==
+                                selectedPackage.PackageId &&
+                            other.StartDate.Date ==
+                                requestedDay)
+                        {
+                            return
+                                "هذه الباقة مرتبطة بحجز آخر في نفس التاريخ.";
+                        }
+
+                        continue;
+                    }
+
+                    if (PackageIntervalsConflict(
+                            requestedDay,
+                            selectedPackage,
+                            other.StartDate,
+                            other.Package,
+                            bufferHours))
+                    {
+                        return
+                            "توجد باقة أخرى متداخلة زمنيًا مع هذا الحجز أو مع وقت التجهيز بين الحجوزات.";
+                    }
                 }
 
                 return null;
@@ -1695,10 +1886,12 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 }
 
                 var now = DateTime.Now;
-                var operationalStartAt =
-                    GetOperationalStartAt(booking);
+                var actionDeadline =
+                    booking.PackageId.HasValue
+                        ? GetOperationalEndAt(booking)
+                        : GetOperationalStartAt(booking);
 
-                if (now >= operationalStartAt)
+                if (now >= actionDeadline)
                 {
                     booking.BookingState = "Expired";
                     booking.PaymentStatus = "Expired";
@@ -1712,8 +1905,9 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     return Json(new
                     {
                         success = false,
-                        message =
-                            "انتهى موعد بداية الحجز، وتم نقله إلى الأرشيف كطلب منتهي."
+                        message = booking.PackageId.HasValue
+                            ? "انتهى وقت الباقة بالكامل، وتم نقل الطلب إلى الأرشيف كطلب منتهي."
+                            : "انتهى موعد بداية الحجز، وتم نقله إلى الأرشيف كطلب منتهي."
                     });
                 }
 
@@ -1758,8 +1952,23 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
                     booking.BookingState = "AwaitingPayment";
                     booking.PaymentStatus = "Unpaid";
-                    booking.TimerExpiredAt =
+
+                    var paymentDeadline =
                         now.AddHours(paymentTimeout);
+
+                    if (booking.PackageId.HasValue)
+                    {
+                        var packageEndAt =
+                            GetOperationalEndAt(booking);
+
+                        if (paymentDeadline > packageEndAt)
+                        {
+                            paymentDeadline = packageEndAt;
+                        }
+                    }
+
+                    booking.TimerExpiredAt =
+                        paymentDeadline;
 
                     if (financialRecord != null)
                     {
@@ -2168,14 +2377,20 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
                 if (request.IsApproved)
                 {
-                    if (now >= GetOperationalStartAt(booking))
+                    var paymentApprovalDeadline =
+                        booking.PackageId.HasValue
+                            ? GetOperationalEndAt(booking)
+                            : GetOperationalStartAt(booking);
+
+                    if (now >= paymentApprovalDeadline)
                     {
                         await transaction.RollbackAsync();
                         return Json(new
                         {
                             success = false,
-                            message =
-                                "بدأ موعد الحجز بالفعل. لا يمكن اعتماد الدفع الآن؛ ارفض الحجز نهائيًا أو تواصل مع الإدارة لمعالجة الحوالة."
+                            message = booking.PackageId.HasValue
+                                ? "انتهى وقت الباقة بالكامل. لا يمكن اعتماد الدفع الآن؛ عالج الحجز حسب حالة الحضور أو تواصل مع الإدارة عند الحاجة."
+                                : "بدأ موعد الحجز بالفعل. لا يمكن اعتماد الدفع الآن؛ ارفض الحجز نهائيًا أو تواصل مع الإدارة لمعالجة الحوالة."
                         });
                     }
 
