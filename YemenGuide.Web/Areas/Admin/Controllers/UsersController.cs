@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using YemenGuide.Data;
@@ -47,7 +47,7 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
         }
 
         // =============================================================
-        //  2. تحديث الحالة (الفصل الذكي المطور بين المالك الجديد والقديم)
+        //  2. تحديث الحالة (الفصل الصريح بين اعتماد المالك واعتماد المنشأة)
         // =============================================================
         [HttpPost]
         [RequireAdminPermission(AdminPermissionKeys.Users.ChangeState)]
@@ -92,46 +92,79 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
 
             var previousAccountState = user.AccountState;
             var isNewOwnerApproval =
-                string.Equals(user.Role, "Owner", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(user.Role, SystemRoles.Owner, StringComparison.OrdinalIgnoreCase) &&
                 (string.Equals(previousAccountState, "Pending", StringComparison.OrdinalIgnoreCase) ||
                  string.Equals(previousAccountState, "Rejected", StringComparison.OrdinalIgnoreCase)) &&
-                (string.Equals(requestedState, "Activate", StringComparison.OrdinalIgnoreCase) || string.Equals(requestedState, "Unblock", StringComparison.OrdinalIgnoreCase));
+                (string.Equals(requestedState, "Activate", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(requestedState, "Unblock", StringComparison.OrdinalIgnoreCase));
 
-            // 🎯 الفحص الذكي المطور:
-            if (string.Equals(requestedState, "Activate", StringComparison.OrdinalIgnoreCase) || string.Equals(requestedState, "Unblock", StringComparison.OrdinalIgnoreCase))
+            // اعتماد الحساب لا يعني اعتماد أي منشأة.
+            if (string.Equals(requestedState, "Activate", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(requestedState, "Unblock", StringComparison.OrdinalIgnoreCase))
             {
-                // 1️⃣ إذا كان المستخدم مالكاً جديداً وحالته الحالية قيد الانتظار أو الرفض
                 if (isNewOwnerApproval)
                 {
-                    // نضعه Accepted لكي يمر على صفحة الاحتفال والتهنئة أولاً
+                    // يمر المالك الجديد بمرحلة Accepted ثم يكمل الدخول/التفعيل.
                     user.AccountState = "Accepted";
                 }
                 else
                 {
-                    // 2️⃣ إذا كان مالكاً قديماً (معلق Suspended أو محظور Blocked) أو عميلاً عادياً
-                    // نضعه Active مباشرة لكي يطير طوالي للوحته دون المرور بالاحتفال
                     user.AccountState = "Active";
                 }
             }
             else
             {
-                // الاحتفاظ بالحالات الأخرى (Suspended, Blocked, Rejected) كما هي دون تغيير
                 user.AccountState = requestedState;
             }
 
             if (isNewOwnerApproval)
             {
-                var pendingPlaces = await _context.Places
-                    .AsNoTracking()
+                /*
+                 * حماية مهمة:
+                 * قبول حساب المالك لا يعتمد منشآته إطلاقًا.
+                 *
+                 * - Pending تبقى Pending وتظل غير متاحة.
+                 * - WaitOwner تبقى WaitOwner؛ قبول الحساب لا يعني قبول إسناد المنشأة.
+                 * - UnderReview تبقى UnderReview وغير متاحة.
+                 * - أي Active وُجدت خطأً لمالك لم يكن معتمدًا تُعاد إلى Pending.
+                 * - Rejected / Suspended لا نغيّر حالتها.
+                 */
+                var ownerPlaces = await _context.Places
                     .Where(place =>
                         place.OwnerId == user.UserId &&
-                        place.Status == "Pending")
+                        (place.Status == "Active" ||
+                         place.Status == "Pending" ||
+                         place.Status == "WaitOwner" ||
+                         place.Status == "UnderReview"))
+                    .ToListAsync();
+
+                foreach (var place in ownerPlaces)
+                {
+                    if (string.Equals(
+                            place.Status,
+                            "Active",
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Active قبل اعتماد المنشأة من الإدارة حالة غير صحيحة لمالك جديد.
+                        place.Status = "Pending";
+                    }
+
+                    // أي منشأة لم تُعتمد بصورة مستقلة لا تظهر للعميل.
+                    place.IsAvailable = false;
+                }
+
+                var pendingPlaces = ownerPlaces
+                    .Where(place =>
+                        string.Equals(
+                            place.Status,
+                            "Pending",
+                            StringComparison.OrdinalIgnoreCase))
                     .Select(place => new
                     {
                         place.PlaceId,
                         place.PlaceNameAndDesc
                     })
-                    .ToListAsync();
+                    .ToList();
 
                 foreach (var place in pendingPlaces)
                 {
@@ -141,7 +174,7 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                         {
                             NotificationTitle = "منشأة جديدة جاهزة للمراجعة",
                             NotificationText =
-                                $"تم قبول توثيق المالك {user.FullName} وأصبحت المنشأة «{place.PlaceNameAndDesc}» جاهزة للمراجعة.",
+                                $"تم قبول توثيق المالك {user.FullName}، والمنشأة «{place.PlaceNameAndDesc}» ما زالت بانتظار اعتماد مستقل من الإدارة.",
                             NotificationType = NotificationTypes.AdminPlaceActionRequired,
                             TargetUrl = $"/Admin/Places/PlaceManagement?focusPlace={place.PlaceId}",
                             ReferenceType = NotificationReferenceTypes.Place,
@@ -162,7 +195,7 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                 "Suspended" => "تم توقيف الحساب مؤقتًا. يستطيع المستخدم تسجيل الدخول والتصفح فقط دون تنفيذ عمليات.",
                 "Blocked" => "تم حظر الحساب ومنعه من تسجيل الدخول.",
                 "Active" => "تم تنشيط الحساب وإعادة صلاحياته الطبيعية.",
-                "Accepted" => "تم قبول حساب المالك وأصبح جاهزًا لاستكمال خطوات التفعيل.",
+                "Accepted" => "تم قبول حساب المالك فقط. المنشآت التابعة له لا تزال تحتاج اعتمادًا مستقلًا من إدارة المنشآت.",
                 "Rejected" => "تم رفض طلب انضمام المالك.",
                 _ => "تم تحديث حالة المستخدم بنجاح."
             };
@@ -225,7 +258,6 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
             if (user == null)
                 return Json(new { success = false, message = "المستخدم غير موجود" });
 
-            // حذف الكائن كلياً وجذرياً من قاعدة البيانات في حالة الرفض النهائي فقط بطلب صريح
             _context.Users.Remove(user);
             await _context.SaveChangesAsync();
 
@@ -285,7 +317,6 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                     ReferenceId = user.UserId
                 });
         }
-
     }
 
     // =============================================================

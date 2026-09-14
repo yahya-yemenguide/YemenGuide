@@ -531,6 +531,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                        "Active",
                        StringComparison.OrdinalIgnoreCase);
         }
+
         private sealed class OwnerDashboardBookingPlaceCandidate
         {
             public int PlaceId { get; set; }

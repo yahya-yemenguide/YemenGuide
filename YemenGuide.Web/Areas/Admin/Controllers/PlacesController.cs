@@ -865,6 +865,51 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
             }
             else
             {
+                if (status == "Active")
+                {
+                    var ownerState = await _db.Users
+                        .AsNoTracking()
+                        .Where(user => user.UserId == p.OwnerId)
+                        .Select(user => new
+                        {
+                            user.Role,
+                            user.AccountState
+                        })
+                        .FirstOrDefaultAsync();
+
+                    bool isAdminOwned =
+                        ownerState != null &&
+                        string.Equals(
+                            ownerState.Role,
+                            SystemRoles.Admin,
+                            StringComparison.OrdinalIgnoreCase);
+
+                    bool isApprovedOwner =
+                        ownerState != null &&
+                        string.Equals(
+                            ownerState.Role,
+                            SystemRoles.Owner,
+                            StringComparison.OrdinalIgnoreCase) &&
+                        string.Equals(
+                            ownerState.AccountState,
+                            "Active",
+                            StringComparison.OrdinalIgnoreCase);
+
+                    if (!isAdminOwned && !isApprovedOwner)
+                    {
+                        p.Status = previousStatus;
+                        p.IsAvailable = false;
+
+                        return Json(new
+                        {
+                            success = false,
+                            message = L(
+                                "لا يمكن اعتماد المنشأة قبل اكتمال تفعيل حساب المالك. اعتماد المالك واعتماد المنشأة خطوتان منفصلتان.",
+                                "The place cannot be approved before the owner's account is fully active. Owner approval and place approval are separate steps.")
+                        });
+                    }
+                }
+
                 p.Status = status;
                 if (reason != null) p.RejectionReason = reason;
 
@@ -896,7 +941,12 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                     p.IsAvailable = true;
                     p.RejectionReason = null;
                 }
-                else if (status == "Rejected" || status == "Suspended")
+                else if (
+                    status == "Rejected" ||
+                    status == "Suspended" ||
+                    status == "Pending" ||
+                    status == "WaitOwner" ||
+                    status == "UnderReview")
                 {
                     p.IsAvailable = false;
                 }
@@ -1190,8 +1240,12 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
 
             string targetStatus = isAdministrationOperation
                 ? (isBookable ? "Pending" : "Active")
-                : (isBookable ? "WaitOwner" : "Active");
-            string targetAvailability = isBookable ? "false" : "true";
+                : "WaitOwner";
+
+            string targetAvailability =
+                isAdministrationOperation && !isBookable
+                    ? "true"
+                    : "false";
 
             return RedirectToAction("FillSurvey", new
             {
@@ -1214,8 +1268,8 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
             ViewBag.BookingSystemId = category.BookingSystemId;
             ViewBag.CategoryName = category.CategoryName;
             ViewBag.SelectedOwnerId = ownerId;
-            ViewBag.InitialStatus = initialStatus ?? "Active";
-            ViewBag.InitialAvailability = initialAvailability ?? "true";
+            ViewBag.InitialStatus = initialStatus ?? "Pending";
+            ViewBag.InitialAvailability = initialAvailability ?? "false";
 
             var fillAdminIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
             bool isCurrentAdminOwner =

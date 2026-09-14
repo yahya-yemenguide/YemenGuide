@@ -625,46 +625,124 @@ namespace YemenGuide.Web.Controllers
                 return false;
             }
 
-            var packageStart =
-                package.StartTime.Value;
-
-            var packageEnd =
-                package.EndTime.Value;
+            var packageStartMinutes =
+                package.StartTime.Value
+                    .TotalMinutes;
 
             var packageEndMinutes =
-                packageEnd.TotalMinutes;
+                package.EndTime.Value
+                    .TotalMinutes;
 
-            if (packageEnd <= packageStart)
+            const double minutesPerDay =
+                24d * 60d;
+
+            if (package.EndTime.Value <=
+                package.StartTime.Value)
             {
                 packageEndMinutes +=
-                    TimeSpan.FromDays(1)
-                        .TotalMinutes;
+                    minutesPerDay;
             }
 
-            foreach (
-                var shift in
+            var configuredShifts =
                 ReadPolicyShiftWindows(
                     place.PlacePolicy?
-                        .ShiftsJson))
+                        .ShiftsJson);
+
+            if (configuredShifts.Count == 0)
             {
-                var shiftStartMinutes =
+                return false;
+            }
+
+            /*
+             * قد تمتد الباقة عبر أكثر من فترة تشغيلية متصلة.
+             * مثال: 08-14 ثم 14-20 ثم 20-08 تعتبر تغطية مستمرة،
+             * لذلك تقبل باقة 14-22. أما وجود فجوة فعلية بين فترتين
+             * فيمنع الباقة إذا مرت بهذه الفجوة.
+             *
+             * نكرر نوافذ التشغيل لليوم السابق والحالي والتالي حتى
+             * ندعم الفترات والباقات التي تعبر منتصف الليل بصورة صحيحة.
+             */
+            var operationalWindows =
+                new List<(double Start, double End)>();
+
+            foreach (var shift in configuredShifts)
+            {
+                var shiftStart =
                     shift.Start.TotalMinutes;
 
-                var shiftEndMinutes =
+                var shiftEnd =
                     shift.End.TotalMinutes;
 
                 if (shift.End <= shift.Start)
                 {
-                    shiftEndMinutes +=
-                        TimeSpan.FromDays(1)
-                            .TotalMinutes;
+                    shiftEnd +=
+                        minutesPerDay;
                 }
 
-                if (
-                    packageStart.TotalMinutes >=
-                        shiftStartMinutes &&
-                    packageEndMinutes <=
-                        shiftEndMinutes)
+                for (
+                    var dayOffset = -1;
+                    dayOffset <= 1;
+                    dayOffset++)
+                {
+                    var offset =
+                        dayOffset *
+                        minutesPerDay;
+
+                    operationalWindows.Add((
+                        shiftStart + offset,
+                        shiftEnd + offset));
+                }
+            }
+
+            var orderedWindows =
+                operationalWindows
+                    .OrderBy(window =>
+                        window.Start)
+                    .ThenBy(window =>
+                        window.End)
+                    .ToList();
+
+            var coveredUntil =
+                packageStartMinutes;
+
+            var coverageStarted =
+                false;
+
+            const double toleranceMinutes =
+                0.0001d;
+
+            foreach (var window in orderedWindows)
+            {
+                if (window.End <=
+                    coveredUntil +
+                    toleranceMinutes)
+                {
+                    continue;
+                }
+
+                if (window.Start >
+                    coveredUntil +
+                    toleranceMinutes)
+                {
+                    if (coverageStarted)
+                    {
+                        break;
+                    }
+
+                    continue;
+                }
+
+                coverageStarted =
+                    true;
+
+                coveredUntil =
+                    Math.Max(
+                        coveredUntil,
+                        window.End);
+
+                if (coveredUntil >=
+                    packageEndMinutes -
+                    toleranceMinutes)
                 {
                     return true;
                 }
