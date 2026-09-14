@@ -680,10 +680,10 @@
             isValid = false;
         }
 
-        if (!/^[0-9]{6}$/.test(payload.AccountNumber)) {
+        if (!/^[0-9]{6,9}$/.test(payload.AccountNumber)) {
             setFieldError(
                 'AccountNumber',
-                'رقم الحساب التجاري يجب أن يتكون من 6 أرقام إنجليزية.'
+                'رقم الحساب التجاري يجب أن يكون بين 6 و9 أرقام إنجليزية.'
             );
 
             firstInvalidElement ??=
@@ -1598,13 +1598,13 @@
         }
 
         counter.textContent =
-            `${String(input?.value || '').length}/6`;
+            `${String(input?.value || '').length}/9`;
     }
 
     function normalizeAccountNumber(value) {
         return String(value || '')
             .replace(/[^0-9]/g, '')
-            .slice(0, 6);
+            .slice(0, 9);
     }
 
     function setInputValue(selector, value) {
