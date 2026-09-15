@@ -437,6 +437,8 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 BookingState = booking.BookingState?.Trim() ?? "Pending",
                 PaymentStatus = booking.PaymentStatus?.Trim() ?? "Unpaid",
                 PaymentMethod = booking.PaymentMethod?.Trim(),
+                OnlinePaymentType =
+                    financialRecord?.OnlinePaymentType?.Trim(),
                 Quantity = Math.Max(1, booking.Quantity),
                 AdultsCount = Math.Max(0, booking.AdultsCount),
                 ChildrenCount = Math.Max(0, booking.ChildrenCount),
@@ -466,7 +468,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 OperationalStartAt = operationalStartAt,
                 OperationalEndAt = operationalEndAt,
                 NoShowAvailableAt = noShowAvailableAt,
-                NoShowGraceMinutes = 60,
+                NoShowGraceMinutes = 0,
                 CanAccept =
                     IsState(booking.BookingState, "Pending") &&
                     (
@@ -487,8 +489,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     IsState(booking.BookingState, "PaymentReview") ||
                     IsState(booking.BookingState, "AwaitingPayment"),
                 CanOwnerCancel =
-                    IsState(booking.BookingState, "Confirmed") &&
-                    (financialRecord?.AmountCollectedAtProperty ?? 0m) <= 0m,
+                    IsState(booking.BookingState, "Confirmed"),
                 CanCompleteNow =
                     IsState(booking.BookingState, "Confirmed") &&
                     now >= operationalEndAt,
@@ -842,10 +843,8 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
         private static DateTime GetNoShowAvailableAt(Booking booking)
         {
-            // قاعدة تشغيل موحدة: عدم الحضور يصبح متاحًا بعد ساعة واحدة
-            // من بداية الفترة الفعلية للحجز.
-            return GetOperationalStartAt(booking)
-                .AddHours(1);
+            // عدم الحضور يصبح متاحًا من بداية الفترة الفعلية للحجز.
+            return GetOperationalStartAt(booking);
         }
 
         private static string BuildActionAvailabilityText(
@@ -863,8 +862,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             if (now < startAt)
             {
                 return
-                    $"التحصيل يتاح عند بداية الفترة في {startAt:yyyy-MM-dd HH:mm}. " +
-                    $"عدم الحضور يتاح بعد ساعة في {noShowAt:yyyy-MM-dd HH:mm}. " +
+                    $"التحصيل وعدم الحضور يتاحان عند بداية الفترة في {startAt:yyyy-MM-dd HH:mm}. " +
                     $"الإنهاء يتاح بعد نهاية الفترة في {endAt:yyyy-MM-dd HH:mm}.";
             }
 
@@ -873,16 +871,8 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 if (collectedAtProperty > 0m)
                 {
                     return
-                        "تم تسجيل تحصيل عند المنشأة؛ لذلك أصبح عدم الحضور وإلغاء الحجز من جهة المالك غير متاحين. " +
+                        "تم تسجيل تحصيل عند المنشأة؛ لذلك أصبح عدم الحضور غير متاح، بينما يظل إلغاء الحجز من جهة المالك متاحًا مع إنشاء استرداد كامل للمبالغ المحصلة. " +
                         $"يمكن استكمال تحصيل أي مبلغ متبقٍ حتى نهاية الفترة في {endAt:yyyy-MM-dd HH:mm}، ثم إنهاء الحجز.";
-                }
-
-                if (now < noShowAt)
-                {
-                    return
-                        "التحصيل متاح الآن. " +
-                        $"عدم الحضور يتاح بعد ساعة من البداية في {noShowAt:yyyy-MM-dd HH:mm}. " +
-                        $"الإنهاء يتاح في {endAt:yyyy-MM-dd HH:mm}.";
                 }
 
                 return
@@ -3212,8 +3202,8 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     {
                         success = false,
                         message =
-                            $"لا يمكن تسجيل عدم حضور قبل مرور ساعة من بداية الفترة، " +
-                            $"أي قبل {noShowAvailableAt:yyyy-MM-dd HH:mm}."
+                            $"لا يمكن تسجيل عدم حضور قبل بداية فترة الحجز في " +
+                            $"{noShowAvailableAt:yyyy-MM-dd HH:mm}."
                     });
                 }
 
@@ -3672,17 +3662,6 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     });
                 }
 
-                if ((booking.FinancialRecord?.AmountCollectedAtProperty ?? 0m) > 0m)
-                {
-                    await transaction.RollbackAsync();
-                    return Json(new
-                    {
-                        success = false,
-                        message =
-                            "لا يمكن إلغاء الحجز من جهة المالك بعد تسجيل تحصيل عند المنشأة. أكمل الحجز حتى نهايته ثم استخدم إنهاء الحجز."
-                    });
-                }
-
                 var now =
                     DateTime.Now;
 
@@ -3727,6 +3706,16 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                             Math.Max(
                                 0m,
                                 booking.TotalPrice)),
+                        2);
+
+                var collectedAtProperty =
+                    Math.Round(
+                        Math.Max(0m, financialRecord?.AmountCollectedAtProperty ?? 0m),
+                        2);
+
+                var totalPaid =
+                    Math.Round(
+                        Math.Min(Math.Max(0m, booking.TotalPrice), paidOnline + collectedAtProperty),
                         2);
 
                 var originalCommission =
@@ -3809,11 +3798,11 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     if (!charged.Success) { await transaction.RollbackAsync(); return Json(new { success = false, message = charged.Message }); }
                 }
                 var refundRequest =
-                    paidOnline > 0m
+                    totalPaid > 0m
                         ? CreateRefundRequest(
                             booking,
-                            paidOnline,
-                            paidOnline,
+                            totalPaid,
+                            totalPaid,
                             0m,
                             returnCommission ? 0m : financialRecord?.PlatformCommission ?? 0m,
                             returnCommission ? originalCommission : 0m,
@@ -3821,7 +3810,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                             now)
                         : null;
 
-                if (paidOnline > 0m &&
+                if (totalPaid > 0m &&
                     refundRequest != null)
                 {
                     booking.RefundStatus =
@@ -3869,12 +3858,12 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 return Json(new
                 {
                     success = true,
-                    message = paidOnline > 0m
-                        ? "تم إلغاء الحجز وإنشاء طلب استرداد كامل للعميل."
+                    message = totalPaid > 0m
+                        ? "تم إلغاء الحجز وإنشاء طلب استرداد كامل لكل المبالغ المدفوعة للعميل."
                         : "تم إلغاء الحجز وإبلاغ العميل.",
                     nextState = "Cancelled",
                     refundStatus = booking.RefundStatus,
-                    refundAmount = paidOnline,
+                    refundAmount = totalPaid,
                     refundRequestId = refundRequest?.RefundRequestId
                 });
             }

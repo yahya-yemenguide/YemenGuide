@@ -1,4 +1,4 @@
-(function (window, document) {
+﻿(function (window, document) {
     "use strict";
 
     const endpoints = Object.freeze({
@@ -122,6 +122,9 @@
             const form = popup.querySelector("#promotionForm");
             if (!form) return;
 
+            // الخطوة 1: حماية كل الحقول الرقمية في نموذج العرض بدون تغيير منطقها الحالي.
+            installPromotionNumericGuards(form);
+
             const ui = {
                 title: form.querySelector("#promotionDialogTitle"),
                 alert: form.querySelector("#promotionFormAlert"),
@@ -228,8 +231,14 @@
                 "promotionServiceId"
             ].forEach(id => {
                 const control = form.querySelector(`#${id}`);
-                control?.addEventListener("input", updateLiveSummary);
-                control?.addEventListener("change", updateLiveSummary);
+                control?.addEventListener("input", function () {
+                    syncPriceConstraints();
+                    updateLiveSummary();
+                });
+                control?.addEventListener("change", function () {
+                    syncPriceConstraints();
+                    updateLiveSummary();
+                });
             });
 
             ui.draft?.addEventListener("click", function () {
@@ -303,7 +312,14 @@
                     stayDetails.open = true;
                 }
 
-                checkRadio("TargetType", data.targetType || "Place");
+                if ((data.targetType || "Place") === "Room") {
+                    const roomOption = form.querySelector(
+                        `#promotionRoomId option[value="${cssEscape(String(data.roomId || ""))}"]`
+                    );
+                    checkTargetKind(roomOption?.dataset.roomKind || "Room");
+                } else {
+                    checkRadio("TargetType", data.targetType || "Place");
+                }
                 checkRadio("OfferMode", data.offerMode || "Discount");
                 checkRadio("DiscountType", data.discountType || "Percentage");
                 if (data.rewardType) checkRadio("RewardType", data.rewardType);
@@ -400,8 +416,28 @@
                             return invalidate(discount, "أدخل قيمة خصم أكبر من صفر.");
                         }
 
-                        if (fieldValue("DiscountType") === "Percentage" && discountValue > 100) {
-                            return invalidate(discount, "نسبة الخصم لا يمكن أن تتجاوز 100%.");
+                        const discountType = fieldValue("DiscountType") || "Percentage";
+
+                        if (discountType === "Percentage" && discountValue >= 100) {
+                            return invalidate(discount, "نسبة الخصم يجب أن تكون أكبر من صفر وأقل من 100%.");
+                        }
+
+                        if (discountType === "FixedAmount") {
+                            const targetPrice = currentTargetBasePrice();
+
+                            if (targetPrice === null) {
+                                return invalidate(
+                                    discount,
+                                    "تعذر تحديد سعر مرجعي للخصم الثابت. اختر نسبة مئوية أو هدفًا له سعر واضح."
+                                );
+                            }
+
+                            if (discountValue >= targetPrice) {
+                                return invalidate(
+                                    discount,
+                                    `قيمة الخصم يجب أن تكون أقل من السعر الأصلي للهدف (${formatNumber(targetPrice)} ريال).`
+                                );
+                            }
                         }
                     } else {
                         const rewardType = fieldValue("RewardType");
@@ -418,29 +454,45 @@
                             if (!amount || amount <= 0) {
                                 return invalidate(value, "أدخل قيمة المكافأة.");
                             }
-                            if (rewardType === "PercentageDiscount" && amount > 100) {
-                                return invalidate(value, "نسبة الخصم لا يمكن أن تتجاوز 100%.");
+                            if (rewardType === "PercentageDiscount" && amount >= 100) {
+                                return invalidate(value, "نسبة الخصم يجب أن تكون أكبر من صفر وأقل من 100%.");
+                            }
+
+                            if (rewardType === "FixedDiscount") {
+                                const targetPrice = currentTargetBasePrice();
+
+                                if (targetPrice === null) {
+                                    return invalidate(
+                                        value,
+                                        "تعذر تحديد سعر مرجعي لخصم المبلغ. اختر خصم نسبة أو هدفًا له سعر واضح."
+                                    );
+                                }
+
+                                if (amount >= targetPrice) {
+                                    return invalidate(
+                                        value,
+                                        `قيمة الخصم يجب أن تكون أقل من السعر الأصلي للهدف (${formatNumber(targetPrice)} ريال).`
+                                    );
+                                }
                             }
                         }
 
                         if (rewardType === "FreeQuantity") {
-                            const quantity = form.querySelector("#promotionRewardQuantity");
-                            if (Number(quantity?.value || 0) <= 0) {
-                                return invalidate(quantity, "حدد الكمية المجانية.");
+                            if (!supportsFreeNightReward()) {
+                                return invalidate(
+                                    form.querySelector('input[name="RewardType"][value="FreeQuantity"]'),
+                                    "الليالي المجانية متاحة للفندق عند اختيار المنشأة كاملة أو غرفة أو جناح فقط."
+                                );
                             }
 
-                            const hasCondition =
-                                Number(form.querySelector("#promotionRequiredQuantity")?.value || 0) > 0 ||
-                                Number(form.querySelector("#promotionMinimumNights")?.value || 0) > 0 ||
-                                Number(form.querySelector("#promotionMinimumPeople")?.value || 0) > 0 ||
-                                Number(form.querySelector("#promotionMinimumBooking")?.value || 0) > 0;
+                            const quantity = form.querySelector("#promotionRewardQuantity");
+                            if (Number(quantity?.value || 0) <= 0) {
+                                return invalidate(quantity, "حدد عدد الليالي المجانية.");
+                            }
 
-                            if (!hasCondition) {
-                                return invalidate(
-                                    form.querySelector("#promotionRequiredQuantity") ||
-                                    form.querySelector("#promotionMinimumNights"),
-                                    "حدد شرط الحصول على المجاني: عدد الليالي المطلوبة أو الكمية المطلوبة على الأقل."
-                                );
+                            const nights = form.querySelector("#promotionMinimumNights");
+                            if (Number(nights?.value || 0) <= 0) {
+                                return invalidate(nights, "حدد عدد الليالي التي يجب حجزها للحصول على الليلة المجانية.");
                             }
                         }
 
@@ -453,8 +505,38 @@
 
                         if (rewardType === "SpecialPrice" || rewardType === "ServiceSpecialPrice") {
                             const price = form.querySelector("#promotionSpecialPrice");
-                            if (Number(price?.value || 0) <= 0) {
+                            const specialPrice = Number(price?.value || 0);
+
+                            if (!specialPrice || specialPrice <= 0) {
                                 return invalidate(price, "أدخل السعر الخاص.");
+                            }
+
+                            if (rewardType === "SpecialPrice") {
+                                const targetPrice = currentTargetBasePrice();
+
+                                if (target === "Place" && !isLegacyPlaceSpecialPrice()) {
+                                    return invalidate(
+                                        price,
+                                        "السعر الخاص يحتاج غرفة/جناح أو باقة أو خدمة لها سعر أصلي محدد."
+                                    );
+                                }
+
+                                if (targetPrice !== null && specialPrice >= targetPrice) {
+                                    return invalidate(
+                                        price,
+                                        `السعر الخاص يجب أن يكون أقل من السعر الأصلي للهدف (${formatNumber(targetPrice)} ريال).`
+                                    );
+                                }
+                            }
+
+                            if (rewardType === "ServiceSpecialPrice") {
+                                const servicePrice = selectedOptionPrice("promotionRewardServiceId");
+                                if (servicePrice !== null && specialPrice >= servicePrice) {
+                                    return invalidate(
+                                        price,
+                                        `السعر الخاص للخدمة يجب أن يكون أقل من سعرها الأصلي (${formatNumber(servicePrice)} ريال).`
+                                    );
+                                }
                             }
                         }
                     }
@@ -611,11 +693,59 @@
 
             function syncTargetFields() {
                 const selected = fieldValue("TargetType") || "Place";
+                const selectedKind = selectedTargetKind();
 
                 form.querySelectorAll("[data-target-select]").forEach(group => {
                     group.hidden = group.dataset.targetSelect !== selected;
                 });
 
+                if (selected === "Room") {
+                    syncRoomKindOptions(selectedKind);
+                }
+
+                const fixedDirect = form.querySelector('input[name="DiscountType"][value="FixedAmount"]');
+                const fixedDirectLabel = fixedDirect?.closest("label");
+                const fixedReward = form.querySelector('input[name="RewardType"][value="FixedDiscount"]');
+                const fixedRewardLabel = fixedReward?.closest("label");
+                const specialReward = form.querySelector('input[name="RewardType"][value="SpecialPrice"]');
+                const specialRewardLabel = specialReward?.closest("label");
+
+                // للمنشأة كاملة: المبلغ الثابت مسموح عندما نستطيع حساب
+                // أرخص سعر حجز أساسي (غرفة/جناح/باقة). السعر الخاص نفسه غير منطقي.
+                const placeHasBasePrice = placeBasePrice() !== null;
+                const hideFixedDirect =
+                    selected === "Place" &&
+                    !placeHasBasePrice &&
+                    !isLegacyPlaceFixedDirectOffer();
+
+                const hideFixedReward =
+                    selected === "Place" &&
+                    !placeHasBasePrice &&
+                    !isLegacyPlaceFixedReward();
+
+                const hideSpecialReward =
+                    selected === "Place" &&
+                    !isLegacyPlaceSpecialPrice();
+
+                if (fixedDirectLabel) fixedDirectLabel.hidden = hideFixedDirect;
+                if (fixedRewardLabel) fixedRewardLabel.hidden = hideFixedReward;
+                if (specialRewardLabel) specialRewardLabel.hidden = hideSpecialReward;
+
+                if (hideFixedDirect && fixedDirect?.checked) {
+                    checkRadio("DiscountType", "Percentage");
+                    syncDiscountFields();
+                }
+
+                if ((hideFixedReward && fixedReward?.checked) ||
+                    (hideSpecialReward && specialReward?.checked)) {
+                    form.querySelectorAll('input[name="RewardType"]').forEach(input => {
+                        input.checked = false;
+                    });
+                }
+
+                syncFreeNightAvailability();
+                syncRewardFields();
+                syncPriceConstraints();
                 updateLiveSummary();
             }
 
@@ -662,7 +792,9 @@
 
                 if (valueInput) {
                     valueInput.placeholder = percentage ? "مثال: 20" : "مثال: 5000";
-                    valueInput.max = percentage ? "100" : "";
+                    valueInput.max = percentage
+                        ? "99.99"
+                        : maxBelow(currentTargetBasePrice());
                 }
 
                 if (maximumField) maximumField.hidden = !percentage;
@@ -695,22 +827,33 @@
                     }
 
                     if (input) {
-                        input.max = rewardType === "PercentageDiscount" ? "100" : "";
+                        input.max = rewardType === "PercentageDiscount"
+                            ? "99.99"
+                            : maxBelow(currentTargetBasePrice());
                         input.placeholder = rewardType === "PercentageDiscount" ? "مثال: 15" : "مثال: 5000";
                     }
                 }
 
                 const isFreeQuantity = rewardType === "FreeQuantity";
-                if (isFreeQuantity) {
+                const canUseFreeNights = supportsFreeNightReward();
+
+                if (isFreeQuantity && canUseFreeNights) {
                     show("rewardQuantity");
                     show("rewardRepeatable");
+
+                    const quantityLabel = form.querySelector("#promotionRewardQuantityLabel");
+                    if (quantityLabel) {
+                        quantityLabel.innerHTML = 'عدد الليالي المجانية <em>*</em>';
+                    }
                 }
 
                 if (ui.freeQuantityCondition) {
-                    ui.freeQuantityCondition.hidden = !isFreeQuantity;
+                    ui.freeQuantityCondition.hidden = !(isFreeQuantity && canUseFreeNights);
                 }
 
-                if (!isFreeQuantity) {
+                syncFreeNightConditionFields(isFreeQuantity && canUseFreeNights);
+
+                if (!isFreeQuantity || !canUseFreeNights) {
                     setValue("promotionRequiredQuantity", "");
                     setValue("promotionMinimumNights", "");
                     setValue("promotionMinimumPeople", "");
@@ -726,6 +869,7 @@
                     show("specialPrice");
                 }
 
+                syncPriceConstraints();
                 updateLiveSummary();
             }
 
@@ -774,7 +918,9 @@
                 } else if (rewardType === "FreeQuantity") {
                     const quantity = Number(form.querySelector("#promotionRewardQuantity")?.value || 0);
                     const repeatText = ui.rewardRepeatable?.checked ? " — ويتكرر العرض" : "";
-                    rewardText = quantity > 0 ? `${quantity} مجانًا${repeatText}` : `كمية مجانية${repeatText}`;
+                    rewardText = quantity > 0
+                        ? `${quantity} ${quantity === 1 ? "ليلة مجانية" : "ليالٍ مجانية"}${repeatText}`
+                        : `ليلة مجانية${repeatText}`;
                 } else if (rewardType === "FreeService") {
                     rewardText = `${selectedText("promotionRewardServiceId", "خدمة إضافية")} مجانًا`;
                 } else if (rewardType === "SpecialPrice") {
@@ -878,6 +1024,222 @@
             function numberOrNull(id) {
                 const value = form.querySelector(`#${id}`)?.value;
                 return value ? Number(value) : null;
+            }
+
+            function selectedTargetKind() {
+                const checked = form.querySelector('input[type="radio"][name="TargetType"]:checked');
+                if (!checked) return fieldValue("TargetType") || "Place";
+                return checked.dataset.roomKind || checked.value || "Place";
+            }
+
+            function checkTargetKind(kind) {
+                const selector = kind === "Suite"
+                    ? 'input[type="radio"][name="TargetType"][value="Room"][data-room-kind="Suite"]'
+                    : 'input[type="radio"][name="TargetType"][value="Room"][data-room-kind="Room"]';
+
+                const input = form.querySelector(selector) ||
+                    form.querySelector('input[type="radio"][name="TargetType"][value="Room"]');
+
+                if (input) input.checked = true;
+            }
+
+            function syncRoomKindOptions(kind) {
+                const select = form.querySelector("#promotionRoomId");
+                if (!select) return;
+
+                const expectedKind = kind === "Suite" ? "Suite" : "Room";
+                const current = select.value;
+
+                Array.from(select.options).forEach(option => {
+                    if (!option.value) {
+                        option.disabled = false;
+                        option.hidden = false;
+                        return;
+                    }
+
+                    const optionKind = option.dataset.roomKind || "Room";
+                    const visible = optionKind === expectedKind;
+                    option.disabled = !visible;
+                    option.hidden = !visible;
+                });
+
+                const currentOption = Array.from(select.options).find(
+                    option => option.value === current
+                );
+
+                if (currentOption && currentOption.disabled) {
+                    select.value = "";
+                }
+
+                const label = form.querySelector("#promotionRoomTargetLabel");
+                if (label) {
+                    label.innerHTML = expectedKind === "Suite"
+                        ? 'الجناح <em>*</em>'
+                        : 'الغرفة <em>*</em>';
+                }
+
+                const empty = select.options[0];
+                if (empty) {
+                    empty.textContent = expectedKind === "Suite"
+                        ? "اختر الجناح"
+                        : "اختر الغرفة";
+                }
+            }
+
+            function optionPrice(option) {
+                if (!option || !option.value) return null;
+
+                let text = String(option.textContent || "")
+                    .replace(/[٠-٩]/g, digit => String("٠١٢٣٤٥٦٧٨٩".indexOf(digit)))
+                    .replace(/[۰-۹]/g, digit => String("۰۱۲۳۴۵۶۷۸۹".indexOf(digit)))
+                    .replace(/٬/g, ",")
+                    .replace(/٫/g, ".");
+
+                const matches = text.match(/\d[\d,]*(?:\.\d+)?/g);
+                if (!matches?.length) return null;
+
+                const value = Number(matches[matches.length - 1].replace(/,/g, ""));
+                return Number.isFinite(value) && value > 0 ? value : null;
+            }
+
+            function allOptionPrices(id) {
+                const select = form.querySelector(`#${id}`);
+                if (!select) return [];
+
+                return Array.from(select.options)
+                    .map(optionPrice)
+                    .filter(value => Number.isFinite(value) && value > 0);
+            }
+
+            function placeBasePrice() {
+                // للمنشأة كاملة نأخذ أقل سعر حجز أساسي:
+                // غرفة/جناح أو باقة. الخدمات الإضافية لا تدخل في أصل الحجز.
+                const prices = [
+                    ...allOptionPrices("promotionRoomId"),
+                    ...allOptionPrices("promotionPackageId")
+                ];
+
+                if (!prices.length) return null;
+                return Math.min(...prices);
+            }
+
+            function supportsFreeNightReward() {
+                const bookingSystemId = Number(root.dataset.bookingSystemId || 0);
+                if (bookingSystemId !== 1) return false;
+
+                const kind = selectedTargetKind();
+                return kind === "Place" || kind === "Room" || kind === "Suite";
+            }
+
+            function syncFreeNightAvailability() {
+                const optionLabel = form.querySelector("#promotionFreeQuantityRewardOption");
+                const input = optionLabel?.querySelector('input[name="RewardType"][value="FreeQuantity"]');
+                const allowed = supportsFreeNightReward();
+
+                if (optionLabel) optionLabel.hidden = !allowed;
+
+                if (!allowed && input?.checked) {
+                    input.checked = false;
+                }
+            }
+
+            function syncFreeNightConditionFields(active) {
+                const visibility = {
+                    nights: active,
+                    quantity: false,
+                    people: false,
+                    booking: false
+                };
+
+                form.querySelectorAll("[data-free-condition-field]").forEach(field => {
+                    const key = field.dataset.freeConditionField || "";
+                    field.hidden = !visibility[key];
+                });
+
+                const example = form.querySelector("#promotionFreeQuantityExample");
+                if (example) {
+                    example.hidden = !active;
+                    if (active) {
+                        example.innerHTML =
+                            '<i class="bi bi-lightbulb"></i>' +
+                            '<span>مثال: <b>عدد الليالي المطلوبة 2</b> + <b>عدد الليالي المجانية 1</b> = احجز ليلتين وخذ الثالثة مجانًا.</span>';
+                    }
+                }
+            }
+
+            function selectedOptionPrice(id) {
+                const select = form.querySelector(`#${id}`);
+                return optionPrice(select?.selectedOptions?.[0]);
+            }
+
+            function currentTargetBasePrice() {
+                const target = fieldValue("TargetType") || "Place";
+
+                if (target === "Room") return selectedOptionPrice("promotionRoomId");
+                if (target === "Package") return selectedOptionPrice("promotionPackageId");
+                if (target === "Service") return selectedOptionPrice("promotionServiceId");
+                if (target === "Place") return placeBasePrice();
+
+                return null;
+            }
+
+            function maxBelow(price) {
+                if (!Number.isFinite(price) || price <= 0.01) return "";
+                return String(Math.round((price - 0.01) * 100) / 100);
+            }
+
+            function isLegacyPlaceFixedDirectOffer() {
+                return !!item &&
+                    (item.targetType || "Place") === "Place" &&
+                    (item.offerMode || "Discount") === "Discount" &&
+                    item.discountType === "FixedAmount";
+            }
+
+            function isLegacyPlaceFixedReward() {
+                return !!item &&
+                    (item.targetType || "Place") === "Place" &&
+                    item.offerMode === "ConditionalReward" &&
+                    item.rewardType === "FixedDiscount";
+            }
+
+            function isLegacyPlaceSpecialPrice() {
+                return !!item &&
+                    (item.targetType || "Place") === "Place" &&
+                    item.offerMode === "ConditionalReward" &&
+                    item.rewardType === "SpecialPrice";
+            }
+
+            function syncPriceConstraints() {
+                const targetPrice = currentTargetBasePrice();
+                const discountType = fieldValue("DiscountType") || "Percentage";
+                const rewardType = fieldValue("RewardType");
+
+                const directDiscount = form.querySelector("#promotionDiscountValue");
+                if (directDiscount) {
+                    directDiscount.max = discountType === "Percentage"
+                        ? "99.99"
+                        : maxBelow(targetPrice);
+                }
+
+                const rewardDiscount = form.querySelector("#promotionRewardDiscountValue");
+                if (rewardDiscount) {
+                    rewardDiscount.max = rewardType === "PercentageDiscount"
+                        ? "99.99"
+                        : rewardType === "FixedDiscount"
+                            ? maxBelow(targetPrice)
+                            : "";
+                }
+
+                const specialPrice = form.querySelector("#promotionSpecialPrice");
+                if (specialPrice) {
+                    const referencePrice = rewardType === "ServiceSpecialPrice"
+                        ? selectedOptionPrice("promotionRewardServiceId")
+                        : rewardType === "SpecialPrice"
+                            ? targetPrice
+                            : null;
+
+                    specialPrice.max = maxBelow(referencePrice);
+                }
             }
 
             function showAlert(message) {
@@ -1003,6 +1365,148 @@
                 window.location.reload();
             }
         }
+    }
+
+    /**
+     * الخطوة الأولى فقط: حماية الحقول الرقمية داخل نموذج العروض.
+     *
+     * - يمنع السالب والموجب و e/E والحروف والرموز القابلة للطباعة.
+     * - الحقول المالية/النسبية التي step فيها كسري تقبل الكسور العشرية.
+     * - حقول الكمية/الأشخاص/الليالي/حدود الاستخدام تقبل أعدادًا صحيحة فقط.
+     * - لا يغير أسماء الحقول أو قيم min/step الحالية أو منطق الحفظ والتحقق.
+     */
+    function installPromotionNumericGuards(form) {
+        if (!form || form.dataset.numericGuardsInstalled === "true") return;
+        form.dataset.numericGuardsInstalled = "true";
+
+        const numericSelector = 'input[type="number"]';
+
+        const isNumericInput = element =>
+            element instanceof HTMLInputElement && element.matches(numericSelector);
+
+        const allowsDecimal = input => {
+            const rawStep = String(input.getAttribute("step") || "").trim().toLowerCase();
+            if (rawStep === "any") return true;
+            if (!rawStep) return false;
+
+            const step = Number(rawStep);
+            return Number.isFinite(step) && step > 0 && !Number.isInteger(step);
+        };
+
+        const isAllowedPastedValue = (input, value) => {
+            const text = String(value || "").trim();
+            if (!text) return false;
+
+            return allowsDecimal(input)
+                ? /^\d+(?:\.\d+)?$/.test(text)
+                : /^\d+$/.test(text);
+        };
+
+        const prepareNumericInput = input => {
+            if (!isNumericInput(input)) return;
+
+            // جميع حقول الأرقام في هذا النموذج غير سالبة. لا نغير أي min موجود أصلًا.
+            if (!input.hasAttribute("min")) {
+                input.setAttribute("min", "0");
+            }
+
+            input.setAttribute("inputmode", allowsDecimal(input) ? "decimal" : "numeric");
+        };
+
+        form.querySelectorAll(numericSelector).forEach(prepareNumericInput);
+
+        form.addEventListener("keydown", function (event) {
+            const input = event.target;
+            if (!isNumericInput(input)) return;
+
+            prepareNumericInput(input);
+
+            // اختصارات النظام مثل Ctrl/Cmd + A/C/V/X تبقى كما هي؛ اللصق يفحص أدناه.
+            if (event.ctrlKey || event.metaKey || event.altKey) return;
+
+            // مفاتيح التحكم والتنقل ليست إدخالًا نصيًا.
+            if (event.key.length > 1) return;
+
+            if (/^[0-9]$/.test(event.key)) return;
+
+            if (event.key === "." && allowsDecimal(input)) return;
+
+            // يمنع - و + و e/E وكل حرف أو رمز آخر.
+            event.preventDefault();
+        });
+
+        form.addEventListener("beforeinput", function (event) {
+            const input = event.target;
+            if (!isNumericInput(input)) return;
+
+            const inputType = String(event.inputType || "");
+            if (inputType.startsWith("delete") || inputType === "historyUndo" || inputType === "historyRedo") {
+                return;
+            }
+
+            if (event.data == null) return;
+
+            const data = String(event.data);
+            const allowed = allowsDecimal(input)
+                ? /^[0-9.]+$/.test(data)
+                : /^[0-9]+$/.test(data);
+
+            if (!allowed) {
+                event.preventDefault();
+            }
+        });
+
+        form.addEventListener("paste", function (event) {
+            const input = event.target;
+            if (!isNumericInput(input)) return;
+
+            const pastedText = event.clipboardData?.getData("text") || "";
+            if (!isAllowedPastedValue(input, pastedText)) {
+                event.preventDefault();
+            }
+        });
+
+        form.addEventListener("drop", function (event) {
+            const input = event.target;
+            if (!isNumericInput(input)) return;
+
+            const droppedText = event.dataTransfer?.getData("text") || "";
+            if (!isAllowedPastedValue(input, droppedText)) {
+                event.preventDefault();
+            }
+        });
+
+        // حاجز أخير لأي إدخال يمر من المتصفح أو لوحة هاتف بطريقة مختلفة.
+        form.addEventListener("input", function (event) {
+            const input = event.target;
+            if (!isNumericInput(input)) return;
+
+            prepareNumericInput(input);
+
+            if (input.validity.badInput) {
+                input.value = "";
+                return;
+            }
+
+            const rawValue = String(input.value || "").trim();
+            if (!rawValue) return;
+
+            // input[type=number] قد يقبل الصيغة العلمية برمجيًا؛ هذه غير مسموحة هنا.
+            if (/[eE+\-]/.test(rawValue)) {
+                input.value = "";
+                return;
+            }
+
+            const numericValue = Number(rawValue);
+            if (!Number.isFinite(numericValue) || numericValue < 0) {
+                input.value = "";
+                return;
+            }
+
+            if (!allowsDecimal(input) && !Number.isInteger(numericValue)) {
+                input.value = "";
+            }
+        });
     }
 
     function chooseInitialFilter(buttons) {

@@ -1350,7 +1350,6 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 // لا نخفي الخطأ الأساسي بسبب تعذر تنظيف ملف مؤقت.
             }
         }
-
         private bool TryGetOwnerId(out int ownerId)
         {
             string? value = User.FindFirstValue(ClaimTypes.NameIdentifier);

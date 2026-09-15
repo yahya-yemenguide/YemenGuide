@@ -55,6 +55,202 @@
     });
 
     /* ======================================================================
+     * حماية حقول الأرقام في فورم إضافة المنشأة عند المالك
+     * تمنع السالب والحروف و + و e/E، وتعمل أيضًا مع الحقول الديناميكية.
+     * ملاحظة: رقم الطابق مستثنى فقط لأن النظام الحالي يستخدم -1 للبدروم.
+     * ====================================================================== */
+    function installOwnerNumericInputGuard(form, config) {
+        if (!form || form.dataset.ownerNumericGuardReady === 'true') return;
+
+        // الملف نفسه مشترك مع الأدمن؛ المطلوب هنا يطبق على المالك ورحلة التوثيق فقط.
+        if (config?.mode === 'admin') return;
+
+        form.dataset.ownerNumericGuardReady = 'true';
+
+        const numericTextPattern =
+            /(Price|Amount|Area|AreaSquareMeters|Distance|Capacity|Count|Qty|MaxPersons|MaxAdults|MaxChildren|BedsCount|InternalRoomsCount|Percentage|Percent|Rate)$/i;
+
+        const explicitNumericTextIds = new Set([
+            'add-lat-display',
+            'add-lng-display'
+        ]);
+
+        const isFloorNumber = input =>
+            input instanceof HTMLInputElement &&
+            input.hasAttribute('data-floor-number');
+
+        const isGuardedNumericInput = input => {
+            if (!(input instanceof HTMLInputElement) || !form.contains(input)) return false;
+
+            // الحفاظ على دعم البدروم الموجود أصلًا: 0 للأرضي و-1 للبدروم.
+            if (isFloorNumber(input)) return false;
+
+            if (input.type === 'number') return true;
+            if (input.type !== 'text') return false;
+
+            if (explicitNumericTextIds.has(input.id)) return true;
+            if (input.hasAttribute('data-range-start') || input.hasAttribute('data-range-end')) return true;
+
+            const semanticKey = [
+                input.name || '',
+                input.getAttribute('data-field') || '',
+                input.getAttribute('data-package-field') || '',
+                input.id || ''
+            ].join(' ');
+
+            return numericTextPattern.test(semanticKey);
+        };
+
+        const allowsDecimal = input => {
+            if (explicitNumericTextIds.has(input.id)) return true;
+
+            const semanticKey = [
+                input.name || '',
+                input.getAttribute('data-field') || '',
+                input.getAttribute('data-package-field') || ''
+            ].join(' ');
+
+            if (/(Price|Amount|Area|AreaSquareMeters|Distance|Percentage|Percent|Rate)$/i.test(semanticKey)) {
+                return true;
+            }
+
+            const step = String(input.getAttribute('step') || '').trim().toLowerCase();
+            if (step === 'any') return true;
+            if (step && Number.isFinite(Number(step)) && Number(step) % 1 !== 0) return true;
+
+            return false;
+        };
+
+        const normalizeDigits = value => String(value ?? '')
+            .replace(/[٠-٩]/g, digit => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)))
+            .replace(/[۰-۹]/g, digit => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)))
+            .replace(/[٫,]/g, '.');
+
+        const configureInput = input => {
+            if (!isGuardedNumericInput(input)) return;
+
+            if (input.type === 'number') {
+                const minText = input.getAttribute('min');
+                const minValue = minText === null ? NaN : Number(minText);
+
+                // لا نغير min=1 أو min=0.01؛ فقط نضيف 0 إذا لم يوجد حد أدنى.
+                if (minText === null || (!Number.isNaN(minValue) && minValue < 0)) {
+                    input.setAttribute('min', '0');
+                }
+            }
+
+            input.setAttribute('inputmode', allowsDecimal(input) ? 'decimal' : 'numeric');
+        };
+
+        const controlKeys = new Set([
+            'Backspace', 'Delete', 'Tab', 'Escape', 'Enter',
+            'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown',
+            'Home', 'End'
+        ]);
+
+        const currentValue = input => normalizeDigits(input.value || '');
+
+        const selectionContainsDecimal = input => {
+            const start = input.selectionStart;
+            const end = input.selectionEnd;
+            if (start === null || end === null || start === end) return false;
+            return currentValue(input).slice(start, end).includes('.');
+        };
+
+        const canInsertDecimal = input =>
+            allowsDecimal(input) &&
+            (!currentValue(input).includes('.') || selectionContainsDecimal(input));
+
+        form.addEventListener('keydown', event => {
+            const input = event.target;
+            if (!isGuardedNumericInput(input)) return;
+
+            configureInput(input);
+
+            // السماح باختصارات النسخ واللصق والتحديد.
+            if (event.ctrlKey || event.metaKey) return;
+            if (controlKeys.has(event.key)) return;
+            if (/^[0-9٠-٩۰-۹]$/.test(event.key)) return;
+
+            if ((event.key === '.' || event.key === 'Decimal') && canInsertDecimal(input)) {
+                return;
+            }
+
+            // يمنع -, +, e, E والحروف وأي رمز غير رقمي قبل دخوله للحقل.
+            event.preventDefault();
+        }, true);
+
+        // حماية إضافية للهواتف وطرق الإدخال التي قد لا تمر عبر keydown.
+        form.addEventListener('beforeinput', event => {
+            const input = event.target;
+            if (!isGuardedNumericInput(input) || !event.data) return;
+            if (event.inputType?.startsWith('delete')) return;
+
+            const incoming = normalizeDigits(event.data);
+
+            if (/^\d+$/.test(incoming)) return;
+            if (incoming === '.' && canInsertDecimal(input)) return;
+
+            event.preventDefault();
+        }, true);
+
+        // لا نسمح بلصق قيمة سالبة أو نص أو رموز داخل الحقول الرقمية.
+        form.addEventListener('paste', event => {
+            const input = event.target;
+            if (!isGuardedNumericInput(input)) return;
+
+            const pasted = normalizeDigits(event.clipboardData?.getData('text') || '').trim();
+            const pattern = allowsDecimal(input)
+                ? /^\d+(?:\.\d+)?$/
+                : /^\d+$/;
+
+            if (!pattern.test(pasted)) {
+                event.preventDefault();
+            }
+        }, true);
+
+        // حاجز أخير لو سمح المتصفح مؤقتًا بـ "-" داخل input[type=number].
+        form.addEventListener('input', event => {
+            const input = event.target;
+            if (!isGuardedNumericInput(input)) return;
+
+            configureInput(input);
+
+            if (input.type === 'number') {
+                if (input.validity.badInput) {
+                    input.value = '';
+                    return;
+                }
+
+                const value = input.value.trim();
+                if (!value) return;
+
+                const numberValue = Number(value);
+                if (!Number.isFinite(numberValue) || numberValue < 0) {
+                    input.value = '';
+                }
+                return;
+            }
+
+            let value = normalizeDigits(input.value);
+            value = value.replace(allowsDecimal(input) ? /[^0-9.]/g : /[^0-9]/g, '');
+
+            if (allowsDecimal(input)) {
+                const firstDot = value.indexOf('.');
+                if (firstDot >= 0) {
+                    value = value.slice(0, firstDot + 1) +
+                        value.slice(firstDot + 1).replace(/\./g, '');
+                }
+            }
+
+            if (input.value !== value) input.value = value;
+        }, true);
+
+        // تجهيز الحقول الموجودة الآن؛ والحقول التي تُنشأ لاحقًا يحميها التفويض أعلاه تلقائيًا.
+        form.querySelectorAll('input').forEach(configureInput);
+    }
+
+    /* ======================================================================
      * أدوات الفورم المشتركة بين المالك والأدمن
      * ====================================================================== */
 
@@ -1567,6 +1763,8 @@
         const config = normalizeWizardConfig(rawConfig);
         const form = document.getElementById('fullPlaceSurveyForm');
         if (!form) return;
+
+        installOwnerNumericInputGuard(form, config);
 
         bindRealTimeValidation('add-lat-display', 'add-lat', 'lat');
         bindRealTimeValidation('add-lng-display', 'add-lng', 'lng');

@@ -1,4 +1,5 @@
 ﻿@using System.Text.Json
+@using System.Linq
 @model YemenGuide.Core.DTOs.Owner.PromotionManagementDto
 
 @{
@@ -16,6 +17,17 @@
         "Draft" => "draft",
         _ => "archived"
     };
+
+    bool IsSuiteTarget(string? name)
+    {
+        string value = name ?? string.Empty;
+        return value.Contains("جناح", System.StringComparison.OrdinalIgnoreCase) ||
+               value.Contains("suite", System.StringComparison.OrdinalIgnoreCase) ||
+               value.Contains("سويت", System.StringComparison.OrdinalIgnoreCase);
+    }
+
+    var roomTargets = Model.Rooms.Where(item => !IsSuiteTarget(item.Name)).ToList();
+    var suiteTargets = Model.Rooms.Where(item => IsSuiteTarget(item.Name)).ToList();
 
     string pageDescription = Model.IsNonBooking
         ? "أنشئ عرضًا ترويجيًا واضحًا للمنشأة المحددة من الهيدر، وسيستخدم النظام صورة المنشأة تلقائيًا."
@@ -388,11 +400,25 @@
                                     <span><i class="bi bi-building"></i><b>المنشأة كاملة</b><small>كل الحجوزات المؤهلة</small></span>
                                 </label>
 
-                                @if (Model.CanTargetRooms)
+                                @if (roomTargets.Count > 0)
                                 {
                                     <label>
-                                        <input type="radio" name="TargetType" value="Room" />
-                                        <span><i class="bi bi-door-open"></i><b>غرفة أو جناح</b><small>نوع فندقي محدد</small></span>
+                                        <input type="radio"
+                                               name="TargetType"
+                                               value="Room"
+                                               data-room-kind="Room" />
+                                        <span><i class="bi bi-door-open"></i><b>غرفة</b><small>غرفة محددة</small></span>
+                                    </label>
+                                }
+
+                                @if (suiteTargets.Count > 0)
+                                {
+                                    <label>
+                                        <input type="radio"
+                                               name="TargetType"
+                                               value="Room"
+                                               data-room-kind="Suite" />
+                                        <span><i class="bi bi-building"></i><b>جناح</b><small>جناح محدد</small></span>
                                     </label>
                                 }
 
@@ -417,12 +443,16 @@
                             {
                                 <div class="yg-promo-target-select" data-target-select="Room" hidden>
                                     <label class="yg-promo-field">
-                                        <span>الغرفة أو الجناح <em>*</em></span>
+                                        <span id="promotionRoomTargetLabel">الغرفة <em>*</em></span>
                                         <select name="RoomId" id="promotionRoomId">
-                                            <option value="">اختر الغرفة أو الجناح</option>
-                                            @foreach (var item in Model.Rooms)
+                                            <option value="">اختر الغرفة</option>
+                                            @foreach (var item in roomTargets)
                                             {
-                                                <option value="@item.Id">@item.Name — @item.Meta</option>
+                                                <option value="@item.Id" data-room-kind="Room">@item.Name — @item.Meta</option>
+                                            }
+                                            @foreach (var item in suiteTargets)
+                                            {
+                                                <option value="@item.Id" data-room-kind="Suite">@item.Name — @item.Meta</option>
                                             }
                                         </select>
                                     </label>
@@ -547,7 +577,7 @@
                                     <label><input type="radio" name="RewardType" value="PercentageDiscount" /><span><i class="bi bi-percent"></i><b>خصم نسبة</b></span></label>
                                     <label><input type="radio" name="RewardType" value="FixedDiscount" /><span><i class="bi bi-cash"></i><b>خصم مبلغ</b></span></label>
                                     <label><input type="radio" name="RewardType" value="SpecialPrice" /><span><i class="bi bi-tag"></i><b>سعر خاص</b></span></label>
-                                    <label><input type="radio" name="RewardType" value="FreeQuantity" /><span><i class="bi bi-plus-circle"></i><b>كمية / ليلة مجانية</b></span></label>
+                                    <label id="promotionFreeQuantityRewardOption"><input type="radio" name="RewardType" value="FreeQuantity" /><span><i class="bi bi-moon-stars"></i><b>ليلة مجانية</b></span></label>
                                     @if (Model.CanTargetServices)
                                     {
                                         <label><input type="radio" name="RewardType" value="FreeService" /><span><i class="bi bi-gift"></i><b>خدمة مجانية</b></span></label>
@@ -567,7 +597,7 @@
                                     </label>
 
                                     <label class="yg-promo-field" data-reward-field="rewardQuantity" hidden>
-                                        <span>الكمية المجانية <em>*</em></span>
+                                        <span id="promotionRewardQuantityLabel">عدد الليالي المجانية <em>*</em></span>
                                         <input type="number"
                                                name="RewardQuantity"
                                                id="promotionRewardQuantity"
@@ -629,7 +659,7 @@
                                     <div class="yg-promo-fields two">
                                         @if (Model.SupportsMinimumNights)
                                         {
-                                            <label class="yg-promo-field">
+                                            <label class="yg-promo-field" data-free-condition-field="nights">
                                                 <span>عدد الليالي المطلوبة</span>
                                                 <input type="number" name="MinimumNights" id="promotionMinimumNights"
                                            min="1" inputmode="numeric" placeholder="مثال: 2" />
@@ -637,7 +667,7 @@
                                             </label>
                                         }
 
-                                        <label class="yg-promo-field">
+                                        <label class="yg-promo-field" data-free-condition-field="quantity">
                                             <span>الكمية المطلوبة</span>
                                             <input type="number" name="RequiredQuantity" id="promotionRequiredQuantity"
                                            min="1" inputmode="numeric" placeholder="مثال: 2" />
@@ -646,7 +676,7 @@
 
                                         @if (Model.SupportsMinimumPeople)
                                         {
-                                            <label class="yg-promo-field">
+                                            <label class="yg-promo-field" data-free-condition-field="people">
                                                 <span>أقل عدد أشخاص</span>
                                                 <input type="number" name="MinimumPeople" id="promotionMinimumPeople"
                                            min="1" inputmode="numeric" placeholder="اختياري" />
@@ -655,7 +685,7 @@
 
                                         @if (Model.SupportsBookingAmount)
                                         {
-                                            <label class="yg-promo-field">
+                                            <label class="yg-promo-field" data-free-condition-field="booking">
                                                 <span>أقل قيمة حجز (ريال)</span>
                                                 <input type="number" name="MinimumBookingAmount" id="promotionMinimumBooking"
                                            min="0" step="0.01" inputmode="decimal" placeholder="اختياري" />
@@ -663,7 +693,7 @@
                                         }
                                     </div>
 
-                                    <div class="yg-promo-condition-example">
+                                    <div class="yg-promo-condition-example" id="promotionFreeQuantityExample">
                                         <i class="bi bi-lightbulb"></i>
                                         <span>
                                             مثال: <b>عدد الليالي المطلوبة 2</b> + <b>الكمية المجانية 1</b>
