@@ -1817,7 +1817,14 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             var discountedBeforeTax = Math.Round(Math.Max(0m, originalBeforeTax - discount), 2);
             var taxAmount = Math.Round(discountedBeforeTax * taxPercentage / 100m, 2);
             var totalPrice = Math.Round(Math.Max(0m, discountedBeforeTax + taxAmount), 2);
-            var depositAmount = ManualCalculateDepositAmount(place, totalPrice);
+
+            // الخدمات الإضافية جزء من إجمالي الفاتورة النهائية، لكنها لا تدخل في أساس العربون.
+            // نستبعد قيمة الخدمات وضريبتها من الإجمالي المستخدم لحساب العربون فقط.
+            var servicesTaxAmount = Math.Round(servicesTotal * taxPercentage / 100m, 2);
+            var depositCalculationBase = Math.Round(
+                Math.Max(0m, totalPrice - servicesTotal - servicesTaxAmount),
+                2);
+            var depositAmount = ManualCalculateDepositAmount(place, depositCalculationBase);
 
             var wantsCollected = totalPrice > 0m && IsState(request.PaymentMode, "Collected");
             var normalizedPaidAmount = wantsCollected

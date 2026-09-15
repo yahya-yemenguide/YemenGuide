@@ -576,6 +576,20 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     "السجل المالي المرتبط بالحجز غير موجود.");
             }
 
+            // الحجز اليدوي خارج مسار اكتساب المنصة ولا يخضع للعمولة حتى عند إلغائه بطلب العميل.
+            if (IsState(booking.BookingSource, "OwnerManual"))
+            {
+                financial.PlatformCommission = 0m;
+                financial.CommissionRateSnapshot = 0m;
+                financial.CommissionBaseAmount = 0m;
+                financial.CommissionStatus = "NotApplicable";
+
+                return CustomerRequestCommissionResult.Succeeded(
+                    0m,
+                    0m,
+                    quote.CancellationFee);
+            }
+
             var originalCommission = Math.Round(
                 Math.Max(0m, financial.PlatformCommission),
                 2);
