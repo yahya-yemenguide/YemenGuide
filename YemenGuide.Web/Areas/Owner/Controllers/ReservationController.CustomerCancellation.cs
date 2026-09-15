@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
@@ -607,7 +607,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             {
                 if (IsState(
                         financial.CommissionStatus,
-                        OwnerBookingCommissionStatuses.Calculated))
+                        FinancialCommissionStatuses.Calculated))
                 {
                     var held = await _commissionFinanceService
                         .HoldBookingCommissionAsync(
@@ -666,13 +666,13 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
             if (IsState(
                     commissionStatus,
-                    OwnerBookingCommissionStatuses.Held) ||
+                    FinancialCommissionStatuses.Held) ||
                 IsState(
                     commissionStatus,
-                    OwnerBookingCommissionStatuses.Debt) ||
+                    FinancialCommissionStatuses.Debt) ||
                 IsState(
                     commissionStatus,
-                    OwnerBookingCommissionStatuses.Charged))
+                    FinancialCommissionStatuses.Charged))
             {
                 var releaseForAdjustment = await _commissionFinanceService
                     .ReleaseBookingCommissionAsync(

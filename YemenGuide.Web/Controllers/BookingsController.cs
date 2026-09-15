@@ -1459,10 +1459,25 @@ namespace YemenGuide.Web.Controllers
                     .Trim() ??
                 "CustomerPays";
 
+            var cancellationStartAt =
+                booking.Package?.StartTime.HasValue == true
+                    ? booking.StartDate.Date.Add(booking.Package.StartTime.Value)
+                    : booking.StartDate;
+
+            if (!booking.PackageId.HasValue &&
+                booking.StartDate.TimeOfDay == TimeSpan.Zero &&
+                TimeSpan.TryParse(
+                    policy?.CheckInTime,
+                    out var cancellationCheckInTime))
+            {
+                cancellationStartAt =
+                    booking.StartDate.Date.Add(cancellationCheckInTime);
+            }
+
             var hoursUntilStart =
                 Math.Max(
                     0,
-                    (booking.StartDate - now)
+                    (cancellationStartAt - now)
                         .TotalHours);
 
             var isWithinNormalFreeWindow =
