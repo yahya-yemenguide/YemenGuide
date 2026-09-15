@@ -1,0 +1,66 @@
+name: Fix customer cancellation runtime
+
+on:
+  push:
+    branches: [fix-customer-cancel-runtime]
+
+permissions:
+  contents: write
+
+jobs:
+  patch-build-commit:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: fix-customer-cancel-runtime
+
+      - name: Fix ClosedByType length
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          path = Path(r"YemenGuide.Web/Areas/Owner/Controllers/ReservationController.CustomerCancellation.cs")
+          text = path.read_text(encoding="utf-8-sig")
+          old = '"OwnerOnBehalfOfCustomer"'
+          new = '"CustomerViaOwner"'
+          count = text.count(old)
+          if count != 1:
+              raise SystemExit(f"expected exactly one match, found {count}")
+          path.write_text(text.replace(old, new, 1), encoding="utf-8-sig")
+          print("ClosedByType changed to CustomerViaOwner (16 chars <= NVARCHAR(20))")
+          '@ | python -
+
+      - name: Verify diff
+        shell: pwsh
+        run: git diff --check
+
+      - name: Build solution
+        shell: pwsh
+        run: dotnet build YemenGuide.sln --configuration Release
+
+      - name: Prepare artifact
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifact\YemenGuide.Web\Areas\Owner\Controllers | Out-Null
+          Copy-Item YemenGuide.Web\Areas\Owner\Controllers\ReservationController.CustomerCancellation.cs artifact\YemenGuide.Web\Areas\Owner\Controllers\
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: customer-cancellation-runtime-fix
+          path: artifact
+
+      - name: Remove temporary workflow
+        shell: pwsh
+        run: Remove-Item .github\workflows\fix-customer-cancel-runtime.yml
+
+      - name: Commit verified fix
+        shell: pwsh
+        run: |
+          git config user.name "yahya-yemenguide"
+          git config user.email "yahyagemini11@gmail.com"
+          git add -A
+          git commit -m "إصلاح خطأ تنفيذ إلغاء العميل"
+          git push origin fix-customer-cancel-runtime
