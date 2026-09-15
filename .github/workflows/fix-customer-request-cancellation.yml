@@ -18,7 +18,9 @@ jobs:
 
       - name: Apply patch
         shell: pwsh
-        run: python .github/scripts/patch_customer_request_cancellation.py
+        run: |
+          python .github/scripts/patch_customer_request_cancellation.py
+          python .github/scripts/fix_customer_cancel_finance_constant.py
 
       - name: Verify JavaScript
         shell: pwsh
@@ -39,7 +41,6 @@ jobs:
           New-Item -ItemType Directory -Force -Path artifact\YemenGuide.Web\wwwroot\js\owner | Out-Null
           New-Item -ItemType Directory -Force -Path artifact\YemenGuide.Web\Controllers | Out-Null
           Copy-Item YemenGuide.Web\Areas\Owner\Controllers\ReservationController.CustomerCancellation.cs artifact\YemenGuide.Web\Areas\Owner\Controllers\
-          Copy-Item YemenGuide.Web\Areas\Owner\Controllers\ReservationController.CustomerCancellation.Usings.cs artifact\YemenGuide.Web\Areas\Owner\Controllers\
           Copy-Item YemenGuide.Web\wwwroot\js\owner\reservation-actions.js artifact\YemenGuide.Web\wwwroot\js\owner\
           Copy-Item YemenGuide.Web\Controllers\BookingsController.cs artifact\YemenGuide.Web\Controllers\
 
@@ -53,6 +54,7 @@ jobs:
         shell: pwsh
         run: |
           Remove-Item .github\scripts\patch_customer_request_cancellation.py
+          Remove-Item .github\scripts\fix_customer_cancel_finance_constant.py
           Remove-Item .github\workflows\fix-customer-request-cancellation.yml
 
       - name: Commit verified changes
