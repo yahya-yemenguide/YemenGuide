@@ -3188,6 +3188,10 @@
 
             if (window.Swal) {
                 const response = await Swal.fire({
+                    target: document.body,
+                    customClass: {
+                        container: "yg-calendar-swal-layer"
+                    },
                     title: isRemainingPayment
                         ? `تحصيل المتبقي للحجز #${bookingId}`
                         : `تسجيل عربون الحجز #${bookingId}`,
