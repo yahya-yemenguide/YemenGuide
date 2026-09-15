@@ -31,6 +31,7 @@ namespace YemenGuide.Core.DTOs.Owner
         public string ClosedDaysCsv { get; set; } = string.Empty;
         public string CheckInTime { get; set; } = string.Empty;
         public string CheckOutTime { get; set; } = string.Empty;
+        public List<OwnerManualWalletOptionDto> Wallets { get; set; } = new();
     }
 
     public sealed class OwnerCalendarEventDto
@@ -136,6 +137,19 @@ namespace YemenGuide.Core.DTOs.Owner
         public List<OwnerManualRoomOptionDto> Rooms { get; set; } = new();
         public List<OwnerManualPackageOptionDto> Packages { get; set; } = new();
         public List<OwnerManualServiceOptionDto> Services { get; set; } = new();
+        public List<OwnerManualWalletOptionDto> Wallets { get; set; } = new();
+    }
+
+    public sealed class OwnerManualWalletOptionDto
+    {
+        public int OwnerWalletId { get; set; }
+        public int WalletId { get; set; }
+        public string WalletName { get; set; } = string.Empty;
+        public string AccountNumber { get; set; } = string.Empty;
+        public string BeneficiaryName { get; set; } = string.Empty;
+        public string DisplayText => string.IsNullOrWhiteSpace(AccountNumber)
+            ? WalletName
+            : $"{WalletName} · {AccountNumber}";
     }
 
     public sealed class OwnerManualRoomOptionDto
@@ -269,6 +283,8 @@ namespace YemenGuide.Core.DTOs.Owner
         [StringLength(30)]
         public string? PaymentMethod { get; set; }
 
+        public int? OwnerWalletId { get; set; }
+
         [StringLength(100)]
         public string? PaymentReferenceNumber { get; set; }
     }
@@ -337,6 +353,8 @@ namespace YemenGuide.Core.DTOs.Owner
         [Required]
         [StringLength(30)]
         public string PaymentMethod { get; set; } = "Cash";
+
+        public int? OwnerWalletId { get; set; }
 
         [StringLength(100)]
         public string? PaymentReferenceNumber { get; set; }

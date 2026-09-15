@@ -100,6 +100,7 @@
         let calendarScope = "active";
         let countdownInterval = 0;
         let paymentRequestInFlight = false;
+        let latestManualQuote = null;
         let lockedScrollY = null;
         let previousBodyPaddingRight = "";
         let previousBodyPosition = "";
@@ -229,6 +230,11 @@
             paymentSelectTrigger: $("#ygPaymentSelectTrigger"),
             paymentSelectText: $("#ygPaymentSelectText"),
             paymentSelectMenu: $("#ygPaymentSelectMenu"),
+            ownerWalletField: $("#ygOwnerWalletField"),
+            ownerWalletId: $("#ygManualOwnerWalletId"),
+            ownerWalletSelectTrigger: $("#ygOwnerWalletSelectTrigger"),
+            ownerWalletSelectText: $("#ygOwnerWalletSelectText"),
+            ownerWalletSelectMenu: $("#ygOwnerWalletSelectMenu"),
             paymentReference: $("#ygManualPaymentReference"),
             preview: $("#ygPreviewManualBooking"),
             create: $("#ygCreateManualBooking"),
@@ -600,6 +606,7 @@
                 updateSmartSelectValue(elements.roomId, elements.roomSelectText);
                 updateRoomHint();
                 normalizeRoomQuantity();
+                syncGuestCapacity(true);
                 activeRoomFloorKey = "";
                 selectedRoomUnitIds.clear();
                 renderRoomUnitChoices();
@@ -609,6 +616,7 @@
                 clearFieldError("packageId");
                 updatePackageHint();
                 renderPackageCards();
+                syncGuestCapacity(true);
                 scheduleQuotePreview();
             });
             on(elements.roomFloorTabs, "click", event => {
@@ -626,6 +634,7 @@
             on(elements.quantity, "input", () => {
                 clearFieldError("quantity");
                 normalizeRoomQuantity();
+                syncGuestCapacity(true);
                 normalizeRoomUnitSelection();
                 renderRoomUnitChoices(false);
                 scheduleQuotePreview();
@@ -645,8 +654,8 @@
                 clearFieldError("roomUnits");
                 scheduleQuotePreview();
             });
-            on(elements.adults, "input", () => { clampIntegerInput(elements.adults, 0, 1000); scheduleQuotePreview(); });
-            on(elements.children, "input", () => { clampIntegerInput(elements.children, 0, 1000); scheduleQuotePreview(); });
+            on(elements.adults, "input", () => { syncGuestCapacity(false, "adults"); scheduleQuotePreview(); });
+            on(elements.children, "input", () => { syncGuestCapacity(false, "children"); scheduleQuotePreview(); });
             on(elements.promoCode, "input", () => { clearFieldError("promoCode"); scheduleQuotePreview(); });
             on(elements.seating, "change", () => {
                 updateSmartSelectValue(elements.seating, elements.seatingSelectText);
@@ -679,6 +688,12 @@
                 updateSmartSelectValue(elements.paymentMethod, elements.paymentSelectText);
                 syncOtherFields();
                 clearFieldError("paymentMethod");
+                clearFieldError("ownerWallet");
+                scheduleQuotePreview();
+            });
+            on(elements.ownerWalletId, "change", () => {
+                updateSmartSelectValue(elements.ownerWalletId, elements.ownerWalletSelectText);
+                clearFieldError("ownerWallet");
                 scheduleQuotePreview();
             });
             on(elements.paymentMethodOther, "input", () => { clearFieldError("paymentMethodOther"); scheduleQuotePreview(); });
@@ -687,6 +702,7 @@
             initializeSmartSelect(elements.roomId, elements.roomSelectTrigger, elements.roomSelectMenu, elements.roomSelectText);
             initializeSmartSelect(elements.seating, elements.seatingSelectTrigger, elements.seatingSelectMenu, elements.seatingSelectText);
             initializeSmartSelect(elements.paymentMethod, elements.paymentSelectTrigger, elements.paymentSelectMenu, elements.paymentSelectText);
+            initializeSmartSelect(elements.ownerWalletId, elements.ownerWalletSelectTrigger, elements.ownerWalletSelectMenu, elements.ownerWalletSelectText);
 
             on(document, "click", event => {
                 if (!event.target.closest(".yg-v8-smart-select")) closeAllSmartSelects();
@@ -2026,6 +2042,14 @@
                 clearFieldError("paymentMethodOther");
             }
 
+            const walletPayment = getPaymentMode() === "Collected" && elements.paymentMethod?.value === "Wallet";
+            if (elements.ownerWalletField) elements.ownerWalletField.hidden = !walletPayment;
+            if (!walletPayment && elements.ownerWalletId) {
+                elements.ownerWalletId.value = "";
+                updateSmartSelectValue(elements.ownerWalletId, elements.ownerWalletSelectText);
+                clearFieldError("ownerWallet");
+            }
+
             const seatingOther = elements.seating?.value === "Other";
             if (elements.seatingOtherField) elements.seatingOtherField.hidden = !seatingOther;
             if (!seatingOther && elements.seatingOther) {
@@ -2129,6 +2153,8 @@
             if (elements.manualChannelOther) elements.manualChannelOther.value = "";
             if (elements.seatingOther) elements.seatingOther.value = "";
             if (elements.paymentMethodOther) elements.paymentMethodOther.value = "";
+            if (elements.ownerWalletId) elements.ownerWalletId.value = "";
+            latestManualQuote = null;
             elements.startDate.value = date;
             elements.endDate.value = formatLocalDate(addDays(parseLocalDate(date), 1));
             elements.quantity.value = "1";
@@ -2152,6 +2178,7 @@
             refreshDynamicSmartSelect(elements.roomId);
             refreshDynamicSmartSelect(elements.seating);
             refreshDynamicSmartSelect(elements.paymentMethod);
+            refreshDynamicSmartSelect(elements.ownerWalletId);
             elements.paymentReference.value = "";
             const unpaid = $('input[name="ygPaymentMode"][value="Unpaid"]');
             if (unpaid) unpaid.checked = true;
@@ -2200,6 +2227,7 @@
             if (manualResourceKind === "package") {
                 elements.quantity.value = "1";
             }
+            if (manualOptions) syncGuestCapacity(true);
             clearFieldError("roomId");
             clearFieldError("packageId");
             clearFieldError("roomUnits");
@@ -2283,6 +2311,21 @@
             renderPackageCards();
             renderServices(Array.isArray(data.services) ? data.services : []);
 
+            const wallets = Array.isArray(data.wallets)
+                ? data.wallets
+                : (Array.isArray(context?.wallets) ? context.wallets : []);
+            if (elements.ownerWalletId) {
+                const previousWallet = elements.ownerWalletId.value;
+                elements.ownerWalletId.innerHTML = '<option value="">اختر المحفظة</option>' + wallets.map(wallet => {
+                    const label = wallet.displayText || [wallet.walletName, wallet.accountNumber].filter(Boolean).join(" · ");
+                    return `<option value="${wallet.ownerWalletId}">${escapeHtml(label || "محفظة")}</option>`;
+                }).join("");
+                if (wallets.some(wallet => String(wallet.ownerWalletId) === previousWallet)) {
+                    elements.ownerWalletId.value = previousWallet;
+                }
+                refreshDynamicSmartSelect(elements.ownerWalletId);
+            }
+
             if (data.isClosedByPolicy || data.isClosedByException) {
                 elements.optionsStatus.hidden = false;
                 elements.optionsStatus.classList.add("is-danger");
@@ -2297,6 +2340,8 @@
             activeRoomFloorKey = "";
             renderRoomUnitChoices();
             syncManualTemplateUi();
+            syncGuestCapacity(true);
+            syncOtherFields();
             scheduleQuotePreview();
         }
 
@@ -2383,6 +2428,83 @@
             const current = Math.max(1, Number(elements.quantity.value || 1));
             elements.quantity.max = String(safeMax);
             if (current > safeMax) elements.quantity.value = String(safeMax);
+        }
+
+        function syncGuestCapacity(resetToPolicyMaximum = false, changedKind = "") {
+            if (!elements.adults || !elements.children) return;
+
+            let maxAdults = 1000;
+            let maxChildren = 1000;
+            let maxTotal = 0;
+            let hasPolicyLimit = false;
+
+            if (manualResourceKind === "room") {
+                const roomId = Number(elements.roomId.value || 0);
+                const room = manualOptions?.rooms?.find(item => Number(item.roomId) === roomId);
+                if (room) {
+                    const quantity = Math.max(1, Number(elements.quantity.value || 1));
+                    maxAdults = Math.max(1, Number(room.maxAdults || 0) * quantity);
+                    maxChildren = Math.max(0, Number(room.maxChildren || 0) * quantity);
+                    maxTotal = maxAdults + maxChildren;
+                    hasPolicyLimit = true;
+                }
+            } else {
+                const packageId = Number(elements.packageId.value || 0);
+                const item = manualOptions?.packages?.find(pkg => Number(pkg.packageId) === packageId);
+                const capacity = Math.max(0, Number(item?.capacity || 0));
+                if (item && capacity > 0) {
+                    maxAdults = capacity;
+                    maxChildren = capacity;
+                    maxTotal = capacity;
+                    hasPolicyLimit = true;
+                }
+            }
+
+            elements.adults.max = String(maxAdults);
+            elements.children.max = String(maxChildren);
+
+            if (resetToPolicyMaximum) {
+                if (hasPolicyLimit && manualResourceKind === "room") {
+                    elements.adults.value = String(maxAdults);
+                    elements.children.value = String(maxChildren);
+                } else if (hasPolicyLimit) {
+                    elements.adults.value = String(maxTotal);
+                    elements.children.value = "0";
+                } else {
+                    elements.adults.value = "1";
+                    elements.children.value = "0";
+                }
+            } else {
+                clampIntegerInput(elements.adults, 0, maxAdults);
+                clampIntegerInput(elements.children, 0, maxChildren);
+
+                if (hasPolicyLimit && manualResourceKind === "package") {
+                    let adults = Math.max(0, Number(elements.adults.value || 0));
+                    let children = Math.max(0, Number(elements.children.value || 0));
+                    if (adults + children > maxTotal) {
+                        if (changedKind === "children") {
+                            children = Math.max(0, maxTotal - adults);
+                            elements.children.value = String(children);
+                        } else {
+                            adults = Math.max(0, maxTotal - children);
+                            elements.adults.value = String(adults);
+                        }
+                    }
+                }
+            }
+
+            const adults = Math.max(0, Number(elements.adults.value || 0));
+            const children = Math.max(0, Number(elements.children.value || 0));
+            const totalReached = hasPolicyLimit && manualResourceKind === "package" && adults + children >= maxTotal;
+
+            $$('[data-counter-target="ygManualAdults"]').forEach(button => {
+                const delta = Number(button.dataset.counterDelta || 0);
+                button.disabled = delta > 0 && (adults >= maxAdults || totalReached);
+            });
+            $$('[data-counter-target="ygManualChildren"]').forEach(button => {
+                const delta = Number(button.dataset.counterDelta || 0);
+                button.disabled = delta > 0 && (children >= maxChildren || totalReached);
+            });
         }
 
         function renderRoomUnitChoices(resetFloor = true) {
@@ -2644,13 +2766,30 @@
             elements.collectedFields.hidden = !collected;
             if (!collected) {
                 elements.paidAmount.value = "0";
+                elements.paidAmount.readOnly = false;
                 elements.paymentReference.value = "";
                 if (elements.paymentMethodOther) elements.paymentMethodOther.value = "";
                 clearFieldError("paidAmount");
                 clearFieldError("paymentMethod");
                 clearFieldError("paymentMethodOther");
+                clearFieldError("ownerWallet");
+            } else {
+                syncCollectedDepositFromQuote();
             }
             syncOtherFields();
+        }
+
+        function syncCollectedDepositFromQuote(data = latestManualQuote) {
+            if (!elements.paidAmount || getPaymentMode() !== "Collected") return;
+            const deposit = Math.max(0, Number(data?.depositAmount || 0));
+            if (deposit > 0) {
+                elements.paidAmount.value = String(deposit);
+                elements.paidAmount.readOnly = true;
+                elements.paidAmount.title = "قيمة العربون محسوبة تلقائيًا من سياسة المنشأة.";
+            } else {
+                elements.paidAmount.readOnly = false;
+                elements.paidAmount.removeAttribute("title");
+            }
         }
 
         function getPaymentMode() {
@@ -2687,6 +2826,9 @@
             const effectivePaymentMethod = selectedPaymentMethod === "Other"
                 ? (elements.paymentMethodOther?.value || "").trim()
                 : selectedPaymentMethod;
+            const ownerWalletId = selectedPaymentMethod === "Wallet"
+                ? Number(elements.ownerWalletId?.value || 0) || null
+                : null;
 
             return {
                 customerId,
@@ -2712,6 +2854,7 @@
                 paymentMode,
                 paidAmount: paymentMode === "Collected" ? Math.max(0, Number(elements.paidAmount.value || 0)) : 0,
                 paymentMethod: paymentMode === "Collected" ? effectivePaymentMethod || null : null,
+                ownerWalletId: paymentMode === "Collected" ? ownerWalletId : null,
                 paymentReferenceNumber: paymentMode === "Collected" ? elements.paymentReference.value.trim() || null : null
             };
         }
@@ -2817,8 +2960,11 @@
             }
 
             if (step === 3 && request.paymentMode === "Collected") {
-                if (request.paidAmount <= 0) invalid("paidAmount", "أدخل المبلغ الذي تم استلامه فعليًا.");
+                if (request.paidAmount < 0) invalid("paidAmount", "قيمة العربون غير صحيحة.");
                 if (!request.paymentMethod) invalid("paymentMethod", "حدد طريقة الدفع.");
+                if (elements.paymentMethod?.value === "Wallet" && !request.ownerWalletId) {
+                    invalid("ownerWallet", "حدد نوع المحفظة التي استلمت عليها العربون.");
+                }
                 if (elements.paymentMethod?.value === "Other" && !elements.paymentMethodOther?.value?.trim()) {
                     invalid("paymentMethodOther", "اكتب طريقة الدفع الأخرى.");
                 }
@@ -2841,7 +2987,8 @@
             else if (text.includes("الغرف الفعلية") || text.includes("الوحدات") || text.includes("لم تعد متاحة")) { step = 2; key = "roomUnits"; }
             else if (text.includes("الباقة") || text.includes("الفترة المختارة")) { step = 2; key = "packageId"; }
             else if (text.includes("عدد الأشخاص") || text.includes("سعة")) { step = 2; key = "guests"; }
-            else if (text.includes("المبلغ المستلم") || text.includes("أقل من العربون") || text.includes("يتجاوز إجمالي")) { step = 3; key = "paidAmount"; }
+            else if (text.includes("المبلغ المستلم") || text.includes("العربون المستلم") || text.includes("أقل من العربون") || text.includes("يتجاوز إجمالي")) { step = 3; key = "paidAmount"; }
+            else if (text.includes("المحفظة")) { step = 3; key = "ownerWallet"; }
             else if (text.includes("طريقة دفع")) { step = 3; key = elements.paymentMethod?.value === "Other" ? "paymentMethodOther" : "paymentMethod"; }
 
             if (key) {
@@ -2881,6 +3028,8 @@
         }
 
         function renderQuote(data) {
+            latestManualQuote = data;
+            syncCollectedDepositFromQuote(data);
             elements.quotePlaceholder.hidden = true;
             elements.quoteContent.hidden = false;
             elements.quoteCustomer.textContent = data.customerDisplayName || "ضيف";
@@ -2925,6 +3074,7 @@
             elements.quotePlaceholder.hidden = false;
             elements.quoteContent.hidden = true;
             if (full) {
+                latestManualQuote = null;
                 elements.quoteDiscountRow.hidden = true;
                 elements.quoteUnits.hidden = true;
                 elements.quotePromo.hidden = true;
@@ -2932,7 +3082,7 @@
         }
 
         async function createManualBooking() {
-            const request = buildManualRequest();
+            let request = buildManualRequest();
             const validation = validateManualRequest(request, true);
             if (validation) return;
 
@@ -2940,6 +3090,9 @@
             try {
                 const preview = await previewManualBooking(true);
                 if (!preview) return;
+
+                syncCollectedDepositFromQuote(preview);
+                request = buildManualRequest();
 
                 const confirmed = await confirmCreate(request, preview);
                 if (!confirmed) return;
@@ -2971,8 +3124,10 @@
 
             const remaining = Math.max(0, Number(remainingAmount || 0));
             const isRemainingPayment = paymentMode === "remaining";
+            const ownerWallets = Array.isArray(context?.wallets) ? context.wallets : [];
             let amount = "";
             let method = "Cash";
+            let ownerWalletId = null;
             let reference = "";
 
             if (window.Swal) {
@@ -3002,6 +3157,12 @@
                                     <option value="Cash">نقدًا</option><option value="Wallet">محفظة إلكترونية</option><option value="BankTransfer">حوالة / تحويل</option><option value="Other">أخرى</option>
                                 </select>
                             </label>
+                            <label id="ygSwalWalletWrap" style="font-size:.75rem;font-weight:800;color:#42566A;display:none">نوع المحفظة
+                                <select id="ygSwalWallet" class="swal2-select" style="margin:6px 0 0;width:100%">
+                                    <option value="">اختر المحفظة</option>
+                                    ${ownerWallets.map(wallet => `<option value="${wallet.ownerWalletId}">${escapeHtml(wallet.displayText || [wallet.walletName, wallet.accountNumber].filter(Boolean).join(" · "))}</option>`).join("")}
+                                </select>
+                            </label>
                             <label style="font-size:.75rem;font-weight:800;color:#42566A">الرقم المرجعي (إن وجد)
                                 <input id="ygSwalRef" type="text" maxlength="100" class="swal2-input" style="margin:6px 0 0;width:100%" />
                             </label>
@@ -3010,6 +3171,15 @@
                     confirmButtonText: isRemainingPayment ? "تسجيل التحصيل" : "تسجيل وتأكيد",
                     cancelButtonText: "إلغاء",
                     confirmButtonColor: "#10B981",
+                    didOpen: () => {
+                        const methodSelect = document.getElementById("ygSwalMethod");
+                        const walletWrap = document.getElementById("ygSwalWalletWrap");
+                        const syncWallet = () => {
+                            if (walletWrap) walletWrap.style.display = methodSelect?.value === "Wallet" ? "block" : "none";
+                        };
+                        methodSelect?.addEventListener("change", syncWallet);
+                        syncWallet();
+                    },
                     preConfirm: () => {
                         const paid = Number(document.getElementById("ygSwalPaid")?.value || 0);
                         if (!Number.isFinite(paid) || paid <= 0) {
@@ -3020,9 +3190,16 @@
                             Swal.showValidationMessage(`المبلغ لا يمكن أن يتجاوز المتبقي (${formatNumber(remaining)}).`);
                             return false;
                         }
+                        const selectedMethod = document.getElementById("ygSwalMethod")?.value || "Cash";
+                        const selectedWalletId = Number(document.getElementById("ygSwalWallet")?.value || 0) || null;
+                        if (selectedMethod === "Wallet" && !selectedWalletId) {
+                            Swal.showValidationMessage("حدد نوع المحفظة المستخدمة في التحصيل.");
+                            return false;
+                        }
                         return {
                             amount: paid,
-                            method: document.getElementById("ygSwalMethod")?.value || "Cash",
+                            method: selectedMethod,
+                            ownerWalletId: selectedWalletId,
                             reference: document.getElementById("ygSwalRef")?.value?.trim() || ""
                         };
                     }
@@ -3030,6 +3207,7 @@
                 if (!response.isConfirmed || !response.value) return;
                 amount = response.value.amount;
                 method = response.value.method;
+                ownerWalletId = response.value.ownerWalletId || null;
                 reference = response.value.reference;
             } else {
                 amount = Number(window.prompt(
@@ -3049,6 +3227,7 @@
                     bookingId,
                     paidAmount: Number(amount),
                     paymentMethod: method,
+                    ownerWalletId,
                     paymentReferenceNumber: reference || null
                 });
                 if (!result.success) throw new Error(result.message || "تعذر تسجيل الدفعة.");
