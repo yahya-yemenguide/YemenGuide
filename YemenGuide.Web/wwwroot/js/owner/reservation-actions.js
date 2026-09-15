@@ -1,4 +1,4 @@
-/**
+﻿/**
  * =============================================================================
  * دليلك اليمني — إدارة حجوزات المالك
  * File: wwwroot/js/owner/reservation-actions.js
@@ -2706,6 +2706,12 @@
             "0 ريال يمني"
         );
 
+        setFinancialRow(
+            "modalCollectedAtPropertyRow",
+            details.collectedAmount,
+            "text-success"
+        );
+
         setText(
             "modalAmountProperty",
             details.propertyAmount,
@@ -2722,6 +2728,28 @@
             "modalDepositRow",
             details.depositAmount,
             "text-info"
+        );
+
+        const showExpectedOnlineFlow =
+            details.bookingState === "AwaitingPayment" ||
+            details.bookingState === "PaymentReview";
+
+        setVisible(
+            "modalOnlinePaymentTypeRow",
+            showExpectedOnlineFlow,
+            "flex"
+        );
+
+        setVisible(
+            "modalExpectedOnlineRow",
+            showExpectedOnlineFlow,
+            "flex"
+        );
+
+        setVisible(
+            "modalExpectedRemainingRow",
+            showExpectedOnlineFlow,
+            "flex"
         );
 
         setFinancialRow(
@@ -2748,13 +2776,19 @@
                 : "text-success"
         );
 
+        const isFullyPaid =
+            details.paymentStatus === "Paid" ||
+            details.paymentStatus === "FullyPaid";
+
         setFinancialRow(
             "modalPaymentConfirmedRow",
-            details.paymentConfirmed
-                ? "تم اعتماد الدفع"
-                : "الدفع غير معتمد",
+            isFullyPaid
+                ? "مدفوع بالكامل"
+                : details.paymentConfirmed
+                    ? "تم اعتماد الدفع"
+                    : "الدفع غير معتمد",
 
-            details.paymentConfirmed
+            details.paymentConfirmed || isFullyPaid
                 ? "text-success"
                 : "text-warning"
         );
