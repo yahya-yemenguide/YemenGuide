@@ -1,0 +1,74 @@
+name: Fix calendar payment modal layer
+
+on:
+  push:
+    branches:
+      - fix-calendar-payment-modal-layer
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-check:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply calendar modal layer fix
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+
+          js_path = Path('YemenGuide.Web/wwwroot/js/owner/calendar-manager.js')
+          js = js_path.read_text(encoding='utf-8-sig')
+          marker = 'async function recordManualPayment(bookingId, remainingAmount, paymentMode)'
+          start = js.find(marker)
+          if start < 0:
+              raise SystemExit('recordManualPayment marker not found')
+
+          needle = 'const response = await Swal.fire({'
+          idx = js.find(needle, start)
+          if idx < 0:
+              raise SystemExit('payment Swal.fire not found')
+
+          replacement = '''const response = await Swal.fire({\n                    target: document.body,\n                    customClass: {\n                        container: "yg-calendar-swal-layer"\n                    },'''
+          if 'yg-calendar-swal-layer' not in js[start:start+7000]:
+              js = js[:idx] + replacement + js[idx+len(needle):]
+              js_path.write_text(js, encoding='utf-8-sig')
+
+          css_path = Path('YemenGuide.Web/wwwroot/css/owner/calendar-manager.css')
+          css = css_path.read_text(encoding='utf-8-sig')
+          css_marker = '/* Calendar payment dialogs must stay above calendar portal overlays */'
+          if css_marker not in css:
+              css += '''\n\n/* Calendar payment dialogs must stay above calendar portal overlays */\nbody > .swal2-container.yg-calendar-swal-layer {\n    z-index: 2147483600 !important;\n}\n'''
+              css_path.write_text(css, encoding='utf-8-sig')
+          '@ | Set-Content -Path patch.py -Encoding utf8
+          python patch.py
+          Remove-Item patch.py
+
+      - name: Verify diff
+        shell: pwsh
+        run: |
+          git diff --check
+          git diff -- YemenGuide.Web/wwwroot/js/owner/calendar-manager.js YemenGuide.Web/wwwroot/css/owner/calendar-manager.css
+
+      - name: Check JavaScript
+        shell: pwsh
+        run: node --check YemenGuide.Web/wwwroot/js/owner/calendar-manager.js
+
+      - name: Remove temporary workflow
+        shell: pwsh
+        run: Remove-Item .github/workflows/fix-calendar-payment-modal-layer.yml
+
+      - name: Commit verified fix
+        shell: pwsh
+        run: |
+          git config user.name "yahya-yemenguide"
+          git config user.email "actions@users.noreply.github.com"
+          git add YemenGuide.Web/wwwroot/js/owner/calendar-manager.js YemenGuide.Web/wwwroot/css/owner/calendar-manager.css .github/workflows/fix-calendar-payment-modal-layer.yml
+          git commit -m "إظهار نافذة تحصيل التقويم فوق مودال اليوم"
+          git push origin HEAD:fix-calendar-payment-modal-layer
