@@ -533,4 +533,119 @@
 
     <script src="~/js/customer/customer-bookings.js"
         asp-append-version="true"></script>
+
+
+    <script>
+(() => {
+    "use strict";
+
+    const rows = Array.from(
+        document.querySelectorAll(".customer-booking-row[data-booking-id]"));
+
+    if (!rows.length) return;
+
+    const makeLink = (href, text, icon, extraClass = "secondary") => {
+        const link = document.createElement("a");
+        link.href = href;
+        link.className =
+            `customer-booking-button ${extraClass} additional-payment-link`;
+        link.innerHTML =
+            `<i class="bi ${icon}"></i><span>${text}</span>`;
+        return link;
+    };
+
+    const makeDisabled = (text, title) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.disabled = true;
+        button.className =
+            "customer-booking-button secondary additional-payment-link";
+        button.title = title || text;
+        button.innerHTML =
+            `<i class="bi bi-hourglass-split"></i><span>${text}</span>`;
+        return button;
+    };
+
+    const disableCancelWhilePending = row => {
+        const candidates = row.querySelectorAll(
+            '[data-booking-action="cancel"], [data-action="cancel"], .booking-cancel-btn, .customer-cancel-booking');
+
+        candidates.forEach(button => {
+            if ("disabled" in button) button.disabled = true;
+            button.setAttribute("aria-disabled", "true");
+            button.setAttribute(
+                "title",
+                "يوجد دفع إضافي قيد المراجعة. انتظر اعتمادها أو رفضها قبل الإلغاء.");
+        });
+    };
+
+    async function enrichRow(row) {
+        const bookingId = Number(row.dataset.bookingId || 0);
+        const actions = row.querySelector(".customer-booking-actions");
+        if (!bookingId || !actions) return;
+
+        try {
+            const response = await fetch(
+                `/AdditionalPayments/Status?bookingId=${encodeURIComponent(bookingId)}`,
+                {
+                    headers: { "X-Requested-With": "XMLHttpRequest" },
+                    credentials: "same-origin"
+                });
+
+            if (!response.ok) return;
+
+            const data = await response.json();
+            if (!data?.success) return;
+
+            actions
+                .querySelectorAll(".additional-payment-link")
+                .forEach(item => item.remove());
+
+            if (data.allowed && data.payUrl) {
+                const pay = makeLink(
+                    data.payUrl,
+                    "دفع مبلغ إضافي",
+                    "bi-wallet2",
+                    "primary");
+
+                pay.title =
+                    `المتبقي ${Number(data.remaining || 0).toLocaleString("ar-YE")} ر.ي`;
+                actions.prepend(pay);
+            } else if (data.pending) {
+                actions.prepend(
+                    makeDisabled(
+                        "دفعة إضافية قيد المراجعة",
+                        data.message ||
+                        "انتظر اعتماد أو رفض الدفعة الحالية أولًا."));
+
+                disableCancelWhilePending(row);
+            }
+
+            if (Number(data.approvedAdditionalCount || 0) > 0) {
+                if (data.latestReceiptUrl) {
+                    actions.append(
+                        makeLink(
+                            data.latestReceiptUrl,
+                            "سند آخر دفعة",
+                            "bi-receipt-cutoff",
+                            "secondary"));
+                }
+
+                if (data.paymentsUrl) {
+                    actions.append(
+                        makeLink(
+                            data.paymentsUrl,
+                            "سجل الدفعات",
+                            "bi-clock-history",
+                            "secondary"));
+                }
+            }
+        } catch {
+            // لا نغيّر سلوك صفحة حجوزاتي الأصلية عند تعذر الامتداد.
+        }
+    }
+
+    rows.forEach(enrichRow);
+})();
+    </script>
 }

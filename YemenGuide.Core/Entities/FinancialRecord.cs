@@ -22,10 +22,10 @@ namespace YemenGuide.Core.Entities
         public DateTime? CommissionReleasedAt { get; set; }
         public decimal AmountCollectedAtProperty { get; set; }
         public DateTime? CollectedAt { get; set; }
+        public string? PaymentTransactionsJson { get; set; }
         public DateTime UpdatedAt { get; set; }
         public byte[] RowVersion { get; set; } = null!;
 
         public virtual Booking Booking { get; set; } = null!;
     }
 }
-

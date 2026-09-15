@@ -1,0 +1,244 @@
+@using YemenGuide.Web.Models.Payments
+@model AdditionalPaymentPageViewModel
+
+@{
+    ViewData["Title"] = "دفع مبلغ إضافي";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    var errorMessage = TempData["AdditionalPaymentError"] as string;
+}
+
+<div class="container py-4 additional-payment-page additional-payment-pay-page" dir="rtl">
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+        <div class="card-body p-4 p-md-5">
+            <div class="additional-payment-head d-flex align-items-start justify-content-between gap-3 flex-wrap mb-4">
+                <div>
+                    <div class="text-muted small mb-1">الحجز رقم #@Model.BookingId</div>
+                    <h3 class="fw-bold mb-1">دفع مبلغ إضافي</h3>
+                    <div class="text-muted">@Model.PlaceName</div>
+                </div>
+                <button type="button"
+                        class="btn btn-outline-secondary rounded-pill px-4 additional-payment-back"
+                        onclick="if (window.history.length > 1) { window.history.back(); } else { window.location.href='/Bookings/MyBookings'; }">
+                    <i class="bi bi-arrow-right"></i>
+                    رجوع
+                </button>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(errorMessage))
+            {
+                <div class="alert alert-danger rounded-3">@errorMessage</div>
+            }
+
+            <div class="row g-3 mb-4">
+                <div class="col-md-4">
+                    <div class="border rounded-4 p-3 h-100">
+                        <span class="text-muted small">إجمالي الحجز</span>
+                        <div class="fw-bold fs-5 mt-1">@Model.TotalPrice.ToString("N0") ر.ي</div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="border rounded-4 p-3 h-100">
+                        <span class="text-muted small">المدفوع إلكترونيًا</span>
+                        <div class="fw-bold fs-5 mt-1">@Model.AmountPaidOnline.ToString("N0") ر.ي</div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="border rounded-4 p-3 h-100">
+                        <span class="text-muted small">المتبقي</span>
+                        <div class="fw-bold fs-5 mt-1">@Model.RemainingAmount.ToString("N0") ر.ي</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="alert alert-info rounded-3 mb-4">
+                يمكنك دفع أي جزء من المتبقي قبل بداية فترة الحجز في
+                <strong>@Model.OperationalStartAt.ToString("dd/MM/yyyy - hh:mm tt")</strong>.
+                لا تُحتسب الدفعة ضمن المدفوع إلا بعد اعتماد المنشأة لإثبات الدفع.
+            </div>
+
+            <form asp-controller="AdditionalPayments"
+                  asp-action="Submit"
+                  method="post"
+                  enctype="multipart/form-data"
+                  class="row g-4">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="BookingId" value="@Model.BookingId" />
+
+                <div class="col-12">
+                    <label class="form-label fw-bold">المبلغ الذي تريد دفعه</label>
+                    <div class="input-group input-group-lg">
+                        <input type="number"
+                               id="additionalPaymentAmount"
+                               name="Amount"
+                               min="0.01"
+                               max="@Model.RemainingAmount.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                               step="0.01"
+                               inputmode="decimal"
+                               value="@Model.RemainingAmount.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                               class="form-control"
+                               required />
+                        <span class="input-group-text">ر.ي</span>
+                    </div>
+                    <small class="text-muted">لا يمكن أن يتجاوز المبلغ @Model.RemainingAmount.ToString("N0") ر.ي.</small>
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label fw-bold">حساب التحويل</label>
+                    <div class="row g-3">
+                        @foreach (var wallet in Model.Wallets)
+                        {
+                            <div class="col-md-6">
+                                <label class="border rounded-4 p-3 d-block h-100" style="cursor:pointer;">
+                                    <div class="d-flex gap-2 align-items-start">
+                                        <input class="form-check-input mt-1"
+                                               type="radio"
+                                               name="OwnerWalletId"
+                                               value="@wallet.OwnerWalletId"
+                                               required />
+                                        <div>
+                                            <strong>@wallet.WalletName</strong>
+                                            <div class="small mt-1">الحساب: <span dir="ltr">@wallet.AccountNumber</span></div>
+                                            <div class="small text-muted">المستفيد: @wallet.BeneficiaryName</div>
+                                        </div>
+                                    </div>
+                                </label>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">رقم/مرجع الحوالة <span class="text-muted fw-normal">(اختياري)</span></label>
+                    <input type="text"
+                           name="PaymentReference"
+                           maxlength="150"
+                           class="form-control form-control-lg"
+                           autocomplete="off" />
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">صورة إثبات الدفع</label>
+                    <input type="file"
+                           name="ProofFile"
+                           accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                           class="form-control form-control-lg"
+                           required />
+                    <small class="text-muted">JPG / PNG / WEBP — بحد أقصى 5MB.</small>
+                </div>
+
+                <div class="col-12 d-flex gap-2 justify-content-end flex-wrap">
+                    <a asp-controller="Bookings" asp-action="MyBookings" class="btn btn-light btn-lg rounded-pill px-4">إلغاء</a>
+                    <button type="submit" class="btn btn-primary btn-lg rounded-pill px-5">
+                        <i class="bi bi-cloud-arrow-up"></i>
+                        إرسال الدفعة للمراجعة
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+
+<style>
+.additional-payment-page {
+    max-width: 920px;
+    padding-top: 112px !important;
+    padding-bottom: 42px !important;
+}
+.additional-payment-page .card {
+    background: rgba(255,255,255,.98);
+}
+.additional-payment-head {
+    position: relative;
+}
+.additional-payment-back {
+    display: inline-flex;
+    align-items: center;
+    gap: .45rem;
+    white-space: nowrap;
+}
+.additional-payment-page .form-control:focus {
+    box-shadow: 0 0 0 .2rem rgba(0,166,218,.12);
+}
+@@media (max-width: 767.98px) {
+    .additional-payment-page {
+        padding-top: 92px !important;
+        padding-left: 14px;
+        padding-right: 14px;
+    }
+    .additional-payment-page .card-body {
+        padding: 1.15rem !important;
+    }
+    .additional-payment-back {
+        width: 100%;
+        justify-content: center;
+    }
+}
+</style>
+
+<script>
+(() => {
+    "use strict";
+
+    const amountInput = document.getElementById("additionalPaymentAmount");
+    if (!amountInput) return;
+
+    const form = amountInput.closest("form");
+    const maximum = Number(amountInput.max || 0);
+    const blockedKeys = new Set(["-", "+", "e", "E"]);
+
+    amountInput.addEventListener("keydown", event => {
+        if (blockedKeys.has(event.key)) {
+            event.preventDefault();
+        }
+    });
+
+    amountInput.addEventListener("beforeinput", event => {
+        const text = String(event.data || "");
+        if (/[+\-eE]/.test(text)) {
+            event.preventDefault();
+        }
+    });
+
+    amountInput.addEventListener("paste", event => {
+        const text = String(event.clipboardData?.getData("text") || "").trim();
+        const value = Number(text);
+        if (!text || /[+\-eE]/.test(text) || !Number.isFinite(value) || value <= 0) {
+            event.preventDefault();
+        }
+    });
+
+    const validateAmount = () => {
+        const raw = String(amountInput.value || "").trim();
+        const value = Number(raw);
+
+        if (!raw || !Number.isFinite(value) || value <= 0) {
+            amountInput.setCustomValidity("أدخل مبلغًا أكبر من صفر.");
+            return false;
+        }
+
+        if (maximum > 0 && value > maximum) {
+            amountInput.setCustomValidity(`المبلغ لا يمكن أن يتجاوز ${maximum.toLocaleString("ar-YE")} ر.ي.`);
+            return false;
+        }
+
+        amountInput.setCustomValidity("");
+        return true;
+    };
+
+    amountInput.addEventListener("input", () => {
+        if (String(amountInput.value || "").startsWith("-")) {
+            amountInput.value = "";
+        }
+        validateAmount();
+    });
+
+    form?.addEventListener("submit", event => {
+        if (!validateAmount()) {
+            event.preventDefault();
+            amountInput.reportValidity();
+            amountInput.focus();
+        }
+    });
+})();
+</script>

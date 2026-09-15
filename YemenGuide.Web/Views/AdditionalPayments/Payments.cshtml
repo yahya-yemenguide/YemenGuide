@@ -1,0 +1,504 @@
+@using System
+@using System.Linq
+@using YemenGuide.Web.Models.Payments
+@using YemenGuide.Web.Services.Payments
+@model BookingPaymentsPageViewModel
+
+@functions {
+    private static string StatusLabel(string? status) => status?.Trim() switch
+    {
+        "Approved" => "معتمدة",
+        "Rejected" => "مرفوضة",
+        _ => "قيد المراجعة"
+    };
+}
+
+@{
+    ViewData["Title"] = "دفعات الحجز";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+
+    var success = TempData["AdditionalPaymentSuccess"] as string;
+
+    var orderedAdditionalPayments = (Model.AdditionalPayments ?? Array.Empty<BookingPaymentTransaction>())
+        .OrderByDescending(item =>
+            item.ReceiptIssuedAt ??
+            item.ReviewedAt ??
+            item.SubmittedAt)
+        .ToList();
+
+    var approvedAdditionalPayments = orderedAdditionalPayments
+        .Where(BookingPaymentLedger.IsApproved)
+        .ToList();
+
+    var pendingOrRejectedPayments = orderedAdditionalPayments
+        .Where(item => !BookingPaymentLedger.IsApproved(item))
+        .ToList();
+
+    var latestApproved = approvedAdditionalPayments.FirstOrDefault();
+    var previousApprovedAdditional = approvedAdditionalPayments.Skip(1).FirstOrDefault();
+
+    var hasPending = orderedAdditionalPayments
+        .Any(BookingPaymentLedger.IsPending);
+
+    var hasCurrentReceipt = latestApproved != null || Model.DepositReceipt != null;
+    var hasPreviousReceipt = latestApproved != null &&
+        (previousApprovedAdditional != null || Model.DepositReceipt != null);
+}
+
+<div class="container py-4 additional-payment-page additional-payment-history-page" dir="rtl">
+    <div class="additional-payment-heading mb-4">
+        <div class="additional-payment-heading__copy">
+            <div class="text-muted">الحجز رقم #@Model.BookingId</div>
+            <h3 class="fw-bold mb-1">سجل الدفعات والسندات</h3>
+            <div class="text-muted">@Model.PlaceName</div>
+        </div>
+
+        <div class="additional-payment-heading__actions">
+            @if (!hasPending && Model.RemainingAmount > 0m)
+            {
+                <a asp-action="Pay"
+                   asp-route-id="@Model.BookingId"
+                   class="btn btn-primary rounded-pill px-4">
+                    <i class="bi bi-wallet2"></i>
+                    دفع مبلغ إضافي
+                </a>
+            }
+
+            <button type="button"
+                    class="btn additional-payment-back rounded-pill px-4"
+                    onclick="if (window.history.length > 1) { window.history.back(); } else { window.location.href='/Bookings/MyBookings'; }">
+                <i class="bi bi-arrow-right"></i>
+                رجوع
+            </button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(success))
+    {
+        <div class="alert alert-success rounded-3">@success</div>
+    }
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm rounded-4 h-100 payment-summary-card">
+                <div class="card-body">
+                    <small class="text-muted">إجمالي الحجز</small>
+                    <div class="fw-bold fs-5">@Model.TotalPrice.ToString("N0") ر.ي</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm rounded-4 h-100 payment-summary-card">
+                <div class="card-body">
+                    <small class="text-muted">المدفوع إلكترونيًا المعتمد</small>
+                    <div class="fw-bold fs-5 text-success">@Model.AmountPaidOnline.ToString("N0") ر.ي</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm rounded-4 h-100 payment-summary-card">
+                <div class="card-body">
+                    <small class="text-muted">المتبقي</small>
+                    <div class="fw-bold fs-5">@Model.RemainingAmount.ToString("N0") ر.ي</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (pendingOrRejectedPayments.Count > 0)
+    {
+        <section class="payment-review-section mb-4">
+            <div class="mb-3">
+                <h5 class="fw-bold mb-1">دفعات بانتظار الإجراء</h5>
+                <div class="text-muted small">الدفعة قيد المراجعة لا يصدر لها سند إلا بعد اعتماد المنشأة.</div>
+            </div>
+
+            @foreach (var payment in pendingOrRejectedPayments)
+            {
+                var pending = BookingPaymentLedger.IsPending(payment);
+
+                <div class="card border-0 shadow-sm rounded-4 mb-3 payment-state-card @(pending ? "is-pending" : "is-rejected")">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between gap-3 flex-wrap align-items-start">
+                            <div>
+                                <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
+                                    <strong>دفعة إضافية</strong>
+                                    <span class="badge @(pending ? "bg-warning text-dark" : "bg-danger")">
+                                        @StatusLabel(payment.Status)
+                                    </span>
+                                </div>
+
+                                <div class="fw-bold fs-5">@payment.Amount.ToString("N0") ر.ي</div>
+                                <small class="text-muted">
+                                    أرسلت في @payment.SubmittedAt.ToString("dd/MM/yyyy - hh:mm tt")
+                                </small>
+
+                                @if (!string.IsNullOrWhiteSpace(payment.WalletName))
+                                {
+                                    <div class="small mt-2">الوسيلة: @payment.WalletName</div>
+                                }
+                            </div>
+
+                            @if (pending)
+                            {
+                                <span class="payment-state-note is-pending">
+                                    <i class="bi bi-hourglass-split"></i>
+                                    بانتظار مراجعة المنشأة
+                                </span>
+                            }
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(payment.RejectionReason))
+                        {
+                            <div class="alert alert-danger py-2 px-3 mt-3 mb-0">
+                                سبب الرفض: @payment.RejectionReason
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </section>
+    }
+
+    @if (hasCurrentReceipt)
+    {
+        <section class="receipt-section receipt-section-current mb-4">
+            <div class="receipt-section-title">
+                <div>
+                    <span class="receipt-section-kicker">السند الحالي</span>
+                    <h5>آخر سند معتمد للحجز</h5>
+                </div>
+                <span class="receipt-current-badge">
+                    <i class="bi bi-patch-check-fill"></i>
+                    معتمد
+                </span>
+            </div>
+
+            @if (latestApproved != null)
+            {
+                <div class="receipt-card receipt-card-current">
+                    <div class="receipt-card__content">
+                        <div>
+                            <span class="receipt-type-chip">دفعة إضافية</span>
+                            <strong>@latestApproved.Amount.ToString("N0") ر.ي</strong>
+                            <small>
+                                اعتمد في @((latestApproved.ReceiptIssuedAt ?? latestApproved.ReviewedAt ?? latestApproved.SubmittedAt).ToString("dd/MM/yyyy - hh:mm tt"))
+                            </small>
+                            @if (latestApproved.RemainingAfterApproval.HasValue)
+                            {
+                                <small>
+                                    المتبقي بعد الدفعة: @latestApproved.RemainingAfterApproval.Value.ToString("N0") ر.ي
+                                </small>
+                            }
+                        </div>
+
+                        <a asp-action="Receipt"
+                           asp-route-bookingId="@Model.BookingId"
+                           asp-route-paymentId="@latestApproved.PaymentId"
+                           class="btn btn-primary rounded-pill px-4 receipt-open-button">
+                            <i class="bi bi-receipt-cutoff"></i>
+                            فتح السند الحالي
+                        </a>
+                    </div>
+                </div>
+            }
+            else if (Model.DepositReceipt != null)
+            {
+                <div class="receipt-card receipt-card-current">
+                    <div class="receipt-card__content">
+                        <div>
+                            <span class="receipt-type-chip">@Model.DepositReceipt.PaymentTypeLabel</span>
+                            <strong>@Model.DepositReceipt.Amount.ToString("N0") ر.ي</strong>
+                            <small>
+                                اعتمد في @Model.DepositReceipt.PaidAt.ToString("dd/MM/yyyy - hh:mm tt")
+                            </small>
+                        </div>
+
+                        <a asp-action="Receipt"
+                           asp-route-bookingId="@Model.BookingId"
+                           asp-route-paymentId="deposit"
+                           class="btn btn-primary rounded-pill px-4 receipt-open-button">
+                            <i class="bi bi-receipt"></i>
+                            فتح السند الحالي
+                        </a>
+                    </div>
+                </div>
+            }
+        </section>
+    }
+
+    @if (hasPreviousReceipt)
+    {
+        <section class="receipt-section receipt-section-previous mb-4">
+            <div class="receipt-section-title">
+                <div>
+                    <span class="receipt-section-kicker">السند السابق</span>
+                    <h5>السند المعتمد قبل السند الحالي</h5>
+                </div>
+            </div>
+
+            @if (previousApprovedAdditional != null)
+            {
+                <div class="receipt-card receipt-card-previous">
+                    <div class="receipt-card__content">
+                        <div>
+                            <span class="receipt-type-chip is-previous">دفعة إضافية</span>
+                            <strong>@previousApprovedAdditional.Amount.ToString("N0") ر.ي</strong>
+                            <small>
+                                اعتمد في @((previousApprovedAdditional.ReceiptIssuedAt ?? previousApprovedAdditional.ReviewedAt ?? previousApprovedAdditional.SubmittedAt).ToString("dd/MM/yyyy - hh:mm tt"))
+                            </small>
+                        </div>
+
+                        <a asp-action="Receipt"
+                           asp-route-bookingId="@Model.BookingId"
+                           asp-route-paymentId="@previousApprovedAdditional.PaymentId"
+                           class="btn btn-outline-secondary rounded-pill px-4 receipt-open-button">
+                            <i class="bi bi-receipt"></i>
+                            فتح السند السابق
+                        </a>
+                    </div>
+                </div>
+            }
+            else if (Model.DepositReceipt != null)
+            {
+                <div class="receipt-card receipt-card-previous">
+                    <div class="receipt-card__content">
+                        <div>
+                            <span class="receipt-type-chip is-deposit">@Model.DepositReceipt.PaymentTypeLabel</span>
+                            <strong>@Model.DepositReceipt.Amount.ToString("N0") ر.ي</strong>
+                            <small>
+                                اعتمد في @Model.DepositReceipt.PaidAt.ToString("dd/MM/yyyy - hh:mm tt")
+                            </small>
+                        </div>
+
+                        <a asp-action="Receipt"
+                           asp-route-bookingId="@Model.BookingId"
+                           asp-route-paymentId="deposit"
+                           class="btn btn-outline-secondary rounded-pill px-4 receipt-open-button">
+                            <i class="bi bi-receipt"></i>
+                            فتح سند العربون
+                        </a>
+                    </div>
+                </div>
+            }
+        </section>
+    }
+
+    @if (!hasCurrentReceipt && pendingOrRejectedPayments.Count == 0)
+    {
+        <div class="card border-0 shadow-sm rounded-4 mb-4">
+            <div class="card-body text-center py-5 text-muted">
+                لا توجد سندات أو دفعات إضافية لهذا الحجز حتى الآن.
+            </div>
+        </div>
+    }
+</div>
+
+<style>
+.additional-payment-page {
+    max-width: 980px;
+    padding-top: 112px !important;
+    padding-bottom: 170px !important;
+}
+
+.additional-payment-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.additional-payment-heading__actions {
+    display: flex;
+    gap: .65rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.additional-payment-back {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: .45rem;
+    white-space: nowrap;
+    color: #fff !important;
+    background: #dc3545 !important;
+    border: 1px solid #dc3545 !important;
+    box-shadow: 0 8px 20px rgba(220, 53, 69, .16);
+}
+
+.additional-payment-back:hover,
+.additional-payment-back:focus {
+    color: #fff !important;
+    background: #bb2d3b !important;
+    border-color: #b02a37 !important;
+}
+
+.payment-summary-card {
+    border: 1px solid rgba(5, 32, 60, .05) !important;
+}
+
+.payment-state-card {
+    overflow: hidden;
+}
+
+.payment-state-card.is-pending {
+    border-inline-start: 4px solid #f59e0b !important;
+}
+
+.payment-state-card.is-rejected {
+    border-inline-start: 4px solid #dc3545 !important;
+}
+
+.payment-state-note {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    padding: .55rem .8rem;
+    border-radius: 999px;
+    font-size: .85rem;
+    font-weight: 700;
+}
+
+.payment-state-note.is-pending {
+    color: #8a5a00;
+    background: #fff6d9;
+    border: 1px solid #f4d77a;
+}
+
+.receipt-section {
+    border-top: 1px solid rgba(5, 32, 60, .09);
+    padding-top: 1.2rem;
+}
+
+.receipt-section-current {
+    border-top: 0;
+    padding-top: 0;
+}
+
+.receipt-section-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: .85rem;
+}
+
+.receipt-section-title h5 {
+    margin: .15rem 0 0;
+    font-weight: 800;
+}
+
+.receipt-section-kicker {
+    color: #667085;
+    font-size: .8rem;
+    font-weight: 700;
+}
+
+.receipt-current-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    color: #087f5b;
+    background: #e9fbf4;
+    border: 1px solid #bcebd9;
+    padding: .4rem .7rem;
+    border-radius: 999px;
+    font-size: .82rem;
+    font-weight: 800;
+}
+
+.receipt-card {
+    background: #fff;
+    border-radius: 18px;
+    box-shadow: 0 8px 28px rgba(5, 32, 60, .08);
+    overflow: hidden;
+}
+
+.receipt-card-current {
+    border: 1px solid rgba(0, 166, 218, .22);
+    background: linear-gradient(135deg, rgba(0, 166, 218, .055), #fff 46%);
+}
+
+.receipt-card-previous {
+    border: 1px solid rgba(5, 32, 60, .08);
+}
+
+.receipt-card__content {
+    padding: 1.15rem 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.receipt-card__content > div:first-child {
+    display: grid;
+    gap: .35rem;
+}
+
+.receipt-card__content strong {
+    font-size: 1.25rem;
+}
+
+.receipt-card__content small {
+    color: #667085;
+}
+
+.receipt-type-chip {
+    width: fit-content;
+    display: inline-flex;
+    align-items: center;
+    padding: .3rem .55rem;
+    border-radius: 8px;
+    color: #007ea5;
+    background: #e8f8fd;
+    font-size: .78rem;
+    font-weight: 800;
+}
+
+.receipt-type-chip.is-previous {
+    color: #475467;
+    background: #f2f4f7;
+}
+
+.receipt-type-chip.is-deposit {
+    color: #175cd3;
+    background: #eff8ff;
+}
+
+.receipt-open-button {
+    min-width: 165px;
+}
+
+@@media (max-width: 767.98px) {
+    .additional-payment-page {
+        padding-top: 92px !important;
+        padding-left: 14px;
+        padding-right: 14px;
+        padding-bottom: 155px !important;
+    }
+
+    .additional-payment-heading__actions,
+    .additional-payment-heading__actions > * {
+        width: 100%;
+    }
+
+    .additional-payment-heading__actions .btn {
+        justify-content: center;
+    }
+
+    .receipt-card__content,
+    .receipt-open-button {
+        width: 100%;
+    }
+
+    .receipt-open-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+}
+</style>

@@ -18,6 +18,7 @@ using YemenGuide.Data;
 using YemenGuide.Web.Filters;
 using YemenGuide.Web.Services.Finance;
 using YemenGuide.Web.Services.Notifications;
+using YemenGuide.Web.Services.Payments;
 
 namespace YemenGuide.Web.Areas.Owner.Controllers
 {
@@ -2704,6 +2705,30 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     });
                 }
 
+                if (!BookingPaymentLedger.TryRead(
+                        financialRecord.PaymentTransactionsJson,
+                        out var paymentTransactions))
+                {
+                    await transaction.RollbackAsync();
+                    return Json(new
+                    {
+                        success = false,
+                        message =
+                            "تعذر قراءة سجل الدفعات الإضافية. لم يتم تنفيذ التحصيل."
+                    });
+                }
+
+                if (paymentTransactions.Any(BookingPaymentLedger.IsPending))
+                {
+                    await transaction.RollbackAsync();
+                    return Json(new
+                    {
+                        success = false,
+                        message =
+                            "يوجد دفع إضافي قيد المراجعة. راجعه أولًا قبل التحصيل عند المنشأة."
+                    });
+                }
+
                 var outstandingAmount = Math.Round(
                     Math.Max(0m, financialRecord.AmountToPayAtProperty),
                     2);
@@ -2888,6 +2913,33 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 }
 
                 var financialRecord = booking.FinancialRecord;
+
+                if (financialRecord != null)
+                {
+                    if (!BookingPaymentLedger.TryRead(
+                            financialRecord.PaymentTransactionsJson,
+                            out var pendingPaymentTransactions))
+                    {
+                        await transaction.RollbackAsync();
+                        return Json(new
+                        {
+                            success = false,
+                            message =
+                                "تعذر قراءة سجل الدفعات الإضافية. لم يتم إنهاء الحجز."
+                        });
+                    }
+
+                    if (pendingPaymentTransactions.Any(BookingPaymentLedger.IsPending))
+                    {
+                        await transaction.RollbackAsync();
+                        return Json(new
+                        {
+                            success = false,
+                            message =
+                                "يوجد دفع إضافي قيد المراجعة. اعتمده أو ارفضه قبل إنهاء الحجز."
+                        });
+                    }
+                }
                 var outstandingAmount = Math.Round(
                     Math.Max(
                         0m,
@@ -3198,6 +3250,33 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
                 var financialRecord =
                     booking.FinancialRecord;
+
+                if (financialRecord != null)
+                {
+                    if (!BookingPaymentLedger.TryRead(
+                            financialRecord.PaymentTransactionsJson,
+                            out var pendingPaymentTransactions))
+                    {
+                        await transaction.RollbackAsync();
+                        return Json(new
+                        {
+                            success = false,
+                            message =
+                                "تعذر قراءة سجل الدفعات الإضافية. راجع الدفعات قبل تسجيل عدم الحضور."
+                        });
+                    }
+
+                    if (pendingPaymentTransactions.Any(BookingPaymentLedger.IsPending))
+                    {
+                        await transaction.RollbackAsync();
+                        return Json(new
+                        {
+                            success = false,
+                            message =
+                                "يوجد دفع إضافي قيد المراجعة. اعتمده أو ارفضه قبل تسجيل عدم الحضور."
+                        });
+                    }
+                }
                 var paidOnline =
                     Math.Round(
                         Math.Min(
@@ -3610,6 +3689,33 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 var financialRecord =
                     booking.FinancialRecord;
 
+                if (financialRecord != null)
+                {
+                    if (!BookingPaymentLedger.TryRead(
+                            financialRecord.PaymentTransactionsJson,
+                            out var pendingPaymentTransactions))
+                    {
+                        await transaction.RollbackAsync();
+                        return Json(new
+                        {
+                            success = false,
+                            message =
+                                "تعذر قراءة سجل الدفعات الإضافية. راجع الدفعات قبل إلغاء الحجز."
+                        });
+                    }
+
+                    if (pendingPaymentTransactions.Any(BookingPaymentLedger.IsPending))
+                    {
+                        await transaction.RollbackAsync();
+                        return Json(new
+                        {
+                            success = false,
+                            message =
+                                "يوجد دفع إضافي قيد المراجعة. اعتمده أو ارفضه قبل إلغاء الحجز."
+                        });
+                    }
+                }
+
                 var paidOnline =
                     Math.Round(
                         Math.Min(
@@ -3788,5 +3894,582 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 });
             }
         }
+
+        // =====================================================================
+        // الدفعات الإضافية والتحصيل المتأخر
+        // =====================================================================
+
+        [HttpGet]
+        public async Task<IActionResult> AdditionalPaymentStatus(int id)
+        {
+            if (!TryGetCurrentOwnerId(out var ownerId))
+            {
+                return UnauthorizedOwnerJson();
+            }
+
+            var booking = await _context.Bookings
+                .AsNoTracking()
+                .Include(item => item.Place)
+                .Include(item => item.FinancialRecord)
+                .FirstOrDefaultAsync(item =>
+                    item.BookingId == id &&
+                    item.Place.OwnerId == ownerId,
+                    HttpContext.RequestAborted);
+
+            if (booking == null)
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = "الحجز غير موجود أو لا يتبع منشآتك."
+                });
+            }
+
+            var financial = booking.FinancialRecord;
+            if (financial == null)
+            {
+                return Json(new
+                {
+                    success = true,
+                    pending = false,
+                    message = "السجل المالي للحجز غير موجود."
+                });
+            }
+
+            if (!BookingPaymentLedger.TryRead(
+                    financial.PaymentTransactionsJson,
+                    out var transactions))
+            {
+                return Json(new
+                {
+                    success = false,
+                    pending = false,
+                    message = "تعذر قراءة سجل الدفعات الإضافية."
+                });
+            }
+
+            var pending = transactions
+                .Where(BookingPaymentLedger.IsPending)
+                .OrderByDescending(item => item.SubmittedAt)
+                .FirstOrDefault();
+
+            return Json(new
+            {
+                success = true,
+                pending = pending != null,
+                payment = pending == null
+                    ? null
+                    : new
+                    {
+                        paymentId = pending.PaymentId,
+                        amount = pending.Amount,
+                        walletName = pending.WalletName,
+                        accountNumber = pending.AccountNumber,
+                        beneficiaryName = pending.BeneficiaryName,
+                        paymentReference = pending.PaymentReference,
+                        proofPath = pending.ProofPath,
+                        submittedAt = pending.SubmittedAt
+                    },
+                amountPaidOnline =
+                    Math.Max(0m, financial.AmountPaidOnline),
+                remaining =
+                    Math.Max(0m, financial.AmountToPayAtProperty)
+            });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ReviewAdditionalPayment(
+            int id,
+            string paymentId,
+            bool isApproved,
+            string? rejectionReason = null)
+        {
+            if (!TryGetCurrentOwnerId(out var ownerId))
+            {
+                return UnauthorizedOwnerJson();
+            }
+
+            if (id <= 0 || string.IsNullOrWhiteSpace(paymentId))
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = "بيانات الدفعة غير صحيحة."
+                });
+            }
+
+            if (!isApproved)
+            {
+                rejectionReason = NormalizeReason(rejectionReason);
+                var reasonError = ValidateReason(rejectionReason);
+
+                if (reasonError != null)
+                {
+                    return Json(new
+                    {
+                        success = false,
+                        message = reasonError
+                    });
+                }
+            }
+
+            await using var transaction =
+                await _context.Database.BeginTransactionAsync(
+                    IsolationLevel.Serializable,
+                    HttpContext.RequestAborted);
+
+            try
+            {
+                var booking = await _context.Bookings
+                    .Include(item => item.Place)
+                    .Include(item => item.FinancialRecord)
+                    .FirstOrDefaultAsync(item =>
+                        item.BookingId == id &&
+                        item.Place.OwnerId == ownerId,
+                        HttpContext.RequestAborted);
+
+                if (booking == null || booking.FinancialRecord == null)
+                {
+                    await transaction.RollbackAsync(
+                        HttpContext.RequestAborted);
+
+                    return Json(new
+                    {
+                        success = false,
+                        message = "الحجز أو سجله المالي غير موجود."
+                    });
+                }
+
+                if (!IsState(booking.BookingState, "Confirmed"))
+                {
+                    await transaction.RollbackAsync(
+                        HttpContext.RequestAborted);
+
+                    return Json(new
+                    {
+                        success = false,
+                        message =
+                            "لا يمكن مراجعة الدفعة لأن الحجز لم يعد في حالة مؤكدة."
+                    });
+                }
+
+                var financial = booking.FinancialRecord;
+
+                if (!BookingPaymentLedger.TryRead(
+                        financial.PaymentTransactionsJson,
+                        out var transactions))
+                {
+                    await transaction.RollbackAsync(
+                        HttpContext.RequestAborted);
+
+                    return Json(new
+                    {
+                        success = false,
+                        message =
+                            "تعذر قراءة سجل الدفعات. لم يتم تغيير أي مبلغ."
+                    });
+                }
+
+                var payment = transactions.FirstOrDefault(item =>
+                    string.Equals(
+                        item.PaymentId,
+                        paymentId.Trim(),
+                        StringComparison.OrdinalIgnoreCase));
+
+                if (payment == null)
+                {
+                    await transaction.RollbackAsync(
+                        HttpContext.RequestAborted);
+
+                    return Json(new
+                    {
+                        success = false,
+                        message = "الدفعة الإضافية غير موجودة."
+                    });
+                }
+
+                if (!BookingPaymentLedger.IsPending(payment))
+                {
+                    await transaction.RollbackAsync(
+                        HttpContext.RequestAborted);
+
+                    return Json(new
+                    {
+                        success = false,
+                        message = "تمت مراجعة هذه الدفعة مسبقًا."
+                    });
+                }
+
+                var now = DateTime.Now;
+
+                if (isApproved)
+                {
+                    var remaining = Math.Round(
+                        Math.Max(
+                            0m,
+                            financial.AmountToPayAtProperty),
+                        2);
+
+                    var amount = Math.Round(
+                        Math.Max(0m, payment.Amount),
+                        2);
+
+                    if (amount <= 0m || amount > remaining)
+                    {
+                        await transaction.RollbackAsync(
+                            HttpContext.RequestAborted);
+
+                        return Json(new
+                        {
+                            success = false,
+                            message = amount <= 0m
+                                ? "قيمة الدفعة غير صحيحة."
+                                : $"قيمة الدفعة {amount:N0} تتجاوز المتبقي الحالي {remaining:N0}. لا تعتمدها قبل مراجعة الحساب."
+                        });
+                    }
+
+                    financial.AmountPaidOnline = Math.Round(
+                        Math.Min(
+                            booking.TotalPrice,
+                            Math.Max(0m, financial.AmountPaidOnline) +
+                            amount),
+                        2);
+
+                    financial.AmountToPayAtProperty = Math.Round(
+                        Math.Max(0m, remaining - amount),
+                        2);
+
+                    financial.UpdatedAt = now;
+
+                    var totalPaid = Math.Round(
+                        Math.Max(0m, financial.AmountPaidOnline) +
+                        Math.Max(
+                            0m,
+                            financial.AmountCollectedAtProperty),
+                        2);
+
+                    booking.PaymentStatus =
+                        totalPaid >= booking.TotalPrice
+                            ? "FullyPaid"
+                            : totalPaid > 0m
+                                ? "PartiallyPaid"
+                                : "Unpaid";
+
+                    payment.Status = "Approved";
+                    payment.ReviewedAt = now;
+                    payment.ReviewedByUserId = ownerId;
+                    payment.RejectionReason = null;
+                    payment.ReceiptIssuedAt = now;
+
+                    var paymentIdPart = string.IsNullOrWhiteSpace(
+                        payment.PaymentId)
+                        ? Guid.NewGuid().ToString("N")[..8]
+                        : payment.PaymentId[..Math.Min(
+                            8,
+                            payment.PaymentId.Length)];
+
+                    payment.ReceiptNumber =
+                        $"AP-{booking.BookingId}-{now:yyyyMMddHHmmss}-{paymentIdPart.ToUpperInvariant()}";
+
+                    payment.CumulativePaidOnlineAfterApproval =
+                        financial.AmountPaidOnline;
+
+                    payment.RemainingAfterApproval =
+                        financial.AmountToPayAtProperty;
+
+                    financial.PaymentTransactionsJson =
+                        BookingPaymentLedger.Write(transactions);
+
+                    AddStructuredNotification(
+                        booking.CustomerId,
+                        "تم اعتماد دفعتك الإضافية",
+                        $"تم اعتماد دفعة إضافية بقيمة {amount:N0} ريال للحجز رقم {booking.BookingId}. " +
+                        $"المتبقي الآن {financial.AmountToPayAtProperty:N0} ريال.",
+                        "AdditionalPaymentApproved",
+                        $"/AdditionalPayments/Payments/{booking.BookingId}",
+                        NotificationReferenceTypes.Booking,
+                        booking.BookingId);
+
+                    await _context.SaveChangesAsync(
+                        HttpContext.RequestAborted);
+
+                    await transaction.CommitAsync(
+                        HttpContext.RequestAborted);
+
+                    return Json(new
+                    {
+                        success = true,
+                        approved = true,
+                        message =
+                            "تم اعتماد الدفعة وتحديث المبلغ المدفوع والمتبقي بنجاح.",
+                        amountPaidOnline = financial.AmountPaidOnline,
+                        remaining = financial.AmountToPayAtProperty,
+                        paymentStatus = booking.PaymentStatus,
+                        receiptNumber = payment.ReceiptNumber
+                    });
+                }
+
+                payment.Status = "Rejected";
+                payment.ReviewedAt = now;
+                payment.ReviewedByUserId = ownerId;
+                payment.RejectionReason = rejectionReason;
+
+                financial.PaymentTransactionsJson =
+                    BookingPaymentLedger.Write(transactions);
+                financial.UpdatedAt = now;
+
+                AddStructuredNotification(
+                    booking.CustomerId,
+                    "تم رفض الدفعة الإضافية",
+                    $"تم رفض إثبات الدفعة الإضافية للحجز رقم {booking.BookingId}. " +
+                    $"السبب: {rejectionReason}",
+                    "AdditionalPaymentRejected",
+                    "/Bookings/MyBookings",
+                    NotificationReferenceTypes.Booking,
+                    booking.BookingId);
+
+                await _context.SaveChangesAsync(
+                    HttpContext.RequestAborted);
+
+                await transaction.CommitAsync(
+                    HttpContext.RequestAborted);
+
+                return Json(new
+                {
+                    success = true,
+                    approved = false,
+                    message =
+                        "تم رفض الدفعة دون تغيير أي مبلغ مالي."
+                });
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                await transaction.RollbackAsync(
+                    HttpContext.RequestAborted);
+                return ConcurrencyError();
+            }
+            catch
+            {
+                await transaction.RollbackAsync(
+                    HttpContext.RequestAborted);
+
+                return Json(new
+                {
+                    success = false,
+                    message =
+                        "حدث خطأ أثناء مراجعة الدفعة. لم يتم تغيير البيانات."
+                });
+            }
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> CollectLatePayment(
+            int id,
+            decimal amount)
+        {
+            if (!TryGetCurrentOwnerId(out var ownerId))
+            {
+                return UnauthorizedOwnerJson();
+            }
+
+            if (id <= 0 || amount <= 0m)
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = "بيانات التحصيل المتأخر غير صحيحة."
+                });
+            }
+
+            await using var transaction =
+                await _context.Database.BeginTransactionAsync(
+                    IsolationLevel.Serializable,
+                    HttpContext.RequestAborted);
+
+            try
+            {
+                var booking = await _context.Bookings
+                    .Include(item => item.Place)
+                    .Include(item => item.FinancialRecord)
+                    .FirstOrDefaultAsync(item =>
+                        item.BookingId == id &&
+                        item.Place.OwnerId == ownerId,
+                        HttpContext.RequestAborted);
+
+                if (booking == null || booking.FinancialRecord == null)
+                {
+                    await transaction.RollbackAsync(
+                        HttpContext.RequestAborted);
+
+                    return Json(new
+                    {
+                        success = false,
+                        message = "الحجز أو سجله المالي غير موجود."
+                    });
+                }
+
+                if (!IsState(booking.BookingState, "Completed"))
+                {
+                    await transaction.RollbackAsync(
+                        HttpContext.RequestAborted);
+
+                    return Json(new
+                    {
+                        success = false,
+                        message =
+                            "التحصيل المتأخر متاح للحجوزات المكتملة فقط."
+                    });
+                }
+
+                var financial = booking.FinancialRecord;
+
+                if (!BookingPaymentLedger.TryRead(
+                        financial.PaymentTransactionsJson,
+                        out var paymentTransactions))
+                {
+                    await transaction.RollbackAsync(
+                        HttpContext.RequestAborted);
+
+                    return Json(new
+                    {
+                        success = false,
+                        message =
+                            "تعذر قراءة سجل الدفعات الإضافية. لم يتم تنفيذ التحصيل."
+                    });
+                }
+
+                if (paymentTransactions.Any(
+                        BookingPaymentLedger.IsPending))
+                {
+                    await transaction.RollbackAsync(
+                        HttpContext.RequestAborted);
+
+                    return Json(new
+                    {
+                        success = false,
+                        message =
+                            "يوجد دفع إضافي قيد المراجعة. راجعه قبل تسجيل تحصيل متأخر."
+                    });
+                }
+
+                var remaining = Math.Round(
+                    Math.Max(
+                        0m,
+                        financial.AmountToPayAtProperty),
+                    2);
+
+                var actualAmount = Math.Round(
+                    Math.Max(0m, amount),
+                    2);
+
+                if (remaining <= 0m)
+                {
+                    await transaction.RollbackAsync(
+                        HttpContext.RequestAborted);
+
+                    return Json(new
+                    {
+                        success = false,
+                        message = "لا يوجد مبلغ متبقٍ على هذا الحجز."
+                    });
+                }
+
+                if (actualAmount <= 0m || actualAmount > remaining)
+                {
+                    await transaction.RollbackAsync(
+                        HttpContext.RequestAborted);
+
+                    return Json(new
+                    {
+                        success = false,
+                        message = actualAmount <= 0m
+                            ? "المبلغ يجب أن يكون أكبر من صفر."
+                            : $"المبلغ لا يمكن أن يتجاوز المتبقي {remaining:N0} ريال."
+                    });
+                }
+
+                var now = DateTime.Now;
+
+                financial.AmountCollectedAtProperty = Math.Round(
+                    Math.Max(
+                        0m,
+                        financial.AmountCollectedAtProperty) +
+                    actualAmount,
+                    2);
+
+                financial.AmountToPayAtProperty = Math.Round(
+                    Math.Max(0m, remaining - actualAmount),
+                    2);
+
+                financial.CollectedAt = now;
+                financial.UpdatedAt = now;
+
+                var totalPaid = Math.Round(
+                    Math.Max(0m, financial.AmountPaidOnline) +
+                    Math.Max(
+                        0m,
+                        financial.AmountCollectedAtProperty),
+                    2);
+
+                booking.PaymentStatus =
+                    totalPaid >= booking.TotalPrice
+                        ? "FullyPaid"
+                        : totalPaid > 0m
+                            ? "PartiallyPaid"
+                            : "Unpaid";
+
+                // لا نعيد فتح الحجز ولا الغرف ولا العمولة.
+                AddStructuredNotification(
+                    booking.CustomerId,
+                    "تم تسجيل دفعة متأخرة",
+                    $"تم تسجيل تحصيل {actualAmount:N0} ريال على الحجز المكتمل رقم {booking.BookingId}. " +
+                    $"المتبقي {financial.AmountToPayAtProperty:N0} ريال.",
+                    "LateBookingPaymentCollected",
+                    "/Bookings/MyBookings",
+                    NotificationReferenceTypes.Booking,
+                    booking.BookingId);
+
+                await _context.SaveChangesAsync(
+                    HttpContext.RequestAborted);
+
+                await transaction.CommitAsync(
+                    HttpContext.RequestAborted);
+
+                return Json(new
+                {
+                    success = true,
+                    message = financial.AmountToPayAtProperty <= 0m
+                        ? "تم تحصيل كامل المبلغ المتبقي وتسوية الحجز ماليًا."
+                        : "تم تسجيل التحصيل المتأخر وتحديث المتبقي.",
+                    amountCollectedNow = actualAmount,
+                    amountCollectedAtProperty =
+                        financial.AmountCollectedAtProperty,
+                    remaining = financial.AmountToPayAtProperty,
+                    paymentStatus = booking.PaymentStatus,
+                    bookingState = booking.BookingState
+                });
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                await transaction.RollbackAsync(
+                    HttpContext.RequestAborted);
+                return ConcurrencyError();
+            }
+            catch
+            {
+                await transaction.RollbackAsync(
+                    HttpContext.RequestAborted);
+
+                return Json(new
+                {
+                    success = false,
+                    message =
+                        "حدث خطأ أثناء تسجيل التحصيل المتأخر. لم تتغير البيانات."
+                });
+            }
+        }
+
     }
 }

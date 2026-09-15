@@ -1,0 +1,68 @@
+@using YemenGuide.Web.Models.Payments
+@model BookingPaymentReceiptViewModel
+
+@{
+    ViewData["Title"] = "سند دفع";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="container py-4 additional-payment-page additional-payment-receipt-page" dir="rtl">
+    <div class="card border-0 shadow-sm rounded-4" id="paymentReceipt">
+        <div class="card-body p-4 p-md-5">
+            <div class="text-center mb-4">
+                <h3 class="fw-bold mb-1">سند @Model.PaymentTypeLabel</h3>
+                <div class="text-muted">دليلك اليمني</div>
+            </div>
+
+            <div class="border rounded-4 p-4">
+                <div class="row g-3">
+                    <div class="col-sm-6"><small class="text-muted d-block">رقم السند</small><strong dir="ltr">@Model.ReceiptNumber</strong></div>
+                    <div class="col-sm-6"><small class="text-muted d-block">رقم الحجز</small><strong>#@Model.BookingId</strong></div>
+                    <div class="col-12"><small class="text-muted d-block">المنشأة</small><strong>@Model.PlaceName</strong></div>
+                    <div class="col-sm-6"><small class="text-muted d-block">قيمة هذه الدفعة</small><strong>@Model.Amount.ToString("N0") ر.ي</strong></div>
+                    <div class="col-sm-6"><small class="text-muted d-block">تاريخ الاعتماد</small><strong>@Model.PaidAt.ToString("dd/MM/yyyy - hh:mm tt")</strong></div>
+                    @if (!string.IsNullOrWhiteSpace(Model.WalletName))
+                    {
+                        <div class="col-sm-6"><small class="text-muted d-block">وسيلة الدفع</small><strong>@Model.WalletName</strong></div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(Model.PaymentReference))
+                    {
+                        <div class="col-sm-6"><small class="text-muted d-block">مرجع الحوالة</small><strong dir="ltr">@Model.PaymentReference</strong></div>
+                    }
+                    <div class="col-sm-6"><small class="text-muted d-block">إجمالي المدفوع إلكترونيًا بعد العملية</small><strong>@Model.CumulativePaidOnline.ToString("N0") ر.ي</strong></div>
+                    <div class="col-sm-6"><small class="text-muted d-block">المتبقي بعد العملية</small><strong>@Model.RemainingAmount.ToString("N0") ر.ي</strong></div>
+                </div>
+            </div>
+
+            <div class="d-flex gap-2 justify-content-center flex-wrap mt-4 d-print-none">
+                <button type="button"
+                        class="btn btn-light rounded-pill px-4"
+                        onclick="if (window.history.length > 1) { window.history.back(); } else { window.location.href='/AdditionalPayments/Payments/@Model.BookingId'; }">
+                    <i class="bi bi-arrow-right"></i> رجوع
+                </button>
+                <button type="button" class="btn btn-primary rounded-pill px-4" onclick="window.print()">
+                    <i class="bi bi-printer"></i> طباعة السند
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.additional-payment-page {
+    max-width: 760px;
+    padding-top: 112px !important;
+    padding-bottom: 42px !important;
+}
+@@media (max-width: 767.98px) {
+    .additional-payment-page {
+        padding-top: 92px !important;
+        padding-left: 14px;
+        padding-right: 14px;
+    }
+}
+@@media print {
+    header, footer, nav, .d-print-none { display:none !important; }
+    #paymentReceipt { box-shadow:none !important; border:1px solid #ddd !important; }
+}
+</style>

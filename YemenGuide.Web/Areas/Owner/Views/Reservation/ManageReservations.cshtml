@@ -1,4 +1,4 @@
-﻿@using System
+@using System
 
 @{
     ViewData["Title"] = "إدارة الحجوزات";
@@ -1986,5 +1986,438 @@
                 };
             }
         })();
+    </script>
+
+
+    <script>
+(() => {
+    "use strict";
+
+    let lastDetailsButton = null;
+
+    const token = () =>
+        document.querySelector('input[name="__RequestVerificationToken"]')?.value || "";
+
+    const postForm = async (url, data) => {
+        const body = new URLSearchParams();
+
+        Object.entries(data || {}).forEach(([key, value]) => {
+            if (value !== undefined && value !== null) {
+                body.set(key, String(value));
+            }
+        });
+
+        const csrf = token();
+        if (csrf) body.set("__RequestVerificationToken", csrf);
+
+        const response = await fetch(url, {
+            method: "POST",
+            credentials: "same-origin",
+            headers: {
+                "Content-Type":
+                    "application/x-www-form-urlencoded; charset=UTF-8",
+                "X-Requested-With": "XMLHttpRequest"
+            },
+            body
+        });
+
+        return response.json();
+    };
+
+    const showMessage = async (icon, title, text) => {
+        if (window.Swal?.fire) {
+            return window.Swal.fire({
+                icon,
+                title,
+                text,
+                confirmButtonText: "حسنًا"
+            });
+        }
+
+        window.alert(text || title);
+    };
+
+    const restoreNormalBookingActions = actions => {
+        Array.from(actions?.children || []).forEach(child => {
+            if (!(child instanceof HTMLButtonElement)) return;
+            if (child.classList.contains("reservation-payment-extension")) return;
+            if (child.dataset.additionalPaymentHidden !== "true") return;
+
+            child.style.display = child.dataset.additionalPaymentDisplay || "";
+            delete child.dataset.additionalPaymentHidden;
+            delete child.dataset.additionalPaymentDisplay;
+        });
+    };
+
+    const disableNormalBookingActions = actions => {
+        Array.from(actions?.children || []).forEach(child => {
+            if (!(child instanceof HTMLButtonElement)) return;
+            if (child.classList.contains("reservation-payment-extension")) return;
+
+            child.dataset.additionalPaymentHidden = "true";
+            child.dataset.additionalPaymentDisplay = child.style.display || "";
+            child.style.display = "none";
+        });
+    };
+
+    const escapeHtml = value =>
+        String(value ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+
+    async function approveAdditional(bookingId, paymentId, skipConfirmation = false) {
+        const confirmed = skipConfirmation
+            ? { isConfirmed: true }
+            : window.Swal?.fire
+                ? await window.Swal.fire({
+                    icon: "question",
+                    title: "اعتماد الدفعة الإضافية",
+                    text:
+                        "سيتم إضافة المبلغ إلى المدفوع إلكترونيًا وتخفيض المتبقي. هل أنت متأكد؟",
+                    showCancelButton: true,
+                    confirmButtonText: "اعتماد",
+                    cancelButtonText: "إلغاء"
+                })
+                : {
+                    isConfirmed: window.confirm("اعتماد الدفعة الإضافية؟")
+                };
+
+        if (!confirmed.isConfirmed) return;
+
+        const result = await postForm(
+            "/Owner/Reservation/ReviewAdditionalPayment",
+            {
+                id: bookingId,
+                paymentId,
+                isApproved: true
+            });
+
+        if (!result?.success) {
+            await showMessage(
+                "error",
+                "تعذر الاعتماد",
+                result?.message || "لم يتم تغيير البيانات.");
+            return;
+        }
+
+        await showMessage(
+            "success",
+            "تم اعتماد الدفعة",
+            result.message);
+
+        window.location.reload();
+    }
+
+    async function reviewAdditionalPayment(bookingId, payment) {
+        if (!payment?.paymentId) return;
+
+        if (!window.Swal?.fire) {
+            const accepted = window.confirm(
+                `دفعة إضافية بقيمة ${Number(payment.amount || 0).toLocaleString("ar-YE")} ر.ي. هل تريد اعتمادها؟`);
+
+            if (accepted) {
+                await approveAdditional(bookingId, payment.paymentId, true);
+            }
+            return;
+        }
+
+        const proofLink = payment.proofPath
+            ? `<a href="${escapeHtml(payment.proofPath)}" target="_blank" rel="noopener" class="btn btn-light btn-sm mt-2"><i class="bi bi-image"></i> عرض إثبات الدفع</a>`
+            : `<div class="text-danger small mt-2">لا توجد صورة إثبات متاحة.</div>`;
+
+        const result = await window.Swal.fire({
+            icon: "info",
+            title: "مراجعة الدفعة الإضافية",
+            html: `
+                <div dir="rtl" class="text-start">
+                    <div class="mb-2">المبلغ: <strong>${Number(payment.amount || 0).toLocaleString("ar-YE")} ر.ي</strong></div>
+                    ${payment.walletName ? `<div class="mb-2">المحفظة: <strong>${escapeHtml(payment.walletName)}</strong></div>` : ""}
+                    ${payment.accountNumber ? `<div class="mb-2">حساب التحويل: <strong dir="ltr">${escapeHtml(payment.accountNumber)}</strong></div>` : ""}
+                    ${payment.beneficiaryName ? `<div class="mb-2">المستفيد: <strong>${escapeHtml(payment.beneficiaryName)}</strong></div>` : ""}
+                    ${payment.paymentReference ? `<div class="mb-2">مرجع الحوالة: <strong dir="ltr">${escapeHtml(payment.paymentReference)}</strong></div>` : ""}
+                    ${payment.submittedAt ? `<div class="mb-2">وقت الإرسال: <strong>${new Date(payment.submittedAt).toLocaleString("ar-YE")}</strong></div>` : ""}
+                    ${proofLink}
+                    <div class="alert alert-warning py-2 mt-3 mb-0">
+                        اعتماد الدفعة سيزيد المدفوع إلكترونيًا ويخفض المتبقي فقط، ولن ينهي الحجز.
+                    </div>
+                </div>`,
+            showCancelButton: true,
+            showDenyButton: true,
+            confirmButtonText: "اعتماد الدفعة",
+            denyButtonText: "رفض الدفعة",
+            cancelButtonText: "إغلاق",
+            confirmButtonColor: "#10B981",
+            denyButtonColor: "#EF4444",
+            reverseButtons: true
+        });
+
+        if (result.isConfirmed) {
+            await approveAdditional(bookingId, payment.paymentId, true);
+            return;
+        }
+
+        if (result.isDenied) {
+            await rejectAdditional(bookingId, payment.paymentId);
+        }
+    }
+
+    async function rejectAdditional(bookingId, paymentId) {
+        let reason = "";
+
+        if (window.Swal?.fire) {
+            const result = await window.Swal.fire({
+                icon: "warning",
+                title: "رفض الدفعة الإضافية",
+                input: "textarea",
+                inputLabel: "سبب الرفض",
+                inputPlaceholder: "اكتب سببًا واضحًا...",
+                inputAttributes: { maxlength: "500" },
+                showCancelButton: true,
+                confirmButtonText: "رفض الدفعة",
+                cancelButtonText: "إلغاء",
+                preConfirm: value => {
+                    const text = String(value || "").trim();
+                    if (text.length < 5) {
+                        window.Swal.showValidationMessage(
+                            "اكتب سببًا لا يقل عن 5 أحرف.");
+                        return false;
+                    }
+                    return text;
+                }
+            });
+
+            if (!result.isConfirmed) return;
+            reason = String(result.value || "").trim();
+        } else {
+            reason = String(
+                window.prompt("اكتب سبب رفض الدفعة:") || "")
+                .trim();
+
+            if (reason.length < 5) return;
+        }
+
+        const result = await postForm(
+            "/Owner/Reservation/ReviewAdditionalPayment",
+            {
+                id: bookingId,
+                paymentId,
+                isApproved: false,
+                rejectionReason: reason
+            });
+
+        if (!result?.success) {
+            await showMessage(
+                "error",
+                "تعذر الرفض",
+                result?.message || "لم يتم تغيير البيانات.");
+            return;
+        }
+
+        await showMessage(
+            "success",
+            "تم رفض الدفعة",
+            result.message);
+
+        window.location.reload();
+    }
+
+    async function collectLatePayment(button) {
+        const bookingId = Number(button.dataset.id || 0);
+        const remaining = Number(button.dataset.propertyRaw || 0);
+        if (!bookingId || !(remaining > 0)) return;
+
+        let amount = remaining;
+
+        if (window.Swal?.fire) {
+            const result = await window.Swal.fire({
+                icon: "info",
+                title: "تحصيل مبلغ متبقٍ",
+                html:
+                    `المتبقي على الحجز: <strong>${remaining.toLocaleString("ar-YE")} ر.ي</strong>`,
+                input: "number",
+                inputValue: remaining,
+                inputAttributes: {
+                    min: "0.01",
+                    max: String(remaining),
+                    step: "0.01"
+                },
+                showCancelButton: true,
+                confirmButtonText: "تسجيل التحصيل",
+                cancelButtonText: "إلغاء",
+                preConfirm: value => {
+                    const n = Number(value);
+                    if (!Number.isFinite(n) ||
+                        n <= 0 ||
+                        n > remaining) {
+                        window.Swal.showValidationMessage(
+                            `أدخل مبلغًا أكبر من صفر ولا يتجاوز ${remaining.toLocaleString("ar-YE")}.`);
+                        return false;
+                    }
+                    return n;
+                }
+            });
+
+            if (!result.isConfirmed) return;
+            amount = Number(result.value);
+        } else {
+            const value = Number(
+                window.prompt("المبلغ المحصل:", String(remaining)));
+
+            if (!Number.isFinite(value) ||
+                value <= 0 ||
+                value > remaining) return;
+
+            amount = value;
+        }
+
+        const result = await postForm(
+            "/Owner/Reservation/CollectLatePayment",
+            {
+                id: bookingId,
+                amount
+            });
+
+        if (!result?.success) {
+            await showMessage(
+                "error",
+                "تعذر تسجيل التحصيل",
+                result?.message || "لم يتم تغيير البيانات.");
+            return;
+        }
+
+        await showMessage(
+            "success",
+            "تم تسجيل التحصيل",
+            result.message);
+
+        window.location.reload();
+    }
+
+    function addLateCollection(actions, button) {
+        const status = String(button.dataset.status || "").trim();
+        const remaining = Number(button.dataset.propertyRaw || 0);
+
+        if (status !== "Completed" || !(remaining > 0)) return;
+
+        const late = document.createElement("button");
+        late.type = "button";
+        late.className =
+            "btn btn-primary reservation-payment-extension";
+        late.innerHTML =
+            '<i class="bi bi-cash-coin"></i> تحصيل مبلغ متبقٍ';
+        late.addEventListener(
+            "click",
+            () => collectLatePayment(button));
+        actions.appendChild(late);
+    }
+
+    let additionalPaymentSyncGeneration = 0;
+
+    async function addPendingReview(actions, button, syncGeneration) {
+        const status = String(button.dataset.status || "").trim();
+        if (status !== "Confirmed") return;
+
+        const bookingId = Number(button.dataset.id || 0);
+        if (!bookingId) return;
+
+        try {
+            const response = await fetch(
+                `/Owner/Reservation/AdditionalPaymentStatus?id=${encodeURIComponent(bookingId)}`,
+                {
+                    credentials: "same-origin",
+                    headers: { "X-Requested-With": "XMLHttpRequest" }
+                });
+
+            if (!response.ok) return;
+
+            const data = await response.json();
+
+            if (syncGeneration !== additionalPaymentSyncGeneration ||
+                lastDetailsButton !== button ||
+                !document.body.contains(actions)) {
+                return;
+            }
+
+            if (!data?.success || !data.pending || !data.payment) return;
+
+            restoreNormalBookingActions(actions);
+            disableNormalBookingActions(actions);
+
+            const payment = data.payment;
+
+            actions
+                .querySelectorAll(".reservation-payment-extension[data-additional-payment-review='true']")
+                .forEach(item => item.remove());
+
+            const reviewButton = document.createElement("button");
+            reviewButton.type = "button";
+            reviewButton.className =
+                "btn btn-warning reservation-payment-extension";
+            reviewButton.dataset.additionalPaymentReview = "true";
+            reviewButton.innerHTML = `
+                <i class="bi bi-wallet2"></i>
+                مراجعة الدفعة الإضافية
+                <strong>${Number(payment.amount || 0).toLocaleString("ar-YE")} ر.ي</strong>`;
+            reviewButton.title =
+                "افتح الدفعة لمشاهدة الإثبات ثم اعتمادها أو رفضها.";
+            reviewButton.addEventListener(
+                "click",
+                () => reviewAdditionalPayment(bookingId, payment));
+
+            actions.appendChild(reviewButton);
+
+            const actionNotice =
+                document.getElementById("modalActionNotice");
+
+            if (actionNotice) {
+                actionNotice.style.display = "flex";
+                actionNotice.innerHTML = `
+                    <i class="bi bi-exclamation-circle"></i>
+                    <span>يوجد دفع إضافي بقيمة <strong>${Number(payment.amount || 0).toLocaleString("ar-YE")} ر.ي</strong> قيد المراجعة. راجعه أولًا قبل أي إجراء آخر على الحجز.</span>`;
+            }
+        } catch {
+            // لا نؤثر على إجراءات الحجز الأصلية عند فشل الامتداد.
+        }
+    }
+
+    async function syncExtensions(button) {
+        const actions = document.querySelector("#modalActionButtons");
+        if (!actions || !button) return;
+
+        const syncGeneration = ++additionalPaymentSyncGeneration;
+
+        restoreNormalBookingActions(actions);
+
+        actions
+            .querySelectorAll(".reservation-payment-extension")
+            .forEach(item => item.remove());
+
+        addLateCollection(actions, button);
+        await addPendingReview(actions, button, syncGeneration);
+    }
+
+    document.addEventListener(
+        "click",
+        event => {
+            const button = event.target.closest?.(
+                ".compact-details-button");
+
+            if (!button) return;
+
+            lastDetailsButton = button;
+            window.setTimeout(() => syncExtensions(button), 200);
+            window.setTimeout(() => syncExtensions(button), 650);
+        },
+        true);
+
+    document.addEventListener("shown.bs.modal", () => {
+        if (lastDetailsButton) {
+            syncExtensions(lastDetailsButton);
+        }
+    });
+})();
     </script>
 }
