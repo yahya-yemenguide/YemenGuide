@@ -1,0 +1,28 @@
+name: Export manual booking files
+on:
+  push:
+    branches:
+      - export-manual-booking-files
+permissions:
+  contents: read
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare files
+        run: |
+          mkdir -p export/YemenGuide.Core/DTOs/Owner
+          mkdir -p export/YemenGuide.Web/Areas/Owner/Controllers
+          mkdir -p export/YemenGuide.Web/Areas/Owner/Views/Reservation
+          mkdir -p export/YemenGuide.Web/wwwroot/js/owner
+          cp YemenGuide.Core/DTOs/Owner/OwnerCalendarDtos.cs export/YemenGuide.Core/DTOs/Owner/
+          cp YemenGuide.Web/Areas/Owner/Controllers/ReservationController.Calendar.cs export/YemenGuide.Web/Areas/Owner/Controllers/
+          cp YemenGuide.Web/Areas/Owner/Views/Reservation/_CalendarManager.cshtml export/YemenGuide.Web/Areas/Owner/Views/Reservation/
+          cp YemenGuide.Web/wwwroot/js/owner/calendar-manager.js export/YemenGuide.Web/wwwroot/js/owner/
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: manual-booking-files
+          path: export/
+          if-no-files-found: error
