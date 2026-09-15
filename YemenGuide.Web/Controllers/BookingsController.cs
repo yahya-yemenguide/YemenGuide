@@ -993,21 +993,16 @@ namespace YemenGuide.Web.Controllers
                  * حاجز نهائي ضد إنشاء Refund أكبر من المال
                  * الذي تم اعتماده فعليًا لهذا الحجز.
                  */
-                var verifiedPaidOnline =
+                var verifiedPaidAmount =
                     Math.Round(
                         Math.Min(
-                            Math.Max(
-                                0m,
-                                booking.FinancialRecord?
-                                    .AmountPaidOnline ??
-                                0m),
-                            Math.Max(
-                                0m,
-                                booking.TotalPrice)),
+                            Math.Max(0m, booking.TotalPrice),
+                            Math.Max(0m, booking.FinancialRecord?.AmountPaidOnline ?? 0m) +
+                            Math.Max(0m, booking.FinancialRecord?.AmountCollectedAtProperty ?? 0m)),
                         2);
 
                 if (quote.RefundAmount >
-                    verifiedPaidOnline + 0.01m)
+                    verifiedPaidAmount + 0.01m)
                 {
                     await transaction.RollbackAsync();
 
@@ -1015,7 +1010,7 @@ namespace YemenGuide.Web.Controllers
                     {
                         success = false,
                         message =
-                            "تعذر إنشاء الاسترداد لأن مبلغ الاسترداد يتجاوز المبلغ الإلكتروني المعتمد فعليًا للحجز."
+                            "تعذر إنشاء الاسترداد لأن مبلغ الاسترداد يتجاوز إجمالي المبلغ المحصل فعليًا للحجز."
                     });
                 }
 
@@ -1124,12 +1119,12 @@ namespace YemenGuide.Web.Controllers
                              * هنا نحفظ Snapshot للمبلغ الإلكتروني المعتمد فعليًا.
                              */
                             DepositPaid =
-                                verifiedPaidOnline,
+                                verifiedPaidAmount,
 
                             CancellationFee =
                                 Math.Round(
                                     Math.Min(
-                                        verifiedPaidOnline,
+                                        verifiedPaidAmount,
                                         Math.Max(
                                             0m,
                                             quote.CancellationFee)),
@@ -1138,7 +1133,7 @@ namespace YemenGuide.Web.Controllers
                             RefundAmount =
                                 Math.Round(
                                     Math.Min(
-                                        verifiedPaidOnline,
+                                        verifiedPaidAmount,
                                         Math.Max(
                                             0m,
                                             quote.RefundAmount)),
@@ -1426,18 +1421,13 @@ namespace YemenGuide.Web.Controllers
                 IsPaymentApproved(booking);
 
             /*
-             * المصدر المالي الوحيد للاسترداد هو المبلغ الإلكتروني
-             * الذي تم اعتماده فعليًا في FinancialRecord.AmountPaidOnline.
-             * لا نستخدم DepositAmount ولا صورة الإثبات ولا TotalPrice
-             * كمبلغ مدفوع.
+             * مصدر حقيقة الاسترداد هو كل مبلغ تم تحصيله فعليًا للحجز:
+             * المدفوع الإلكتروني المعتمد + ما سجله المالك كمحصّل عند المنشأة.
              */
             var depositPaid =
                 isConfirmedPayment
-                    ? Math.Max(
-                        0m,
-                        financialRecord?
-                            .AmountPaidOnline ??
-                        0m)
+                    ? Math.Max(0m, financialRecord?.AmountPaidOnline ?? 0m) +
+                      Math.Max(0m, financialRecord?.AmountCollectedAtProperty ?? 0m)
                     : 0m;
 
             depositPaid =

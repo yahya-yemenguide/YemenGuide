@@ -1680,7 +1680,7 @@
                 const configuredNoShowAt = new Date(button.dataset.noShowAvailableAt || "").getTime();
                 const noShowAt = Number.isFinite(configuredNoShowAt)
                     ? configuredNoShowAt
-                    : startAt + (60 * 60 * 1000);
+                    : startAt;
                 const now = Date.now();
                 const remaining = Math.max(0, parseReservationRaw(button.dataset.propertyRaw));
                 const collected = Math.max(0, parseReservationRaw(button.dataset.collectedRaw));
@@ -1730,17 +1730,14 @@
                     setReservationActionDisabled(
                         noShowAction,
                         true,
-                        "عدم الحضور يتاح بعد ساعة من بداية فترة الحجز."
+                        "عدم الحضور يتاح عند بداية فترة الحجز."
                     );
                 }
 
-                if (collected > 0) {
-                    setReservationActionDisabled(
-                        ownerCancelAction,
-                        true,
-                        "تم تسجيل تحصيل عند المنشأة؛ لذلك لا يمكن إلغاء الحجز من جهة المالك."
-                    );
-                }
+                setReservationActionDisabled(
+                    ownerCancelAction,
+                    false
+                );
             };
 
             window.executeCollectBooking = async bookingId => {
@@ -1802,7 +1799,7 @@
                             </div>
                             <div class="reservation-danger-dialog-note" style="margin-top:12px;">
                                 <i class="bi bi-info-circle"></i>
-                                <span>يمكن التحصيل على دفعات حتى سداد المتبقي. أول تحصيل فعلي يمنع تسجيل عدم حضور وإلغاء الحجز من جهة المالك، ولا ينهي الحجز.</span>
+                                <span>يمكن التحصيل على دفعات حتى سداد المتبقي. أول تحصيل فعلي يمنع تسجيل عدم حضور فقط، ولا يمنع إلغاء المالك ولا ينهي الحجز.</span>
                             </div>
                         </div>
                     `,
@@ -1973,7 +1970,7 @@
                     }
 
                     if (patched.title === "إلغاء الحجز من جهة المالك" && currentButton) {
-                        const raw = currentButton.dataset.onlineRaw;
+                        const raw = currentButton.dataset.totalCollectedRaw || currentButton.dataset.onlineRaw;
                         if (raw !== undefined) {
                             patched.html = String(patched.html || "").replace(
                                 /[\d٬,.]+\s*(?:ريال\s+يمني|ريال|ر\.ي|ر\.س|\$)/,
