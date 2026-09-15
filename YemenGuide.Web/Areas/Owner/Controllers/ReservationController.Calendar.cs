@@ -273,6 +273,70 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             public DateTime StartDate { get; set; }
             public DateTime? EndDate { get; set; }
             public int Quantity { get; set; }
+            public string ResolvedPaymentMethod { get; set; } = string.Empty;
+        }
+
+        private static string MaskManualWalletAccount(string? accountNumber)
+        {
+            var value = accountNumber?.Trim() ?? string.Empty;
+            if (value.Length <= 4) return value;
+            return $"{new string('•', Math.Min(6, value.Length - 4))}{value[^4..]}";
+        }
+
+        private async Task<List<OwnerManualWalletOptionDto>> GetOwnerManualWalletsAsync(int ownerId)
+        {
+            return await _context.OwnerWallets
+                .AsNoTracking()
+                .Where(item =>
+                    item.OwnerId == ownerId &&
+                    item.IsActive == true &&
+                    item.Wallet.IsActive == true)
+                .OrderByDescending(item => item.UpdatedAt)
+                .ThenBy(item => item.Wallet.WalletName)
+                .Select(item => new OwnerManualWalletOptionDto
+                {
+                    WalletId = item.WalletId,
+                    WalletName = item.Wallet.WalletName ?? "محفظة إلكترونية",
+                    AccountNumberMasked = MaskManualWalletAccount(item.AccountNumber)
+                })
+                .ToListAsync(HttpContext.RequestAborted);
+        }
+
+        private async Task<(bool Success, string StoredValue, string Message)>
+            ResolveManualPaymentMethodAsync(int ownerId, string? paymentMethod, int? walletId)
+        {
+            var method = paymentMethod?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(method) || method.Length > 30)
+                return (false, string.Empty, "حدد طريقة دفع صحيحة.");
+
+            if (!IsState(method, "Wallet"))
+                return (true, method, string.Empty);
+
+            if (!walletId.HasValue || walletId.Value <= 0)
+                return (false, string.Empty, "حدد نوع المحفظة التي استلمت الدفعة.");
+
+            var wallet = await _context.OwnerWallets
+                .AsNoTracking()
+                .Where(item =>
+                    item.OwnerId == ownerId &&
+                    item.WalletId == walletId.Value &&
+                    item.IsActive == true &&
+                    item.Wallet.IsActive == true)
+                .Select(item => new
+                {
+                    item.WalletId,
+                    item.Wallet.WalletName
+                })
+                .FirstOrDefaultAsync(HttpContext.RequestAborted);
+
+            if (wallet == null)
+                return (false, string.Empty, "المحفظة المختارة غير مفعلة ضمن حسابات استقبال المالك.");
+
+            var storedValue = $"محفظة: {wallet.WalletName?.Trim() ?? "إلكترونية"}";
+            if (storedValue.Length > 30)
+                storedValue = storedValue[..30];
+
+            return (true, storedValue, string.Empty);
         }
 
         private void ApplyManualQuoteDisplayCurrency(
@@ -848,6 +912,8 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             foreach (var service in rawServices)
                 service.Price = ToDisplayCurrency(service.Price, currency);
 
+            var wallets = await GetOwnerManualWalletsAsync(ownerId);
+
             return Json(new
             {
                 success = true,
@@ -862,11 +928,25 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                         : exceptionClosed ? "الفترة تتضمن يومًا مغلقًا من التقويم." : string.Empty,
                     Rooms = roomOptions,
                     Packages = packageOptions,
-                    Services = rawServices
+                    Services = rawServices,
+                    Wallets = wallets
                 },
                 currency = currency.Currency,
                 currencyCode = currency.CurrencyCode,
                 currencySymbol = currency.CurrencySymbol
+            });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetManualPaymentWallets()
+        {
+            if (!TryGetCurrentOwnerId(out var ownerId)) return UnauthorizedOwnerJson();
+
+            var wallets = await GetOwnerManualWalletsAsync(ownerId);
+            return Json(new
+            {
+                success = true,
+                data = wallets
             });
         }
 
@@ -921,7 +1001,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 var isFreeBooking = quote.PublicQuote.TotalPrice <= 0m;
                 var isCollectedMode = IsState(request.PaymentMode, "Collected");
                 var paidAmount = isFreeBooking ? 0m
-                    : isCollectedMode ? Math.Round(Math.Max(0m, request.PaidAmount), 2) : 0m;
+                    : isCollectedMode ? quote.PublicQuote.InitialPaymentAmount : 0m;
                 var isCollected = !isFreeBooking && isCollectedMode && paidAmount > 0m;
 
                 if (paidAmount > quote.PublicQuote.TotalPrice)
@@ -976,7 +1056,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     DiscountValueSnapshot = quote.Promotion.IsApplied ? quote.Promotion.DiscountValue : null,
                     BookingState = bookingState,
                     PaymentStatus = paymentStatus,
-                    PaymentMethod = isFreeBooking ? "Promotion" : isCollected ? request.PaymentMethod?.Trim() : null,
+                    PaymentMethod = isFreeBooking ? "Promotion" : isCollected ? quote.ResolvedPaymentMethod : null,
                     RefundStatus = "NotApplicable",
                     TimerExpiredAt = timerExpiredAt,
                     LastStatusChangedAt = now,
@@ -1029,10 +1109,10 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 {
                     BookingId = booking.BookingId,
                     DepositAmount = quote.PublicQuote.DepositAmount,
-                    PlatformCommission = quote.PublicQuote.PlatformCommission,
-                    CommissionRateSnapshot = quote.PublicQuote.CommissionPercentage,
-                    CommissionBaseAmount = quote.PublicQuote.TotalPrice,
-                    CommissionStatus = quote.PublicQuote.PlatformCommission > 0m ? "Calculated" : "NotApplicable",
+                    PlatformCommission = 0m,
+                    CommissionRateSnapshot = 0m,
+                    CommissionBaseAmount = 0m,
+                    CommissionStatus = "NotApplicable",
                     TransferReferenceNumber = isCollected && !string.IsNullOrWhiteSpace(request.PaymentReferenceNumber)
                         ? request.PaymentReferenceNumber.Trim() : null,
                     AmountPaidOnline = 0m,
@@ -1152,6 +1232,15 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
                 var currency = await GetOwnerCurrencyContextAsync(booking.PlaceId);
                 var inputPaidAmountYer = Math.Round(Math.Max(0m, ToYer(input.PaidAmount, currency)), 2);
+                var paymentResolution = await ResolveManualPaymentMethodAsync(
+                    ownerId,
+                    input.PaymentMethod,
+                    input.WalletId);
+                if (!paymentResolution.Success)
+                {
+                    await transaction.RollbackAsync();
+                    return BadRequest(new { success = false, message = paymentResolution.Message });
+                }
                 var isInitialPayment = IsState(booking.BookingState, "AwaitingPayment");
                 var canCollectRemaining =
                     IsState(booking.BookingState, "Confirmed") ||
@@ -1250,7 +1339,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 }
 
                 booking.PaymentStatus = remainingAmount <= 0m ? "Paid" : "PartiallyPaid";
-                booking.PaymentMethod = input.PaymentMethod.Trim();
+                booking.PaymentMethod = paymentResolution.StoredValue;
                 booking.PaymentApprovedAt ??= now;
                 booking.LastStatusChangedAt = now;
 
@@ -1469,8 +1558,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
             if (IsState(request.PaymentMode, "Collected"))
             {
-                if (request.PaidAmount < 0m) { failed.PublicQuote.Message = "المبلغ المستلم غير صحيح."; return failed; }
-                if (request.PaidAmount > 0m && (string.IsNullOrWhiteSpace(request.PaymentMethod) || request.PaymentMethod.Trim().Length > 30))
+                if (string.IsNullOrWhiteSpace(request.PaymentMethod) || request.PaymentMethod.Trim().Length > 30)
                 { failed.PublicQuote.Message = "حدد طريقة دفع صحيحة."; return failed; }
                 if (!string.IsNullOrWhiteSpace(request.PaymentReferenceNumber) && request.PaymentReferenceNumber.Trim().Length > 100)
                 { failed.PublicQuote.Message = "الرقم المرجعي أطول من الحد المسموح."; return failed; }
@@ -1481,6 +1569,20 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             var place = await LoadManualBookingPlaceAsync(placeId.Value, ownerId);
             if (place == null) { failed.PublicQuote.Message = "المنشأة المختارة غير متاحة."; return failed; }
             var displayCurrency = await GetOwnerCurrencyContextAsync(place.PlaceId);
+
+            var paymentResolution = (Success: true, StoredValue: string.Empty, Message: string.Empty);
+            if (IsState(request.PaymentMode, "Collected"))
+            {
+                paymentResolution = await ResolveManualPaymentMethodAsync(
+                    ownerId,
+                    request.PaymentMethod,
+                    request.WalletId);
+                if (!paymentResolution.Success)
+                {
+                    failed.PublicQuote.Message = paymentResolution.Message;
+                    return failed;
+                }
+            }
 
             var startDate = request.StartDate.Date;
             var endDate = request.EndDate?.Date;
@@ -1560,7 +1662,13 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
                 var guests = Math.Max(0, request.AdultsCount) + Math.Max(0, request.ChildrenCount);
                 if (guests <= 0) { failed.PublicQuote.Message = "حدد شخصًا واحدًا على الأقل."; return failed; }
-                var roomCapacity = room.MaxAdults + room.MaxChildren;
+                var roomCapacity = Math.Max(0, room.MaxAdults) + Math.Max(0, room.MaxChildren);
+                var maximumAdults = Math.Max(0, room.MaxAdults) * quantity;
+                var maximumChildren = Math.Max(0, room.MaxChildren) * quantity;
+                if (maximumAdults > 0 && request.AdultsCount > maximumAdults)
+                { failed.PublicQuote.Message = $"عدد البالغين أكبر من الحد المحدد للغرف ({maximumAdults})."; return failed; }
+                if (maximumChildren >= 0 && request.ChildrenCount > maximumChildren)
+                { failed.PublicQuote.Message = $"عدد الأطفال أكبر من الحد المحدد للغرف ({maximumChildren})."; return failed; }
                 if (roomCapacity > 0 && guests > roomCapacity * quantity)
                 { failed.PublicQuote.Message = $"عدد الأشخاص أكبر من سعة الغرف المطلوبة ({roomCapacity * quantity})."; return failed; }
 
@@ -1674,25 +1782,15 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             var totalPrice = Math.Round(Math.Max(0m, discountedBeforeTax + taxAmount), 2);
             var depositAmount = ManualCalculateDepositAmount(place, totalPrice);
 
-            if (IsState(request.PaymentMode, "Collected") && totalPrice > 0m && request.PaidAmount <= 0m)
-            { failed.PublicQuote.Message = "أدخل المبلغ المستلم فعليًا."; return failed; }
+            var collected = totalPrice > 0m && IsState(request.PaymentMode, "Collected");
+            var initialPaymentAmount = collected
+                ? Math.Round(depositAmount > 0m ? depositAmount : totalPrice, 2)
+                : 0m;
+            var normalizedPaidAmount = initialPaymentAmount;
 
-            var collected = totalPrice > 0m && IsState(request.PaymentMode, "Collected") && request.PaidAmount > 0m;
-            var normalizedPaidAmount = collected ? Math.Round(Math.Max(0m, request.PaidAmount), 2) : 0m;
-            if (normalizedPaidAmount > totalPrice)
-            { failed.PublicQuote.Message = "المبلغ المستلم لا يمكن أن يتجاوز إجمالي الحجز."; return failed; }
-            if (collected && depositAmount > 0m && normalizedPaidAmount < depositAmount)
-            {
-                failed.PublicQuote.Message = $"المبلغ المستلم أقل من العربون المطلوب ({DisplayMoney(depositAmount, displayCurrency)}).";
-                return failed;
-            }
-
-            var defaultCommission = await _context.SystemSettings.AsNoTracking()
-                .OrderByDescending(item => item.Id)
-                .Select(item => (decimal?)item.CommissionPercentage)
-                .FirstOrDefaultAsync() ?? 0m;
-            var commissionPercentage = Math.Clamp(place.Category?.CommissionPercentage ?? defaultCommission, 0m, 100m);
-            var platformCommission = totalPrice <= 0m ? 0m : Math.Round(totalPrice * commissionPercentage / 100m, 2);
+            // الحجوزات التي ينشئها المالك يدويًا لا تُحتسب عليها عمولة منصة.
+            const decimal commissionPercentage = 0m;
+            const decimal platformCommission = 0m;
             var proposedState = depositAmount > 0m && !collected ? "AwaitingPayment" : "Confirmed";
             var paymentTimeout = Math.Max(1, place.PlacePolicy?.PaymentTimeout ?? 12);
 
@@ -1717,6 +1815,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 DiscountAmount = discount,
                 TotalPrice = totalPrice,
                 DepositAmount = depositAmount,
+                InitialPaymentAmount = initialPaymentAmount,
                 RemainingAmount = Math.Round(Math.Max(0m, totalPrice - normalizedPaidAmount), 2),
                 CommissionPercentage = commissionPercentage,
                 PlatformCommission = platformCommission,
@@ -1752,7 +1851,8 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 Promotion = promotion,
                 StartDate = startDate,
                 EndDate = endDate,
-                Quantity = quantity
+                Quantity = quantity,
+                ResolvedPaymentMethod = paymentResolution.StoredValue
             };
         }
 
