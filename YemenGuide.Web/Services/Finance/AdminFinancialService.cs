@@ -295,7 +295,10 @@ namespace YemenGuide.Web.Services.Finance
             var missingPlaceIds = await _context.Places
                 .AsNoTracking()
                 .Where(place =>
-                    place.PlaceCommissionAccount == null)
+                    place.PlaceCommissionAccount == null &&
+                    place.Category != null &&
+                    place.Category.BookingSystemId >= 1 &&
+                    place.Category.BookingSystemId <= 4)
                 .Select(place => place.PlaceId)
                 .ToListAsync(cancellationToken);
 
@@ -391,7 +394,12 @@ namespace YemenGuide.Web.Services.Finance
             // بحساب مدير أو موظف، وهذا لا يحوّل ذلك الحساب إلى مالك.
             return await _context.Users
                 .AsNoTracking()
-                .Where(user => user.Role == "Owner")
+                .Where(user =>
+                    user.Role == "Owner" &&
+                    user.Places.Any(place =>
+                        place.Category != null &&
+                        place.Category.BookingSystemId >= 1 &&
+                        place.Category.BookingSystemId <= 4))
                 .Select(user => new AdminFinancialOwnerOptionDto
                 {
                     OwnerId = user.UserId,
@@ -400,7 +408,10 @@ namespace YemenGuide.Web.Services.Finance
                         : user.FullName,
                     PhoneNumber = user.PhoneNumber,
                     ContactInfo = user.ContactInfo,
-                    PlacesCount = user.Places.Count,
+                    PlacesCount = user.Places.Count(place =>
+                        place.Category != null &&
+                        place.Category.BookingSystemId >= 1 &&
+                        place.Category.BookingSystemId <= 4),
                     IsSelected = selectedOwnerId == user.UserId
                 })
                 .OrderBy(item => item.OwnerName)
@@ -423,6 +434,10 @@ namespace YemenGuide.Web.Services.Finance
 
             var query = _context.Places
                 .AsNoTracking()
+                .Where(place =>
+                    place.Category != null &&
+                    place.Category.BookingSystemId >= 1 &&
+                    place.Category.BookingSystemId <= 4)
                 .Include(place => place.PlaceCommissionAccount)
                 .Include(place => place.PlaceImages)
                 .AsSplitQuery()
@@ -760,6 +775,10 @@ namespace YemenGuide.Web.Services.Finance
 
             var accountCounts = await _context.PlaceCommissionAccounts
                 .AsNoTracking()
+                .Where(account =>
+                    account.Place.Category != null &&
+                    account.Place.Category.BookingSystemId >= 1 &&
+                    account.Place.Category.BookingSystemId <= 4)
                 .GroupBy(account => account.AccountStatus)
                 .Select(group => new
                 {
@@ -839,6 +858,10 @@ namespace YemenGuide.Web.Services.Finance
 
             var placesQuery = _context.Places
                 .AsNoTracking()
+                .Where(place =>
+                    place.Category != null &&
+                    place.Category.BookingSystemId >= 1 &&
+                    place.Category.BookingSystemId <= 4)
                 .AsQueryable();
 
             if (filter.OwnerId.HasValue)
@@ -2080,6 +2103,10 @@ namespace YemenGuide.Web.Services.Finance
             var query = _context.PlaceCommissionAccounts
                 .AsNoTracking()
                 .Include(account => account.Place)
+                .Where(account =>
+                    account.Place.Category != null &&
+                    account.Place.Category.BookingSystemId >= 1 &&
+                    account.Place.Category.BookingSystemId <= 4)
                 .AsQueryable();
 
             if (filter.OwnerId.HasValue)
@@ -2372,7 +2399,10 @@ namespace YemenGuide.Web.Services.Finance
                 .Include(item => item.Place)
                 .FirstOrDefaultAsync(item =>
                     item.PlaceCommissionAccountId ==
-                    placeCommissionAccountId,
+                        placeCommissionAccountId &&
+                    item.Place.Category != null &&
+                    item.Place.Category.BookingSystemId >= 1 &&
+                    item.Place.Category.BookingSystemId <= 4,
                     cancellationToken);
 
             if (account == null)
@@ -2550,7 +2580,10 @@ namespace YemenGuide.Web.Services.Finance
                 .FirstOrDefaultAsync(item =>
                     item.PlaceCommissionAccountId ==
                         request.PlaceCommissionAccountId &&
-                    item.PlaceId == request.PlaceId,
+                    item.PlaceId == request.PlaceId &&
+                    item.Place.Category != null &&
+                    item.Place.Category.BookingSystemId >= 1 &&
+                    item.Place.Category.BookingSystemId <= 4,
                     cancellationToken);
 
             if (account == null)
@@ -2660,7 +2693,10 @@ namespace YemenGuide.Web.Services.Finance
                 .FirstOrDefaultAsync(item =>
                     item.PlaceCommissionAccountId ==
                         request.PlaceCommissionAccountId &&
-                    item.PlaceId == request.PlaceId,
+                    item.PlaceId == request.PlaceId &&
+                    item.Place.Category != null &&
+                    item.Place.Category.BookingSystemId >= 1 &&
+                    item.Place.Category.BookingSystemId <= 4,
                     cancellationToken);
 
             if (account == null)
@@ -5083,6 +5119,10 @@ namespace YemenGuide.Web.Services.Finance
 
                 var accounts =
                     await _context.PlaceCommissionAccounts
+                        .Where(account =>
+                            account.Place.Category != null &&
+                            account.Place.Category.BookingSystemId >= 1 &&
+                            account.Place.Category.BookingSystemId <= 4)
                         .ToListAsync(
                             cancellationToken);
 
