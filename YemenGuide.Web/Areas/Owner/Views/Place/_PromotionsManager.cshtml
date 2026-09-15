@@ -31,7 +31,7 @@
 
     string pageDescription = Model.IsNonBooking
         ? "أنشئ عرضًا ترويجيًا واضحًا للمنشأة المحددة من الهيدر، وسيستخدم النظام صورة المنشأة تلقائيًا."
-        : "ابنِ خصمًا أو عرضًا بشرط ومكافأة؛ أنت تحدد الفكرة والنظام يضبط الحقول المناسبة تلقائيًا.";
+        : "أنشئ خصمًا مباشرًا أو عرضًا بمكافأة؛ اختر الفكرة وسيظهر لك النظام الحقول التي تحتاجها فقط.";
 }
 
 <section class="yg-promo-manager"
@@ -499,25 +499,25 @@
                             <div class="yg-promo-section-title compact">
                                 <span><i class="bi bi-diagram-3"></i></span>
                                 <div>
-                                    <h3>اختر طريقة العرض</h3>
+                                    <h3>كيف تريد تقديم العرض؟</h3>
                                 </div>
                             </div>
 
-                            <div class="yg-promo-offer-mode">
+                            <div class="yg-promo-offer-mode yg-promo-offer-mode--simple">
                                 <label>
                                     <input type="radio" name="OfferMode" value="Discount" checked />
                                     <span>
                                         <i class="bi bi-percent"></i>
                                         <b>خصم مباشر</b>
-                                        <small>نسبة أو مبلغ ثابت بدون مكافأة إضافية</small>
+                                        <small>اختر نسبة أو مبلغ خصم فقط</small>
                                     </span>
                                 </label>
                                 <label>
                                     <input type="radio" name="OfferMode" value="ConditionalReward" />
                                     <span>
                                         <i class="bi bi-gift"></i>
-                                        <b>شرط + مكافأة</b>
-                                        <small>أنت تحدد الشرط وما الذي يحصل عليه العميل</small>
+                                        <b>عرض بمكافأة</b>
+                                        <small>ليلة مجانية، خدمة، خصم أو سعر خاص</small>
                                     </span>
                                 </label>
                             </div>
@@ -563,29 +563,99 @@
 
                         @if (Model.IsBookable)
                         {
-                            <!-- منشئ المكافأة -->
-                            <div id="promotionRewardBuilder" class="yg-promo-reward-builder" hidden>
-                                <div class="yg-promo-builder-label">
-                                    <span><i class="bi bi-gift-fill"></i></span>
+                            <!--
+                                المرحلة الثالثة:
+                                نبقي القيم وأسماء الحقول القديمة كما هي، ونبسط فقط طريقة عرضها.
+                            -->
+                            <div id="promotionRewardBuilder" class="yg-promo-reward-builder yg-promo-reward-builder--simple" hidden>
+                                <div class="yg-promo-simple-step">
+                                    <span class="yg-promo-simple-step__number">1</span>
                                     <div>
-                                        <b>ماذا سيحصل عليه العميل؟</b>
-                                        <small>اختر المكافأة ثم أدخل قيمتها فقط.</small>
+                                        <b>اختر المكافأة</b>
+                                        <small>اختر ما سيحصل عليه العميل، وسيظهر لك الحقل المطلوب فقط.</small>
                                     </div>
                                 </div>
 
-                                <div class="yg-promo-reward-types">
-                                    <label><input type="radio" name="RewardType" value="PercentageDiscount" /><span><i class="bi bi-percent"></i><b>خصم نسبة</b></span></label>
-                                    <label><input type="radio" name="RewardType" value="FixedDiscount" /><span><i class="bi bi-cash"></i><b>خصم مبلغ</b></span></label>
-                                    <label><input type="radio" name="RewardType" value="SpecialPrice" /><span><i class="bi bi-tag"></i><b>سعر خاص</b></span></label>
-                                    <label id="promotionFreeQuantityRewardOption"><input type="radio" name="RewardType" value="FreeQuantity" /><span><i class="bi bi-moon-stars"></i><b>ليلة مجانية</b></span></label>
+                                <div class="yg-promo-reward-types yg-promo-reward-types--simple">
+                                    <label>
+                                        <input type="radio" name="RewardType" value="PercentageDiscount" />
+                                        <span>
+                                            <i class="bi bi-percent"></i>
+                                            <span class="yg-promo-reward-choice-copy">
+                                                <b>خصم نسبة</b>
+                                                <small>مثال: 15%</small>
+                                            </span>
+                                        </span>
+                                    </label>
+
+                                    <label>
+                                        <input type="radio" name="RewardType" value="FixedDiscount" />
+                                        <span>
+                                            <i class="bi bi-cash"></i>
+                                            <span class="yg-promo-reward-choice-copy">
+                                                <b>خصم مبلغ</b>
+                                                <small>مثال: 5,000 ريال</small>
+                                            </span>
+                                        </span>
+                                    </label>
+
+                                    <label>
+                                        <input type="radio" name="RewardType" value="SpecialPrice" />
+                                        <span>
+                                            <i class="bi bi-tag"></i>
+                                            <span class="yg-promo-reward-choice-copy">
+                                                <b>سعر خاص</b>
+                                                <small>سعر نهائي مخفض</small>
+                                            </span>
+                                        </span>
+                                    </label>
+
+                                    <label id="promotionFreeQuantityRewardOption">
+                                        <input type="radio" name="RewardType" value="FreeQuantity" />
+                                        <span>
+                                            <i class="bi bi-moon-stars"></i>
+                                            <span class="yg-promo-reward-choice-copy">
+                                                <b>ليلة مجانية</b>
+                                                <small>احجز عددًا وخذ ليلة أو أكثر</small>
+                                            </span>
+                                        </span>
+                                    </label>
+
                                     @if (Model.CanTargetServices)
                                     {
-                                        <label><input type="radio" name="RewardType" value="FreeService" /><span><i class="bi bi-gift"></i><b>خدمة مجانية</b></span></label>
-                                        <label><input type="radio" name="RewardType" value="ServiceSpecialPrice" /><span><i class="bi bi-stars"></i><b>خدمة بسعر خاص</b></span></label>
+                                        <label>
+                                            <input type="radio" name="RewardType" value="FreeService" />
+                                            <span>
+                                                <i class="bi bi-gift"></i>
+                                                <span class="yg-promo-reward-choice-copy">
+                                                    <b>خدمة مجانية</b>
+                                                    <small>خدمة إضافية بدون تكلفة</small>
+                                                </span>
+                                            </span>
+                                        </label>
+
+                                        <label>
+                                            <input type="radio" name="RewardType" value="ServiceSpecialPrice" />
+                                            <span>
+                                                <i class="bi bi-stars"></i>
+                                                <span class="yg-promo-reward-choice-copy">
+                                                    <b>خدمة بسعر خاص</b>
+                                                    <small>اختر الخدمة وسعرها الجديد</small>
+                                                </span>
+                                            </span>
+                                        </label>
                                     }
                                 </div>
 
-                                <div class="yg-promo-reward-fields">
+                                <div class="yg-promo-simple-step yg-promo-simple-step--second">
+                                    <span class="yg-promo-simple-step__number">2</span>
+                                    <div>
+                                        <b>أدخل تفاصيل المكافأة</b>
+                                        <small>لن تظهر إلا البيانات المطلوبة للخيار الذي اخترته.</small>
+                                    </div>
+                                </div>
+
+                                <div class="yg-promo-reward-fields yg-promo-reward-fields--simple">
                                     <label class="yg-promo-field" data-reward-field="discount" hidden>
                                         <span id="promotionRewardDiscountLabel">قيمة المكافأة <em>*</em></span>
                                         <input type="number"
@@ -596,99 +666,151 @@
                                                placeholder="أدخل القيمة" />
                                     </label>
 
-                                    <label class="yg-promo-field" data-reward-field="rewardQuantity" hidden>
-                                        <span id="promotionRewardQuantityLabel">عدد الليالي المجانية <em>*</em></span>
-                                        <input type="number"
-                                               name="RewardQuantity"
-                                               id="promotionRewardQuantity"
-                                               min="1"
-                                               inputmode="numeric"
-                                               placeholder="مثال: 1" />
-                                    </label>
-
-                                    <div class="yg-promo-repeat-box" id="promotionRewardRepeatableField" data-reward-field="rewardRepeatable" hidden>
-                                        <label class="yg-promo-repeat-toggle">
-                                            <input type="checkbox"
-                                           name="IsRewardRepeatable"
-                                           id="promotionRewardRepeatable"
-                                           value="true" />
-                                            <span class="yg-promo-repeat-switch" aria-hidden="true"></span>
-                                            <span class="yg-promo-repeat-copy">
-                                                <b>تكرار المكافأة عند تحقق الشرط أكثر من مرة</b>
-                                                <small>مثال: احجز ليلتين + ليلة مجانية. عند حجز 6 ليالٍ يحصل العميل على ليلتين مجانًا.</small>
-                                            </span>
-                                        </label>
-                                    </div>
-
                                     @if (Model.CanTargetServices)
                                     {
-                                        <label class="yg-promo-field" data-reward-field="rewardService" hidden>
-                                            <span>الخدمة التي سيحصل عليها العميل <em>*</em></span>
-                                            <select name="RewardServiceId" id="promotionRewardServiceId">
-                                                <option value="">اختر الخدمة</option>
+                                        <div class="yg-promo-field yg-promo-reward-services" data-reward-field="rewardService" hidden>
+                                            <span>الخدمات <em>*</em></span>
+                                            <small class="yg-promo-field-hint">يمكن اختيار خدمة واحدة أو أكثر. الحقل القديم يبقى محفوظًا تلقائيًا للتوافق.</small>
+
+                                            <input type="hidden" name="RewardServiceId" id="promotionRewardServiceId" />
+
+                                            <div class="yg-promo-service-checks" id="promotionRewardServiceIds">
                                                 @foreach (var item in Model.Services)
                                                 {
-                                                    <option value="@item.Id">@item.Name — @item.Meta</option>
+                                                    <label>
+                                                        <input type="checkbox"
+                                                               name="RewardServiceIds"
+                                                               value="@item.Id"
+                                                               data-price="@item.Price.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                                                               data-name="@item.Name" />
+                                                        <span>
+                                                            <i class="bi bi-check2"></i>
+                                                            <b>@item.Name</b>
+                                                            <small>@item.Meta</small>
+                                                        </span>
+                                                    </label>
                                                 }
-                                            </select>
-                                        </label>
+                                            </div>
+
+                                            <div class="yg-promo-bundle-summary" id="promotionBundleSummary" hidden>
+                                                <span><small>السعر الأصلي</small><b id="promotionBundleOriginalText">0 ريال</b></span>
+                                                <i class="bi bi-arrow-left"></i>
+                                                <span><small>السعر النهائي</small><b id="promotionBundleFinalText">0 ريال</b></span>
+                                                <span class="is-saving"><small>التوفير</small><b id="promotionBundleSavingText">0 ريال</b></span>
+                                            </div>
+                                        </div>
                                     }
 
                                     <label class="yg-promo-field" data-reward-field="specialPrice" hidden>
-                                        <span>السعر الخاص (ريال) <em>*</em></span>
+                                        <span>السعر الجديد (ريال) <em>*</em></span>
                                         <input type="number"
                                                name="SpecialPrice"
                                                id="promotionSpecialPrice"
                                                min="0.01"
                                                step="0.01"
                                                inputmode="decimal"
-                                               placeholder="مثال: 25000" />
+                                               placeholder="أدخل السعر الجديد" />
+                                        <small class="yg-promo-field-hint" id="promotionSpecialPriceHint">السعر يجب أن يكون أقل من السعر الأصلي.</small>
                                     </label>
                                 </div>
 
-
-                                <div class="yg-promo-free-condition" id="promotionFreeQuantityCondition" hidden>
-                                    <div class="yg-promo-builder-label yg-promo-builder-label--condition">
-                                        <span><i class="bi bi-check2-square"></i></span>
+                                <!-- ليلة مجانية: صيغة طبيعية بدل عرض حقول تقنية كثيرة -->
+                                <div class="yg-promo-free-condition yg-promo-free-condition--simple"
+                                     id="promotionFreeQuantityCondition"
+                                     hidden>
+                                    <div class="yg-promo-simple-night-title">
+                                        <span><i class="bi bi-moon-stars"></i></span>
                                         <div>
-                                            <b>شرط الحصول على المجاني</b>
-                                            <small>حدد مقابل ماذا يحصل العميل على الكمية أو الليلة المجانية.</small>
+                                            <b>حدد صيغة الليلة المجانية</b>
+                                            <small>مثال: احجز ليلتين وخذ ليلة مجانًا.</small>
                                         </div>
                                     </div>
 
-                                    <div class="yg-promo-fields two">
+                                    <div class="yg-promo-night-formula">
                                         @if (Model.SupportsMinimumNights)
                                         {
                                             <label class="yg-promo-field" data-free-condition-field="nights">
-                                                <span>عدد الليالي المطلوبة</span>
-                                                <input type="number" name="MinimumNights" id="promotionMinimumNights"
-                                           min="1" inputmode="numeric" placeholder="مثال: 2" />
-                                                <small class="yg-promo-field-hint">مثال: 2 = احجز ليلتين ثم يحصل على المجاني.</small>
+                                                <span>يحجز العميل <em>*</em></span>
+                                                <div class="yg-promo-night-input">
+                                                    <input type="number"
+                                                           name="MinimumNights"
+                                                           id="promotionMinimumNights"
+                                                           min="1"
+                                                           inputmode="numeric"
+                                                           placeholder="2" />
+                                                    <b>ليلة</b>
+                                                </div>
                                             </label>
                                         }
 
-                                        <label class="yg-promo-field" data-free-condition-field="quantity">
-                                            <span>الكمية المطلوبة</span>
-                                            <input type="number" name="RequiredQuantity" id="promotionRequiredQuantity"
-                                           min="1" inputmode="numeric" placeholder="مثال: 2" />
-                                            <small class="yg-promo-field-hint">مثال: 2 = خذ اثنتين واحصل على المجاني.</small>
+                                        <span class="yg-promo-night-formula__arrow">
+                                            <i class="bi bi-arrow-left"></i>
+                                        </span>
+
+                                        <label class="yg-promo-field" data-reward-field="rewardQuantity" hidden>
+                                            <span>ويحصل مجانًا على <em>*</em></span>
+                                            <div class="yg-promo-night-input">
+                                                <input type="number"
+                                                       name="RewardQuantity"
+                                                       id="promotionRewardQuantity"
+                                                       min="1"
+                                                       inputmode="numeric"
+                                                       placeholder="1" />
+                                                <b>ليلة</b>
+                                            </div>
+                                        </label>
+                                    </div>
+
+                                    <div class="yg-promo-repeat-box yg-promo-repeat-box--simple"
+                                         id="promotionRewardRepeatableField"
+                                         data-reward-field="rewardRepeatable"
+                                         hidden>
+                                        <label class="yg-promo-repeat-toggle">
+                                            <input type="checkbox"
+                                                   name="IsRewardRepeatable"
+                                                   id="promotionRewardRepeatable"
+                                                   value="true" />
+                                            <span class="yg-promo-repeat-switch" aria-hidden="true"></span>
+                                            <span class="yg-promo-repeat-copy">
+                                                <b>كرر المكافأة إذا تكرر الشرط</b>
+                                                <small>مثال: إذا كان العرض 2 + 1، فإن تكرار الشرط يعطي المكافأة مرة أخرى حسب الحجز.</small>
+                                            </span>
+                                        </label>
+                                    </div>
+
+                                    <!--
+                                        حقول قديمة محفوظة للتوافق مع العروض السابقة.
+                                        لا نحذفها ولا نغير أسماءها، لكنها لا تظهر للمستخدم في الواجهة المبسطة.
+                                    -->
+                                    <div class="yg-promo-legacy-preserved-fields" aria-hidden="true">
+                                        <label data-free-condition-field="quantity">
+                                            <input type="number"
+                                                   name="RequiredQuantity"
+                                                   id="promotionRequiredQuantity"
+                                                   min="1"
+                                                   inputmode="numeric" />
                                         </label>
 
                                         @if (Model.SupportsMinimumPeople)
                                         {
-                                            <label class="yg-promo-field" data-free-condition-field="people">
-                                                <span>أقل عدد أشخاص</span>
-                                                <input type="number" name="MinimumPeople" id="promotionMinimumPeople"
-                                           min="1" inputmode="numeric" placeholder="اختياري" />
+                                            <label data-free-condition-field="people">
+                                                <input type="number"
+                                                       name="MinimumPeople"
+                                                       id="promotionMinimumPeople"
+                                                       min="1"
+                                                       inputmode="numeric" />
                                             </label>
                                         }
 
                                         @if (Model.SupportsBookingAmount)
                                         {
-                                            <label class="yg-promo-field" data-free-condition-field="booking">
-                                                <span>أقل قيمة حجز (ريال)</span>
-                                                <input type="number" name="MinimumBookingAmount" id="promotionMinimumBooking"
-                                           min="0" step="0.01" inputmode="decimal" placeholder="اختياري" />
+                                            <label data-free-condition-field="booking">
+                                                <input type="number"
+                                                       name="MinimumBookingAmount"
+                                                       id="promotionMinimumBooking"
+                                                       min="0"
+                                                       step="0.01"
+                                                       inputmode="decimal" />
                                             </label>
                                         }
                                     </div>
@@ -696,12 +818,11 @@
                                     <div class="yg-promo-condition-example" id="promotionFreeQuantityExample">
                                         <i class="bi bi-lightbulb"></i>
                                         <span>
-                                            مثال: <b>عدد الليالي المطلوبة 2</b> + <b>الكمية المجانية 1</b>
-                                            = احجز ليلتين وخذ الثالثة مجانًا.
+                                            أدخل <b>2</b> في عدد الليالي و<b>1</b> في المجاني
+                                            ليصبح العرض: <b>احجز ليلتين وخذ الثالثة مجانًا.</b>
                                         </span>
                                     </div>
                                 </div>
-
                             </div>
                         }
 
@@ -710,11 +831,11 @@
                             <div class="yg-promo-apply-mode">
                                 <label>
                                     <input type="radio" name="IsAutomatic" value="true" checked />
-                                    <span><i class="bi bi-magic"></i><b>تلقائي</b><small>يطبّق عند تحقق الشروط</small></span>
+                                    <span><i class="bi bi-magic"></i><b>تلقائي</b><small>يطبق النظام العرض عند تحقق شروطه</small></span>
                                 </label>
                                 <label>
                                     <input type="radio" name="IsAutomatic" value="false" />
-                                    <span><i class="bi bi-ticket-perforated"></i><b>بكود عرض</b><small>يدخله العميل أثناء الحجز</small></span>
+                                    <span><i class="bi bi-ticket-perforated"></i><b>بكود عرض</b><small>يدخل العميل الكود أثناء الحجز</small></span>
                                 </label>
                             </div>
 
@@ -744,14 +865,33 @@
                         <div class="yg-promo-fields two">
                             <label class="yg-promo-field">
                                 <span>بداية العرض <em>*</em></span>
-                                <input type="date" name="StartDate" id="promotionStartDate" required />
+                                <input type="hidden" name="StartDate" id="promotionStartDate" />
+                                <input type="text"
+                                       id="promotionStartDateDisplay"
+                                       class="yg-promo-datetime-display"
+                                       data-promo-datetime-display="start"
+                                       lang="en-US"
+                                       dir="ltr"
+                                       readonly
+                                       autocomplete="off"
+                                       placeholder="Select start date & time"
+                                       aria-label="Start date and time" />
                             </label>
                             <label class="yg-promo-field">
                                 <span>نهاية العرض <em>*</em></span>
-                                <input type="date" name="EndDate" id="promotionEndDate" required />
+                                <input type="hidden" name="EndDate" id="promotionEndDate" />
+                                <input type="text"
+                                       id="promotionEndDateDisplay"
+                                       class="yg-promo-datetime-display"
+                                       data-promo-datetime-display="end"
+                                       lang="en-US"
+                                       dir="ltr"
+                                       readonly
+                                       autocomplete="off"
+                                       placeholder="Select end date & time"
+                                       aria-label="End date and time" />
                             </label>
                         </div>
-
 
                         <div class="yg-promo-days">
                             <div>
@@ -820,6 +960,830 @@
                 </footer>
             </form>
         </template>
+
+        <style>
+            /* ================================================================
+               المرحلة الثالثة - تبسيط "عرض بمكافأة"
+               هذه القواعد محصورة داخل نافذة العروض ولا تغير منطق الحفظ.
+               ================================================================ */
+
+            .yg-promo-offer-mode--simple {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 12px;
+                margin-bottom: 16px;
+            }
+
+            .yg-promo-offer-mode--simple label {
+                position: relative;
+                min-width: 0;
+                cursor: pointer;
+            }
+
+            .yg-promo-offer-mode--simple input {
+                position: absolute;
+                opacity: 0;
+                pointer-events: none;
+            }
+
+            .yg-promo-offer-mode--simple label > span {
+                display: grid;
+                grid-template-columns: 42px minmax(0, 1fr);
+                align-items: center;
+                gap: 10px;
+                min-height: 76px;
+                padding: 12px 14px;
+                color: #536779;
+                background: #fff;
+                border: 1px solid #DDE9F0;
+                border-radius: 15px;
+                transition: .18s ease;
+            }
+
+            .yg-promo-offer-mode--simple label > span > i {
+                display: grid;
+                place-items: center;
+                grid-row: 1 / span 2;
+                width: 42px;
+                height: 42px;
+                color: #00A6DA;
+                background: #EAF8FD;
+                border-radius: 12px;
+                font-size: 1rem;
+            }
+
+            .yg-promo-offer-mode--simple b,
+            .yg-promo-offer-mode--simple small {
+                grid-column: 2;
+            }
+
+            .yg-promo-offer-mode--simple b {
+                align-self: end;
+                color: #30495C;
+                font-size: .82rem;
+                font-weight: 900;
+            }
+
+            .yg-promo-offer-mode--simple small {
+                align-self: start;
+                color: #8395A4;
+                font-size: .67rem;
+                font-weight: 650;
+                line-height: 1.5;
+            }
+
+            .yg-promo-offer-mode--simple input:checked + span {
+                background: #F0FAFE;
+                border-color: rgba(0, 166, 218, .62);
+                box-shadow: 0 0 0 3px rgba(0, 166, 218, .07);
+            }
+
+            .yg-promo-offer-mode--simple input:checked + span b {
+                color: #008FBE;
+            }
+
+            .yg-promo-reward-builder--simple {
+                margin-top: 2px;
+                padding: 16px;
+                background: #fff;
+                border: 1px solid #E0EBF1;
+                border-radius: 18px;
+            }
+
+            .yg-promo-simple-step {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                margin-bottom: 12px;
+            }
+
+            .yg-promo-simple-step--second {
+                margin-top: 17px;
+                padding-top: 15px;
+                border-top: 1px solid #E8F0F4;
+            }
+
+            .yg-promo-simple-step__number {
+                display: grid;
+                place-items: center;
+                flex: 0 0 32px;
+                width: 32px;
+                height: 32px;
+                color: #fff;
+                background: #00A6DA;
+                border-radius: 10px;
+                font-size: .75rem;
+                font-weight: 950;
+                box-shadow: 0 7px 16px rgba(0, 166, 218, .17);
+            }
+
+            .yg-promo-simple-step b {
+                display: block;
+                margin-bottom: 1px;
+                color: #30495C;
+                font-size: .8rem;
+                font-weight: 950;
+            }
+
+            .yg-promo-simple-step small {
+                display: block;
+                color: #8596A5;
+                font-size: .67rem;
+                font-weight: 650;
+            }
+
+            .yg-promo-reward-types--simple {
+                display: grid;
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                gap: 9px;
+            }
+
+            .yg-promo-reward-types--simple label {
+                position: relative;
+                min-width: 0;
+                cursor: pointer;
+            }
+
+            .yg-promo-reward-types--simple input {
+                position: absolute;
+                opacity: 0;
+                pointer-events: none;
+            }
+
+            .yg-promo-reward-types--simple label > span {
+                display: flex;
+                align-items: center;
+                gap: 9px;
+                min-height: 68px;
+                padding: 9px 10px;
+                color: #536779;
+                background: #F9FCFD;
+                border: 1px solid #E1EBF1;
+                border-radius: 13px;
+                transition: .18s ease;
+            }
+
+            .yg-promo-reward-types--simple label > span > i {
+                display: grid;
+                place-items: center;
+                flex: 0 0 34px;
+                width: 34px;
+                height: 34px;
+                color: #00A6DA;
+                background: #EAF8FD;
+                border-radius: 10px;
+            }
+
+            .yg-promo-reward-choice-copy {
+                display: block;
+                min-width: 0;
+            }
+
+            .yg-promo-reward-choice-copy b {
+                display: block;
+                margin-bottom: 2px;
+                color: #334D60;
+                font-size: .72rem;
+                font-weight: 900;
+            }
+
+            .yg-promo-reward-choice-copy small {
+                display: block;
+                overflow: hidden;
+                color: #8A9AA8;
+                font-size: .6rem;
+                font-weight: 650;
+                line-height: 1.4;
+                text-overflow: ellipsis;
+            }
+
+            .yg-promo-reward-types--simple input:checked + span {
+                background: #F0FAFE;
+                border-color: rgba(0, 166, 218, .6);
+                box-shadow: 0 0 0 3px rgba(0, 166, 218, .065);
+            }
+
+            .yg-promo-reward-types--simple input:checked + span .yg-promo-reward-choice-copy b {
+                color: #008FBE;
+            }
+
+            .yg-promo-reward-fields--simple {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 12px;
+            }
+
+            .yg-promo-free-condition--simple {
+                margin-top: 2px;
+                padding: 14px;
+                background: #F7FCFE;
+                border: 1px solid #DDEEF5;
+                border-radius: 15px;
+            }
+
+            .yg-promo-simple-night-title {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                margin-bottom: 13px;
+            }
+
+            .yg-promo-simple-night-title > span {
+                display: grid;
+                place-items: center;
+                flex: 0 0 38px;
+                width: 38px;
+                height: 38px;
+                color: #00A6DA;
+                background: #fff;
+                border: 1px solid #DCECF3;
+                border-radius: 11px;
+            }
+
+            .yg-promo-simple-night-title b {
+                display: block;
+                margin-bottom: 2px;
+                color: #30495C;
+                font-size: .77rem;
+                font-weight: 950;
+            }
+
+            .yg-promo-simple-night-title small {
+                display: block;
+                color: #8496A5;
+                font-size: .65rem;
+                font-weight: 650;
+            }
+
+            .yg-promo-night-formula {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) 42px minmax(0, 1fr);
+                align-items: end;
+                gap: 10px;
+            }
+
+            .yg-promo-night-formula__arrow {
+                display: grid;
+                place-items: center;
+                height: 52px;
+                color: #00A6DA;
+                font-size: 1rem;
+            }
+
+            .yg-promo-night-input {
+                position: relative;
+            }
+
+            .yg-promo-night-input input {
+                padding-inline-end: 58px !important;
+            }
+
+            .yg-promo-night-input > b {
+                position: absolute;
+                top: 50%;
+                inset-inline-end: 10px;
+                transform: translateY(-50%);
+                display: grid;
+                place-items: center;
+                min-width: 40px;
+                height: 30px;
+                padding: 0 7px;
+                color: #008FBE;
+                background: #EAF8FD;
+                border-radius: 8px;
+                font-size: .66rem;
+                font-weight: 900;
+                pointer-events: none;
+            }
+
+            .yg-promo-repeat-box--simple {
+                margin-top: 12px;
+            }
+
+            .yg-promo-legacy-preserved-fields {
+                display: none !important;
+            }
+
+            .yg-promo-condition-example {
+                margin-top: 12px;
+            }
+
+            @@media (max-width: 760px) {
+                .yg-promo-offer-mode--simple,
+                .yg-promo-reward-types--simple,
+                .yg-promo-reward-fields--simple {
+                    grid-template-columns: 1fr !important;
+                }
+
+                .yg-promo-night-formula {
+                    grid-template-columns: 1fr !important;
+                }
+
+                .yg-promo-night-formula__arrow {
+                    height: 28px;
+                    transform: rotate(-90deg);
+                }
+            }
+        
+            /* المرحلة 5 و6: اختيار خدمات متعددة وتسعير الباقة */
+            .yg-promo-reward-services {
+                grid-column: 1 / -1;
+            }
+
+            .yg-promo-service-checks {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 9px;
+                margin-top: 2px;
+            }
+
+            .yg-promo-service-checks label {
+                position: relative;
+                min-width: 0;
+                cursor: pointer;
+            }
+
+            .yg-promo-service-checks input {
+                position: absolute;
+                opacity: 0;
+                pointer-events: none;
+            }
+
+            .yg-promo-service-checks label > span {
+                display: grid;
+                grid-template-columns: 32px minmax(0, 1fr);
+                align-items: center;
+                gap: 2px 9px;
+                min-height: 62px;
+                padding: 9px 10px;
+                background: #fff;
+                border: 1px solid #DFEAF0;
+                border-radius: 12px;
+                transition: .18s ease;
+            }
+
+            .yg-promo-service-checks label > span > i {
+                display: grid;
+                place-items: center;
+                grid-row: 1 / span 2;
+                width: 32px;
+                height: 32px;
+                color: #8FA0AE;
+                background: #F1F5F7;
+                border-radius: 9px;
+            }
+
+            .yg-promo-service-checks b {
+                align-self: end;
+                color: #385165;
+                font-size: .72rem;
+                font-weight: 900;
+            }
+
+            .yg-promo-service-checks small {
+                align-self: start;
+                color: #8B9AA8;
+                font-size: .6rem;
+                font-weight: 650;
+            }
+
+            .yg-promo-service-checks input:checked + span {
+                background: #F0FAFE;
+                border-color: rgba(0,166,218,.58);
+                box-shadow: 0 0 0 3px rgba(0,166,218,.06);
+            }
+
+            .yg-promo-service-checks input:checked + span > i {
+                color: #fff;
+                background: #00A6DA;
+            }
+
+            .yg-promo-bundle-summary {
+                display: grid;
+                grid-template-columns: 1fr auto 1fr 1fr;
+                align-items: center;
+                gap: 9px;
+                margin-top: 10px;
+                padding: 11px;
+                background: #F7FBFD;
+                border: 1px solid #E0EDF3;
+                border-radius: 12px;
+            }
+
+            .yg-promo-bundle-summary > span {
+                display: block;
+                min-width: 0;
+            }
+
+            .yg-promo-bundle-summary small,
+            .yg-promo-bundle-summary b { display: block; }
+            .yg-promo-bundle-summary small { color:#8A9AA8; font-size:.59rem; font-weight:700; }
+            .yg-promo-bundle-summary b { color:#30495C; font-size:.72rem; font-weight:950; }
+            .yg-promo-bundle-summary .is-saving b { color:#23956D; }
+            .yg-promo-bundle-summary > i { color:#00A6DA; }
+
+            @@media (max-width: 760px) {
+                .yg-promo-service-checks { grid-template-columns: 1fr; }
+                .yg-promo-bundle-summary { grid-template-columns: 1fr 1fr; }
+                .yg-promo-bundle-summary > i { display:none; }
+            }
+
+            /* ================================================================
+               V5 - English date/time picker for promotions
+               Native browser calendars follow browser/OS locale, so these
+               visible fields use the custom picker installed by promotions-manager.js.
+               ================================================================ */
+            .yg-promo-datetime-display {
+                direction: ltr !important;
+                text-align: left !important;
+                cursor: pointer;
+                font-variant-numeric: tabular-nums;
+                letter-spacing: .01em;
+                background: #fff !important;
+            }
+
+            .yg-promo-datetime-display.is-invalid {
+                border-color: #ef6a6a !important;
+                box-shadow: 0 0 0 3px rgba(239, 106, 106, .08) !important;
+            }
+
+            .yg-promo-en-datetime-picker {
+                position: fixed;
+                z-index: 2147483000;
+                width: min(340px, calc(100vw - 24px));
+                padding: 14px;
+                direction: ltr;
+                text-align: left;
+                color: #2d4658;
+                background: #fff;
+                border: 1px solid #d9e7ee;
+                border-radius: 16px;
+                box-shadow: 0 18px 48px rgba(17, 55, 78, .18);
+                font-family: Arial, "Segoe UI", sans-serif;
+                user-select: none;
+            }
+
+            .yg-promo-en-datetime-picker[hidden] {
+                display: none !important;
+            }
+
+            .yg-promo-en-picker__head {
+                display: grid;
+                grid-template-columns: 36px 1fr 36px;
+                align-items: center;
+                gap: 8px;
+                margin-bottom: 10px;
+            }
+
+            .yg-promo-en-picker__head button {
+                display: grid;
+                place-items: center;
+                width: 36px;
+                height: 36px;
+                padding: 0;
+                border: 1px solid #dfeaf0;
+                border-radius: 10px;
+                color: #456072;
+                background: #f8fbfc;
+                cursor: pointer;
+                font-size: 18px;
+                font-weight: 800;
+            }
+
+            .yg-promo-en-picker__head button:disabled {
+                opacity: .28;
+                cursor: not-allowed;
+            }
+
+            .yg-promo-en-picker__month {
+                text-align: center;
+                color: #263f52;
+                font-size: .9rem;
+                font-weight: 900;
+            }
+
+            .yg-promo-en-picker__weekdays,
+            .yg-promo-en-picker__days {
+                display: grid;
+                grid-template-columns: repeat(7, 1fr);
+                gap: 4px;
+            }
+
+            .yg-promo-en-picker__weekdays {
+                margin-bottom: 5px;
+                color: #8295a3;
+                font-size: .63rem;
+                font-weight: 800;
+                text-align: center;
+            }
+
+            .yg-promo-en-picker__weekday {
+                padding: 4px 0;
+            }
+
+            .yg-promo-en-picker__day {
+                display: grid;
+                place-items: center;
+                aspect-ratio: 1;
+                min-width: 0;
+                border: 0;
+                border-radius: 9px;
+                color: #385267;
+                background: transparent;
+                cursor: pointer;
+                font-size: .72rem;
+                font-weight: 800;
+            }
+
+            .yg-promo-en-picker__day:hover:not(:disabled) {
+                color: #008fbe;
+                background: #edf9fd;
+            }
+
+            .yg-promo-en-picker__day.is-selected {
+                color: #fff;
+                background: #00a6da;
+                box-shadow: 0 5px 13px rgba(0, 166, 218, .23);
+            }
+
+            .yg-promo-en-picker__day.is-today:not(.is-selected) {
+                color: #008fbe;
+                outline: 1px solid rgba(0, 166, 218, .45);
+                outline-offset: -2px;
+            }
+
+            .yg-promo-en-picker__day:disabled,
+            .yg-promo-en-picker__day.is-outside {
+                color: #c7d0d6;
+                background: #f7f9fa;
+                cursor: not-allowed;
+                opacity: .68;
+            }
+
+            .yg-promo-en-picker__time {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 10px;
+                margin-top: 13px;
+                padding-top: 12px;
+                border-top: 1px solid #e7eff3;
+            }
+
+            .yg-promo-en-picker__time label {
+                display: grid;
+                gap: 5px;
+                color: #708492;
+                font-size: .64rem;
+                font-weight: 800;
+            }
+
+            .yg-promo-en-picker__time input {
+                width: 100%;
+                height: 40px;
+                padding: 0 10px;
+                direction: ltr;
+                text-align: center;
+                color: #2d4658;
+                background: #fff;
+                border: 1px solid #dce8ee;
+                border-radius: 10px;
+                outline: none;
+                font-size: .78rem;
+                font-weight: 850;
+            }
+
+            .yg-promo-en-picker__time input:focus {
+                border-color: #00a6da;
+                box-shadow: 0 0 0 3px rgba(0, 166, 218, .08);
+            }
+
+            .yg-promo-en-picker__minimum {
+                margin-top: 8px;
+                color: #8a9aa6;
+                font-size: .61rem;
+                font-weight: 700;
+            }
+
+            .yg-promo-en-picker__actions {
+                display: flex;
+                justify-content: flex-end;
+                gap: 8px;
+                margin-top: 12px;
+            }
+
+            .yg-promo-en-picker__actions button {
+                min-width: 78px;
+                height: 38px;
+                padding: 0 14px;
+                border-radius: 10px;
+                font-size: .7rem;
+                font-weight: 900;
+                cursor: pointer;
+            }
+
+            .yg-promo-en-picker__cancel {
+                color: #607786;
+                background: #fff;
+                border: 1px solid #dce8ee;
+            }
+
+            .yg-promo-en-picker__apply {
+                color: #fff;
+                background: #00a6da;
+                border: 1px solid #00a6da;
+            }
+
+        </style>
+
+
+        <script>
+            /*
+             * توافق المرحلة 5/6 مع أي نسخة قديمة من promotions-manager.js:
+             * - RewardServiceId يبقى أول خدمة مختارة للتوافق القديم.
+             * - RewardServiceIds هي المصدر الحقيقي للاختيار المتعدد.
+             * - السعر النهائي لباقة الخدمات يجب أن يكون أقل من مجموع أسعارها الأصلية.
+             */
+            (function () {
+                const root = document.getElementById("promotionManager");
+                if (!root || root.dataset.bundleCompatibilityInstalled === "true") return;
+                root.dataset.bundleCompatibilityInstalled = "true";
+
+                function getForm(target) {
+                    return target?.closest?.("#promotionForm") || document.querySelector("#promotionForm");
+                }
+
+                function selectedServices(form) {
+                    if (!form) return [];
+                    return Array.from(form.querySelectorAll('input[name="RewardServiceIds"]:checked'))
+                        .map(input => ({
+                            input,
+                            id: Number(input.value || 0),
+                            price: Number(input.dataset.price || 0),
+                            name: String(input.dataset.name || "خدمة")
+                        }))
+                        .filter(item => item.id > 0 && Number.isFinite(item.price) && item.price >= 0);
+                }
+
+                function originalBundlePrice(form) {
+                    return selectedServices(form).reduce((sum, item) => sum + item.price, 0);
+                }
+
+                function money(value) {
+                    try {
+                        return new Intl.NumberFormat("ar-YE", { maximumFractionDigits: 2 }).format(value);
+                    } catch {
+                        return String(Math.round(value * 100) / 100);
+                    }
+                }
+
+                function setAlert(form, message) {
+                    const alert = form?.querySelector("#promotionFormAlert");
+                    if (alert) {
+                        alert.textContent = message;
+                        alert.hidden = false;
+                        alert.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+                    }
+                }
+
+                function syncBundle(form) {
+                    if (!form) return;
+
+                    const selected = selectedServices(form);
+                    const legacy = form.querySelector("#promotionRewardServiceId");
+                    if (legacy) {
+                        legacy.value = selected.length ? String(selected[0].id) : "";
+                    }
+
+                    const rewardType = form.querySelector('input[name="RewardType"]:checked')?.value || "";
+                    const isBundle = rewardType === "ServiceSpecialPrice";
+                    const total = originalBundlePrice(form);
+                    const price = form.querySelector("#promotionSpecialPrice");
+                    const hint = form.querySelector("#promotionSpecialPriceHint");
+                    const summary = form.querySelector("#promotionBundleSummary");
+                    const finalValue = Number(price?.value || 0);
+
+                    if (price && isBundle && total > 0) {
+                        const max = Math.max(0, Math.round((total - 0.01) * 100) / 100);
+                        price.max = String(max);
+                    } else if (price && isBundle) {
+                        price.removeAttribute("max");
+                    }
+
+                    if (hint && isBundle) {
+                        hint.textContent = total > 0
+                            ? `السعر النهائي يجب أن يكون أقل من مجموع أسعار الخدمات المختارة (${money(total)} ريال).`
+                            : "اختر خدمة واحدة على الأقل أولًا ليتم حساب الحد الأعلى للسعر.";
+
+                        const invalid = finalValue > 0 && total > 0 && finalValue >= total;
+                        hint.style.color = invalid ? "#c94d4d" : "";
+                    }
+
+                    if (summary) {
+                        summary.hidden = !isBundle || total <= 0;
+                    }
+
+                    const originalText = form.querySelector("#promotionBundleOriginalText");
+                    const finalText = form.querySelector("#promotionBundleFinalText");
+                    const savingText = form.querySelector("#promotionBundleSavingText");
+
+                    if (originalText) originalText.textContent = `${money(total)} ريال`;
+                    if (finalText) finalText.textContent = finalValue > 0 ? `${money(finalValue)} ريال` : "—";
+                    if (savingText) {
+                        const saving = finalValue > 0 && finalValue < total ? total - finalValue : 0;
+                        savingText.textContent = `${money(saving)} ريال`;
+                    }
+                }
+
+                function validateBundleBeforeContinue(form) {
+                    if (!form) return true;
+
+                    const rewardType = form.querySelector('input[name="RewardType"]:checked')?.value || "";
+                    if (rewardType !== "ServiceSpecialPrice") return true;
+
+                    syncBundle(form);
+
+                    const selected = selectedServices(form);
+                    if (!selected.length) {
+                        setAlert(form, "اختر خدمة واحدة على الأقل ضمن باقة الخدمات.");
+                        selected[0]?.input?.focus?.();
+                        return false;
+                    }
+
+                    const total = originalBundlePrice(form);
+                    const price = form.querySelector("#promotionSpecialPrice");
+                    const value = Number(price?.value || 0);
+
+                    if (!Number.isFinite(value) || value <= 0) {
+                        setAlert(form, "أدخل السعر النهائي لباقة الخدمات بشكل صحيح.");
+                        price?.focus?.();
+                        return false;
+                    }
+
+                    if (total <= 0) {
+                        setAlert(form, "تعذر حساب مجموع أسعار الخدمات المختارة.");
+                        return false;
+                    }
+
+                    if (value >= total) {
+                        setAlert(
+                            form,
+                            `السعر النهائي يجب أن يكون أقل من مجموع أسعار الخدمات (${money(total)} ريال).`
+                        );
+                        price?.classList?.add("is-invalid");
+                        price?.focus?.();
+                        return false;
+                    }
+
+                    price?.classList?.remove("is-invalid");
+                    return true;
+                }
+
+                document.addEventListener("change", function (event) {
+                    const target = event.target;
+                    if (!(target instanceof HTMLElement)) return;
+
+                    if (target.matches('input[name="RewardServiceIds"], input[name="RewardType"], input[name="OfferMode"]')) {
+                        const form = getForm(target);
+                        window.setTimeout(() => syncBundle(form), 0);
+                    }
+                }, true);
+
+                document.addEventListener("input", function (event) {
+                    const target = event.target;
+                    if (!(target instanceof HTMLElement)) return;
+                    if (target.id === "promotionSpecialPrice") {
+                        syncBundle(getForm(target));
+                    }
+                }, true);
+
+                // نتحقق قبل وصول النقرة إلى كود التحقق القديم.
+                document.addEventListener("click", function (event) {
+                    const button = event.target?.closest?.(
+                        "#promotionNextStep, #savePromotionDraft, #publishPromotion"
+                    );
+                    if (!button) return;
+
+                    const form = getForm(button);
+                    syncBundle(form);
+
+                    if (!validateBundleBeforeContinue(form)) {
+                        event.preventDefault();
+                        event.stopImmediatePropagation();
+                    }
+                }, true);
+
+                document.addEventListener("submit", function (event) {
+                    const form = event.target;
+                    if (!(form instanceof HTMLFormElement) || form.id !== "promotionForm") return;
+
+                    syncBundle(form);
+                    if (!validateBundleBeforeContinue(form)) {
+                        event.preventDefault();
+                        event.stopImmediatePropagation();
+                    }
+                }, true);
+            })();
+        </script>
 
         <script type="application/json" id="promotionManagerData">@Html.Raw(promotionsJson)</script>
     }

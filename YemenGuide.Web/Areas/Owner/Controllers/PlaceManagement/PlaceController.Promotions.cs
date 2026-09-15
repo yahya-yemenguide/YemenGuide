@@ -663,8 +663,8 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 if (dto.DiscountValue <= 0)
                     return "قيمة الخصم يجب أن تكون أكبر من صفر.";
 
-                if (dto.DiscountType == "Percentage" && dto.DiscountValue > 100)
-                    return "نسبة الخصم لا يمكن أن تتجاوز 100%.";
+                if (dto.DiscountType == "Percentage" && dto.DiscountValue >= 100)
+                    return "نسبة الخصم يجب أن تكون أكبر من صفر وأقل من 100%.";
             }
             else
             {
@@ -678,8 +678,8 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     if (dto.DiscountValue <= 0)
                         return "أدخل قيمة المكافأة بشكل صحيح.";
 
-                    if (rewardType == "PercentageDiscount" && dto.DiscountValue > 100)
-                        return "نسبة الخصم لا يمكن أن تتجاوز 100%.";
+                    if (rewardType == "PercentageDiscount" && dto.DiscountValue >= 100)
+                        return "نسبة الخصم يجب أن تكون أكبر من صفر وأقل من 100%.";
                 }
 
                 if (rewardType == "FreeQuantity")
@@ -799,11 +799,122 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 return "هدف العرض المحدد غير صحيح.";
             }
 
+            // المرحلة الثانية: الخصم الثابت يجب أن يكون أقل من السعر الأصلي للهدف.
+            bool usesFixedDiscount =
+                (dto.OfferMode == "Discount" && dto.DiscountType == "FixedAmount") ||
+                (dto.OfferMode == "ConditionalReward" && dto.RewardType == "FixedDiscount");
+
+            if (usesFixedDiscount)
+            {
+                decimal? targetBasePrice = await ResolvePromotionTargetBasePriceAsync(
+                    dto,
+                    placeId,
+                    bookingSystemId);
+
+                if (!targetBasePrice.HasValue || targetBasePrice.Value <= 0)
+                {
+                    return "تعذر تحديد السعر الأصلي للهدف. اختر نسبة مئوية أو هدفًا له سعر واضح.";
+                }
+
+                if (dto.DiscountValue >= targetBasePrice.Value)
+                {
+                    return $"قيمة الخصم يجب أن تكون أقل من السعر الأصلي للهدف ({targetBasePrice.Value:N0} ريال).";
+                }
+            }
+
             string? normalizedDays = NormalizeApplicableDays(dto.ApplicableDaysCsv);
             if (!string.IsNullOrWhiteSpace(dto.ApplicableDaysCsv) && normalizedDays == null)
                 return "أيام تطبيق العرض غير صحيحة.";
 
             return null;
+        }
+
+        /// <summary>
+        /// يعيد السعر الأصلي للهدف بنفس منطق واجهة العروض.
+        /// للمنشأة كاملة نستخدم أقل سعر حجز أساسي من الغرف/الباقات،
+        /// ولا ندخل الخدمات الإضافية في أصل سعر الحجز.
+        /// </summary>
+        private async Task<decimal?> ResolvePromotionTargetBasePriceAsync(
+            PromotionUpsertDto dto,
+            int placeId,
+            int bookingSystemId)
+        {
+            string targetType = (dto.TargetType ?? "Place").Trim();
+
+            if (targetType == "Room")
+            {
+                if (!dto.RoomId.HasValue)
+                    return null;
+
+                return await _context.Rooms
+                    .AsNoTracking()
+                    .Where(item =>
+                        item.RoomId == dto.RoomId.Value &&
+                        item.PlaceId == placeId &&
+                        item.IsAvailable != false)
+                    .Select(item => (decimal?)item.Price)
+                    .FirstOrDefaultAsync();
+            }
+
+            if (targetType == "Package")
+            {
+                if (!dto.PackageId.HasValue)
+                    return null;
+
+                return await _context.PlacePackages
+                    .AsNoTracking()
+                    .Where(item =>
+                        item.PackageId == dto.PackageId.Value &&
+                        item.PlaceId == placeId &&
+                        item.IsActive != false)
+                    .Select(item => (decimal?)item.Price)
+                    .FirstOrDefaultAsync();
+            }
+
+            if (targetType == "Service")
+            {
+                if (!dto.ServiceId.HasValue)
+                    return null;
+
+                return await _context.PlaceAdditionalServices
+                    .AsNoTracking()
+                    .Where(item =>
+                        item.ServiceId == dto.ServiceId.Value &&
+                        item.PlaceId == placeId &&
+                        item.IsActive != false)
+                    .Select(item => (decimal?)item.Price)
+                    .FirstOrDefaultAsync();
+            }
+
+            if (targetType != "Place" || !IsBookableSystem(bookingSystemId))
+                return null;
+
+            decimal? minimumRoomPrice = null;
+            if (bookingSystemId == 1)
+            {
+                minimumRoomPrice = await _context.Rooms
+                    .AsNoTracking()
+                    .Where(item =>
+                        item.PlaceId == placeId &&
+                        item.IsAvailable != false &&
+                        item.Price > 0)
+                    .Select(item => (decimal?)item.Price)
+                    .MinAsync();
+            }
+
+            decimal? minimumPackagePrice = await _context.PlacePackages
+                .AsNoTracking()
+                .Where(item =>
+                    item.PlaceId == placeId &&
+                    item.IsActive != false &&
+                    item.Price > 0)
+                .Select(item => (decimal?)item.Price)
+                .MinAsync();
+
+            if (minimumRoomPrice.HasValue && minimumPackagePrice.HasValue)
+                return Math.Min(minimumRoomPrice.Value, minimumPackagePrice.Value);
+
+            return minimumRoomPrice ?? minimumPackagePrice;
         }
 
         private static void NormalizePromotionDtoForPlace(
@@ -1111,13 +1222,17 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
         /// <summary>
         /// يقرأ الحقول العشرية مباشرة من Request.Form بطريقة لا تتأثر بثقافة ar/en.
-        /// هذا يمنع أخطاء مثل: 0.01 is not a valid value for Decimal.
+        /// المرحلة الأولى: يمنع الإشارات والحروف و e/E والرموز في القيم الرقمية
+        /// قبل تنفيذ منطق التحويل والحفظ الحالي.
         /// </summary>
         private bool TryApplyPromotionDecimalValuesFromForm(
             PromotionUpsertDto dto,
             out string? error)
         {
             error = null;
+
+            if (!ValidatePromotionNumericInputFromForm(out error))
+                return false;
 
             if (!TryReadOptionalDecimal(
                     "DiscountValue",
@@ -1172,6 +1287,153 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             ModelState.Remove(nameof(PromotionUpsertDto.SpecialPrice));
 
             return true;
+        }
+
+        private bool ValidatePromotionNumericInputFromForm(out string? error)
+        {
+            error = null;
+
+            string[] decimalFields =
+            {
+                "DiscountValue",
+                "MaximumDiscountAmount",
+                "MinimumBookingAmount",
+                "SpecialPrice"
+            };
+
+            foreach (string key in decimalFields)
+            {
+                if (!Request.Form.TryGetValue(key, out var values))
+                    continue;
+
+                foreach (var value in values)
+                {
+                    string raw = value ?? string.Empty;
+
+                    if (string.IsNullOrEmpty(raw))
+                        continue;
+
+                    if (!IsStrictPromotionDecimal(raw))
+                    {
+                        error =
+                            GetPromotionNumericFieldLabel(key) +
+                            ": استخدم الأرقام فقط. يسمح بالنقطة العشرية فقط عند الحاجة، " +
+                            "ولا يسمح بـ + أو - أو e/E أو الحروف أو الرموز.";
+
+                        return false;
+                    }
+                }
+            }
+
+            string[] integerFields =
+            {
+                "PromotionId",
+                "RequiredQuantity",
+                "RewardQuantity",
+                "MinimumNights",
+                "MinimumPeople",
+                "TotalUsageLimit",
+                "PerCustomerUsageLimit",
+                "RoomId",
+                "PackageId",
+                "ServiceId",
+                "RewardServiceId"
+            };
+
+            foreach (string key in integerFields)
+            {
+                if (!Request.Form.TryGetValue(key, out var values))
+                    continue;
+
+                foreach (var value in values)
+                {
+                    string raw = value ?? string.Empty;
+
+                    if (string.IsNullOrEmpty(raw))
+                        continue;
+
+                    if (!IsStrictPromotionInteger(raw))
+                    {
+                        error =
+                            GetPromotionNumericFieldLabel(key) +
+                            ": هذا الحقل يقبل أرقامًا صحيحة فقط بدون كسور أو إشارات أو حروف.";
+
+                        return false;
+                    }
+                }
+            }
+
+            return true;
+        }
+
+        private static bool IsStrictPromotionInteger(string raw)
+        {
+            if (string.IsNullOrEmpty(raw))
+                return false;
+
+            foreach (char character in raw)
+            {
+                if (character < '0' || character > '9')
+                    return false;
+            }
+
+            return true;
+        }
+
+        private static bool IsStrictPromotionDecimal(string raw)
+        {
+            if (string.IsNullOrEmpty(raw))
+                return false;
+
+            bool hasDecimalPoint = false;
+            bool hasDigit = false;
+
+            for (int index = 0; index < raw.Length; index++)
+            {
+                char character = raw[index];
+
+                if (character >= '0' && character <= '9')
+                {
+                    hasDigit = true;
+                    continue;
+                }
+
+                if (character == '.' &&
+                    !hasDecimalPoint &&
+                    index > 0 &&
+                    index < raw.Length - 1)
+                {
+                    hasDecimalPoint = true;
+                    continue;
+                }
+
+                return false;
+            }
+
+            return hasDigit;
+        }
+
+        private static string GetPromotionNumericFieldLabel(string key)
+        {
+            return key switch
+            {
+                "DiscountValue" => "قيمة الخصم",
+                "MaximumDiscountAmount" => "أقصى مبلغ للخصم",
+                "MinimumBookingAmount" => "أقل قيمة للحجز",
+                "SpecialPrice" => "السعر الخاص",
+                "PromotionId" => "رقم العرض",
+                "RequiredQuantity" => "الكمية المطلوبة",
+                "RewardQuantity" => "كمية المكافأة",
+                "MinimumNights" => "عدد الليالي",
+                "MinimumPeople" => "عدد الأشخاص",
+                "TotalUsageLimit" => "إجمالي مرات الاستخدام",
+                "PerCustomerUsageLimit" => "مرات الاستخدام للعميل",
+                "RoomId" => "الغرفة",
+                "PackageId" => "الباقة",
+                "ServiceId" => "الخدمة",
+                "RewardServiceId" => "خدمة المكافأة",
+                _ => "القيمة الرقمية"
+            };
         }
 
         private bool TryReadRequiredDecimal(string key, out decimal value)
@@ -1261,7 +1523,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 friendly = "كود الخصم مستخدم في عرض آخر. اختر كودًا مختلفًا.";
             else if (details.Contains("CK_Promotions_DiscountRules", StringComparison.OrdinalIgnoreCase) ||
                      details.Contains("CK_Promotions_DiscountValue", StringComparison.OrdinalIgnoreCase))
-                friendly = "قيمة الخصم غير مقبولة. النسبة يجب أن تكون أكبر من صفر ولا تتجاوز 100%.";
+                friendly = "قيمة الخصم غير مقبولة. النسبة يجب أن تكون أكبر من صفر وأقل من 100%.";
             else if (details.Contains("CK_Promotions_ApplicationMode", StringComparison.OrdinalIgnoreCase))
                 friendly = "طريقة تطبيق العرض غير صحيحة: التطبيق التلقائي لا يستخدم كودًا، أما وضع الكود فيتطلب كود خصم.";
             else if (details.Contains("FK_Promotions_Rooms", StringComparison.OrdinalIgnoreCase) ||

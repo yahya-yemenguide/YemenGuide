@@ -1001,6 +1001,26 @@ namespace YemenGuide.Web.Controllers
                             Math.Max(0m, booking.FinancialRecord?.AmountCollectedAtProperty ?? 0m)),
                         2);
 
+                var verifiedPaidDeposit =
+                    Math.Round(
+                        Math.Min(
+                            Math.Max(0m, booking.FinancialRecord?.DepositAmount ?? 0m),
+                            Math.Min(
+                                Math.Max(0m, booking.FinancialRecord?.AmountPaidOnline ?? 0m),
+                                verifiedPaidAmount)),
+                        2);
+
+                if (quote.CancellationFee > verifiedPaidDeposit + 0.01m)
+                {
+                    await transaction.RollbackAsync();
+
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "تعذر تطبيق سياسة الإلغاء لأن الغرامة المحسوبة تتجاوز العربون المدفوع فعليًا."
+                    });
+                }
+
                 if (quote.RefundAmount >
                     verifiedPaidAmount + 0.01m)
                 {
@@ -1115,8 +1135,10 @@ namespace YemenGuide.Web.Controllers
                                 booking.PlaceId,
 
                             /*
-                             * DepositPaid اسم تاريخي في الجدول.
-                             * هنا نحفظ Snapshot للمبلغ الإلكتروني المعتمد فعليًا.
+                             * DepositPaid اسم تاريخي في الجدول ويجب أن يبقى Snapshot
+                             * لإجمالي المبلغ المحصل حتى يظل RefundAmount <= DepositPaid
+                             * متوافقًا مع القيد القديم والتقارير السابقة.
+                             * سياسة الإلغاء نفسها أعلاه مقيدة بالعربون المدفوع فعليًا فقط.
                              */
                             DepositPaid =
                                 verifiedPaidAmount,
@@ -1124,7 +1146,7 @@ namespace YemenGuide.Web.Controllers
                             CancellationFee =
                                 Math.Round(
                                     Math.Min(
-                                        verifiedPaidAmount,
+                                        verifiedPaidDeposit,
                                         Math.Max(
                                             0m,
                                             quote.CancellationFee)),
@@ -1421,23 +1443,33 @@ namespace YemenGuide.Web.Controllers
                 IsPaymentApproved(booking);
 
             /*
-             * مصدر حقيقة الاسترداد هو كل مبلغ تم تحصيله فعليًا للحجز:
-             * المدفوع الإلكتروني المعتمد + ما سجله المالك كمحصّل عند المنشأة.
+             * إجمالي ما تم تحصيله فعليًا يحدد أقصى مبلغ يمكن استرداده.
+             * أما سياسة الإلغاء نفسها فتطبق فقط على العربون الذي دُفع فعليًا
+             * (ولا تشمل باقي المبلغ أو المبالغ المحصلة في المنشأة).
              */
-            var depositPaid =
+            var totalPaid =
                 isConfirmedPayment
                     ? Math.Max(0m, financialRecord?.AmountPaidOnline ?? 0m) +
                       Math.Max(0m, financialRecord?.AmountCollectedAtProperty ?? 0m)
                     : 0m;
 
-            depositPaid =
+            totalPaid =
                 Math.Round(
                     Math.Min(
-                        depositPaid,
-                        Math.Max(
-                            0m,
-                            booking.TotalPrice)),
+                        totalPaid,
+                        Math.Max(0m, booking.TotalPrice)),
                     2);
+
+            var depositPaid =
+                isConfirmedPayment
+                    ? Math.Round(
+                        Math.Min(
+                            Math.Max(0m, financialRecord?.DepositAmount ?? 0m),
+                            Math.Max(0m, financialRecord?.AmountPaidOnline ?? 0m)),
+                        2)
+                    : 0m;
+
+            depositPaid = Math.Min(depositPaid, totalPaid);
 
             var freeCancellationHours =
                 Math.Max(
@@ -1556,12 +1588,12 @@ namespace YemenGuide.Web.Controllers
                 Math.Round(
                     Math.Max(
                         0m,
-                        depositPaid -
+                        totalPaid -
                         cancellationFee),
                     2);
 
             var requiresRefundRequest =
-                depositPaid > 0m;
+                totalPaid > 0m;
 
             var refundTransferFeeLabel =
                 string.Equals(

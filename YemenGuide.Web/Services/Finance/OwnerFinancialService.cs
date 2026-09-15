@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -354,27 +354,39 @@ namespace YemenGuide.Web.Services.Finance
                     "لا يوجد مبلغ مسترد يحتاج إلى تحويل للعميل.");
             }
 
-            var verifiedPaidOnline =
+            var financialRecord =
+                refund.Booking?.FinancialRecord;
+
+            var verifiedPaidTotal =
                 Math.Round(
-                    Math.Max(
-                        0m,
-                        refund.Booking?
-                            .FinancialRecord?
-                            .AmountPaidOnline ??
-                        0m),
+                    Math.Max(0m, financialRecord?.AmountPaidOnline ?? 0m) +
+                    Math.Max(0m, financialRecord?.AmountCollectedAtProperty ?? 0m),
                     2);
 
-            if (verifiedPaidOnline + 0.01m <
-                refund.RefundAmount)
+            if (verifiedPaidTotal + 0.01m < refund.RefundAmount)
             {
                 return FinanceOperationResult.Failed(
-                    "لا يمكن تنفيذ الاسترداد قبل اعتماد المبلغ الإلكتروني المدفوع فعليًا.");
+                    "مبلغ الاسترداد لا يمكن أن يتجاوز إجمالي ما تم تحصيله فعليًا من العميل.");
             }
 
-            if (!refund.RefundWalletId.HasValue ||
-                refund.RefundWalletId.Value <= 0 ||
-                string.IsNullOrWhiteSpace(refund.RefundAccountNumber) ||
-                string.IsNullOrWhiteSpace(refund.RefundBeneficiaryName))
+            var customerId =
+                refund.CustomerId ??
+                refund.Booking?.CustomerId;
+
+            var isManualGuestRefund =
+                string.Equals(
+                    refund.Booking?.BookingSource?.Trim(),
+                    "OwnerManual",
+                    StringComparison.OrdinalIgnoreCase) &&
+                !customerId.HasValue;
+
+            // الضيف في الحجز اليدوي قد لا يملك حسابًا داخل المنصة؛
+            // في هذه الحالة يوثق المالك التحويل بالمرجع والإثبات مباشرة.
+            if (!isManualGuestRefund &&
+                (!refund.RefundWalletId.HasValue ||
+                 refund.RefundWalletId.Value <= 0 ||
+                 string.IsNullOrWhiteSpace(refund.RefundAccountNumber) ||
+                 string.IsNullOrWhiteSpace(refund.RefundBeneficiaryName)))
             {
                 return FinanceOperationResult.Failed(
                     "العميل لم يحدد حساب استلام الاسترداد بعد.");
@@ -423,7 +435,12 @@ namespace YemenGuide.Web.Services.Finance
             refund.ReferenceNumber = reference;
             refund.ProofImage = proofImagePath.Trim();
             refund.TransferredAt = now;
-            refund.Status = FinancialRefundStatuses.Processing;
+            refund.Status = isManualGuestRefund
+                ? FinancialRefundStatuses.Completed
+                : FinancialRefundStatuses.Processing;
+            refund.ProcessedAt = isManualGuestRefund
+                ? now
+                : refund.ProcessedAt;
             refund.ProcessedByUserId = ownerId;
 
             if (!string.IsNullOrWhiteSpace(request.Notes))
@@ -436,31 +453,21 @@ namespace YemenGuide.Web.Services.Finance
 
             if (refund.Booking != null)
             {
-                refund.Booking.RefundStatus = FinancialRefundStatuses.Processing;
+                refund.Booking.RefundStatus = isManualGuestRefund
+                    ? FinancialRefundStatuses.Completed
+                    : FinancialRefundStatuses.Processing;
 
-                if (!string.Equals(
-                        refund.Booking.PaymentStatus,
-                        "RefundPending",
-                        StringComparison.OrdinalIgnoreCase))
-                {
-                    refund.Booking.PaymentStatus = "RefundPending";
-                }
+                refund.Booking.PaymentStatus = isManualGuestRefund
+                    ? "Refunded"
+                    : "RefundPending";
             }
 
-            var customerId =
-                refund.CustomerId ??
-                refund.Booking?.CustomerId;
-
-            if (!customerId.HasValue)
+            if (customerId.HasValue)
             {
-                return FinanceOperationResult.Failed(
-                    "تعذر تحديد العميل المرتبط بطلب الاسترداد.");
-            }
-
-            _notificationService.Queue(
-                new CreateNotificationDto
-                {
-                    UserId = customerId.Value,
+                _notificationService.Queue(
+                    new CreateNotificationDto
+                    {
+                        UserId = customerId.Value,
                     NotificationTitle = "تم تحويل مبلغ الاسترداد",
                     NotificationText =
                         $"تم تحويل استرداد الحجز رقم {refund.BookingId} " +
@@ -468,9 +475,10 @@ namespace YemenGuide.Web.Services.Finance
                         "راجع الحجز ثم أكد استلام المبلغ.",
                     NotificationType = NotificationTypes.RefundTransferred,
                     TargetUrl = $"/Places/BookingDetails/{refund.BookingId}",
-                    ReferenceType = NotificationReferenceTypes.Booking,
-                    ReferenceId = refund.BookingId
-                });
+                        ReferenceType = NotificationReferenceTypes.Booking,
+                        ReferenceId = refund.BookingId
+                    });
+            }
 
             try
             {
@@ -483,7 +491,9 @@ namespace YemenGuide.Web.Services.Finance
                 }
 
                 return FinanceOperationResult.Succeeded(
-                    "تم تسجيل تحويل الاسترداد. بانتظار تأكيد العميل للاستلام.",
+                    isManualGuestRefund
+                        ? "تم تسجيل الاسترداد للحجز اليدوي وإكماله بنجاح."
+                        : "تم تسجيل تحويل الاسترداد. بانتظار تأكيد العميل للاستلام.",
                     refund.RefundRequestId,
                     refund.ReferenceNumber);
             }

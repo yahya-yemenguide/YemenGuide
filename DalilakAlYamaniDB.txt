@@ -30,6 +30,7 @@
 -- 23) تم إضافة حقول اللغة الإنجليزية للبيانات العامة: الإعدادات، السلايدر، الفئات، المدن والمحافظ.
 -- 24) تم تطوير البلاغات لدعم ResponseContentType وتوسيع ReportStatus إلى NVARCHAR(30).
 -- 25) تم نقل تقييم الفترة التجريبية إلى مستوى المنشأة، وإضافة سياسة إعادة العمولة عند الإلغاء مع Snapshot مالي.
+-- 26) تم تطوير العروض لدعم وقت بداية/نهاية دقيق وتعدد خدمات المكافأة عبر RewardServicesJson مع إبقاء RewardServiceID للتوافق.
 -- ==============================================================================
 
 USE master;
@@ -1041,13 +1042,18 @@ CREATE TABLE dbo.Promotions
     RequiredQuantity INT NULL,
     RewardQuantity INT NULL,
     RewardServiceID INT NULL,
+
+    -- يدعم تعدد خدمات المكافأة مع إبقاء RewardServiceID للتوافق مع البيانات/الكود القديم.
+    RewardServicesJson NVARCHAR(MAX) NULL,
+
     SpecialPrice DECIMAL(18,2) NULL,
 
     IsRewardRepeatable BIT NOT NULL
         CONSTRAINT DF_Promotions_IsRewardRepeatable DEFAULT 0,
 
-    StartDate DATE NOT NULL,
-    EndDate DATE NOT NULL,
+    -- تاريخ ووقت بداية ونهاية العرض بدقة الثواني.
+    StartDate DATETIME2(0) NOT NULL,
+    EndDate DATETIME2(0) NOT NULL,
 
     IsActive BIT NOT NULL
         CONSTRAINT DF_Promotions_IsActive DEFAULT 0,
@@ -1277,7 +1283,7 @@ CREATE TABLE dbo.Promotions
     CONSTRAINT CK_Promotions_DateRange
         CHECK
         (
-            EndDate >= StartDate
+            EndDate > StartDate
         ),
 
     CONSTRAINT CK_Promotions_StayDateRange

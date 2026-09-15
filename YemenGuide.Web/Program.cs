@@ -16,6 +16,7 @@ using YemenGuide.Web.Services.Advertisements;
 using YemenGuide.Web.Services.Notifications;
 using YemenGuide.Web.Services.Reports;
 using YemenGuide.Web.Services.ExchangeRates;
+using YemenGuide.Web.Services.Backups;
 using YemenGuide.Web.Maintenance;
 using YemenGuide.Core.Helpers;
 using YemenGuide.Web.Localization;
@@ -241,6 +242,16 @@ builder.Services.AddHttpClient<IExchangeRateProvider, YemenSulExchangeRateProvid
 
 // تسجيل طبقة التنسيق المركزية لأسعار الصرف
 builder.Services.AddScoped<ExchangeRateService>();
+
+// =============================================================
+//  نظام النسخ الاحتياطي والاستعادة
+// =============================================================
+builder.Services.AddSingleton<
+    IBackupService,
+    SqlServerBackupService>();
+
+builder.Services.AddHostedService<
+    BackupHostedService>();
 
 // تسجيل الخدمة الخلفية المستضافة لتحديث الأسعار تلقائياً
 builder.Services.AddHostedService<ExchangeRateBackgroundService>();

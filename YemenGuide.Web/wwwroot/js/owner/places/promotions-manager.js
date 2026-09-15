@@ -124,6 +124,7 @@
 
             // الخطوة 1: حماية كل الحقول الرقمية في نموذج العرض بدون تغيير منطقها الحالي.
             installPromotionNumericGuards(form);
+            installEnglishPromotionDateTimePickers(form);
 
             const ui = {
                 title: form.querySelector("#promotionDialogTitle"),
@@ -241,6 +242,15 @@
                 });
             });
 
+            form.querySelectorAll('input[name="RewardServiceIds"]').forEach(input => {
+                input.addEventListener("change", function () {
+                    syncLegacyRewardServiceId();
+                    syncPriceConstraints();
+                    updateBundleSummary();
+                    updateLiveSummary();
+                });
+            });
+
             ui.draft?.addEventListener("click", function () {
                 submitPromotion("Draft");
             });
@@ -291,11 +301,16 @@
                 setValue("promotionRequiredQuantity", data.requiredQuantity);
                 setValue("promotionRewardQuantity", data.rewardQuantity);
                 if (ui.rewardRepeatable) ui.rewardRepeatable.checked = data.isRewardRepeatable === true;
-                setValue("promotionRewardServiceId", data.rewardServiceId);
+                setRewardServiceSelections(
+                    Array.isArray(data.rewardServiceIds) && data.rewardServiceIds.length
+                        ? data.rewardServiceIds
+                        : (data.rewardServiceId ? [data.rewardServiceId] : [])
+                );
                 setValue("promotionSpecialPrice", data.specialPrice);
 
-                setValue("promotionStartDate", toDateInput(data.startDate));
-                setValue("promotionEndDate", toDateInput(data.endDate));
+                setValue("promotionStartDate", toDateTimeInput(data.startDate));
+                setValue("promotionEndDate", toDateTimeInput(data.endDate));
+                form._refreshPromotionDateTimeDisplays?.();
                 setValue("promotionStayStartDate", toDateInput(data.stayStartDate));
                 setValue("promotionStayEndDate", toDateInput(data.stayEndDate));
                 setValue("promotionMinimumNights", data.minimumNights);
@@ -497,9 +512,12 @@
                         }
 
                         if (rewardType === "FreeService" || rewardType === "ServiceSpecialPrice") {
-                            const service = form.querySelector("#promotionRewardServiceId");
-                            if (!service?.value) {
-                                return invalidate(service, "اختر خدمة المكافأة.");
+                            const selectedServices = selectedRewardServices();
+                            if (!selectedServices.length) {
+                                return invalidate(
+                                    form.querySelector('input[name="RewardServiceIds"]'),
+                                    "اختر خدمة واحدة على الأقل ضمن المكافأة."
+                                );
                             }
                         }
 
@@ -530,11 +548,14 @@
                             }
 
                             if (rewardType === "ServiceSpecialPrice") {
-                                const servicePrice = selectedOptionPrice("promotionRewardServiceId");
-                                if (servicePrice !== null && specialPrice >= servicePrice) {
+                                const originalBundlePrice = rewardServicesOriginalPrice();
+                                if (!originalBundlePrice || originalBundlePrice <= 0) {
+                                    return invalidate(price, "تعذر حساب مجموع أسعار الخدمات المختارة.");
+                                }
+                                if (specialPrice >= originalBundlePrice) {
                                     return invalidate(
                                         price,
-                                        `السعر الخاص للخدمة يجب أن يكون أقل من سعرها الأصلي (${formatNumber(servicePrice)} ريال).`
+                                        `السعر النهائي لباقة الخدمات يجب أن يكون أقل من سعرها الأصلي (${formatNumber(originalBundlePrice)} ريال).`
                                     );
                                 }
                             }
@@ -552,11 +573,39 @@
                 if (step === 3) {
                     const start = form.querySelector("#promotionStartDate");
                     const end = form.querySelector("#promotionEndDate");
+                    const startDisplay = form.querySelector("#promotionStartDateDisplay");
+                    const endDisplay = form.querySelector("#promotionEndDateDisplay");
 
-                    if (!start?.value) return invalidate(start, "حدد تاريخ بداية العرض.");
-                    if (!end?.value) return invalidate(end, "حدد تاريخ نهاية العرض.");
-                    if (end.value < start.value) {
-                        return invalidate(end, "تاريخ النهاية يجب أن يكون بعد البداية أو مساويًا لها.");
+                    if (!start?.value) {
+                        return invalidate(startDisplay || start, "حدد تاريخ ووقت بداية العرض.");
+                    }
+                    if (!end?.value) {
+                        return invalidate(endDisplay || end, "حدد تاريخ ووقت نهاية العرض.");
+                    }
+
+                    const startTime = new Date(start.value).getTime();
+                    const endTime = new Date(end.value).getTime();
+                    if (!Number.isFinite(startTime) || !Number.isFinite(endTime)) {
+                        return invalidate(startDisplay || start, "تأكد من تاريخ ووقت العرض.");
+                    }
+                    if (endTime <= startTime) {
+                        return invalidate(endDisplay || end, "تاريخ ووقت النهاية يجب أن يكون بعد البداية.");
+                    }
+
+                    const nowTime = Date.now();
+                    if (startTime < nowTime - 60000) {
+                        let unchangedLegacyStart = false;
+                        if (item?.startDate) {
+                            const originalStartTime = new Date(item.startDate).getTime();
+                            unchangedLegacyStart =
+                                Number.isFinite(originalStartTime) &&
+                                originalStartTime < nowTime &&
+                                Math.abs(originalStartTime - startTime) < 60000;
+                        }
+
+                        if (!unchangedLegacyStart) {
+                            return invalidate(startDisplay || start, "بداية العرض لا يمكن أن تكون في وقت مضى.");
+                        }
                     }
 
                     const stayStart = form.querySelector("#promotionStayStartDate");
@@ -764,7 +813,7 @@
                         input.checked = false;
                     });
                     setValue("promotionRewardQuantity", "");
-                    setValue("promotionRewardServiceId", "");
+                    setRewardServiceSelections([]);
                     setValue("promotionSpecialPrice", "");
                     setValue("promotionRequiredQuantity", "");
                     setValue("promotionMinimumNights", "");
@@ -922,21 +971,88 @@
                         ? `${quantity} ${quantity === 1 ? "ليلة مجانية" : "ليالٍ مجانية"}${repeatText}`
                         : `ليلة مجانية${repeatText}`;
                 } else if (rewardType === "FreeService") {
-                    rewardText = `${selectedText("promotionRewardServiceId", "خدمة إضافية")} مجانًا`;
+                    const services = selectedRewardServices();
+                    rewardText = services.length > 1
+                        ? `${services.length} خدمات مجانًا`
+                        : `${services[0]?.name || "خدمة إضافية"} مجانًا`;
                 } else if (rewardType === "SpecialPrice") {
                     const price = Number(form.querySelector("#promotionSpecialPrice")?.value || 0);
                     rewardText = price > 0 ? `سعر خاص ${formatNumber(price)} ريال` : "سعر خاص";
                 } else if (rewardType === "ServiceSpecialPrice") {
                     const price = Number(form.querySelector("#promotionSpecialPrice")?.value || 0);
-                    const service = selectedText("promotionRewardServiceId", "الخدمة");
+                    const services = selectedRewardServices();
+                    const original = rewardServicesOriginalPrice();
+                    const saving = price > 0 && original > price ? original - price : 0;
+                    const serviceLabel = services.length > 1
+                        ? `باقة ${services.length} خدمات`
+                        : (services[0]?.name || "الخدمة");
                     rewardText = price > 0
-                        ? `${service} بسعر ${formatNumber(price)} ريال`
-                        : `${service} بسعر خاص`;
+                        ? `${serviceLabel} بسعر ${formatNumber(price)} ريال` +
+                          (original > 0 ? ` بدل ${formatNumber(original)} — توفير ${formatNumber(saving)} ريال` : "")
+                        : `${serviceLabel} بسعر خاص`;
                 }
 
                 ui.summaryText.textContent = conditionParts.length
                     ? `${conditionParts.join("، ")} واحصل على ${rewardText}`
                     : rewardText;
+            }
+
+            function selectedRewardServices() {
+                return Array.from(form.querySelectorAll('input[name="RewardServiceIds"]:checked'))
+                    .map(input => ({
+                        id: Number(input.value || 0),
+                        name: String(input.dataset.name || input.closest("label")?.textContent || "خدمة إضافية").trim(),
+                        price: Number(input.dataset.price || 0)
+                    }))
+                    .filter(item => item.id > 0);
+            }
+
+            function rewardServicesOriginalPrice() {
+                return selectedRewardServices().reduce(
+                    (sum, item) => sum + (Number.isFinite(item.price) && item.price > 0 ? item.price : 0),
+                    0
+                );
+            }
+
+            function syncLegacyRewardServiceId() {
+                const selected = selectedRewardServices();
+                setValue("promotionRewardServiceId", selected.length ? String(selected[0].id) : "");
+            }
+
+            function setRewardServiceSelections(ids) {
+                const wanted = new Set((ids || []).map(value => Number(value)).filter(value => value > 0));
+                form.querySelectorAll('input[name="RewardServiceIds"]').forEach(input => {
+                    input.checked = wanted.has(Number(input.value));
+                });
+                syncLegacyRewardServiceId();
+                updateBundleSummary();
+            }
+
+            function updateBundleSummary() {
+                const box = form.querySelector("#promotionBundleSummary");
+                if (!box) return;
+
+                const isBundle = fieldValue("RewardType") === "ServiceSpecialPrice";
+                const original = rewardServicesOriginalPrice();
+                const finalPrice = Number(form.querySelector("#promotionSpecialPrice")?.value || 0);
+                const saving = original > 0 && finalPrice > 0 && finalPrice < original
+                    ? original - finalPrice
+                    : 0;
+
+                box.hidden = !isBundle || original <= 0;
+                const originalText = form.querySelector("#promotionBundleOriginalText");
+                const finalText = form.querySelector("#promotionBundleFinalText");
+                const savingText = form.querySelector("#promotionBundleSavingText");
+                const hint = form.querySelector("#promotionSpecialPriceHint");
+
+                if (originalText) originalText.textContent = `${formatNumber(original)} ريال`;
+                if (finalText) finalText.textContent = finalPrice > 0 ? `${formatNumber(finalPrice)} ريال` : "—";
+                if (savingText) savingText.textContent = saving > 0 ? `${formatNumber(saving)} ريال` : "—";
+                if (hint && isBundle) {
+                    hint.textContent = original > 0
+                        ? `السعر النهائي يجب أن يكون أقل من ${formatNumber(original)} ريال.`
+                        : "اختر الخدمات أولًا لحساب سعرها الأصلي.";
+                }
             }
 
             function selectedText(id, fallback) {
@@ -993,12 +1109,16 @@
             }
 
             function setDefaultDates() {
-                const today = new Date();
-                const end = new Date(today);
+                const now = new Date();
+                now.setSeconds(0, 0);
+
+                const start = new Date(now.getTime() + 5 * 60000);
+                const end = new Date(start);
                 end.setDate(end.getDate() + 7);
 
-                setValue("promotionStartDate", localDate(today));
-                setValue("promotionEndDate", localDate(end));
+                setValue("promotionStartDate", localDateTime(start));
+                setValue("promotionEndDate", localDateTime(end));
+                form._refreshPromotionDateTimeDisplays?.();
             }
 
             function setValue(id, value) {
@@ -1233,12 +1353,13 @@
                 const specialPrice = form.querySelector("#promotionSpecialPrice");
                 if (specialPrice) {
                     const referencePrice = rewardType === "ServiceSpecialPrice"
-                        ? selectedOptionPrice("promotionRewardServiceId")
+                        ? rewardServicesOriginalPrice()
                         : rewardType === "SpecialPrice"
                             ? targetPrice
                             : null;
 
                     specialPrice.max = maxBelow(referencePrice);
+                    updateBundleSummary();
                 }
             }
 
@@ -1375,6 +1496,375 @@
      * - حقول الكمية/الأشخاص/الليالي/حدود الاستخدام تقبل أعدادًا صحيحة فقط.
      * - لا يغير أسماء الحقول أو قيم min/step الحالية أو منطق الحفظ والتحقق.
      */
+
+    function installEnglishPromotionDateTimePickers(form) {
+        if (!form || form.dataset.englishDatePickersInstalled === "true") return;
+        form.dataset.englishDatePickersInstalled = "true";
+
+        const startHidden = form.querySelector("#promotionStartDate");
+        const endHidden = form.querySelector("#promotionEndDate");
+        const startDisplay = form.querySelector("#promotionStartDateDisplay");
+        const endDisplay = form.querySelector("#promotionEndDateDisplay");
+
+        if (!startHidden || !endHidden || !startDisplay || !endDisplay) return;
+
+        const monthNames = [
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December"
+        ];
+        const weekdayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+        let activePicker = null;
+        let activeKind = null;
+        let visibleMonth = null;
+        let selectedDate = null;
+
+        const pad = value => String(value).padStart(2, "0");
+
+        const startOfDay = date => {
+            const result = new Date(date);
+            result.setHours(0, 0, 0, 0);
+            return result;
+        };
+
+        const parseLocalValue = value => {
+            if (!value) return null;
+            const match = String(value).match(
+                /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/
+            );
+            if (!match) return null;
+
+            const date = new Date(
+                Number(match[1]),
+                Number(match[2]) - 1,
+                Number(match[3]),
+                Number(match[4]),
+                Number(match[5]),
+                0,
+                0
+            );
+
+            return Number.isFinite(date.getTime()) ? date : null;
+        };
+
+        const formatDisplay = date => {
+            if (!date || !Number.isFinite(date.getTime())) return "";
+            return new Intl.DateTimeFormat("en-US", {
+                month: "short",
+                day: "2-digit",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: true
+            }).format(date);
+        };
+
+        const getMinimumDateTime = kind => {
+            const now = new Date();
+            now.setSeconds(0, 0);
+
+            if (kind !== "end") return now;
+
+            const currentStart = parseLocalValue(startHidden.value);
+            if (!currentStart) return now;
+
+            const afterStart = new Date(currentStart.getTime() + 60000);
+            return afterStart > now ? afterStart : now;
+        };
+
+        const refreshDisplays = () => {
+            const start = parseLocalValue(startHidden.value);
+            const end = parseLocalValue(endHidden.value);
+
+            startDisplay.value = start ? formatDisplay(start) : "";
+            endDisplay.value = end ? formatDisplay(end) : "";
+
+            startDisplay.classList.remove("is-invalid");
+            endDisplay.classList.remove("is-invalid");
+        };
+
+        form._refreshPromotionDateTimeDisplays = refreshDisplays;
+
+        const closePicker = () => {
+            if (!activePicker) return;
+            activePicker.remove();
+            activePicker = null;
+            activeKind = null;
+            visibleMonth = null;
+            selectedDate = null;
+        };
+
+        const positionPicker = display => {
+            if (!activePicker || !display) return;
+            const rect = display.getBoundingClientRect();
+            const pickerRect = activePicker.getBoundingClientRect();
+            const gap = 8;
+            let left = rect.left;
+            let top = rect.bottom + gap;
+
+            if (left + pickerRect.width > window.innerWidth - 10) {
+                left = Math.max(10, window.innerWidth - pickerRect.width - 10);
+            }
+            if (top + pickerRect.height > window.innerHeight - 10) {
+                top = Math.max(10, rect.top - pickerRect.height - gap);
+            }
+
+            activePicker.style.left = `${Math.round(left)}px`;
+            activePicker.style.top = `${Math.round(top)}px`;
+        };
+
+        const buildPicker = kind => {
+            closePicker();
+
+            activeKind = kind;
+            const hidden = kind === "start" ? startHidden : endHidden;
+            const display = kind === "start" ? startDisplay : endDisplay;
+            const minDateTime = getMinimumDateTime(kind);
+
+            const existing = parseLocalValue(hidden.value);
+            selectedDate = existing && existing >= minDateTime
+                ? new Date(existing)
+                : new Date(minDateTime);
+
+            visibleMonth = new Date(
+                selectedDate.getFullYear(),
+                selectedDate.getMonth(),
+                1
+            );
+
+            const picker = document.createElement("div");
+            picker.className = "yg-promo-en-datetime-picker";
+            picker.setAttribute("dir", "ltr");
+            picker.setAttribute("lang", "en-US");
+            picker.innerHTML = `
+                <div class="yg-promo-en-picker__head">
+                    <button type="button" data-picker-prev aria-label="Previous month">‹</button>
+                    <div class="yg-promo-en-picker__month" data-picker-month></div>
+                    <button type="button" data-picker-next aria-label="Next month">›</button>
+                </div>
+                <div class="yg-promo-en-picker__weekdays">
+                    ${weekdayNames.map(day => `<span class="yg-promo-en-picker__weekday">${day}</span>`).join("")}
+                </div>
+                <div class="yg-promo-en-picker__days" data-picker-days></div>
+                <div class="yg-promo-en-picker__time">
+                    <label>
+                        <span>Hour (00–23)</span>
+                        <input type="number" min="0" max="23" step="1" inputmode="numeric" data-picker-hour />
+                    </label>
+                    <label>
+                        <span>Minute (00–59)</span>
+                        <input type="number" min="0" max="59" step="1" inputmode="numeric" data-picker-minute />
+                    </label>
+                </div>
+                <div class="yg-promo-en-picker__minimum" data-picker-minimum></div>
+                <div class="yg-promo-en-picker__actions">
+                    <button type="button" class="yg-promo-en-picker__cancel" data-picker-cancel>Cancel</button>
+                    <button type="button" class="yg-promo-en-picker__apply" data-picker-apply>Apply</button>
+                </div>
+            `;
+
+            document.body.appendChild(picker);
+            activePicker = picker;
+
+            const hourInput = picker.querySelector("[data-picker-hour]");
+            const minuteInput = picker.querySelector("[data-picker-minute]");
+            const minimumText = picker.querySelector("[data-picker-minimum]");
+
+            hourInput.value = pad(selectedDate.getHours());
+            minuteInput.value = pad(selectedDate.getMinutes());
+            minimumText.textContent =
+                `Earliest allowed: ${formatDisplay(minDateTime)}`;
+
+            const normalizeTimeInputs = () => {
+                let hour = Number.parseInt(hourInput.value || "0", 10);
+                let minute = Number.parseInt(minuteInput.value || "0", 10);
+
+                if (!Number.isFinite(hour)) hour = 0;
+                if (!Number.isFinite(minute)) minute = 0;
+
+                hour = Math.min(23, Math.max(0, hour));
+                minute = Math.min(59, Math.max(0, minute));
+
+                hourInput.value = pad(hour);
+                minuteInput.value = pad(minute);
+
+                return { hour, minute };
+            };
+
+            const renderDays = () => {
+                const monthLabel = picker.querySelector("[data-picker-month]");
+                const daysHost = picker.querySelector("[data-picker-days]");
+                const prevButton = picker.querySelector("[data-picker-prev]");
+
+                monthLabel.textContent =
+                    `${monthNames[visibleMonth.getMonth()]} ${visibleMonth.getFullYear()}`;
+
+                daysHost.innerHTML = "";
+
+                const firstDay = new Date(
+                    visibleMonth.getFullYear(),
+                    visibleMonth.getMonth(),
+                    1
+                );
+                const gridStart = new Date(firstDay);
+                gridStart.setDate(firstDay.getDate() - firstDay.getDay());
+
+                const minDay = startOfDay(minDateTime);
+                const today = startOfDay(new Date());
+                const selectedDay = startOfDay(selectedDate);
+
+                for (let index = 0; index < 42; index += 1) {
+                    const cellDate = new Date(gridStart);
+                    cellDate.setDate(gridStart.getDate() + index);
+                    cellDate.setHours(0, 0, 0, 0);
+
+                    const button = document.createElement("button");
+                    button.type = "button";
+                    button.className = "yg-promo-en-picker__day";
+                    button.textContent = String(cellDate.getDate());
+
+                    const outsideMonth =
+                        cellDate.getMonth() !== visibleMonth.getMonth();
+                    const isPast = cellDate < minDay;
+
+                    if (outsideMonth) {
+                        button.classList.add("is-outside");
+                    }
+                    if (cellDate.getTime() === today.getTime()) {
+                        button.classList.add("is-today");
+                    }
+                    if (cellDate.getTime() === selectedDay.getTime()) {
+                        button.classList.add("is-selected");
+                    }
+
+                    button.disabled = isPast || outsideMonth;
+
+                    if (!button.disabled) {
+                        button.addEventListener("click", () => {
+                            const currentHour = Number.parseInt(hourInput.value || "0", 10);
+                            const currentMinute = Number.parseInt(minuteInput.value || "0", 10);
+
+                            selectedDate = new Date(
+                                cellDate.getFullYear(),
+                                cellDate.getMonth(),
+                                cellDate.getDate(),
+                                Number.isFinite(currentHour) ? currentHour : 0,
+                                Number.isFinite(currentMinute) ? currentMinute : 0,
+                                0,
+                                0
+                            );
+
+                            renderDays();
+                        });
+                    }
+
+                    daysHost.appendChild(button);
+                }
+
+                const previousMonth = new Date(
+                    visibleMonth.getFullYear(),
+                    visibleMonth.getMonth() - 1,
+                    1
+                );
+                const minimumMonth = new Date(
+                    minDateTime.getFullYear(),
+                    minDateTime.getMonth(),
+                    1
+                );
+                prevButton.disabled = previousMonth < minimumMonth;
+            };
+
+            picker.querySelector("[data-picker-prev]").addEventListener("click", () => {
+                const candidate = new Date(
+                    visibleMonth.getFullYear(),
+                    visibleMonth.getMonth() - 1,
+                    1
+                );
+                const minimumMonth = new Date(
+                    minDateTime.getFullYear(),
+                    minDateTime.getMonth(),
+                    1
+                );
+                if (candidate < minimumMonth) return;
+                visibleMonth = candidate;
+                renderDays();
+                window.requestAnimationFrame(() => positionPicker(display));
+            });
+
+            picker.querySelector("[data-picker-next]").addEventListener("click", () => {
+                visibleMonth = new Date(
+                    visibleMonth.getFullYear(),
+                    visibleMonth.getMonth() + 1,
+                    1
+                );
+                renderDays();
+                window.requestAnimationFrame(() => positionPicker(display));
+            });
+
+            picker.querySelector("[data-picker-cancel]").addEventListener("click", closePicker);
+
+            picker.querySelector("[data-picker-apply]").addEventListener("click", () => {
+                const { hour, minute } = normalizeTimeInputs();
+
+                let candidate = new Date(
+                    selectedDate.getFullYear(),
+                    selectedDate.getMonth(),
+                    selectedDate.getDate(),
+                    hour,
+                    minute,
+                    0,
+                    0
+                );
+
+                if (candidate < minDateTime) {
+                    candidate = new Date(minDateTime);
+                }
+
+                hidden.value = localDateTime(candidate);
+                hidden.dispatchEvent(new Event("input", { bubbles: true }));
+                hidden.dispatchEvent(new Event("change", { bubbles: true }));
+
+                refreshDisplays();
+                closePicker();
+            });
+
+            hourInput.addEventListener("change", normalizeTimeInputs);
+            minuteInput.addEventListener("change", normalizeTimeInputs);
+
+            renderDays();
+            window.requestAnimationFrame(() => positionPicker(display));
+        };
+
+        startDisplay.addEventListener("click", () => buildPicker("start"));
+        endDisplay.addEventListener("click", () => buildPicker("end"));
+
+        startHidden.addEventListener("change", () => {
+            refreshDisplays();
+
+            const start = parseLocalValue(startHidden.value);
+            const end = parseLocalValue(endHidden.value);
+
+            if (start && end && end <= start) {
+                const replacementEnd = new Date(start.getTime() + 7 * 24 * 60 * 60000);
+                endHidden.value = localDateTime(replacementEnd);
+                refreshDisplays();
+            }
+        });
+
+        endHidden.addEventListener("change", refreshDisplays);
+
+        document.addEventListener("mousedown", event => {
+            if (!activePicker) return;
+            if (activePicker.contains(event.target)) return;
+            if (event.target === startDisplay || event.target === endDisplay) return;
+            closePicker();
+        });
+
+        window.addEventListener("resize", closePicker, { passive: true });
+        form.querySelector("[data-close-promotion-dialog]")?.addEventListener("click", closePicker);
+
+        refreshDisplays();
+    }
     function installPromotionNumericGuards(form) {
         if (!form || form.dataset.numericGuardsInstalled === "true") return;
         form.dataset.numericGuardsInstalled = "true";
@@ -1548,9 +2038,21 @@
         return value ? String(value).slice(0, 10) : "";
     }
 
+    function toDateTimeInput(value) {
+        if (!value) return "";
+        const date = new Date(value);
+        if (!Number.isFinite(date.getTime())) return String(value).slice(0, 16);
+        return localDateTime(date);
+    }
+
     function localDate(date) {
         const offset = date.getTimezoneOffset();
         return new Date(date.getTime() - offset * 60000).toISOString().slice(0, 10);
+    }
+
+    function localDateTime(date) {
+        const offset = date.getTimezoneOffset();
+        return new Date(date.getTime() - offset * 60000).toISOString().slice(0, 16);
     }
 
     function normalizeSearch(value) {
