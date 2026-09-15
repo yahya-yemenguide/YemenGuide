@@ -12,6 +12,11 @@
     string Money(decimal value) => value.ToString("N0");
     string Number(long value) => value.ToString("N0");
     string Initial(string? value) => string.IsNullOrWhiteSpace(value) ? "؟" : value.Trim().Substring(0, 1);
+    string CommissionMovement(decimal value) => value > 0m
+        ? $"-{Math.Abs(value):N0}"
+        : value < 0m
+            ? $"+{Math.Abs(value):N0}"
+            : "0";
 
     var attentionCount = Model.AttentionItems.Sum(item => item.Count);
     var todayBookings = Model.TodayOperation.Bookings.Take(5).ToList();
@@ -106,8 +111,8 @@
         <div class="odl-source-note">
             <i class="bi bi-database-check"></i>
             <span>
-                الأرقام أدناه تُقرأ من قاعدة البيانات الفعلية. الدفع يُنسب إلى تاريخ اعتماد الدفع، والتحصيل إلى تاريخ التحصيل،
-                والعمولة إلى تاريخ خصمها، والاسترداد إلى تاريخ تنفيذه؛ لذلك لا نستخدم تاريخ إنشاء الحجز كبديل لحركة مالية.
+                الأرقام أدناه تُقرأ من قاعدة البيانات الفعلية. كل دفعة إلكترونية تُنسب إلى تاريخ اعتمادها الفعلي، والتحصيل إلى تاريخ التحصيل،
+                والاسترداد إلى تاريخ تنفيذه، وصافي العمولة يحسب الخصم مطروحًا منه أي تحرير للعمولة؛ ولا نستخدم تاريخ إنشاء الحجز كبديل لحركة مالية.
             </span>
         </div>
 
@@ -196,7 +201,7 @@
                     <span class="odl-kpi__icon"><i class="bi bi-cash-stack"></i></span>
                 </div>
                 <strong>@Money(Model.Kpis.MonthlyRevenue)</strong>
-                <em>@Model.Currency · بعد الاسترداد والعمولة المنفذة</em>
+                <em>@Model.Currency · بعد الاسترداد وصافي العمولة</em>
             </article>
 
             <article class="odl-kpi odl-kpi--orange">
@@ -320,7 +325,7 @@
                     <div>
                         <span class="odl-kicker">المالية الفعلية</span>
                         <h2>حركات الشهر الحالي</h2>
-                        <p>بحسب تواريخ الدفع والتحصيل والاسترداد وخصم العمولة.</p>
+                        <p>بحسب تاريخ اعتماد كل دفعة، والتحصيل، والاسترداد، وخصم أو تحرير العمولة.</p>
                     </div>
                     <a class="odl-card__link" href="/Owner/Financials?financeTab=overview&placeId=@Model.PlaceId">التفاصيل <i class="bi bi-arrow-left"></i></a>
                 </header>
@@ -338,7 +343,7 @@
                         <div class="odl-finance-item"><span><i class="bi bi-phone"></i> دفع معتمد إلكترونيًا</span><b>@Money(Model.Finance.PaidOnline) @Model.Currency</b></div>
                         <div class="odl-finance-item"><span><i class="bi bi-shop"></i> محصل في المنشأة</span><b>@Money(Model.Finance.CollectedAtProperty) @Model.Currency</b></div>
                         <div class="odl-finance-item is-negative"><span><i class="bi bi-arrow-counterclockwise"></i> استردادات منفذة</span><b>-@Money(Model.Finance.RefundedAmount) @Model.Currency</b></div>
-                        <div class="odl-finance-item is-negative"><span><i class="bi bi-percent"></i> عمولة خُصمت</span><b>-@Money(Model.Finance.PlatformCommission) @Model.Currency</b></div>
+                        <div class="odl-finance-item @(Model.Finance.PlatformCommission > 0m ? "is-negative" : "")"><span><i class="bi bi-percent"></i> صافي عمولة المنصة</span><b>@CommissionMovement(Model.Finance.PlatformCommission) @Model.Currency</b></div>
                         <div class="odl-finance-item"><span><i class="bi bi-calendar-range"></i> قيمة الحجوزات المجدولة للشهر</span><b>@Money(Model.Finance.GrossBookingValue) @Model.Currency</b></div>
                         <div class="odl-finance-item"><span><i class="bi bi-graph-up-arrow"></i> مقارنة بالشهر السابق</span><b>@(Model.Kpis.RevenueChangePercent > 0 ? "+" : "")@Model.Kpis.RevenueChangePercent.ToString("0.#")%</b></div>
                     </div>
