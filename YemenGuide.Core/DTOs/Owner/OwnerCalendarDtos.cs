@@ -136,6 +136,7 @@ namespace YemenGuide.Core.DTOs.Owner
         public List<OwnerManualRoomOptionDto> Rooms { get; set; } = new();
         public List<OwnerManualPackageOptionDto> Packages { get; set; } = new();
         public List<OwnerManualServiceOptionDto> Services { get; set; } = new();
+        public List<OwnerManualWalletOptionDto> Wallets { get; set; } = new();
     }
 
     public sealed class OwnerManualRoomOptionDto
@@ -192,6 +193,16 @@ namespace YemenGuide.Core.DTOs.Owner
         public string ServiceName { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
         public decimal Price { get; set; }
+    }
+
+    public sealed class OwnerManualWalletOptionDto
+    {
+        public int WalletId { get; set; }
+        public string WalletName { get; set; } = string.Empty;
+        public string AccountNumberMasked { get; set; } = string.Empty;
+        public string DisplayName => string.IsNullOrWhiteSpace(AccountNumberMasked)
+            ? WalletName
+            : $"{WalletName} · {AccountNumberMasked}";
     }
 
     public sealed class OwnerManualBookingServiceInputDto
@@ -269,6 +280,8 @@ namespace YemenGuide.Core.DTOs.Owner
         [StringLength(30)]
         public string? PaymentMethod { get; set; }
 
+        public int? WalletId { get; set; }
+
         [StringLength(100)]
         public string? PaymentReferenceNumber { get; set; }
     }
@@ -290,6 +303,7 @@ namespace YemenGuide.Core.DTOs.Owner
         public decimal DiscountAmount { get; set; }
         public decimal TotalPrice { get; set; }
         public decimal DepositAmount { get; set; }
+        public decimal InitialPaymentAmount { get; set; }
         public decimal RemainingAmount { get; set; }
         public decimal CommissionPercentage { get; set; }
         public decimal PlatformCommission { get; set; }
@@ -337,6 +351,8 @@ namespace YemenGuide.Core.DTOs.Owner
         [Required]
         [StringLength(30)]
         public string PaymentMethod { get; set; } = "Cash";
+
+        public int? WalletId { get; set; }
 
         [StringLength(100)]
         public string? PaymentReferenceNumber { get; set; }
