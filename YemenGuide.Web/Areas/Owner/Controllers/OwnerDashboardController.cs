@@ -395,6 +395,35 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 return View(model);
             }
 
+            // المنبثقة ليست مبنية على عمر التجربة أو تخزين المتصفح.
+            // علامة الإشعار هذه تُنشأ فقط عند أول اعتماد لمنشأة حجزية
+            // جديدة؛ لذلك المنشآت القديمة تعرض العداد فقط دون ترحيب.
+            var trialWelcomeNotificationId =
+                await _context.Notifications
+                    .AsNoTracking()
+                    .Where(notification =>
+                        notification.UserId == ownerId &&
+                        notification.ReferenceType ==
+                            NotificationReferenceTypes.Place &&
+                        notification.ReferenceId == selectedPlace.PlaceId &&
+                        notification.NotificationTitle ==
+                            "بدأت الفترة التجريبية لمنشأتك" &&
+                        !notification.ReadAt.HasValue &&
+                        (notification.NotificationState == null ||
+                         notification.NotificationState != "Read"))
+                    .OrderByDescending(notification =>
+                        notification.CreatedAt)
+                    .ThenByDescending(notification =>
+                        notification.NotificationId)
+                    .Select(notification =>
+                        notification.NotificationId)
+                    .FirstOrDefaultAsync(cancellationToken);
+
+            if (trialWelcomeNotificationId <= 0)
+            {
+                return View(model);
+            }
+
             var welcomeTotalTrialDays = Math.Max(
                 1,
                 (int)Math.Ceiling(
@@ -433,9 +462,16 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 CanAcceptNewBookings =
                     financialAccess.CanAcceptNewBookings,
                 StorageKey =
-                    $"ygOwnerTrialWelcome_v2_{ownerId}_{selectedPlace.PlaceId}_" +
+                    $"ygOwnerTrialWelcome_v3_{ownerId}_{selectedPlace.PlaceId}_" +
                     welcomeStartedAt.Value.ToString("yyyyMMddHHmmss")
             };
+
+            // تعليم العلامة كمقروءة قبل إرسال الصفحة يجعل الرسالة تظهر
+            // مرة واحدة فقط على مستوى الحساب، لا مرة لكل متصفح أو جهاز.
+            await _notificationService.MarkAsReadAsync(
+                trialWelcomeNotificationId,
+                ownerId,
+                cancellationToken);
 
             return View(model);
         }

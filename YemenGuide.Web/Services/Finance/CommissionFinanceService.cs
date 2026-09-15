@@ -1039,16 +1039,37 @@ namespace YemenGuide.Web.Services.Finance
             CancellationToken cancellationToken)
         {
             var account = await _context.PlaceCommissionAccounts
-                .FirstOrDefaultAsync(item => item.PlaceId == placeId, cancellationToken);
+                .Include(item => item.Place)
+                    .ThenInclude(place => place.Category)
+                .FirstOrDefaultAsync(
+                    item => item.PlaceId == placeId,
+                    cancellationToken);
 
             if (account != null)
             {
+                if (!IsBookingEnabledCategory(account.Place.Category))
+                {
+                    throw new InvalidOperationException(
+                        "المنشأة غير حجزية ولا تحتاج إلى حساب ضمان أو شحن رصيد.");
+                }
+
                 return account;
             }
 
-            if (!await _context.Places.AnyAsync(place => place.PlaceId == placeId, cancellationToken))
+            var isBookingEnabledPlace = await _context.Places
+                .AsNoTracking()
+                .AnyAsync(
+                    place =>
+                        place.PlaceId == placeId &&
+                        place.Category != null &&
+                        place.Category.BookingSystemId >= 1 &&
+                        place.Category.BookingSystemId <= 4,
+                    cancellationToken);
+
+            if (!isBookingEnabledPlace)
             {
-                throw new InvalidOperationException("المنشأة غير موجودة.");
+                throw new InvalidOperationException(
+                    "المنشأة غير موجودة أو غير حجزية ولا تحتاج إلى حساب ضمان.");
             }
 
             var now = DateTime.Now;

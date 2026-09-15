@@ -465,10 +465,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 OperationalStartAt = operationalStartAt,
                 OperationalEndAt = operationalEndAt,
                 NoShowAvailableAt = noShowAvailableAt,
-                NoShowGraceMinutes = Math.Max(
-                    0,
-                    booking.Place?.PlacePolicy?
-                        .NoShowGraceMinutes ?? 60),
+                NoShowGraceMinutes = 60,
                 CanAccept =
                     IsState(booking.BookingState, "Pending") &&
                     (
@@ -489,13 +486,16 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     IsState(booking.BookingState, "PaymentReview") ||
                     IsState(booking.BookingState, "AwaitingPayment"),
                 CanOwnerCancel =
-                    IsState(booking.BookingState, "Confirmed"),
+                    IsState(booking.BookingState, "Confirmed") &&
+                    (financialRecord?.AmountCollectedAtProperty ?? 0m) <= 0m,
                 CanCompleteNow =
                     IsState(booking.BookingState, "Confirmed") &&
                     now >= operationalEndAt,
                 CanMarkNoShowNow =
                     IsState(booking.BookingState, "Confirmed") &&
-                    now >= noShowAvailableAt,
+                    now >= noShowAvailableAt &&
+                    now < operationalEndAt &&
+                    (financialRecord?.AmountCollectedAtProperty ?? 0m) <= 0m,
                 ActionAvailabilityText =
                     BuildActionAvailabilityText(booking, now),
 
@@ -841,13 +841,10 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
         private static DateTime GetNoShowAvailableAt(Booking booking)
         {
-            var graceMinutes = Math.Max(
-                0,
-                booking.Place?.PlacePolicy?
-                    .NoShowGraceMinutes ?? 60);
-
+            // قاعدة تشغيل موحدة: عدم الحضور يصبح متاحًا بعد ساعة واحدة
+            // من بداية الفترة الفعلية للحجز.
             return GetOperationalStartAt(booking)
-                .AddMinutes(graceMinutes);
+                .AddHours(1);
         }
 
         private static string BuildActionAvailabilityText(
@@ -857,66 +854,43 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             var startAt = GetOperationalStartAt(booking);
             var endAt = GetOperationalEndAt(booking);
             var noShowAt = GetNoShowAvailableAt(booking);
-
-            var lateBookingNotice =
-                booking.PackageId.HasValue &&
-                booking.CreatedAt.HasValue &&
-                booking.CreatedAt.Value > startAt &&
-                booking.CreatedAt.Value < endAt
-                    ? $"تنبيه: تم إنشاء هذا الطلب بعد بدء الباقة بـ " +
-                      $"{FormatOperationalDuration(booking.CreatedAt.Value - startAt)}. "
-                    : string.Empty;
+            var collectedAtProperty =
+                Math.Max(
+                    0m,
+                    booking.FinancialRecord?.AmountCollectedAtProperty ?? 0m);
 
             if (now < startAt)
             {
                 return
-                    lateBookingNotice +
-                    $"موعد بداية الحجز: {startAt:yyyy-MM-dd HH:mm}. " +
-                    $"تسجيل عدم الحضور يتاح في {noShowAt:yyyy-MM-dd HH:mm}، " +
-                    $"والإنهاء في {endAt:yyyy-MM-dd HH:mm}.";
-            }
-
-            if (now < noShowAt)
-            {
-                if (booking.PackageId.HasValue)
-                {
-                    return
-                        lateBookingNotice +
-                        $"بدأ موعد الحجز، وما زال القبول/اعتماد الدفع متاحًا حتى نهاية الباقة " +
-                        $"في {endAt:yyyy-MM-dd HH:mm}. يتاح تسجيل عدم الحضور بعد مهلة السماح في " +
-                        $"{noShowAt:yyyy-MM-dd HH:mm}.";
-                }
-
-                return
-                    $"بدأ موعد الحجز. يتاح تسجيل عدم الحضور بعد مهلة السماح في " +
-                    $"{noShowAt:yyyy-MM-dd HH:mm}.";
+                    $"التحصيل يتاح عند بداية الفترة في {startAt:yyyy-MM-dd HH:mm}. " +
+                    $"عدم الحضور يتاح بعد ساعة في {noShowAt:yyyy-MM-dd HH:mm}. " +
+                    $"الإنهاء يتاح بعد نهاية الفترة في {endAt:yyyy-MM-dd HH:mm}.";
             }
 
             if (now < endAt)
             {
-                if (booking.PackageId.HasValue)
+                if (collectedAtProperty > 0m)
                 {
                     return
-                        lateBookingNotice +
-                        $"الباقة قيد التنفيذ، وما زال القبول/اعتماد الدفع متاحًا حتى " +
-                        $"{endAt:yyyy-MM-dd HH:mm}. يمكن تسجيل عدم حضور الآن حسب الواقع.";
+                        "تم تسجيل تحصيل عند المنشأة؛ لذلك أصبح عدم الحضور وإلغاء الحجز من جهة المالك غير متاحين. " +
+                        $"يمكن استكمال تحصيل أي مبلغ متبقٍ حتى نهاية الفترة في {endAt:yyyy-MM-dd HH:mm}، ثم إنهاء الحجز.";
+                }
+
+                if (now < noShowAt)
+                {
+                    return
+                        "التحصيل متاح الآن. " +
+                        $"عدم الحضور يتاح بعد ساعة من البداية في {noShowAt:yyyy-MM-dd HH:mm}. " +
+                        $"الإنهاء يتاح في {endAt:yyyy-MM-dd HH:mm}.";
                 }
 
                 return
-                    $"يمكن تسجيل عدم حضور الآن، أما إنهاء الحجز فيتاح في " +
-                    $"{endAt:yyyy-MM-dd HH:mm}.";
-            }
-
-            if (booking.PackageId.HasValue)
-            {
-                return
-                    lateBookingNotice +
-                    "انتهى وقت الباقة؛ لا يمكن قبول الطلب أو اعتماد دفعه الآن. " +
-                    "الحجز جاهز للإنهاء أو لتسجيل عدم حضور حسب الواقع.";
+                    "التحصيل متاح الآن، وعدم الحضور متاح عند التأكد من غياب العميل. " +
+                    $"الإنهاء يتاح بعد نهاية الفترة في {endAt:yyyy-MM-dd HH:mm}.";
             }
 
             return
-                "الحجز جاهز للإنهاء أو لتسجيل عدم حضور حسب الواقع.";
+                "انتهت فترة الحجز؛ لم يعد عدم الحضور متاحًا، والحجز جاهز للإنهاء.";
         }
 
         private static bool HasOpenRefundRequest(Booking booking)
@@ -2632,6 +2606,208 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
         }
 
         // =====================================================================
+        // تحصيل مبلغ أثناء فترة الحجز دون إنهاء الحجز
+        // =====================================================================
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> CollectBookingPayment(
+            int id,
+            decimal collectedAmount)
+        {
+            if (!TryGetCurrentOwnerId(out var ownerId))
+            {
+                return UnauthorizedOwnerJson();
+            }
+
+            if (id <= 0 || collectedAmount <= 0m)
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = "بيانات التحصيل غير صحيحة."
+                });
+            }
+
+            await using var transaction =
+                await _context.Database.BeginTransactionAsync(
+                    IsolationLevel.Serializable);
+
+            try
+            {
+                var booking =
+                    await _context.Bookings
+                        .Include(item => item.Place)
+                            .ThenInclude(place => place.PlacePolicy)
+                        .Include(item => item.Package)
+                        .Include(item => item.FinancialRecord)
+                        .FirstOrDefaultAsync(item =>
+                            item.BookingId == id &&
+                            item.Place.OwnerId == ownerId);
+
+                if (booking == null)
+                {
+                    await transaction.RollbackAsync();
+                    return Json(new
+                    {
+                        success = false,
+                        message = "الحجز غير موجود أو لا يتبع منشآتك."
+                    });
+                }
+
+                if (!IsState(booking.BookingState, "Confirmed"))
+                {
+                    await transaction.RollbackAsync();
+                    return Json(new
+                    {
+                        success = false,
+                        message = "التحصيل متاح للحجوزات المؤكدة النشطة فقط."
+                    });
+                }
+
+                var now = DateTime.Now;
+                var operationalStartAt = GetOperationalStartAt(booking);
+                var operationalEndAt = GetOperationalEndAt(booking);
+
+                if (now < operationalStartAt)
+                {
+                    await transaction.RollbackAsync();
+                    return Json(new
+                    {
+                        success = false,
+                        message =
+                            $"يتاح التحصيل عند بداية فترة الحجز في " +
+                            $"{operationalStartAt:yyyy-MM-dd HH:mm}."
+                    });
+                }
+
+                if (now >= operationalEndAt)
+                {
+                    await transaction.RollbackAsync();
+                    return Json(new
+                    {
+                        success = false,
+                        message =
+                            "انتهت فترة الحجز. استخدم زر إنهاء الحجز."
+                    });
+                }
+
+                var financialRecord = booking.FinancialRecord;
+
+                if (financialRecord == null)
+                {
+                    await transaction.RollbackAsync();
+                    return Json(new
+                    {
+                        success = false,
+                        message = "السجل المالي للحجز غير موجود."
+                    });
+                }
+
+                var outstandingAmount = Math.Round(
+                    Math.Max(0m, financialRecord.AmountToPayAtProperty),
+                    2);
+
+                if (outstandingAmount <= 0m)
+                {
+                    await transaction.RollbackAsync();
+                    return Json(new
+                    {
+                        success = false,
+                        message = "تم سداد كامل المبلغ المتبقي مسبقًا."
+                    });
+                }
+
+                var actualCollected = Math.Round(
+                    Math.Max(0m, collectedAmount),
+                    2);
+
+                if (actualCollected > outstandingAmount &&
+                    actualCollected - outstandingAmount <= 0.01m)
+                {
+                    actualCollected = outstandingAmount;
+                }
+
+                if (actualCollected <= 0m ||
+                    actualCollected > outstandingAmount)
+                {
+                    await transaction.RollbackAsync();
+                    return Json(new
+                    {
+                        success = false,
+                        message = actualCollected <= 0m
+                            ? "المبلغ المحصل يجب أن يكون أكبر من صفر."
+                            : $"المبلغ المحصل لا يمكن أن يتجاوز المتبقي " +
+                              $"{outstandingAmount:N2}."
+                    });
+                }
+
+                var remainingAfterCollection = Math.Round(
+                    Math.Max(0m, outstandingAmount - actualCollected),
+                    2);
+
+                financialRecord.AmountCollectedAtProperty =
+                    Math.Round(
+                        Math.Max(0m, financialRecord.AmountCollectedAtProperty) +
+                        actualCollected,
+                        2);
+
+                financialRecord.AmountToPayAtProperty =
+                    remainingAfterCollection;
+                financialRecord.CollectedAt = now;
+                financialRecord.UpdatedAt = now;
+
+                var totalPaid = Math.Round(
+                    Math.Max(0m, financialRecord.AmountPaidOnline) +
+                    Math.Max(0m, financialRecord.AmountCollectedAtProperty),
+                    2);
+
+                booking.PaymentStatus =
+                    totalPaid >= booking.TotalPrice
+                        ? "FullyPaid"
+                        : totalPaid > 0m
+                            ? "PartiallyPaid"
+                            : "Unpaid";
+
+                // التحصيل هنا مالي فقط:
+                // لا نغيّر BookingState، ولا CompletedAt/ClosedAt،
+                // ولا إسناد الغرف، ولا دورة العمولة.
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                return Json(new
+                {
+                    success = true,
+                    bookingId = booking.BookingId,
+                    bookingState = booking.BookingState,
+                    paymentStatus = booking.PaymentStatus,
+                    amountCollectedNow = actualCollected,
+                    amountCollectedAtProperty =
+                        financialRecord.AmountCollectedAtProperty,
+                    remainingAfterCollection,
+                    message = remainingAfterCollection <= 0m
+                        ? "تم تحصيل كامل المبلغ المتبقي، وسيبقى الحجز نشطًا حتى نهاية الفترة."
+                        : "تم تسجيل التحصيل في المالية وتحديث المبلغ المتبقي دون إنهاء الحجز."
+                });
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                await transaction.RollbackAsync();
+                return ConcurrencyError();
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                return Json(new
+                {
+                    success = false,
+                    message =
+                        "حدث خطأ أثناء تسجيل التحصيل. لم يتم تغيير بيانات الحجز."
+                });
+            }
+        }
+
+        // =====================================================================
         // إنهاء الحجز
         // =====================================================================
 
@@ -2984,8 +3160,33 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     {
                         success = false,
                         message =
-                            $"لا يمكن تسجيل عدم حضور قبل انتهاء مهلة السماح في " +
-                            $"{noShowAvailableAt:yyyy-MM-dd HH:mm}."
+                            $"لا يمكن تسجيل عدم حضور قبل مرور ساعة من بداية الفترة، " +
+                            $"أي قبل {noShowAvailableAt:yyyy-MM-dd HH:mm}."
+                    });
+                }
+
+                var operationalEndAt =
+                    GetOperationalEndAt(booking);
+
+                if (now >= operationalEndAt)
+                {
+                    await transaction.RollbackAsync();
+                    return Json(new
+                    {
+                        success = false,
+                        message =
+                            "انتهت فترة الحجز. لم يعد تسجيل عدم الحضور متاحًا؛ استخدم إنهاء الحجز."
+                    });
+                }
+
+                if ((booking.FinancialRecord?.AmountCollectedAtProperty ?? 0m) > 0m)
+                {
+                    await transaction.RollbackAsync();
+                    return Json(new
+                    {
+                        success = false,
+                        message =
+                            "تم تسجيل تحصيل عند المنشأة لهذا الحجز، لذلك لا يمكن تسجيل العميل كعدم حضور."
                     });
                 }
 
@@ -2997,7 +3198,6 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
                 var financialRecord =
                     booking.FinancialRecord;
-
                 var paidOnline =
                     Math.Round(
                         Math.Min(
@@ -3393,6 +3593,17 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     });
                 }
 
+                if ((booking.FinancialRecord?.AmountCollectedAtProperty ?? 0m) > 0m)
+                {
+                    await transaction.RollbackAsync();
+                    return Json(new
+                    {
+                        success = false,
+                        message =
+                            "لا يمكن إلغاء الحجز من جهة المالك بعد تسجيل تحصيل عند المنشأة. أكمل الحجز حتى نهايته ثم استخدم إنهاء الحجز."
+                    });
+                }
+
                 var now =
                     DateTime.Now;
 
@@ -3579,4 +3790,3 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
         }
     }
 }
-

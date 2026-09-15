@@ -14,241 +14,305 @@
          string.Equals(Model.PlaceStatus, "Active", System.StringComparison.OrdinalIgnoreCase))
             ? "is-active"
             : "is-muted";
+
+    string categoryText = string.IsNullOrWhiteSpace(Model.CategoryName)
+        ? "غير مصنفة"
+        : Model.CategoryName;
 }
 
 @section PageStyles {
     <style>
         .nb-owner-dashboard {
-            --nb-surface: rgba(255,255,255,.96);
-            --nb-border: rgba(5,32,60,.09);
-            --nb-text: #102a43;
-            --nb-muted: #64748b;
+            --nb-surface: #fff;
+            --nb-soft: #f7fbfd;
+            --nb-border: #deebf2;
+            --nb-text: #08233f;
+            --nb-muted: #667b90;
             --nb-cyan: #00a6da;
+            --nb-cyan-dark: #007fa9;
             --nb-orange: #f59e0b;
-            padding: 24px 0 36px;
+            --nb-green: #12a66a;
+            padding: 18px 0 34px;
             direction: rtl;
+            color: var(--nb-text);
         }
 
         .dark-mode .nb-owner-dashboard {
-            --nb-surface: rgba(8,28,48,.92);
-            --nb-border: rgba(255,255,255,.08);
-            --nb-text: #eef8ff;
-            --nb-muted: #9fb5c8;
+            --nb-surface: #0b2943;
+            --nb-soft: #102f4b;
+            --nb-border: rgba(255,255,255,.1);
+            --nb-text: #f1f8fc;
+            --nb-muted: #a9bdcc;
+        }
+
+        .nb-owner-dashboard *,
+        .nb-owner-dashboard *::before,
+        .nb-owner-dashboard *::after {
+            box-sizing: border-box;
         }
 
         .nb-owner-hero,
-        .nb-owner-card,
-        .nb-owner-review,
-        .nb-owner-empty {
+        .nb-owner-metric,
+        .nb-owner-panel {
             background: var(--nb-surface);
             border: 1px solid var(--nb-border);
-            box-shadow: 0 18px 48px rgba(5,32,60,.08);
+            box-shadow: 0 16px 38px rgba(5,32,60,.07);
         }
 
         .nb-owner-hero {
             position: relative;
+            isolation: isolate;
             overflow: hidden;
+            display: grid;
+            grid-template-columns: minmax(0,1fr) auto;
+            align-items: center;
+            gap: 24px;
+            min-height: 190px;
+            padding: 26px 30px;
+            margin-bottom: 16px;
             border-radius: 28px;
-            padding: 28px;
-            margin-bottom: 20px;
         }
 
+        .nb-owner-hero::before,
         .nb-owner-hero::after {
             content: "";
             position: absolute;
-            inset-inline-end: -80px;
-            top: -100px;
-            width: 260px;
-            height: 260px;
-            border-radius: 50%;
-            background: radial-gradient(circle, rgba(0,166,218,.22), transparent 68%);
+            z-index: -1;
+            border-radius: 999px;
             pointer-events: none;
         }
 
-        .nb-owner-kicker {
-            display: inline-flex;
-            align-items: center;
-            gap: 7px;
-            padding: 7px 12px;
-            border-radius: 999px;
-            background: rgba(0,166,218,.09);
-            color: var(--nb-cyan);
-            font-size: .83rem;
-            font-weight: 800;
-            margin-bottom: 12px;
+        .nb-owner-hero::before {
+            width: 310px;
+            height: 310px;
+            inset-inline-end: -115px;
+            top: -145px;
+            background: radial-gradient(circle, rgba(0,166,218,.2), transparent 68%);
         }
+
+        .nb-owner-hero::after {
+            width: 230px;
+            height: 230px;
+            inset-inline-start: -90px;
+            bottom: -150px;
+            background: radial-gradient(circle, rgba(245,158,11,.14), transparent 70%);
+        }
+
+        .nb-owner-hero__identity {
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            min-width: 0;
+        }
+
+        .nb-owner-hero__mark {
+            flex: 0 0 76px;
+            width: 76px;
+            height: 76px;
+            display: grid;
+            place-items: center;
+            border-radius: 23px;
+            background: linear-gradient(145deg, var(--nb-cyan), #087ea4);
+            color: #fff;
+            box-shadow: 0 14px 28px rgba(0,166,218,.25);
+            font-size: 1.85rem;
+        }
+
+        .nb-owner-eyebrow {
+            display: block;
+            color: var(--nb-cyan-dark);
+            font-size: .82rem;
+            font-weight: 900;
+            margin-bottom: 5px;
+        }
+
+        .dark-mode .nb-owner-eyebrow { color: #58d6ff; }
 
         .nb-owner-hero h1 {
-            color: var(--nb-text);
-            font-size: clamp(1.5rem, 3vw, 2.2rem);
-            font-weight: 900;
-            margin: 0 0 8px;
-        }
-
-        .nb-owner-hero p {
-            color: var(--nb-muted);
-            max-width: 760px;
             margin: 0;
-            line-height: 1.9;
+            color: var(--nb-text);
+            font-size: clamp(1.65rem, 2.8vw, 2.45rem);
+            line-height: 1.25;
+            font-weight: 950;
+            overflow-wrap: anywhere;
         }
 
         .nb-owner-meta {
             display: flex;
             flex-wrap: wrap;
-            gap: 10px;
-            margin-top: 18px;
+            align-items: center;
+            gap: 8px;
+            margin-top: 13px;
         }
 
         .nb-owner-chip {
             display: inline-flex;
             align-items: center;
             gap: 7px;
-            padding: 8px 12px;
-            border-radius: 12px;
-            background: rgba(15,23,42,.045);
-            color: var(--nb-text);
-            font-weight: 700;
-            font-size: .86rem;
-        }
-
-        .nb-owner-chip.is-active { color: #138a57; }
-        .nb-owner-chip.is-muted { color: #b45309; }
-
-        .nb-owner-info {
-            display: flex;
-            gap: 10px;
-            align-items: flex-start;
-            padding: 14px 16px;
-            border-radius: 16px;
-            background: rgba(245,158,11,.08);
-            border: 1px solid rgba(245,158,11,.18);
-            color: var(--nb-text);
-            margin-top: 18px;
-        }
-
-        .nb-owner-info i { color: var(--nb-orange); margin-top: 3px; }
-        .nb-owner-info strong { display: block; margin-bottom: 2px; }
-        .nb-owner-info span { color: var(--nb-muted); font-size: .9rem; }
-
-        .nb-owner-grid {
-            display: grid;
-            grid-template-columns: repeat(4, minmax(0,1fr));
-            gap: 14px;
-            margin-bottom: 20px;
-        }
-
-        .nb-owner-card {
-            border-radius: 20px;
-            padding: 18px;
-            min-width: 0;
-        }
-
-        .nb-owner-card__icon {
-            width: 42px;
-            height: 42px;
-            display: grid;
-            place-items: center;
-            border-radius: 13px;
-            background: rgba(0,166,218,.09);
-            color: var(--nb-cyan);
-            font-size: 1.15rem;
-            margin-bottom: 12px;
-        }
-
-        .nb-owner-card small {
-            display: block;
-            color: var(--nb-muted);
-            margin-bottom: 4px;
-            font-weight: 700;
-        }
-
-        .nb-owner-card strong {
-            display: block;
-            color: var(--nb-text);
-            font-size: 1.55rem;
-            font-weight: 900;
-            overflow-wrap: anywhere;
-        }
-
-        .nb-owner-columns {
-            display: grid;
-            grid-template-columns: minmax(0,1.3fr) minmax(280px,.7fr);
-            gap: 18px;
-        }
-
-        .nb-owner-section {
-            background: var(--nb-surface);
+            min-height: 34px;
+            padding: 7px 11px;
             border: 1px solid var(--nb-border);
-            border-radius: 24px;
-            padding: 20px;
-            box-shadow: 0 18px 48px rgba(5,32,60,.07);
+            border-radius: 11px;
+            background: var(--nb-soft);
+            color: var(--nb-text);
+            font-size: .84rem;
+            font-weight: 800;
         }
 
-        .nb-owner-section__head {
+        .nb-owner-chip.is-active {
+            border-color: rgba(18,166,106,.18);
+            background: rgba(18,166,106,.09);
+            color: #118353;
+        }
+
+        .nb-owner-chip.is-muted {
+            border-color: rgba(245,158,11,.2);
+            background: rgba(245,158,11,.09);
+            color: #ad6700;
+        }
+
+        .nb-owner-hero__actions {
             display: flex;
             align-items: center;
-            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .nb-owner-button {
+            min-height: 46px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 9px;
+            padding: 10px 16px;
+            border: 1px solid var(--nb-border);
+            border-radius: 14px;
+            background: var(--nb-surface);
+            color: var(--nb-text);
+            text-decoration: none;
+            font-size: .9rem;
+            font-weight: 900;
+            white-space: nowrap;
+            transition: transform .16s ease, box-shadow .16s ease;
+        }
+
+        .nb-owner-button.is-primary {
+            border-color: transparent;
+            background: linear-gradient(135deg, var(--nb-cyan), #0788b2);
+            color: #fff;
+            box-shadow: 0 12px 24px rgba(0,166,218,.2);
+        }
+
+        .nb-owner-button:hover {
+            transform: translateY(-2px);
+            color: var(--nb-text);
+        }
+
+        .nb-owner-button.is-primary:hover { color: #fff; }
+
+        .nb-owner-metrics {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0,1fr));
             gap: 12px;
             margin-bottom: 16px;
         }
 
-        .nb-owner-section__head h2 {
-            color: var(--nb-text);
-            font-size: 1.05rem;
-            font-weight: 900;
-            margin: 0;
-        }
-
-        .nb-owner-section__head a {
-            color: var(--nb-cyan);
-            font-weight: 800;
-            text-decoration: none;
-            font-size: .88rem;
-        }
-
-        .nb-owner-review {
-            border-radius: 17px;
-            padding: 14px;
-            box-shadow: none;
-        }
-
-        .nb-owner-review + .nb-owner-review { margin-top: 10px; }
-
-        .nb-owner-review__top {
-            display: flex;
-            justify-content: space-between;
-            gap: 10px;
-            margin-bottom: 7px;
-        }
-
-        .nb-owner-review__top strong { color: var(--nb-text); }
-        .nb-owner-stars { color: #f59e0b; white-space: nowrap; }
-        .nb-owner-review p { color: var(--nb-muted); margin: 0; line-height: 1.7; font-size: .9rem; }
-
-        .nb-owner-actions {
-            display: grid;
-            gap: 10px;
-        }
-
-        .nb-owner-action {
+        .nb-owner-metric {
+            position: relative;
+            overflow: hidden;
             display: flex;
             align-items: center;
+            gap: 13px;
+            min-width: 0;
+            min-height: 104px;
+            padding: 17px;
+            border-radius: 20px;
+        }
+
+        .nb-owner-metric__icon {
+            flex: 0 0 46px;
+            width: 46px;
+            height: 46px;
+            display: grid;
+            place-items: center;
+            border-radius: 15px;
+            background: rgba(0,166,218,.1);
+            color: var(--nb-cyan);
+            font-size: 1.15rem;
+        }
+
+        .nb-owner-metric.is-orange .nb-owner-metric__icon {
+            background: rgba(245,158,11,.11);
+            color: var(--nb-orange);
+        }
+
+        .nb-owner-metric.is-green .nb-owner-metric__icon {
+            background: rgba(18,166,106,.1);
+            color: var(--nb-green);
+        }
+
+        .nb-owner-metric.is-rose .nb-owner-metric__icon {
+            background: rgba(239,79,112,.1);
+            color: #e84467;
+        }
+
+        .nb-owner-metric__copy {
+            min-width: 0;
+        }
+
+        .nb-owner-metric small {
+            display: block;
+            margin-bottom: 4px;
+            color: var(--nb-muted);
+            font-size: .78rem;
+            font-weight: 800;
+        }
+
+        .nb-owner-metric strong {
+            display: flex;
+            align-items: baseline;
+            gap: 5px;
+            color: var(--nb-text);
+            font-size: 1.45rem;
+            line-height: 1.15;
+            font-weight: 950;
+        }
+
+        .nb-owner-metric strong span {
+            color: var(--nb-muted);
+            font-size: .78rem;
+            font-weight: 800;
+        }
+
+        .nb-owner-layout {
+            display: grid;
+            grid-template-columns: minmax(0,1.45fr) minmax(300px,.55fr);
+            align-items: start;
+            gap: 16px;
+        }
+
+        .nb-owner-panel {
+            border-radius: 24px;
+            overflow: hidden;
+        }
+
+        .nb-owner-panel__head {
+            min-height: 66px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
             gap: 12px;
-            padding: 13px 14px;
-            border-radius: 16px;
-            text-decoration: none;
-            border: 1px solid var(--nb-border);
-            color: var(--nb-text);
-            transition: transform .15s ease, border-color .15s ease;
+            padding: 16px 19px;
+            border-bottom: 1px solid var(--nb-border);
         }
 
-        .nb-owner-action:hover {
-            transform: translateY(-1px);
-            border-color: rgba(0,166,218,.3);
-            color: var(--nb-text);
+        .nb-owner-panel__title {
+            display: flex;
+            align-items: center;
+            gap: 11px;
+            min-width: 0;
         }
 
-        .nb-owner-action i {
+        .nb-owner-panel__title > i {
             width: 38px;
             height: 38px;
             display: grid;
@@ -258,28 +322,292 @@
             color: var(--nb-cyan);
         }
 
-        .nb-owner-action span { flex: 1; font-weight: 800; }
+        .nb-owner-panel__title h2 {
+            margin: 0;
+            color: var(--nb-text);
+            font-size: 1rem;
+            font-weight: 950;
+        }
+
+        .nb-owner-panel__title small {
+            display: block;
+            margin-top: 2px;
+            color: var(--nb-muted);
+            font-size: .72rem;
+            font-weight: 700;
+        }
+
+        .nb-owner-panel__link {
+            color: var(--nb-cyan-dark);
+            text-decoration: none;
+            font-size: .82rem;
+            font-weight: 900;
+            white-space: nowrap;
+        }
+
+        .dark-mode .nb-owner-panel__link { color: #58d6ff; }
+
+        .nb-owner-reviews {
+            padding: 13px;
+        }
+
+        .nb-owner-review {
+            padding: 14px 15px;
+            border: 1px solid var(--nb-border);
+            border-radius: 16px;
+            background: var(--nb-soft);
+        }
+
+        .nb-owner-review + .nb-owner-review { margin-top: 9px; }
+
+        .nb-owner-review__top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 7px;
+        }
+
+        .nb-owner-review__top strong {
+            color: var(--nb-text);
+            font-size: .88rem;
+            font-weight: 900;
+        }
+
+        .nb-owner-stars {
+            color: var(--nb-orange);
+            font-size: .78rem;
+            white-space: nowrap;
+        }
+
+        .nb-owner-review p {
+            margin: 0;
+            color: var(--nb-muted);
+            line-height: 1.75;
+            font-size: .84rem;
+        }
+
+        .nb-owner-side {
+            display: grid;
+            gap: 16px;
+        }
+
+        .nb-owner-ad-stats {
+            display: grid;
+            grid-template-columns: repeat(3,minmax(0,1fr));
+            gap: 8px;
+            padding: 13px;
+        }
+
+        .nb-owner-ad-stat {
+            min-width: 0;
+            padding: 13px 9px;
+            border-radius: 14px;
+            background: var(--nb-soft);
+            text-align: center;
+        }
+
+        .nb-owner-ad-stat small {
+            display: block;
+            color: var(--nb-muted);
+            font-size: .69rem;
+            font-weight: 800;
+            margin-bottom: 5px;
+        }
+
+        .nb-owner-ad-stat strong {
+            display: block;
+            color: var(--nb-text);
+            font-size: 1.05rem;
+            font-weight: 950;
+            overflow-wrap: anywhere;
+        }
+
+        .nb-owner-actions {
+            display: grid;
+            grid-template-columns: repeat(2,minmax(0,1fr));
+            gap: 9px;
+            padding: 13px;
+        }
+
+        .nb-owner-action {
+            min-height: 92px;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 13px;
+            border: 1px solid var(--nb-border);
+            border-radius: 16px;
+            background: var(--nb-soft);
+            color: var(--nb-text);
+            text-decoration: none;
+            transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease;
+        }
+
+        .nb-owner-action:hover {
+            transform: translateY(-2px);
+            border-color: rgba(0,166,218,.3);
+            box-shadow: 0 9px 20px rgba(5,32,60,.07);
+            color: var(--nb-text);
+        }
+
+        .nb-owner-action i {
+            color: var(--nb-cyan);
+            font-size: 1.08rem;
+        }
+
+        .nb-owner-action span {
+            font-size: .8rem;
+            font-weight: 900;
+            line-height: 1.45;
+        }
 
         .nb-owner-empty {
+            padding: 34px 20px;
+            border: 1px dashed var(--nb-border);
             border-radius: 18px;
-            padding: 22px;
+            background: var(--nb-soft);
             color: var(--nb-muted);
             text-align: center;
-            box-shadow: none;
+            font-size: .86rem;
+            font-weight: 700;
+        }
+
+        .nb-owner-empty > i {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--nb-cyan);
+            font-size: 1.5rem;
+        }
+
+        .nb-owner-no-place {
+            max-width: 680px;
+            margin: 40px auto;
+            padding: 34px;
+            border: 1px solid var(--nb-border);
+            border-radius: 25px;
+            background: var(--nb-surface);
+            box-shadow: 0 18px 42px rgba(5,32,60,.08);
+            text-align: center;
+        }
+
+        .nb-owner-no-place i {
+            color: var(--nb-cyan);
+            font-size: 2rem;
+        }
+
+        .nb-owner-no-place h2 {
+            margin: 10px 0 7px;
+            color: var(--nb-text);
+            font-size: 1.2rem;
+            font-weight: 950;
+        }
+
+        .nb-owner-no-place p {
+            margin: 0 0 16px;
+            color: var(--nb-muted);
         }
 
         @@media (max-width: 1100px) {
-            .nb-owner-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
-            .nb-owner-columns { grid-template-columns: 1fr; }
+            .nb-owner-hero {
+                grid-template-columns: 1fr;
+            }
+
+            .nb-owner-hero__actions {
+                padding-inline-start: 94px;
+            }
+
+            .nb-owner-metrics {
+                grid-template-columns: repeat(2,minmax(0,1fr));
+            }
+
+            .nb-owner-layout {
+                grid-template-columns: 1fr;
+            }
         }
 
-        @@media (max-width: 600px) {
-            .nb-owner-dashboard { padding-top: 14px; }
-            .nb-owner-hero { padding: 20px; border-radius: 21px; }
-            .nb-owner-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
-            .nb-owner-card { padding: 14px; border-radius: 17px; }
-            .nb-owner-card strong { font-size: 1.2rem; }
-            .nb-owner-section { padding: 15px; border-radius: 19px; }
+        @@media (max-width: 650px) {
+            .nb-owner-dashboard {
+                padding-top: 10px;
+            }
+
+            .nb-owner-hero {
+                min-height: 0;
+                gap: 18px;
+                padding: 20px;
+                border-radius: 22px;
+            }
+
+            .nb-owner-hero__identity {
+                align-items: flex-start;
+                gap: 13px;
+            }
+
+            .nb-owner-hero__mark {
+                flex-basis: 56px;
+                width: 56px;
+                height: 56px;
+                border-radius: 17px;
+                font-size: 1.35rem;
+            }
+
+            .nb-owner-hero h1 {
+                font-size: 1.5rem;
+            }
+
+            .nb-owner-hero__actions {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                padding-inline-start: 0;
+            }
+
+            .nb-owner-button {
+                min-width: 0;
+                padding-inline: 10px;
+                font-size: .78rem;
+            }
+
+            .nb-owner-metrics {
+                gap: 9px;
+            }
+
+            .nb-owner-metric {
+                min-height: 94px;
+                padding: 13px;
+                gap: 9px;
+                border-radius: 17px;
+            }
+
+            .nb-owner-metric__icon {
+                flex-basis: 38px;
+                width: 38px;
+                height: 38px;
+                border-radius: 12px;
+            }
+
+            .nb-owner-metric strong {
+                font-size: 1.15rem;
+            }
+
+            .nb-owner-panel {
+                border-radius: 19px;
+            }
+
+            .nb-owner-panel__head {
+                padding: 13px 14px;
+            }
+        }
+
+        @@media (max-width: 430px) {
+            .nb-owner-metrics {
+                grid-template-columns: 1fr;
+            }
+
+            .nb-owner-action {
+                min-height: 84px;
+            }
         }
     </style>
 }
@@ -296,180 +624,212 @@
 
     @if (!Model.HasPlace)
     {
-        <section class="nb-owner-empty">
-            <i class="bi bi-building-add fs-2 d-block mb-2"></i>
-            <h2 class="h5 fw-bold">لا توجد منشأة مرتبطة بالحساب</h2>
-            <p class="mb-3">أضف منشأتك الأولى حتى تبدأ إدارة معلوماتها وإعلاناتها وتقييماتها.</p>
-            <a class="btn btn-primary"
+        <section class="nb-owner-no-place">
+            <i class="bi bi-building-add"></i>
+            <h2>لا توجد منشأة مرتبطة بالحساب</h2>
+            <p>يمكن إدارة المنشآت وإضافة منشأة جديدة من صفحة المنشآت.</p>
+            <a class="nb-owner-button is-primary"
                asp-area="Owner"
                asp-controller="Place"
                asp-action="ManagePlaces">
-                إدارة منشآتي
+                <i class="bi bi-buildings"></i>
+                إدارة المنشآت
             </a>
         </section>
     }
     else
     {
         <section class="nb-owner-hero">
-            <span class="nb-owner-kicker">
-                <i class="bi bi-grid-1x2-fill"></i>
-                لوحة منشأة غير حجزية
-            </span>
-
-            <h1>@Model.PlaceName</h1>
-            <p>
-                هذه المنشأة تابعة لفئة تعمل بدون نظام حجز. لذلك تعرض لوحة المالك
-                الأدوات المناسبة للمحتوى والتواصل والتقييمات والإعلانات فقط.
-            </p>
-
-            <div class="nb-owner-meta">
-                <span class="nb-owner-chip">
-                    <i class="bi bi-tag-fill"></i>
-                    @(string.IsNullOrWhiteSpace(Model.CategoryName) ? "بدون فئة" : Model.CategoryName)
+            <div class="nb-owner-hero__identity">
+                <span class="nb-owner-hero__mark" aria-hidden="true">
+                    <i class="bi bi-shop-window"></i>
                 </span>
-                <span class="nb-owner-chip @statusClass">
-                    <i class="bi bi-activity"></i>
-                    @statusText
-                </span>
-                <span class="nb-owner-chip">
-                    <i class="bi bi-calendar-x"></i>
-                    بدون حجز
-                </span>
-            </div>
-
-            <div class="nb-owner-info">
-                <i class="bi bi-shield-check"></i>
                 <div>
-                    <strong>تم تخصيص اللوحة تلقائيًا حسب قالب الفئة</strong>
-                    <span>الحجوزات، سياسات الحجز، والمالية والعمولات غير معروضة لهذه المنشأة.</span>
+                    <span class="nb-owner-eyebrow">ملخص المنشأة</span>
+                    <h1>@Model.PlaceName</h1>
+                    <div class="nb-owner-meta">
+                        <span class="nb-owner-chip">
+                            <i class="bi bi-tag-fill"></i>
+                            @categoryText
+                        </span>
+                        <span class="nb-owner-chip @statusClass">
+                            <i class="bi bi-activity"></i>
+                            @statusText
+                        </span>
+                    </div>
                 </div>
+            </div>
+
+            <div class="nb-owner-hero__actions">
+                <a class="nb-owner-button is-primary"
+                   asp-area="Owner"
+                   asp-controller="Place"
+                   asp-action="ManagePlaces">
+                    <i class="bi bi-pencil-square"></i>
+                    بيانات المنشأة
+                </a>
+                <a class="nb-owner-button"
+                   asp-area="Owner"
+                   asp-controller="Advertisements"
+                   asp-action="AdvertisementManagement">
+                    <i class="bi bi-megaphone"></i>
+                    الإعلانات
+                </a>
             </div>
         </section>
 
-        <section class="nb-owner-grid" aria-label="مؤشرات المنشأة">
-            <article class="nb-owner-card">
-                <span class="nb-owner-card__icon"><i class="bi bi-star-fill"></i></span>
-                <small>متوسط التقييم</small>
-                <strong>@Model.Reviews.AverageRating.ToString("0.0") / 5</strong>
+        <section class="nb-owner-metrics" aria-label="مؤشرات المنشأة">
+            <article class="nb-owner-metric is-orange">
+                <span class="nb-owner-metric__icon"><i class="bi bi-star-fill"></i></span>
+                <div class="nb-owner-metric__copy">
+                    <small>متوسط التقييم</small>
+                    <strong dir="ltr">@Model.Reviews.AverageRating.ToString("0.0") <span>/ 5</span></strong>
+                </div>
             </article>
 
-            <article class="nb-owner-card">
-                <span class="nb-owner-card__icon"><i class="bi bi-chat-square-heart-fill"></i></span>
-                <small>عدد التقييمات</small>
-                <strong>@Model.Reviews.TotalReviews.ToString("N0")</strong>
+            <article class="nb-owner-metric">
+                <span class="nb-owner-metric__icon"><i class="bi bi-chat-square-heart-fill"></i></span>
+                <div class="nb-owner-metric__copy">
+                    <small>إجمالي التقييمات</small>
+                    <strong>@Model.Reviews.TotalReviews.ToString("N0")</strong>
+                </div>
             </article>
 
-            <article class="nb-owner-card">
-                <span class="nb-owner-card__icon"><i class="bi bi-heart-fill"></i></span>
-                <small>في المفضلة</small>
-                <strong>@Model.Kpis.FavoritesCount.ToString("N0")</strong>
+            <article class="nb-owner-metric is-rose">
+                <span class="nb-owner-metric__icon"><i class="bi bi-heart-fill"></i></span>
+                <div class="nb-owner-metric__copy">
+                    <small>الإضافات للمفضلة</small>
+                    <strong>@Model.Kpis.FavoritesCount.ToString("N0")</strong>
+                </div>
             </article>
 
-            <article class="nb-owner-card">
-                <span class="nb-owner-card__icon"><i class="bi bi-megaphone-fill"></i></span>
-                <small>إعلانات نشطة</small>
-                <strong>@Model.Marketing.ActiveAdvertisements.ToString("N0")</strong>
-            </article>
-
-            <article class="nb-owner-card">
-                <span class="nb-owner-card__icon"><i class="bi bi-eye-fill"></i></span>
-                <small>مشاهدات الإعلانات</small>
-                <strong>@Model.Marketing.Impressions.ToString("N0")</strong>
-            </article>
-
-            <article class="nb-owner-card">
-                <span class="nb-owner-card__icon"><i class="bi bi-cursor-fill"></i></span>
-                <small>نقرات الإعلانات</small>
-                <strong>@Model.Marketing.Clicks.ToString("N0")</strong>
-            </article>
-
-            <article class="nb-owner-card">
-                <span class="nb-owner-card__icon"><i class="bi bi-reply-fill"></i></span>
-                <small>تقييمات بانتظار الرد</small>
-                <strong>@Model.Reviews.AwaitingReply.ToString("N0")</strong>
-            </article>
-
-            <article class="nb-owner-card">
-                <span class="nb-owner-card__icon"><i class="bi bi-building-check"></i></span>
-                <small>نوع التشغيل</small>
-                <strong style="font-size:1rem">معلوماتي</strong>
+            <article class="nb-owner-metric is-green">
+                <span class="nb-owner-metric__icon"><i class="bi bi-reply-fill"></i></span>
+                <div class="nb-owner-metric__copy">
+                    <small>بانتظار الرد</small>
+                    <strong>@Model.Reviews.AwaitingReply.ToString("N0")</strong>
+                </div>
             </article>
         </section>
 
-        <div class="nb-owner-columns">
-            <section class="nb-owner-section">
-                <div class="nb-owner-section__head">
-                    <h2><i class="bi bi-star ms-1"></i> أحدث التقييمات</h2>
-                    <a href="/Owner/Chat/ChatInterface?communicationTab=reviews">عرض الكل</a>
-                </div>
-
-                @if (Model.Reviews.LatestReviews != null && Model.Reviews.LatestReviews.Count > 0)
-                {
-                    @foreach (var review in Model.Reviews.LatestReviews)
-                    {
-                        <article class="nb-owner-review">
-                            <div class="nb-owner-review__top">
-                                <strong>@review.CustomerName</strong>
-                                <span class="nb-owner-stars" aria-label="@review.Stars من 5">
-                                    @for (var star = 1; star <= 5; star++)
-                                    {
-                                        <i class="bi @(star <= review.Stars ? "bi-star-fill" : "bi-star")"></i>
-                                    }
-                                </span>
-                            </div>
-                            <p>@(string.IsNullOrWhiteSpace(review.ReviewText) ? "بدون تعليق نصي." : review.ReviewText)</p>
-                        </article>
-                    }
-                }
-                else
-                {
-                    <div class="nb-owner-empty">
-                        <i class="bi bi-star d-block fs-4 mb-2"></i>
-                        لا توجد تقييمات حتى الآن.
+        <div class="nb-owner-layout">
+            <section class="nb-owner-panel">
+                <header class="nb-owner-panel__head">
+                    <div class="nb-owner-panel__title">
+                        <i class="bi bi-star"></i>
+                        <div>
+                            <h2>أحدث التقييمات</h2>
+                            <small>آخر آراء الزوار</small>
+                        </div>
                     </div>
-                }
+                    <a class="nb-owner-panel__link"
+                       href="/Owner/Chat/ChatInterface?communicationTab=reviews">
+                        عرض الكل
+                        <i class="bi bi-arrow-left"></i>
+                    </a>
+                </header>
+
+                <div class="nb-owner-reviews">
+                    @if (Model.Reviews.LatestReviews != null &&
+                         Model.Reviews.LatestReviews.Count > 0)
+                    {
+                        @foreach (var review in Model.Reviews.LatestReviews)
+                        {
+                            <article class="nb-owner-review">
+                                <div class="nb-owner-review__top">
+                                    <strong>@review.CustomerName</strong>
+                                    <span class="nb-owner-stars" aria-label="@review.Stars من 5">
+                                        @for (var star = 1; star <= 5; star++)
+                                        {
+                                            <i class="bi @(star <= review.Stars ? "bi-star-fill" : "bi-star")"></i>
+                                        }
+                                    </span>
+                                </div>
+                                <p>@(string.IsNullOrWhiteSpace(review.ReviewText) ? "بدون تعليق نصي." : review.ReviewText)</p>
+                            </article>
+                        }
+                    }
+                    else
+                    {
+                        <div class="nb-owner-empty">
+                            <i class="bi bi-chat-square-heart"></i>
+                            لا توجد تقييمات حتى الآن
+                        </div>
+                    }
+                </div>
             </section>
 
-            <aside class="nb-owner-section">
-                <div class="nb-owner-section__head">
-                    <h2><i class="bi bi-lightning-charge ms-1"></i> إجراءات سريعة</h2>
-                </div>
+            <aside class="nb-owner-side">
+                <section class="nb-owner-panel">
+                    <header class="nb-owner-panel__head">
+                        <div class="nb-owner-panel__title">
+                            <i class="bi bi-graph-up-arrow"></i>
+                            <div>
+                                <h2>أداء الإعلانات</h2>
+                                <small>ملخص الظهور والتفاعل</small>
+                            </div>
+                        </div>
+                    </header>
 
-                <div class="nb-owner-actions">
-                    <a class="nb-owner-action"
-                       asp-area="Owner"
-                       asp-controller="Place"
-                       asp-action="ManagePlaces">
-                        <i class="bi bi-building-gear"></i>
-                        <span>إدارة بيانات المنشأة</span>
-                        <i class="bi bi-chevron-left"></i>
-                    </a>
+                    <div class="nb-owner-ad-stats">
+                        <div class="nb-owner-ad-stat">
+                            <small>نشطة</small>
+                            <strong>@Model.Marketing.ActiveAdvertisements.ToString("N0")</strong>
+                        </div>
+                        <div class="nb-owner-ad-stat">
+                            <small>مشاهدات</small>
+                            <strong>@Model.Marketing.Impressions.ToString("N0")</strong>
+                        </div>
+                        <div class="nb-owner-ad-stat">
+                            <small>نقرات</small>
+                            <strong>@Model.Marketing.Clicks.ToString("N0")</strong>
+                        </div>
+                    </div>
+                </section>
 
-                    <a class="nb-owner-action"
-                       asp-area="Owner"
-                       asp-controller="Advertisements"
-                       asp-action="AdvertisementManagement">
-                        <i class="bi bi-megaphone"></i>
-                        <span>إدارة الإعلانات</span>
-                        <i class="bi bi-chevron-left"></i>
-                    </a>
+                <section class="nb-owner-panel">
+                    <header class="nb-owner-panel__head">
+                        <div class="nb-owner-panel__title">
+                            <i class="bi bi-lightning-charge"></i>
+                            <div>
+                                <h2>إجراءات سريعة</h2>
+                                <small>الوصول المباشر</small>
+                            </div>
+                        </div>
+                    </header>
 
-                    <a class="nb-owner-action"
-                       href="/Owner/Chat/ChatInterface?communicationTab=reviews">
-                        <i class="bi bi-star"></i>
-                        <span>التقييمات والردود</span>
-                        <i class="bi bi-chevron-left"></i>
-                    </a>
+                    <div class="nb-owner-actions">
+                        <a class="nb-owner-action"
+                           asp-area="Owner"
+                           asp-controller="Place"
+                           asp-action="ManagePlaces">
+                            <i class="bi bi-building-gear"></i>
+                            <span>إدارة البيانات</span>
+                        </a>
 
-                    <a class="nb-owner-action"
-                       asp-area="Owner"
-                       asp-controller="Reports"
-                       asp-action="OwnerReports">
-                        <i class="bi bi-flag"></i>
-                        <span>الدعم والبلاغات</span>
-                        <i class="bi bi-chevron-left"></i>
-                    </a>
-                </div>
+                        <a class="nb-owner-action"
+                           asp-area="Owner"
+                           asp-controller="Advertisements"
+                           asp-action="AdvertisementManagement">
+                            <i class="bi bi-megaphone"></i>
+                            <span>إدارة الإعلانات</span>
+                        </a>
+
+                        <a class="nb-owner-action"
+                           href="/Owner/Chat/ChatInterface?communicationTab=reviews">
+                            <i class="bi bi-star"></i>
+                            <span>التقييمات والردود</span>
+                        </a>
+
+                        <a class="nb-owner-action"
+                           asp-area="Owner"
+                           asp-controller="Reports"
+                           asp-action="OwnerReports">
+                            <i class="bi bi-flag"></i>
+                            <span>الدعم والبلاغات</span>
+                        </a>
+                    </div>
+                </section>
             </aside>
         </div>
     }

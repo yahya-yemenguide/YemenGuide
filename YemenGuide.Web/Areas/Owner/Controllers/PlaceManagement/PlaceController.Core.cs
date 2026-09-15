@@ -72,8 +72,24 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             // منشآت الآخرين لا تصبح "منشآت الأدمن" داخل وضع المالك.
             // تبقى صلاحية الإدارة الأصلية متاحة فقط للإجراءات التي تمرر مفتاح صلاحية صريحًا.
             if (User.IsInRole("Admin"))
-                return adminPermission != null &&
-                       await HasAdminPermissionAsync(adminPermission);
+            {
+                /*
+                 * صلاحيات الإشراف لا تمنح الأدمن ملكية محتوى منشأة المالك.
+                 * يستطيع الأدمن مشاهدة أي منشأة عند امتلاك Places.View،
+                 * لكن تعديل البيانات والصور والسياسات من مسارات Owner
+                 * يبقى محصورًا بمالك المنشأة الفعلي (أو منشأة يملكها الأدمن نفسه
+                 * والتي نجحت في فحص ownsPlace أعلاه).
+                 */
+                if (!string.Equals(
+                        adminPermission,
+                        AdminPermissionKeys.Places.View,
+                        StringComparison.Ordinal))
+                {
+                    return false;
+                }
+
+                return await HasAdminPermissionAsync(AdminPermissionKeys.Places.View);
+            }
 
             return false;
         }

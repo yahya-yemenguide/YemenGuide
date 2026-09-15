@@ -219,17 +219,43 @@
                             <td class="compact-state-column">
                                 <span class="badge @operationalBadgeClass compact-state-badge"><i class="bi @operationalIcon"></i> @operationalLabel</span>
                                 <div class="compact-state-note success"><i class="bi bi-shield-check"></i> الحجز مؤكد</div>
-                                @if (!booking.CanMarkNoShowNow)
+                                @if (now < booking.OperationalStartAt)
                                 {
-                                    <div class="compact-state-note warning"><i class="bi bi-person-x"></i> عدم الحضور يتاح: @booking.NoShowAvailableAt.ToString("yyyy-MM-dd HH:mm")</div>
+                                    <div class="compact-state-note info"><i class="bi bi-cash-stack"></i> التحصيل يتاح: @booking.OperationalStartAt.ToString("yyyy-MM-dd HH:mm")</div>
                                 }
+                                else if (now < booking.OperationalEndAt && booking.RemainingAmount > 0m)
+                                {
+                                    <div class="compact-state-note success"><i class="bi bi-cash-coin"></i> التحصيل متاح الآن</div>
+                                }
+                                else if (now < booking.OperationalEndAt)
+                                {
+                                    <div class="compact-state-note success"><i class="bi bi-check2-circle"></i> تم سداد كامل المبلغ</div>
+                                }
+
+                                @if (booking.AmountCollectedAtProperty > 0m)
+                                {
+                                    <div class="compact-state-note success"><i class="bi bi-person-check"></i> تم تسجيل تحصيل؛ عدم الحضور غير متاح</div>
+                                }
+                                else if (now >= booking.OperationalEndAt)
+                                {
+                                    <div class="compact-state-note warning"><i class="bi bi-person-x"></i> انتهت الفترة؛ عدم الحضور غير متاح</div>
+                                }
+                                else if (!booking.CanMarkNoShowNow)
+                                {
+                                    <div class="compact-state-note warning"><i class="bi bi-person-x"></i> عدم الحضور يتاح بعد ساعة: @booking.NoShowAvailableAt.ToString("yyyy-MM-dd HH:mm")</div>
+                                }
+                                else
+                                {
+                                    <div class="compact-state-note warning"><i class="bi bi-person-x"></i> عدم الحضور متاح عند التأكد من غياب العميل</div>
+                                }
+
                                 @if (!booking.CanCompleteNow)
                                 {
                                     <div class="compact-state-note info"><i class="bi bi-check2-circle"></i> الإنهاء يتاح: @booking.OperationalEndAt.ToString("yyyy-MM-dd HH:mm")</div>
                                 }
-                                @if (booking.CanCompleteNow)
+                                else
                                 {
-                                    <div class="compact-state-note success"><i class="bi bi-unlock"></i> متاح للتحصيل والإنهاء</div>
+                                    <div class="compact-state-note success"><i class="bi bi-unlock"></i> جاهز للإنهاء</div>
                                 }
                             </td>
 

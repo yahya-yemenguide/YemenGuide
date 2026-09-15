@@ -1,4 +1,4 @@
-@using System
+﻿@using System
 
 @{
     ViewData["Title"] = "إدارة الحجوزات";
@@ -325,7 +325,7 @@
             </nav>
 
             <!-- =========================================================
-                 المحتوى المحمّل بواسطة AJAX
+                 المحتوي المحمكل بواسطة AJAX
                  ========================================================= -->
 
             <main class="reservation-content-shell">
@@ -868,7 +868,7 @@
                                                 <i class="bi bi-stopwatch-fill"></i>
                                             </span>
 
-                                            <div class="modal-info-copy">
+                                <div class="modal-info-copy">
 
                                                 <small>
                                                     مهلة الدفع
@@ -902,7 +902,7 @@
                                                 <div>
                                                     <small>المواعيد التشغيلية والإجراءات</small>
                                                     <strong id="modalActionAvailabilityText">
-                                                        سيتم تحديد توفر الإجراءات حسب موعد الحجز.
+                                                        سيتم تحديد توفر الإجراءاة حسب موعد الحجز.
                                                     </strong>
                                                 </div>
 
@@ -1627,13 +1627,281 @@
                 });
             };
 
+            let collectionRunning = false;
+
+            const parseReservationRaw = value => {
+                const parsed = Number(String(value ?? "0").replace(",", "."));
+                return Number.isFinite(parsed) ? parsed : 0;
+            };
+
+            const setReservationActionContent = (button, iconClass, label) => {
+                if (!button) return;
+                const icon = button.querySelector("i");
+                const text = button.querySelector("span");
+                if (icon) icon.className = `bi ${iconClass}`;
+                if (text) text.textContent = label;
+            };
+
+            const setReservationActionDisabled = (button, disabled, title = "") => {
+                if (!button) return;
+                button.disabled = Boolean(disabled);
+                button.setAttribute("aria-disabled", disabled ? "true" : "false");
+                if (title) button.title = title;
+                else button.removeAttribute("title");
+            };
+
+            const syncConfirmedActionButtons = button => {
+                if (!button || button.dataset.status !== "Confirmed") return;
+
+                const container = document.getElementById("modalActionButtons");
+                const buttons = container?.querySelectorAll("button");
+                if (!buttons || buttons.length < 3) return;
+
+                const mainAction = buttons[0];
+                const noShowAction = buttons[1];
+                const ownerCancelAction = buttons[2];
+
+                const bookingId = Number(button.dataset.id || 0);
+                const startAt = new Date(button.dataset.operationalStart || "").getTime();
+                const endAt = new Date(button.dataset.operationalEnd || "").getTime();
+                const configuredNoShowAt = new Date(button.dataset.noShowAvailableAt || "").getTime();
+                const noShowAt = Number.isFinite(configuredNoShowAt)
+                    ? configuredNoShowAt
+                    : startAt + (60 * 60 * 1000);
+                const now = Date.now();
+                const remaining = Math.max(0, parseReservationRaw(button.dataset.propertyRaw));
+                const collected = Math.max(0, parseReservationRaw(button.dataset.collectedRaw));
+
+                if (Number.isFinite(endAt) && now >= endAt) {
+                    setReservationActionContent(mainAction, "bi-check2-circle", "إنهاء الحجز");
+                    setReservationActionDisabled(mainAction, false);
+                    mainAction.setAttribute("onclick", `window.executeCompleteBooking(${bookingId})`);
+                } else if (Number.isFinite(startAt) && now >= startAt) {
+                    if (remaining > 0) {
+                        setReservationActionContent(mainAction, "bi-cash-stack", "تحصيل المبلغ");
+                        setReservationActionDisabled(mainAction, false);
+                        mainAction.setAttribute("onclick", `window.executeCollectBooking(${bookingId})`);
+                    } else {
+                        setReservationActionContent(mainAction, "bi-check2-circle", "تم سداد كامل المبلغ");
+                        setReservationActionDisabled(mainAction, true, "تم سداد كامل المبلغ، وسيصبح الإنهاء متاحًا بعد نهاية الفترة.");
+                        mainAction.removeAttribute("onclick");
+                    }
+                } else {
+                    setReservationActionContent(mainAction, "bi-cash-stack", "تحصيل المبلغ");
+                    setReservationActionDisabled(mainAction, true, "التحصيل يتاح عند بداية فترة الحجز.");
+                    mainAction.removeAttribute("onclick");
+                }
+
+                const canNoShow =
+                    Number.isFinite(noShowAt) &&
+                    Number.isFinite(endAt) &&
+                    now >= noShowAt &&
+                    now < endAt &&
+                    collected <= 0;
+
+                if (canNoShow) {
+                    setReservationActionDisabled(noShowAction, false);
+                } else if (collected > 0) {
+                    setReservationActionDisabled(
+                        noShowAction,
+                        true,
+                        "تم تسجيل تحصيل عند المنشأة؛ لذلك لا يمكن تسجيل عدم حضور لهذا الحجز."
+                    );
+                } else if (Number.isFinite(endAt) && now >= endAt) {
+                    setReservationActionDisabled(
+                        noShowAction,
+                        true,
+                        "انتهت فترة الحجز؛ لم يعد تسجيل عدم الحضور متاحًا."
+                    );
+                } else {
+                    setReservationActionDisabled(
+                        noShowAction,
+                        true,
+                        "عدم الحضور يتاح بعد ساعة من بداية فترة الحجز."
+                    );
+                }
+
+                if (collected > 0) {
+                    setReservationActionDisabled(
+                        ownerCancelAction,
+                        true,
+                        "تم تسجيل تحصيل عند المنشأة؛ لذلك لا يمكن إلغاء الحجز من جهة المالك."
+                    );
+                }
+            };
+
+            window.executeCollectBooking = async bookingId => {
+                if (collectionRunning) return;
+
+                const button = currentButton;
+                const id = Number(bookingId || button?.dataset.id || 0);
+
+                if (!button || !Number.isInteger(id) || id <= 0) {
+                    await window.Swal?.fire?.({
+                        icon: "error",
+                        title: "تعذر تسجيل التحصيل",
+                        text: "تعذر تحديد الحجز المطلوب."
+                    });
+                    return;
+                }
+
+                const startAt = new Date(button.dataset.operationalStart || "").getTime();
+                const endAt = new Date(button.dataset.operationalEnd || "").getTime();
+                const now = Date.now();
+                const remaining = Math.max(0, parseReservationRaw(button.dataset.propertyRaw));
+
+                if (!Number.isFinite(startAt) || now < startAt) {
+                    await window.Swal.fire({
+                        icon: "warning",
+                        title: "التحصيل غير متاح الآن",
+                        text: "التحصيل يتاح عند بداية فترة الحجز."
+                    });
+                    return;
+                }
+
+                if (!Number.isFinite(endAt) || now >= endAt) {
+                    await window.Swal.fire({
+                        icon: "warning",
+                        title: "انتهت فترة التحصيل",
+                        text: "انتهت فترة الحجز. استخدم زر إنهاء الحجز."
+                    });
+                    return;
+                }
+
+                if (remaining <= 0) {
+                    await window.Swal.fire({
+                        icon: "info",
+                        title: "لا يوجد مبلغ متبقٍ",
+                        text: "تم سداد كامل المبلغ المتبقي لهذا الحجز."
+                    });
+                    return;
+                }
+
+                const result = await window.Swal.fire({
+                    icon: "question",
+                    title: "تحصيل المبلغ",
+                    html: `
+                        <div dir="rtl">
+                            <p>أدخل المبلغ الذي تم تحصيله فعليًا عند المنشأة.</p>
+                            <div class="reservation-collection-summary">
+                                <span>المتبقي المسجل</span>
+                                <strong>${money(remaining)}</strong>
+                            </div>
+                            <div class="reservation-danger-dialog-note" style="margin-top:12px;">
+                                <i class="bi bi-info-circle"></i>
+                                <span>يمكن التحصيل على دفعات حتى سداد المتبقي. أول تحصيل فعلي يمنع تسجيل عدم حضور وإلغاء الحجز من جهة المالك، ولا ينهي الحجز.</span>
+                            </div>
+                        </div>
+                    `,
+                    input: "number",
+                    inputLabel: "المبلغ المحصل فعليًا",
+                    inputValue: remaining,
+                    inputAttributes: {
+                        min: "0.01",
+                        max: String(remaining),
+                        step: "0.01",
+                        inputmode: "decimal",
+                        dir: "ltr"
+                    },
+                    showCancelButton: true,
+                    confirmButtonText: "تسجيل التحصيل",
+                    cancelButtonText: "تراجع",
+                    confirmButtonColor: "#10B981",
+                    cancelButtonColor: "#64748B",
+                    reverseButtons: true,
+                    allowOutsideClick: false,
+                    returnFocus: false,
+                    inputValidator: value => {
+                        const amount = Number(value);
+                        if (!Number.isFinite(amount) || amount <= 0) {
+                            return "أدخل مبلغًا صحيحًا أكبر من صفر.";
+                        }
+                        if (amount > remaining) {
+                            return `المبلغ لا يمكن أن يتجاوز ${money(remaining)}.`;
+                        }
+                        return undefined;
+                    }
+                });
+
+                if (!result.isConfirmed) return;
+
+                const amount = Number(result.value);
+                const formData = new FormData();
+                formData.append("id", String(id));
+                formData.append("collectedAmount", String(amount));
+
+                const token = document.querySelector(
+                    '#ownerReservationAntiForgeryForm input[name="__RequestVerificationToken"], input[name="__RequestVerificationToken"]'
+                )?.value;
+                if (token) formData.append("__RequestVerificationToken", token);
+
+                collectionRunning = true;
+
+                window.Swal.fire({
+                    title: "جاري تسجيل التحصيل",
+                    text: "يتم تحديث السجل المالي دون إنهاء الحجز.",
+                    allowOutsideClick: false,
+                    allowEscapeKey: false,
+                    showConfirmButton: false,
+                    didOpen: () => window.Swal.showLoading()
+                });
+
+                try {
+                    const response = await fetch(
+                        "/Owner/Reservation/CollectBookingPayment",
+                        {
+                            method: "POST",
+                            body: formData,
+                            credentials: "same-origin",
+                            headers: {
+                                Accept: "application/json",
+                                "X-Requested-With": "XMLHttpRequest"
+                            }
+                        }
+                    );
+
+                    const data = await response.json();
+                    if (!response.ok || data?.success !== true) {
+                        throw new Error(data?.message || "تعذر تسجيل التحصيل.");
+                    }
+
+                    await window.Swal.fire({
+                        icon: "success",
+                        title: "تم تسجيل التحصيل",
+                        text: data.message || "تم تحديث السجل المالي بنجاح.",
+                        confirmButtonText: "حسنًا",
+                        confirmButtonColor: "#00A6DA",
+                        returnFocus: false
+                    });
+
+                    window.location.reload();
+                } catch (error) {
+                    await window.Swal.fire({
+                        icon: "error",
+                        title: "تعذر تسجيل التحصيل",
+                        text: error?.message || "حدث خطأ أثناء تسجيل التحصيل.",
+                        confirmButtonText: "حسنًا",
+                        confirmButtonColor: "#EF4444",
+                        returnFocus: false
+                    });
+                } finally {
+                    collectionRunning = false;
+                }
+            };
+
             if (typeof window.openPremiumCenterModal === "function") {
                 const originalOpen = window.openPremiumCenterModal;
                 window.openPremiumCenterModal = function (button) {
                     currentButton = button || currentButton;
                     const result = originalOpen.apply(this, arguments);
-                    queueMicrotask(() => repairRefundModal(currentButton));
-                    window.setTimeout(() => repairRefundModal(currentButton), 50);
+                    queueMicrotask(() => {
+                        repairRefundModal(currentButton);
+                        syncConfirmedActionButtons(currentButton);
+                    });
+                    window.setTimeout(() => {
+                        repairRefundModal(currentButton);
+                        syncConfirmedActionButtons(currentButton);
+                    }, 50);
                     return result;
                 };
             }
@@ -1656,7 +1924,10 @@
                     }
 
                     const collectionDialog =
-                        patched.title === "تحصيل وإنهاء الحجز" &&
+                        (
+                            patched.title === "تحصيل وإنهاء الحجز" ||
+                            patched.title === "تحصيل المبلغ"
+                        ) &&
                         patched.inputValue !== undefined;
 
                     if (collectionDialog) {
