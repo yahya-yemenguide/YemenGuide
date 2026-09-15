@@ -1481,6 +1481,15 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             var place = await LoadManualBookingPlaceAsync(placeId.Value, ownerId);
             if (place == null) { failed.PublicQuote.Message = "المنشأة المختارة غير متاحة."; return failed; }
             var displayCurrency = await GetOwnerCurrencyContextAsync(place.PlaceId);
+            var categoryName = place.Category?.CategoryName?.Trim() ?? string.Empty;
+            var bookingSystemId = place.Category?.BookingSystemId ?? 0;
+            var isHallManualBooking =
+                bookingSystemId == 3 ||
+                bookingSystemId == 4 ||
+                categoryName.Contains("قاعة", StringComparison.OrdinalIgnoreCase) ||
+                categoryName.Contains("قاعات", StringComparison.OrdinalIgnoreCase) ||
+                categoryName.Contains("صالة", StringComparison.OrdinalIgnoreCase) ||
+                categoryName.Contains("صالات", StringComparison.OrdinalIgnoreCase);
 
             var startDate = request.StartDate.Date;
             var endDate = request.EndDate?.Date;
@@ -1558,11 +1567,24 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     return failed;
                 }
 
-                var guests = Math.Max(0, request.AdultsCount) + Math.Max(0, request.ChildrenCount);
-                if (guests <= 0) { failed.PublicQuote.Message = "حدد شخصًا واحدًا على الأقل."; return failed; }
-                var roomCapacity = room.MaxAdults + room.MaxChildren;
-                if (roomCapacity > 0 && guests > roomCapacity * quantity)
-                { failed.PublicQuote.Message = $"عدد الأشخاص أكبر من سعة الغرف المطلوبة ({roomCapacity * quantity})."; return failed; }
+                if (request.AdultsCount < 1)
+                {
+                    failed.PublicQuote.Message = "لا يمكن إكمال حجز الغرف بأطفال فقط. يجب وجود شخص بالغ واحد على الأقل.";
+                    return failed;
+                }
+
+                var roomCapacity = Math.Max(0, room.MaxAdults + room.MaxChildren) * quantity;
+                var convertibleChildren = Math.Min(Math.Max(0, request.ChildrenCount), 4);
+                var convertedChildSlots = (int)Math.Ceiling(convertibleChildren / 2m);
+                var extraChildren = Math.Max(0, request.ChildrenCount - 4);
+                var effectiveGuestCapacity = request.AdultsCount + convertedChildSlots + extraChildren;
+
+                if (roomCapacity > 0 && effectiveGuestCapacity > roomCapacity)
+                {
+                    failed.PublicQuote.Message =
+                        $"عدد الأشخاص أكبر من سعة الغرف المطلوبة ({roomCapacity}). أول 4 أطفال فقط يُحتسب كل طفلين منهم مكان بالغ واحد، ومن الطفل الخامس يُحتسب كل طفل كشخص كامل.";
+                    return failed;
+                }
 
                 nights = Math.Max(1, (endDate.Value - startDate).Days);
                 baseAmount = Math.Round(room.Price * nights * quantity, 2);
@@ -1601,9 +1623,41 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 if (await ManualHasPackageBookingConflictAsync(place, package, startDate, now))
                 { failed.PublicQuote.Message = "الفترة المختارة محجوزة أو تتعارض مع وقت التجهيز."; return failed; }
 
-                var guests = Math.Max(0, request.AdultsCount) + Math.Max(0, request.ChildrenCount);
-                if (guests > 0 && package.Capacity > 0 && guests > package.Capacity)
-                { failed.PublicQuote.Message = $"عدد الأشخاص أكبر من سعة الباقة ({package.Capacity})."; return failed; }
+                if (!isHallManualBooking)
+                {
+                    if (request.AdultsCount < 1)
+                    {
+                        failed.PublicQuote.Message = "لا يمكن إكمال حجز الباقة بأطفال فقط. يجب وجود شخص بالغ واحد على الأقل.";
+                        return failed;
+                    }
+
+                    var packageCapacity = Math.Max(0, package.Capacity);
+                    if (packageCapacity > 0)
+                    {
+                        if (request.AdultsCount > packageCapacity)
+                        {
+                            failed.PublicQuote.Message =
+                                $"عدد البالغين لا يمكن أن يتجاوز سعة الباقة الأساسية ({packageCapacity}).";
+                            return failed;
+                        }
+
+                        var extraChildrenAllowance = packageCapacity < 10
+                            ? 2
+                            : packageCapacity == 10
+                                ? 3
+                                : packageCapacity <= 50
+                                    ? 5
+                                    : Math.Min(10, (int)Math.Floor(packageCapacity * 0.10m));
+
+                        if (request.AdultsCount + request.ChildrenCount > packageCapacity + extraChildrenAllowance)
+                        {
+                            failed.PublicQuote.Message =
+                                $"السعة الأساسية للباقة هي {packageCapacity} أشخاص، ويسمح بتجاوزها بـ {extraChildrenAllowance} أطفال فقط كحد أقصى.";
+                            return failed;
+                        }
+                    }
+                }
+
                 baseAmount = Math.Round(package.Price, 2);
             }
 
@@ -1687,6 +1741,13 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 return failed;
             }
 
+            if (customer == null && depositAmount > 0m && !collected)
+            {
+                failed.PublicQuote.Message =
+                    "الضيف غير مربوط بحساب عميل ولا يستطيع رفع إثبات العربون. اربط الحجز بحساب العميل أو سجّل استلام العربون قبل إنشاء الحجز.";
+                return failed;
+            }
+
             var defaultCommission = await _context.SystemSettings.AsNoTracking()
                 .OrderByDescending(item => item.Id)
                 .Select(item => (decimal?)item.CommissionPercentage)
@@ -1764,8 +1825,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 .FirstOrDefaultAsync(item =>
                     item.PlaceId == placeId &&
                     item.OwnerId == ownerId &&
-                    item.Status != "WaitOwner" &&
-                    item.Status != "RejectedByOwner");
+                    item.Status == "Active");
         }
 
         private sealed class RoomAvailabilityResult
