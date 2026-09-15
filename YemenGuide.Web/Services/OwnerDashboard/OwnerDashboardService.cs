@@ -9,15 +9,14 @@ using YemenGuide.Core.DTOs.Owner;
 using YemenGuide.Data;
 using YemenGuide.Web.Services;
 using YemenGuide.Web.Services.ExchangeRates;
+using YemenGuide.Web.Services.Payments;
 
 namespace YemenGuide.Web.Services.OwnerDashboard
 {
     /// <summary>
     /// لوحة المالك الحية.
-    /// لا توجد في هذه الخدمة بيانات تجريبية أو أرقام ثابتة للأعمال:
-    /// كل المؤشرات تُقرأ من الجداول الفعلية وتُنسب إلى تاريخ الحدث الحقيقي
-    /// (إنشاء الحجز، اعتماد الدفع، التحصيل، الإكمال، الإغلاق، الاسترداد، العمولة).
-    /// القيم المالية مخزنة بالريال اليمني ثم تتحول فقط لعملة العرض.
+    /// لا توجد هنا بيانات تجريبية أو قيم أعمال ثابتة؛ كل المؤشرات تُقرأ من قاعدة البيانات
+    /// وتُنسب إلى تاريخ الحدث الحقيقي قدر الإمكان.
     /// </summary>
     public sealed class OwnerDashboardService : IOwnerDashboardService
     {
@@ -167,7 +166,7 @@ namespace YemenGuide.Web.Services.OwnerDashboard
                 .Where(booking => booking.PlaceId == placeId);
 
             // =========================================================
-            // الحجوزات: كل مؤشر مربوط بتاريخ الحدث الذي يمثله.
+            // الحجوزات
             // =========================================================
             model.Kpis.NewBookingsToday = await bookingQuery.CountAsync(
                 booking => booking.CreatedAt.HasValue &&
@@ -217,37 +216,13 @@ namespace YemenGuide.Web.Services.OwnerDashboard
             };
 
             // =========================================================
-            // المالية الحقيقية:
-            // الدفع = PaymentApprovedAt
-            // التحصيل في المنشأة = CollectedAt
-            // العمولة = CommissionChargedAt
-            // الاسترداد = ProcessedAt للحالة Completed
-            // لا نستخدم CreatedAt للحجز كبديل لتاريخ حركة مالية.
+            // المالية
+            // - الدفعة الأولى: Booking.PaymentApprovedAt
+            // - الدفعات الإضافية: PaymentTransactionsJson + ReviewedAt
+            // - التحصيل في المنشأة: FinancialRecord.CollectedAt
+            // - الاسترداد: RefundRequest.ProcessedAt
+            // - العمولة: CommissionTransactions (Charge - Release)
             // =========================================================
-            var financialRows = await _context.FinancialRecords
-                .AsNoTracking()
-                .Where(record =>
-                    record.Booking.PlaceId == placeId &&
-                    ((record.Booking.PaymentApprovedAt.HasValue &&
-                      record.Booking.PaymentApprovedAt.Value >= sixMonthsStart &&
-                      record.Booking.PaymentApprovedAt.Value < nextMonthStart) ||
-                     (record.CollectedAt.HasValue &&
-                      record.CollectedAt.Value >= sixMonthsStart &&
-                      record.CollectedAt.Value < nextMonthStart) ||
-                     (record.CommissionChargedAt.HasValue &&
-                      record.CommissionChargedAt.Value >= sixMonthsStart &&
-                      record.CommissionChargedAt.Value < nextMonthStart)))
-                .Select(record => new FinancialEventRow
-                {
-                    PaymentApprovedAt = record.Booking.PaymentApprovedAt,
-                    AmountPaidOnline = record.AmountPaidOnline,
-                    CollectedAt = record.CollectedAt,
-                    AmountCollectedAtProperty = record.AmountCollectedAtProperty,
-                    CommissionChargedAt = record.CommissionChargedAt,
-                    PlatformCommission = record.PlatformCommission
-                })
-                .ToListAsync(cancellationToken);
-
             var refundRows = await _context.RefundRequests
                 .AsNoTracking()
                 .Where(refund =>
@@ -258,38 +233,102 @@ namespace YemenGuide.Web.Services.OwnerDashboard
                     refund.ProcessedAt.Value < nextMonthStart)
                 .Select(refund => new RefundEventRow
                 {
+                    BookingId = refund.BookingId,
+                    DepositPaid = refund.DepositPaid,
                     ProcessedAt = refund.ProcessedAt,
                     RefundAmount = refund.RefundAmount
                 })
                 .ToListAsync(cancellationToken);
 
-            decimal PaidOnline(DateTime start, DateTime end) => financialRows
-                .Where(item => InPeriod(item.PaymentApprovedAt, start, end))
-                .Sum(item => Math.Max(0m, item.AmountPaidOnline));
+            var financialRows = await _context.FinancialRecords
+                .AsNoTracking()
+                .Where(record =>
+                    record.Booking.PlaceId == placeId &&
+                    ((record.Booking.PaymentApprovedAt.HasValue &&
+                      record.Booking.PaymentApprovedAt.Value >= sixMonthsStart &&
+                      record.Booking.PaymentApprovedAt.Value < nextMonthStart) ||
+                     (record.CollectedAt.HasValue &&
+                      record.CollectedAt.Value >= sixMonthsStart &&
+                      record.CollectedAt.Value < nextMonthStart) ||
+                     (record.UpdatedAt.HasValue &&
+                      record.UpdatedAt.Value >= sixMonthsStart &&
+                      record.UpdatedAt.Value < nextMonthStart)))
+                .Select(record => new FinancialEventRow
+                {
+                    BookingId = record.BookingId,
+                    PaymentApprovedAt = record.Booking.PaymentApprovedAt,
+                    AmountPaidOnline = record.AmountPaidOnline,
+                    PaymentTransactionsJson = record.PaymentTransactionsJson,
+                    CollectedAt = record.CollectedAt,
+                    AmountCollectedAtProperty = record.AmountCollectedAtProperty,
+                    UpdatedAt = record.UpdatedAt
+                })
+                .ToListAsync(cancellationToken);
+
+            var onlinePaymentEvents = BuildOnlinePaymentEvents(
+                financialRows,
+                refundRows,
+                sixMonthsStart,
+                nextMonthStart);
+
+            var commissionRows = await _context.CommissionTransactions
+                .AsNoTracking()
+                .Where(item =>
+                    item.PlaceId == placeId &&
+                    item.Status == "Completed" &&
+                    item.CreatedAt.HasValue &&
+                    item.CreatedAt.Value >= sixMonthsStart &&
+                    item.CreatedAt.Value < nextMonthStart &&
+                    (item.TransactionType == "CommissionCharge" ||
+                     item.TransactionType == "CommissionRelease"))
+                .Select(item => new CommissionEventRow
+                {
+                    OccurredAt = item.CreatedAt,
+                    TransactionType = item.TransactionType,
+                    Amount = item.Amount
+                })
+                .ToListAsync(cancellationToken);
+
+            decimal PaidOnline(DateTime start, DateTime end) => onlinePaymentEvents
+                .Where(item => item.OccurredAt >= start && item.OccurredAt < end)
+                .Sum(item => item.Amount);
 
             decimal CollectedAtProperty(DateTime start, DateTime end) => financialRows
                 .Where(item => InPeriod(item.CollectedAt, start, end))
                 .Sum(item => Math.Max(0m, item.AmountCollectedAtProperty));
 
-            decimal ChargedCommission(DateTime start, DateTime end) => financialRows
-                .Where(item => InPeriod(item.CommissionChargedAt, start, end))
-                .Sum(item => Math.Max(0m, item.PlatformCommission));
-
             decimal CompletedRefunds(DateTime start, DateTime end) => refundRows
                 .Where(item => InPeriod(item.ProcessedAt, start, end))
                 .Sum(item => Math.Max(0m, item.RefundAmount));
+
+            decimal NetCommission(DateTime start, DateTime end)
+            {
+                var charged = commissionRows
+                    .Where(item =>
+                        InPeriod(item.OccurredAt, start, end) &&
+                        IsState(item.TransactionType, "CommissionCharge"))
+                    .Sum(item => Math.Max(0m, item.Amount));
+
+                var released = commissionRows
+                    .Where(item =>
+                        InPeriod(item.OccurredAt, start, end) &&
+                        IsState(item.TransactionType, "CommissionRelease"))
+                    .Sum(item => Math.Max(0m, item.Amount));
+
+                return Math.Round(charged - released, 2);
+            }
 
             decimal NetCashFlow(DateTime start, DateTime end) => Math.Round(
                 PaidOnline(start, end) +
                 CollectedAtProperty(start, end) -
                 CompletedRefunds(start, end) -
-                ChargedCommission(start, end),
+                NetCommission(start, end),
                 2);
 
             var currentPaidOnline = PaidOnline(monthStart, nextMonthStart);
             var currentCollectedAtProperty = CollectedAtProperty(monthStart, nextMonthStart);
             var currentRefunds = CompletedRefunds(monthStart, nextMonthStart);
-            var currentCommission = ChargedCommission(monthStart, nextMonthStart);
+            var currentCommission = NetCommission(monthStart, nextMonthStart);
             var currentNetRevenue = NetCashFlow(monthStart, nextMonthStart);
             var previousNetRevenue = NetCashFlow(previousMonthStart, monthStart);
 
@@ -327,17 +366,14 @@ namespace YemenGuide.Web.Services.OwnerDashboard
                     CollectedAtProperty(month, monthEnd) -
                     CompletedRefunds(month, monthEnd)));
                 model.Finance.MonthlyCommission.Add(DisplayAmount(
-                    ChargedCommission(month, monthEnd)));
+                    NetCommission(month, monthEnd)));
             }
 
             // =========================================================
-            // حساب ضمان العمولة من الحساب الفعلي للمنشأة.
+            // حساب ضمان العمولة
             // =========================================================
             var requiredGuaranteeYer = isBookablePlace
                 ? Math.Max(0m, settings?.RequiredCommissionGuaranteeBalance ?? 0m)
-                : 0m;
-            var lowBalanceThresholdYer = isBookablePlace
-                ? Math.Max(0m, settings?.DefaultLowBalanceThreshold ?? 0m)
                 : 0m;
 
             var account = isBookablePlace
@@ -349,10 +385,19 @@ namespace YemenGuide.Web.Services.OwnerDashboard
                         item.AvailableBalance,
                         item.HeldBalance,
                         item.DebtAmount,
-                        item.AccountStatus
+                        item.AccountStatus,
+                        item.LowBalanceThreshold
                     })
                     .FirstOrDefaultAsync(cancellationToken)
                 : null;
+
+            var lowBalanceThresholdYer = isBookablePlace
+                ? Math.Max(
+                    0m,
+                    account?.LowBalanceThreshold ??
+                    settings?.DefaultLowBalanceThreshold ??
+                    0m)
+                : 0m;
 
             var availableBalanceYer = Math.Max(0m, account?.AvailableBalance ?? 0m);
             var heldBalanceYer = Math.Max(0m, account?.HeldBalance ?? 0m);
@@ -388,7 +433,7 @@ namespace YemenGuide.Web.Services.OwnerDashboard
             model.Kpis.GuaranteeStatus = accountStatus;
 
             // =========================================================
-            // التقييمات والمفضلة - بيانات فعلية فقط.
+            // التقييمات والمفضلة
             // =========================================================
             var reviewRows = await _context.Reviews
                 .AsNoTracking()
@@ -456,7 +501,7 @@ namespace YemenGuide.Web.Services.OwnerDashboard
             model.Kpis.FavoritesCount = favoritesCount;
 
             // =========================================================
-            // التشغيل الحالي: الإشغال = الآن فعلًا، لا كل حجوزات اليوم.
+            // التشغيل الحالي
             // =========================================================
             var roomUnitCount = await _context.RoomUnits
                 .AsNoTracking()
@@ -477,7 +522,9 @@ namespace YemenGuide.Web.Services.OwnerDashboard
                                assignment.AssignmentStatus == "Confirmed") &&
                               booking.BookingState == "Confirmed" &&
                               booking.StartDate <= now &&
-                              (!booking.EndDate.HasValue || booking.EndDate.Value > now)
+                              (booking.EndDate.HasValue
+                                  ? booking.EndDate.Value > now
+                                  : booking.StartDate >= today)
                         select roomUnit.RoomUnitId)
                     .Distinct()
                     .CountAsync(cancellationToken);
@@ -496,7 +543,9 @@ namespace YemenGuide.Web.Services.OwnerDashboard
             var activeNow = await bookingQuery.CountAsync(
                 booking => booking.BookingState == "Confirmed" &&
                            booking.StartDate <= now &&
-                           (!booking.EndDate.HasValue || booking.EndDate.Value > now),
+                           (booking.EndDate.HasValue
+                               ? booking.EndDate.Value > now
+                               : booking.StartDate >= today),
                 cancellationToken);
 
             var arrivalsToday = await bookingQuery.CountAsync(
@@ -564,7 +613,7 @@ namespace YemenGuide.Web.Services.OwnerDashboard
             };
 
             // =========================================================
-            // عناصر تحتاج انتباهًا - تعتمد على حالات مسجلة فعلًا.
+            // عناصر تحتاج إجراء
             // =========================================================
             var pendingBookings = await bookingQuery.CountAsync(
                 booking => booking.BookingState == "Pending",
@@ -577,6 +626,9 @@ namespace YemenGuide.Web.Services.OwnerDashboard
                             booking.PaymentNotificationImage != null &&
                             booking.PaymentNotificationImage != ""),
                 cancellationToken);
+
+            var pendingAdditionalPayments = CountPendingAdditionalPayments(financialRows);
+            paymentReviews += pendingAdditionalPayments;
 
             var unreadMessages = await _context.Chats
                 .AsNoTracking()
@@ -617,9 +669,7 @@ namespace YemenGuide.Web.Services.OwnerDashboard
                 displayCurrency);
 
             // =========================================================
-            // اتجاه 30 يومًا:
-            // إنشاء الحجز في CreatedAt، الإكمال في CompletedAt،
-            // والإغلاق/الإلغاء في ClosedAt. لا ننسب النتيجة ليوم الإنشاء.
+            // اتجاه الحجوزات: تاريخ الحدث نفسه
             // =========================================================
             var createdTrendRows = await bookingQuery
                 .Where(booking => booking.CreatedAt.HasValue &&
@@ -674,7 +724,7 @@ namespace YemenGuide.Web.Services.OwnerDashboard
             }
 
             // =========================================================
-            // التسويق - أحداث الإعلانات المسجلة فعليًا في الشهر الحالي.
+            // التسويق
             // =========================================================
             var activePromotions = await _context.Promotions
                 .AsNoTracking()
@@ -733,7 +783,7 @@ namespace YemenGuide.Web.Services.OwnerDashboard
             };
 
             // =========================================================
-            // التقويم والنشاطات الحديثة - سجلات فعلية فقط.
+            // التقويم والنشاط الحديث
             // =========================================================
             var calendarRows = await bookingQuery
                 .Where(booking =>
@@ -788,7 +838,7 @@ namespace YemenGuide.Web.Services.OwnerDashboard
             var bookings = await _context.Bookings
                 .AsNoTracking()
                 .Where(item => item.PlaceId == placeId)
-                .OrderByDescending(item => item.CreatedAt)
+                .OrderByDescending(item => item.LastStatusChangedAt ?? item.CreatedAt)
                 .ThenByDescending(item => item.BookingId)
                 .Take(5)
                 .Select(item => new
@@ -797,6 +847,7 @@ namespace YemenGuide.Web.Services.OwnerDashboard
                     item.BookingState,
                     item.TotalPrice,
                     item.CreatedAt,
+                    item.LastStatusChangedAt,
                     item.StartDate,
                     item.GuestName,
                     CustomerName = item.Customer != null ? item.Customer.FullName : null
@@ -812,7 +863,7 @@ namespace YemenGuide.Web.Services.OwnerDashboard
                     Description = $"{FirstNonEmpty("عميل", item.CustomerName, item.GuestName)} · {displayMoney(item.TotalPrice)}",
                     Icon = "bi-calendar2-check-fill",
                     Tone = IsClosedWithoutRevenue(item.BookingState) ? "danger" : "primary",
-                    OccurredAt = item.CreatedAt ?? item.StartDate,
+                    OccurredAt = item.LastStatusChangedAt ?? item.CreatedAt ?? item.StartDate,
                     Url = BookingUrl(item.BookingId, item.BookingState)
                 });
             }
@@ -917,6 +968,101 @@ namespace YemenGuide.Web.Services.OwnerDashboard
                 .ToList();
         }
 
+        private static List<MoneyEventRow> BuildOnlinePaymentEvents(
+            IReadOnlyCollection<FinancialEventRow> financialRows,
+            IReadOnlyCollection<RefundEventRow> refundRows,
+            DateTime rangeStart,
+            DateTime rangeEnd)
+        {
+            var result = new List<MoneyEventRow>();
+
+            // عند إلغاء حجز قد يتم تصفير AmountPaidOnline، بينما RefundRequest.DepositPaid
+            // يحتفظ بقيمة الدفع التاريخية. نستخدم الأعلى منهما لإعادة بناء الحركة الأصلية دون اختلاق رقم.
+            var historicalPaidByBooking = refundRows
+                .GroupBy(item => item.BookingId)
+                .ToDictionary(
+                    group => group.Key,
+                    group => group.Max(item => Math.Max(0m, item.DepositPaid)));
+
+            foreach (var row in financialRows)
+            {
+                var ledgerReadable = BookingPaymentLedger.TryRead(
+                    row.PaymentTransactionsJson,
+                    out var transactions);
+
+                var approvedAdditionalTotal = 0m;
+
+                if (ledgerReadable)
+                {
+                    foreach (var payment in transactions.Where(BookingPaymentLedger.IsApproved))
+                    {
+                        var amount = Math.Max(0m, payment.Amount);
+                        if (amount <= 0m)
+                        {
+                            continue;
+                        }
+
+                        approvedAdditionalTotal += amount;
+
+                        var occurredAt = payment.ReviewedAt ?? payment.SubmittedAt;
+                        if (occurredAt >= rangeStart && occurredAt < rangeEnd)
+                        {
+                            result.Add(new MoneyEventRow
+                            {
+                                OccurredAt = occurredAt,
+                                Amount = amount
+                            });
+                        }
+                    }
+                }
+
+                var historicalPaid = Math.Max(0m, row.AmountPaidOnline);
+                if (historicalPaidByBooking.TryGetValue(row.BookingId, out var refundDepositPaid))
+                {
+                    historicalPaid = Math.Max(historicalPaid, refundDepositPaid);
+                }
+
+                // PaymentTransactionsJson يسجل الدفعات الإضافية؛ الباقي هو الدفعة الأولى.
+                var initialPayment = ledgerReadable
+                    ? Math.Max(0m, historicalPaid - approvedAdditionalTotal)
+                    : historicalPaid;
+
+                if (initialPayment > 0m &&
+                    row.PaymentApprovedAt.HasValue &&
+                    row.PaymentApprovedAt.Value >= rangeStart &&
+                    row.PaymentApprovedAt.Value < rangeEnd)
+                {
+                    result.Add(new MoneyEventRow
+                    {
+                        OccurredAt = row.PaymentApprovedAt.Value,
+                        Amount = initialPayment
+                    });
+                }
+            }
+
+            return result;
+        }
+
+        private static int CountPendingAdditionalPayments(
+            IEnumerable<FinancialEventRow> financialRows)
+        {
+            var count = 0;
+
+            foreach (var row in financialRows)
+            {
+                if (!BookingPaymentLedger.TryRead(
+                        row.PaymentTransactionsJson,
+                        out var transactions))
+                {
+                    continue;
+                }
+
+                count += transactions.Count(BookingPaymentLedger.IsPending);
+            }
+
+            return count;
+        }
+
         private static void BuildAttentionItems(
             OwnerDashboardDto model,
             int placeId,
@@ -953,7 +1099,7 @@ namespace YemenGuide.Web.Services.OwnerDashboard
                 {
                     Key = "payment-review",
                     Title = "إثباتات دفع تحتاج مراجعة",
-                    Description = "دفعات مسجلة فعليًا كمراجعة دفع أو لها إثبات مرفوع.",
+                    Description = "تشمل إثبات الدفع الأول وأي دفعات إضافية ما زالت قيد المراجعة.",
                     Icon = "bi-receipt-cutoff",
                     Tone = "primary",
                     Count = paymentReviews,
@@ -1007,8 +1153,6 @@ namespace YemenGuide.Web.Services.OwnerDashboard
                 });
             }
 
-            // خلال التجربة المجانية لا نظهر تنبيه شحن مضللًا؛
-            // الحساب المالي نفسه في الكنترولر سيحدد السماح بالحجز عند انتهائها.
             if (!isBookablePlace || trialActive)
             {
                 return;
@@ -1062,7 +1206,6 @@ namespace YemenGuide.Web.Services.OwnerDashboard
 
         private static decimal PercentageChange(decimal current, decimal previous)
         {
-            // نسبة التغير لا تكون ذات معنى عندما يكون صافي الشهر السابق <= 0.
             if (previous <= 0m)
             {
                 return current > 0m ? 100m : 0m;
@@ -1193,18 +1336,34 @@ namespace YemenGuide.Web.Services.OwnerDashboard
 
         private sealed class FinancialEventRow
         {
+            public int BookingId { get; set; }
             public DateTime? PaymentApprovedAt { get; set; }
             public decimal AmountPaidOnline { get; set; }
+            public string? PaymentTransactionsJson { get; set; }
             public DateTime? CollectedAt { get; set; }
             public decimal AmountCollectedAtProperty { get; set; }
-            public DateTime? CommissionChargedAt { get; set; }
-            public decimal PlatformCommission { get; set; }
+            public DateTime? UpdatedAt { get; set; }
         }
 
         private sealed class RefundEventRow
         {
+            public int BookingId { get; set; }
+            public decimal DepositPaid { get; set; }
             public DateTime? ProcessedAt { get; set; }
             public decimal RefundAmount { get; set; }
+        }
+
+        private sealed class CommissionEventRow
+        {
+            public DateTime? OccurredAt { get; set; }
+            public string? TransactionType { get; set; }
+            public decimal Amount { get; set; }
+        }
+
+        private sealed class MoneyEventRow
+        {
+            public DateTime OccurredAt { get; set; }
+            public decimal Amount { get; set; }
         }
 
         private sealed class ReviewRow
