@@ -1,0 +1,21 @@
+name: Export calendar modal files
+on:
+  push:
+    branches:
+      - export-calendar-modal-files
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare files
+        run: |
+          mkdir -p export/YemenGuide.Web/wwwroot/js/owner
+          mkdir -p export/YemenGuide.Web/wwwroot/css/owner
+          cp YemenGuide.Web/wwwroot/js/owner/calendar-manager.js export/YemenGuide.Web/wwwroot/js/owner/calendar-manager.js
+          cp YemenGuide.Web/wwwroot/css/owner/calendar-manager.css export/YemenGuide.Web/wwwroot/css/owner/calendar-manager.css
+      - name: Upload files
+        uses: actions/upload-artifact@v4
+        with:
+          name: calendar-modal-fix-files
+          path: export/
