@@ -219,7 +219,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     booking,
                     now,
                     ownerId,
-                    "OwnerOnBehalfOfCustomer");
+                    "CustomerViaOwner");
 
                 if (booking.FinancialRecord != null)
                 {
