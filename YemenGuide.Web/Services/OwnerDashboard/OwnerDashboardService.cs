@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -13,9 +13,11 @@ using YemenGuide.Web.Services.ExchangeRates;
 namespace YemenGuide.Web.Services.OwnerDashboard
 {
     /// <summary>
-    /// يبني مركز قيادة المالك من الجداول الموجودة فعليًا في قاعدة البيانات.
-    /// جميع القيم المالية تحفظ وتقرأ من قاعدة البيانات بالريال اليمني،
-    /// ثم تحول هنا فقط لعملة العرض المختارة من بروفايل المالك.
+    /// لوحة المالك الحية.
+    /// لا توجد في هذه الخدمة بيانات تجريبية أو أرقام ثابتة للأعمال:
+    /// كل المؤشرات تُقرأ من الجداول الفعلية وتُنسب إلى تاريخ الحدث الحقيقي
+    /// (إنشاء الحجز، اعتماد الدفع، التحصيل، الإكمال، الإغلاق، الاسترداد، العمولة).
+    /// القيم المالية مخزنة بالريال اليمني ثم تتحول فقط لعملة العرض.
     /// </summary>
     public sealed class OwnerDashboardService : IOwnerDashboardService
     {
@@ -75,6 +77,7 @@ namespace YemenGuide.Web.Services.OwnerDashboard
 
             var settings = await _context.SystemSettings
                 .AsNoTracking()
+                .OrderByDescending(item => item.Id)
                 .Select(item => new
                 {
                     item.RequiredCommissionGuaranteeBalance,
@@ -91,11 +94,17 @@ namespace YemenGuide.Web.Services.OwnerDashboard
                     PlaceName = place.PlaceNameAndDesc,
                     Status = place.Status,
                     IsAvailable = place.IsAvailable == true,
-                    CategoryName = place.Category.CategoryName,
-                    BookingSystemId = place.Category.BookingSystemId,
+                    CategoryName = place.Category != null
+                        ? place.Category.CategoryName
+                        : null,
+                    BookingSystemId = place.Category != null
+                        ? place.Category.BookingSystemId
+                        : 0,
                     ExchangeRateRegion = place.City != null
                         ? place.City.ExchangeRateRegion
-                        : null
+                        : null,
+                    FreeTrialStartedAt = place.FreeTrialStartedAt,
+                    FreeTrialEndsAt = place.FreeTrialEndsAt
                 })
                 .OrderByDescending(place =>
                     (place.Status == "Approved" || place.Status == "Active") &&
@@ -141,10 +150,12 @@ namespace YemenGuide.Web.Services.OwnerDashboard
                 CurrencyDisplayService.GetCurrencySymbol(displayCurrency);
 
             var placeId = selectedPlace.PlaceId;
+            var isBookablePlace = selectedPlace.BookingSystemId > 0;
             var now = DateTime.Now;
             var today = now.Date;
             var tomorrow = today.AddDays(1);
             var monthStart = new DateTime(today.Year, today.Month, 1);
+            var nextMonthStart = monthStart.AddMonths(1);
             var previousMonthStart = monthStart.AddMonths(-1);
             var sixMonthsStart = monthStart.AddMonths(-5);
             var trendStart = today.AddDays(-29);
@@ -155,13 +166,16 @@ namespace YemenGuide.Web.Services.OwnerDashboard
                 .AsNoTracking()
                 .Where(booking => booking.PlaceId == placeId);
 
-            var newBookingsToday = await bookingQuery.CountAsync(
+            // =========================================================
+            // الحجوزات: كل مؤشر مربوط بتاريخ الحدث الذي يمثله.
+            // =========================================================
+            model.Kpis.NewBookingsToday = await bookingQuery.CountAsync(
                 booking => booking.CreatedAt.HasValue &&
                            booking.CreatedAt.Value >= today &&
                            booking.CreatedAt.Value < tomorrow,
                 cancellationToken);
 
-            var todayBookings = await bookingQuery.CountAsync(
+            model.Kpis.TodayBookings = await bookingQuery.CountAsync(
                 booking => booking.StartDate >= today &&
                            booking.StartDate < tomorrow &&
                            booking.BookingState != "Cancelled" &&
@@ -172,7 +186,7 @@ namespace YemenGuide.Web.Services.OwnerDashboard
             var monthlyBookings = await bookingQuery
                 .Where(booking => booking.CreatedAt.HasValue &&
                                   booking.CreatedAt.Value >= monthStart &&
-                                  booking.CreatedAt.Value < monthStart.AddMonths(1))
+                                  booking.CreatedAt.Value < nextMonthStart)
                 .Select(booking => new
                 {
                     booking.BookingState,
@@ -180,164 +194,216 @@ namespace YemenGuide.Web.Services.OwnerDashboard
                 })
                 .ToListAsync(cancellationToken);
 
-            var totalThisMonth = monthlyBookings.Count;
-            var pendingThisMonth = monthlyBookings.Count(item =>
-                IsState(item.BookingState, "Pending") ||
-                IsState(item.BookingState, "AwaitingPayment") ||
-                IsState(item.BookingState, "PaymentReview") ||
-                IsState(item.BookingState, "UnderReview"));
-            var confirmedThisMonth = monthlyBookings.Count(item => IsState(item.BookingState, "Confirmed"));
-            var completedThisMonth = monthlyBookings.Count(item => IsState(item.BookingState, "Completed"));
-            var noShowThisMonth = monthlyBookings.Count(item => IsState(item.BookingState, "NoShow"));
-            var cancelledThisMonth = monthlyBookings.Count(item =>
+            var monthlyClosed = monthlyBookings.Count(item =>
                 IsState(item.BookingState, "Cancelled") ||
                 IsState(item.BookingState, "Rejected") ||
                 IsState(item.BookingState, "Expired"));
 
             model.BookingSummary = new OwnerDashboardBookingSummaryDto
             {
-                TotalThisMonth = totalThisMonth,
-                Pending = pendingThisMonth,
-                Confirmed = confirmedThisMonth,
-                Completed = completedThisMonth,
-                Cancelled = cancelledThisMonth,
-                NoShow = noShowThisMonth,
-                CancellationRate = totalThisMonth <= 0
+                TotalThisMonth = monthlyBookings.Count,
+                Pending = monthlyBookings.Count(item =>
+                    IsState(item.BookingState, "Pending") ||
+                    IsState(item.BookingState, "AwaitingPayment") ||
+                    IsState(item.BookingState, "PaymentReview") ||
+                    IsState(item.BookingState, "UnderReview")),
+                Confirmed = monthlyBookings.Count(item => IsState(item.BookingState, "Confirmed")),
+                Completed = monthlyBookings.Count(item => IsState(item.BookingState, "Completed")),
+                Cancelled = monthlyClosed,
+                NoShow = monthlyBookings.Count(item => IsState(item.BookingState, "NoShow")),
+                CancellationRate = monthlyBookings.Count == 0
                     ? 0m
-                    : Math.Round(cancelledThisMonth * 100m / totalThisMonth, 1)
+                    : Math.Round(monthlyClosed * 100m / monthlyBookings.Count, 1)
             };
 
-            var currentFinance = await (
-                    from record in _context.FinancialRecords.AsNoTracking()
-                    join booking in _context.Bookings.AsNoTracking()
-                        on record.BookingId equals booking.BookingId
-                    where booking.PlaceId == placeId &&
-                          booking.CreatedAt.HasValue &&
-                          booking.CreatedAt.Value >= monthStart &&
-                          booking.CreatedAt.Value < monthStart.AddMonths(1)
-                    select new
-                    {
-                        record.AmountPaidOnline,
-                        record.AmountCollectedAtProperty,
-                        record.PlatformCommission
-                    })
+            // =========================================================
+            // المالية الحقيقية:
+            // الدفع = PaymentApprovedAt
+            // التحصيل في المنشأة = CollectedAt
+            // العمولة = CommissionChargedAt
+            // الاسترداد = ProcessedAt للحالة Completed
+            // لا نستخدم CreatedAt للحجز كبديل لتاريخ حركة مالية.
+            // =========================================================
+            var financialRows = await _context.FinancialRecords
+                .AsNoTracking()
+                .Where(record =>
+                    record.Booking.PlaceId == placeId &&
+                    ((record.Booking.PaymentApprovedAt.HasValue &&
+                      record.Booking.PaymentApprovedAt.Value >= sixMonthsStart &&
+                      record.Booking.PaymentApprovedAt.Value < nextMonthStart) ||
+                     (record.CollectedAt.HasValue &&
+                      record.CollectedAt.Value >= sixMonthsStart &&
+                      record.CollectedAt.Value < nextMonthStart) ||
+                     (record.CommissionChargedAt.HasValue &&
+                      record.CommissionChargedAt.Value >= sixMonthsStart &&
+                      record.CommissionChargedAt.Value < nextMonthStart)))
+                .Select(record => new FinancialEventRow
+                {
+                    PaymentApprovedAt = record.Booking.PaymentApprovedAt,
+                    AmountPaidOnline = record.AmountPaidOnline,
+                    CollectedAt = record.CollectedAt,
+                    AmountCollectedAtProperty = record.AmountCollectedAtProperty,
+                    CommissionChargedAt = record.CommissionChargedAt,
+                    PlatformCommission = record.PlatformCommission
+                })
                 .ToListAsync(cancellationToken);
 
-            var previousFinance = await (
-                    from record in _context.FinancialRecords.AsNoTracking()
-                    join booking in _context.Bookings.AsNoTracking()
-                        on record.BookingId equals booking.BookingId
-                    where booking.PlaceId == placeId &&
-                          booking.CreatedAt.HasValue &&
-                          booking.CreatedAt.Value >= previousMonthStart &&
-                          booking.CreatedAt.Value < monthStart
-                    select record.AmountPaidOnline + record.AmountCollectedAtProperty)
-                .SumAsync(cancellationToken);
-
-            var monthlyRevenue = currentFinance.Sum(item =>
-                item.AmountPaidOnline + item.AmountCollectedAtProperty);
-
-            var grossBookingValue = monthlyBookings
-                .Where(item => !IsClosedWithoutRevenue(item.BookingState))
-                .Sum(item => item.TotalPrice);
-
-            var refundedAmount = await _context.RefundRequests
+            var refundRows = await _context.RefundRequests
                 .AsNoTracking()
-                .Where(item => item.PlaceId == placeId &&
-                               item.Status == "Completed" &&
-                               item.ProcessedAt.HasValue &&
-                               item.ProcessedAt.Value >= monthStart &&
-                               item.ProcessedAt.Value < monthStart.AddMonths(1))
-                .SumAsync(item => (decimal?)item.RefundAmount, cancellationToken) ?? 0m;
+                .Where(refund =>
+                    refund.PlaceId == placeId &&
+                    refund.Status == "Completed" &&
+                    refund.ProcessedAt.HasValue &&
+                    refund.ProcessedAt.Value >= sixMonthsStart &&
+                    refund.ProcessedAt.Value < nextMonthStart)
+                .Select(refund => new RefundEventRow
+                {
+                    ProcessedAt = refund.ProcessedAt,
+                    RefundAmount = refund.RefundAmount
+                })
+                .ToListAsync(cancellationToken);
 
-            var paidOnline = currentFinance.Sum(item => item.AmountPaidOnline);
-            var collectedAtProperty = currentFinance.Sum(item => item.AmountCollectedAtProperty);
-            var platformCommission = currentFinance.Sum(item => item.PlatformCommission);
-            var netCollectedRevenue = Math.Max(
-                0m,
-                paidOnline + collectedAtProperty - refundedAmount - platformCommission);
+            decimal PaidOnline(DateTime start, DateTime end) => financialRows
+                .Where(item => InPeriod(item.PaymentApprovedAt, start, end))
+                .Sum(item => Math.Max(0m, item.AmountPaidOnline));
+
+            decimal CollectedAtProperty(DateTime start, DateTime end) => financialRows
+                .Where(item => InPeriod(item.CollectedAt, start, end))
+                .Sum(item => Math.Max(0m, item.AmountCollectedAtProperty));
+
+            decimal ChargedCommission(DateTime start, DateTime end) => financialRows
+                .Where(item => InPeriod(item.CommissionChargedAt, start, end))
+                .Sum(item => Math.Max(0m, item.PlatformCommission));
+
+            decimal CompletedRefunds(DateTime start, DateTime end) => refundRows
+                .Where(item => InPeriod(item.ProcessedAt, start, end))
+                .Sum(item => Math.Max(0m, item.RefundAmount));
+
+            decimal NetCashFlow(DateTime start, DateTime end) => Math.Round(
+                PaidOnline(start, end) +
+                CollectedAtProperty(start, end) -
+                CompletedRefunds(start, end) -
+                ChargedCommission(start, end),
+                2);
+
+            var currentPaidOnline = PaidOnline(monthStart, nextMonthStart);
+            var currentCollectedAtProperty = CollectedAtProperty(monthStart, nextMonthStart);
+            var currentRefunds = CompletedRefunds(monthStart, nextMonthStart);
+            var currentCommission = ChargedCommission(monthStart, nextMonthStart);
+            var currentNetRevenue = NetCashFlow(monthStart, nextMonthStart);
+            var previousNetRevenue = NetCashFlow(previousMonthStart, monthStart);
+
+            var currentScheduledBookingValue = await bookingQuery
+                .Where(booking =>
+                    booking.StartDate >= monthStart &&
+                    booking.StartDate < nextMonthStart &&
+                    booking.BookingState != "Cancelled" &&
+                    booking.BookingState != "Rejected" &&
+                    booking.BookingState != "Expired")
+                .SumAsync(booking => (decimal?)booking.TotalPrice, cancellationToken) ?? 0m;
 
             model.Finance = new OwnerDashboardFinanceDto
             {
-                GrossBookingValue = DisplayAmount(grossBookingValue),
-                PaidOnline = DisplayAmount(paidOnline),
-                CollectedAtProperty = DisplayAmount(collectedAtProperty),
-                RefundedAmount = DisplayAmount(refundedAmount),
-                PlatformCommission = DisplayAmount(platformCommission),
-                NetCollectedRevenue = DisplayAmount(netCollectedRevenue)
+                GrossBookingValue = DisplayAmount(currentScheduledBookingValue),
+                PaidOnline = DisplayAmount(currentPaidOnline),
+                CollectedAtProperty = DisplayAmount(currentCollectedAtProperty),
+                RefundedAmount = DisplayAmount(currentRefunds),
+                PlatformCommission = DisplayAmount(currentCommission),
+                NetCollectedRevenue = DisplayAmount(currentNetRevenue)
             };
 
-            model.Kpis.NewBookingsToday = newBookingsToday;
-            model.Kpis.TodayBookings = todayBookings;
-            model.Kpis.MonthlyRevenue = DisplayAmount(monthlyRevenue);
-            model.Kpis.PreviousMonthRevenue = DisplayAmount(previousFinance);
-            model.Kpis.RevenueChangePercent = PercentageChange(monthlyRevenue, previousFinance);
+            model.Kpis.MonthlyRevenue = DisplayAmount(currentNetRevenue);
+            model.Kpis.PreviousMonthRevenue = DisplayAmount(previousNetRevenue);
+            model.Kpis.RevenueChangePercent = PercentageChange(currentNetRevenue, previousNetRevenue);
 
-            var commissionAccount = await _context.PlaceCommissionAccounts
-                .AsNoTracking()
-                .Where(account => account.PlaceId == placeId)
-                .Select(account => new
-                {
-                    account.AvailableBalance,
-                    account.HeldBalance,
-                    account.DebtAmount,
-                    account.LowBalanceThreshold,
-                    account.AccountStatus
-                })
-                .FirstOrDefaultAsync(cancellationToken);
+            for (var index = 0; index < 6; index++)
+            {
+                var month = sixMonthsStart.AddMonths(index);
+                var monthEnd = month.AddMonths(1);
 
-            var requiredGuaranteeYer = Math.Max(
-                0m,
-                settings?.RequiredCommissionGuaranteeBalance ?? 0m);
+                model.Finance.MonthlyLabels.Add(MonthLabel(month));
+                model.Finance.MonthlyCollected.Add(DisplayAmount(
+                    PaidOnline(month, monthEnd) +
+                    CollectedAtProperty(month, monthEnd) -
+                    CompletedRefunds(month, monthEnd)));
+                model.Finance.MonthlyCommission.Add(DisplayAmount(
+                    ChargedCommission(month, monthEnd)));
+            }
 
-            var availableBalanceYer = commissionAccount?.AvailableBalance ?? 0m;
-            var lowBalanceThresholdYer = commissionAccount?.LowBalanceThreshold
-                                      ?? settings?.DefaultLowBalanceThreshold
-                                      ?? 0m;
-            var accountStatus = string.IsNullOrWhiteSpace(commissionAccount?.AccountStatus)
-                ? (availableBalanceYer >= requiredGuaranteeYer && requiredGuaranteeYer > 0m
-                    ? "Active"
-                    : "NeedsTopUp")
-                : commissionAccount!.AccountStatus!.Trim();
+            // =========================================================
+            // حساب ضمان العمولة من الحساب الفعلي للمنشأة.
+            // =========================================================
+            var requiredGuaranteeYer = isBookablePlace
+                ? Math.Max(0m, settings?.RequiredCommissionGuaranteeBalance ?? 0m)
+                : 0m;
+            var lowBalanceThresholdYer = isBookablePlace
+                ? Math.Max(0m, settings?.DefaultLowBalanceThreshold ?? 0m)
+                : 0m;
+
+            var account = isBookablePlace
+                ? await _context.PlaceCommissionAccounts
+                    .AsNoTracking()
+                    .Where(item => item.PlaceId == placeId)
+                    .Select(item => new
+                    {
+                        item.AvailableBalance,
+                        item.HeldBalance,
+                        item.DebtAmount,
+                        item.AccountStatus
+                    })
+                    .FirstOrDefaultAsync(cancellationToken)
+                : null;
+
+            var availableBalanceYer = Math.Max(0m, account?.AvailableBalance ?? 0m);
+            var heldBalanceYer = Math.Max(0m, account?.HeldBalance ?? 0m);
+            var debtAmountYer = Math.Max(0m, account?.DebtAmount ?? 0m);
+            var accountStatus = isBookablePlace
+                ? (string.IsNullOrWhiteSpace(account?.AccountStatus)
+                    ? "NeedsTopUp"
+                    : account!.AccountStatus!.Trim())
+                : "NotApplicable";
 
             var fundingPercent = requiredGuaranteeYer <= 0m
-                ? 100m
+                ? (isBookablePlace ? 100m : 0m)
                 : Math.Clamp(
                     Math.Round(availableBalanceYer * 100m / requiredGuaranteeYer, 1),
                     0m,
                     100m);
 
-            var availableBalance = DisplayAmount(availableBalanceYer);
-            var requiredGuarantee = DisplayAmount(requiredGuaranteeYer);
-
             model.Guarantee = new OwnerDashboardGuaranteeDto
             {
-                AvailableBalance = availableBalance,
-                HeldBalance = DisplayAmount(commissionAccount?.HeldBalance ?? 0m),
-                DebtAmount = DisplayAmount(commissionAccount?.DebtAmount ?? 0m),
-                RequiredBalance = requiredGuarantee,
-                LowBalanceThreshold = DisplayAmount(Math.Max(0m, lowBalanceThresholdYer)),
+                AvailableBalance = DisplayAmount(availableBalanceYer),
+                HeldBalance = DisplayAmount(heldBalanceYer),
+                DebtAmount = DisplayAmount(debtAmountYer),
+                RequiredBalance = DisplayAmount(requiredGuaranteeYer),
+                LowBalanceThreshold = DisplayAmount(lowBalanceThresholdYer),
                 FundingPercent = fundingPercent,
                 AccountStatus = accountStatus,
-                AccountStatusLabel = GuaranteeStatusLabel(accountStatus)
+                AccountStatusLabel = isBookablePlace
+                    ? GuaranteeStatusLabel(accountStatus)
+                    : "غير مطبق"
             };
 
-            model.Kpis.AvailableGuaranteeBalance = availableBalance;
+            model.Kpis.AvailableGuaranteeBalance = model.Guarantee.AvailableBalance;
             model.Kpis.GuaranteeStatus = accountStatus;
 
+            // =========================================================
+            // التقييمات والمفضلة - بيانات فعلية فقط.
+            // =========================================================
             var reviewRows = await _context.Reviews
                 .AsNoTracking()
-                .Where(review => review.PlaceId == placeId &&
-                                 review.ParentReviewId == null &&
-                                 review.Stars.HasValue)
-                .Select(review => new
+                .Where(review =>
+                    review.PlaceId == placeId &&
+                    review.ParentReviewId == null &&
+                    review.Stars.HasValue)
+                .Select(review => new ReviewRow
                 {
-                    review.ReviewId,
-                    review.Stars,
-                    review.ReviewText,
-                    review.CreatedAt,
-                    review.OwnerReply,
-                    CustomerName = review.User.FullName
+                    ReviewId = review.ReviewId,
+                    Stars = review.Stars,
+                    ReviewText = review.ReviewText,
+                    CreatedAt = review.CreatedAt,
+                    OwnerReply = review.OwnerReply,
+                    CustomerName = review.User != null ? review.User.FullName : null
                 })
                 .ToListAsync(cancellationToken);
 
@@ -389,6 +455,9 @@ namespace YemenGuide.Web.Services.OwnerDashboard
                 .CountAsync(item => item.PlaceId == placeId, cancellationToken);
             model.Kpis.FavoritesCount = favoritesCount;
 
+            // =========================================================
+            // التشغيل الحالي: الإشغال = الآن فعلًا، لا كل حجوزات اليوم.
+            // =========================================================
             var roomUnitCount = await _context.RoomUnits
                 .AsNoTracking()
                 .CountAsync(item => item.PlaceId == placeId && item.IsAvailable == true, cancellationToken);
@@ -407,8 +476,8 @@ namespace YemenGuide.Web.Services.OwnerDashboard
                               (assignment.AssignmentStatus == "Held" ||
                                assignment.AssignmentStatus == "Confirmed") &&
                               booking.BookingState == "Confirmed" &&
-                              booking.StartDate < tomorrow &&
-                              (!booking.EndDate.HasValue || booking.EndDate.Value >= today)
+                              booking.StartDate <= now &&
+                              (!booking.EndDate.HasValue || booking.EndDate.Value > now)
                         select roomUnit.RoomUnitId)
                     .Distinct()
                     .CountAsync(cancellationToken);
@@ -427,7 +496,7 @@ namespace YemenGuide.Web.Services.OwnerDashboard
             var activeNow = await bookingQuery.CountAsync(
                 booking => booking.BookingState == "Confirmed" &&
                            booking.StartDate <= now &&
-                           (!booking.EndDate.HasValue || booking.EndDate.Value >= now),
+                           (!booking.EndDate.HasValue || booking.EndDate.Value > now),
                 cancellationToken);
 
             var arrivalsToday = await bookingQuery.CountAsync(
@@ -437,7 +506,8 @@ namespace YemenGuide.Web.Services.OwnerDashboard
                 cancellationToken);
 
             var departuresToday = await bookingQuery.CountAsync(
-                booking => booking.BookingState == "Confirmed" &&
+                booking => (booking.BookingState == "Confirmed" ||
+                            booking.BookingState == "Completed") &&
                            booking.EndDate.HasValue &&
                            booking.EndDate.Value >= today &&
                            booking.EndDate.Value < tomorrow,
@@ -493,13 +563,19 @@ namespace YemenGuide.Web.Services.OwnerDashboard
                 }).ToList()
             };
 
+            // =========================================================
+            // عناصر تحتاج انتباهًا - تعتمد على حالات مسجلة فعلًا.
+            // =========================================================
             var pendingBookings = await bookingQuery.CountAsync(
                 booking => booking.BookingState == "Pending",
                 cancellationToken);
 
             var paymentReviews = await bookingQuery.CountAsync(
                 booking => booking.BookingState == "PaymentReview" ||
-                           booking.PaymentStatus == "Pending",
+                           booking.PaymentStatus == "UnderReview" ||
+                           (booking.PaymentStatus == "Pending" &&
+                            booking.PaymentNotificationImage != null &&
+                            booking.PaymentNotificationImage != ""),
                 cancellationToken);
 
             var unreadMessages = await _context.Chats
@@ -519,6 +595,12 @@ namespace YemenGuide.Web.Services.OwnerDashboard
                     (item.Status == "Pending" || item.Status == "Processing"),
                     cancellationToken);
 
+            var trialActive =
+                selectedPlace.FreeTrialStartedAt.HasValue &&
+                selectedPlace.FreeTrialEndsAt.HasValue &&
+                selectedPlace.FreeTrialStartedAt.Value <= now &&
+                selectedPlace.FreeTrialEndsAt.Value > now;
+
             BuildAttentionItems(
                 model,
                 placeId,
@@ -527,12 +609,19 @@ namespace YemenGuide.Web.Services.OwnerDashboard
                 awaitingReviewReply,
                 unreadMessages,
                 pendingRefunds,
+                isBookablePlace,
+                trialActive,
                 accountStatus,
-                availableBalance,
-                requiredGuarantee,
+                model.Guarantee.AvailableBalance,
+                model.Guarantee.RequiredBalance,
                 displayCurrency);
 
-            var trendRows = await bookingQuery
+            // =========================================================
+            // اتجاه 30 يومًا:
+            // إنشاء الحجز في CreatedAt، الإكمال في CompletedAt،
+            // والإغلاق/الإلغاء في ClosedAt. لا ننسب النتيجة ليوم الإنشاء.
+            // =========================================================
+            var createdTrendRows = await bookingQuery
                 .Where(booking => booking.CreatedAt.HasValue &&
                                   booking.CreatedAt.Value >= trendStart &&
                                   booking.CreatedAt.Value < tomorrow)
@@ -540,67 +629,53 @@ namespace YemenGuide.Web.Services.OwnerDashboard
                 .Select(group => new
                 {
                     Date = group.Key,
-                    Total = group.Count(),
-                    Completed = group.Count(item => item.BookingState == "Completed"),
-                    Cancelled = group.Count(item =>
-                        item.BookingState == "Cancelled" ||
-                        item.BookingState == "Rejected" ||
-                        item.BookingState == "Expired")
+                    Count = group.Count()
                 })
                 .ToListAsync(cancellationToken);
 
-            var trendLookup = trendRows.ToDictionary(item => item.Date.Date);
+            var completedTrendRows = await bookingQuery
+                .Where(booking => booking.CompletedAt.HasValue &&
+                                  booking.CompletedAt.Value >= trendStart &&
+                                  booking.CompletedAt.Value < tomorrow &&
+                                  booking.BookingState == "Completed")
+                .GroupBy(booking => booking.CompletedAt!.Value.Date)
+                .Select(group => new
+                {
+                    Date = group.Key,
+                    Count = group.Count()
+                })
+                .ToListAsync(cancellationToken);
+
+            var closedTrendRows = await bookingQuery
+                .Where(booking => booking.ClosedAt.HasValue &&
+                                  booking.ClosedAt.Value >= trendStart &&
+                                  booking.ClosedAt.Value < tomorrow &&
+                                  (booking.BookingState == "Cancelled" ||
+                                   booking.BookingState == "Rejected" ||
+                                   booking.BookingState == "Expired"))
+                .GroupBy(booking => booking.ClosedAt!.Value.Date)
+                .Select(group => new
+                {
+                    Date = group.Key,
+                    Count = group.Count()
+                })
+                .ToListAsync(cancellationToken);
+
+            var createdLookup = createdTrendRows.ToDictionary(item => item.Date.Date, item => item.Count);
+            var completedLookup = completedTrendRows.ToDictionary(item => item.Date.Date, item => item.Count);
+            var closedLookup = closedTrendRows.ToDictionary(item => item.Date.Date, item => item.Count);
+
             for (var day = trendStart; day <= today; day = day.AddDays(1))
             {
                 model.BookingTrend.Labels.Add(day.ToString("dd/MM"));
-                if (trendLookup.TryGetValue(day.Date, out var row))
-                {
-                    model.BookingTrend.Bookings.Add(row.Total);
-                    model.BookingTrend.Completed.Add(row.Completed);
-                    model.BookingTrend.Cancelled.Add(row.Cancelled);
-                }
-                else
-                {
-                    model.BookingTrend.Bookings.Add(0);
-                    model.BookingTrend.Completed.Add(0);
-                    model.BookingTrend.Cancelled.Add(0);
-                }
+                model.BookingTrend.Bookings.Add(createdLookup.TryGetValue(day.Date, out var created) ? created : 0);
+                model.BookingTrend.Completed.Add(completedLookup.TryGetValue(day.Date, out var completed) ? completed : 0);
+                model.BookingTrend.Cancelled.Add(closedLookup.TryGetValue(day.Date, out var closed) ? closed : 0);
             }
 
-            var financeTrendRows = await (
-                    from record in _context.FinancialRecords.AsNoTracking()
-                    join booking in _context.Bookings.AsNoTracking()
-                        on record.BookingId equals booking.BookingId
-                    where booking.PlaceId == placeId &&
-                          booking.CreatedAt.HasValue &&
-                          booking.CreatedAt.Value >= sixMonthsStart
-                    group record by new
-                    {
-                        Year = booking.CreatedAt!.Value.Year,
-                        Month = booking.CreatedAt!.Value.Month
-                    }
-                    into groupByMonth
-                    select new
-                    {
-                        groupByMonth.Key.Year,
-                        groupByMonth.Key.Month,
-                        Collected = groupByMonth.Sum(item =>
-                            item.AmountPaidOnline + item.AmountCollectedAtProperty),
-                        Commission = groupByMonth.Sum(item => item.PlatformCommission)
-                    })
-                .ToListAsync(cancellationToken);
-
-            for (var index = 0; index < 6; index++)
-            {
-                var month = sixMonthsStart.AddMonths(index);
-                var row = financeTrendRows.FirstOrDefault(item =>
-                    item.Year == month.Year && item.Month == month.Month);
-
-                model.Finance.MonthlyLabels.Add(MonthLabel(month));
-                model.Finance.MonthlyCollected.Add(DisplayAmount(row?.Collected ?? 0m));
-                model.Finance.MonthlyCommission.Add(DisplayAmount(row?.Commission ?? 0m));
-            }
-
+            // =========================================================
+            // التسويق - أحداث الإعلانات المسجلة فعليًا في الشهر الحالي.
+            // =========================================================
             var activePromotions = await _context.Promotions
                 .AsNoTracking()
                 .CountAsync(item => item.PlaceId == placeId &&
@@ -621,7 +696,7 @@ namespace YemenGuide.Web.Services.OwnerDashboard
                         on eventItem.AdvertisementId equals advertisement.AdvertisementId
                     where advertisement.PlaceId == placeId &&
                           eventItem.EventAt >= monthStart &&
-                          eventItem.EventAt < monthStart.AddMonths(1)
+                          eventItem.EventAt < nextMonthStart
                     group eventItem by eventItem.EventType
                     into grouped
                     select new
@@ -657,6 +732,9 @@ namespace YemenGuide.Web.Services.OwnerDashboard
                 Favorites = favoritesCount
             };
 
+            // =========================================================
+            // التقويم والنشاطات الحديثة - سجلات فعلية فقط.
+            // =========================================================
             var calendarRows = await bookingQuery
                 .Where(booking =>
                     booking.StartDate < calendarEnd &&
@@ -752,7 +830,7 @@ namespace YemenGuide.Web.Services.OwnerDashboard
                     item.ReviewId,
                     item.Stars,
                     item.CreatedAt,
-                    CustomerName = item.User.FullName
+                    CustomerName = item.User != null ? item.User.FullName : null
                 })
                 .ToListAsync(cancellationToken);
 
@@ -781,10 +859,9 @@ namespace YemenGuide.Web.Services.OwnerDashboard
                 .Take(4)
                 .Select(item => new
                 {
-                    item.MessageId,
                     item.SendTime,
                     item.IsRead,
-                    SenderName = item.Sender.FullName
+                    SenderName = item.Sender != null ? item.Sender.FullName : null
                 })
                 .ToListAsync(cancellationToken);
 
@@ -848,6 +925,8 @@ namespace YemenGuide.Web.Services.OwnerDashboard
             int awaitingReviewReply,
             int unreadMessages,
             int pendingRefunds,
+            bool isBookablePlace,
+            bool trialActive,
             string accountStatus,
             decimal availableBalance,
             decimal requiredGuarantee,
@@ -859,7 +938,7 @@ namespace YemenGuide.Web.Services.OwnerDashboard
                 {
                     Key = "pending-bookings",
                     Title = "حجوزات تنتظر قرارك",
-                    Description = "راجع الطلبات الجديدة قبل انتهاء مهلة العميل.",
+                    Description = "هذه طلبات فعلية بحالة انتظار في قاعدة البيانات.",
                     Icon = "bi-calendar2-event-fill",
                     Tone = "warning",
                     Count = pendingBookings,
@@ -873,8 +952,8 @@ namespace YemenGuide.Web.Services.OwnerDashboard
                 model.AttentionItems.Add(new OwnerDashboardAttentionItemDto
                 {
                     Key = "payment-review",
-                    Title = "إثباتات دفع قيد المراجعة",
-                    Description = "توجد دفعات تحتاج التحقق قبل تأكيد الحجز.",
+                    Title = "إثباتات دفع تحتاج مراجعة",
+                    Description = "دفعات مسجلة فعليًا كمراجعة دفع أو لها إثبات مرفوع.",
                     Icon = "bi-receipt-cutoff",
                     Tone = "primary",
                     Count = paymentReviews,
@@ -888,8 +967,8 @@ namespace YemenGuide.Web.Services.OwnerDashboard
                 model.AttentionItems.Add(new OwnerDashboardAttentionItemDto
                 {
                     Key = "reviews",
-                    Title = "تقييمات تنتظر ردك",
-                    Description = "الرد السريع يساعد على رفع ثقة العملاء بالمنشأة.",
+                    Title = "تقييمات بلا رد",
+                    Description = "تقييمات منشورة لم يسجل لها رد مالك بعد.",
                     Icon = "bi-star-fill",
                     Tone = "warning",
                     Count = awaitingReviewReply,
@@ -904,7 +983,7 @@ namespace YemenGuide.Web.Services.OwnerDashboard
                 {
                     Key = "messages",
                     Title = "رسائل غير مقروءة",
-                    Description = "لديك محادثات جديدة من العملاء.",
+                    Description = "رسائل وصلت لحساب المالك ولم تُقرأ بعد.",
                     Icon = "bi-chat-dots-fill",
                     Tone = "info",
                     Count = unreadMessages,
@@ -919,7 +998,7 @@ namespace YemenGuide.Web.Services.OwnerDashboard
                 {
                     Key = "refunds",
                     Title = "طلبات استرداد مفتوحة",
-                    Description = "تابع الطلبات المالية التي ما زالت قيد المعالجة.",
+                    Description = "طلبات مسجلة بحالة Pending أو Processing.",
                     Icon = "bi-arrow-counterclockwise",
                     Tone = "danger",
                     Count = pendingRefunds,
@@ -928,34 +1007,46 @@ namespace YemenGuide.Web.Services.OwnerDashboard
                 });
             }
 
+            // خلال التجربة المجانية لا نظهر تنبيه شحن مضللًا؛
+            // الحساب المالي نفسه في الكنترولر سيحدد السماح بالحجز عند انتهائها.
+            if (!isBookablePlace || trialActive)
+            {
+                return;
+            }
+
             var financialRisk = IsState(accountStatus, "LowBalance") ||
                                 IsState(accountStatus, "InDebt") ||
                                 IsState(accountStatus, "Suspended") ||
                                 (IsState(accountStatus, "NeedsTopUp") && requiredGuarantee > availableBalance);
 
-            if (financialRisk)
+            if (!financialRisk)
             {
-                var symbol = CurrencyDisplayService.GetCurrencySymbol(displayCurrency);
-                var availableText = CurrencyDisplayService.FormatNumber(availableBalance, displayCurrency);
-                var requiredText = CurrencyDisplayService.FormatNumber(requiredGuarantee, displayCurrency);
-
-                model.AttentionItems.Add(new OwnerDashboardAttentionItemDto
-                {
-                    Key = "commission-balance",
-                    Title = GuaranteeStatusLabel(accountStatus),
-                    Description = requiredGuarantee > 0m
-                        ? $"المتاح {availableText} {symbol} من رصيد مطلوب {requiredText} {symbol}."
-                        : "راجع مركز رصيد ضمان العمولات لمعرفة حالة الحساب.",
-                    Icon = "bi-shield-exclamation",
-                    Tone = IsState(accountStatus, "Suspended") || IsState(accountStatus, "InDebt")
-                        ? "danger"
-                        : "warning",
-                    Count = 1,
-                    Url = $"/Owner/Financials?financeTab=balance&placeId={placeId}",
-                    ActionLabel = "فتح الرصيد"
-                });
+                return;
             }
+
+            var symbol = CurrencyDisplayService.GetCurrencySymbol(displayCurrency);
+            var availableText = CurrencyDisplayService.FormatNumber(availableBalance, displayCurrency);
+            var requiredText = CurrencyDisplayService.FormatNumber(requiredGuarantee, displayCurrency);
+
+            model.AttentionItems.Add(new OwnerDashboardAttentionItemDto
+            {
+                Key = "commission-balance",
+                Title = GuaranteeStatusLabel(accountStatus),
+                Description = requiredGuarantee > 0m
+                    ? $"المتاح {availableText} {symbol} من رصيد مطلوب {requiredText} {symbol}."
+                    : "راجع رصيد ضمان العمولات لمعرفة حالة الحساب المسجلة.",
+                Icon = "bi-shield-exclamation",
+                Tone = IsState(accountStatus, "Suspended") || IsState(accountStatus, "InDebt")
+                    ? "danger"
+                    : "warning",
+                Count = 1,
+                Url = $"/Owner/Financials?financeTab=balance&placeId={placeId}",
+                ActionLabel = "فتح الرصيد"
+            });
         }
+
+        private static bool InPeriod(DateTime? value, DateTime start, DateTime end) =>
+            value.HasValue && value.Value >= start && value.Value < end;
 
         private static bool IsOperationalPlace(PlaceCandidate place) =>
             place.IsAvailable &&
@@ -971,7 +1062,8 @@ namespace YemenGuide.Web.Services.OwnerDashboard
 
         private static decimal PercentageChange(decimal current, decimal previous)
         {
-            if (previous == 0m)
+            // نسبة التغير لا تكون ذات معنى عندما يكون صافي الشهر السابق <= 0.
+            if (previous <= 0m)
             {
                 return current > 0m ? 100m : 0m;
             }
@@ -1095,6 +1187,34 @@ namespace YemenGuide.Web.Services.OwnerDashboard
             public string? CategoryName { get; set; }
             public int BookingSystemId { get; set; }
             public string? ExchangeRateRegion { get; set; }
+            public DateTime? FreeTrialStartedAt { get; set; }
+            public DateTime? FreeTrialEndsAt { get; set; }
+        }
+
+        private sealed class FinancialEventRow
+        {
+            public DateTime? PaymentApprovedAt { get; set; }
+            public decimal AmountPaidOnline { get; set; }
+            public DateTime? CollectedAt { get; set; }
+            public decimal AmountCollectedAtProperty { get; set; }
+            public DateTime? CommissionChargedAt { get; set; }
+            public decimal PlatformCommission { get; set; }
+        }
+
+        private sealed class RefundEventRow
+        {
+            public DateTime? ProcessedAt { get; set; }
+            public decimal RefundAmount { get; set; }
+        }
+
+        private sealed class ReviewRow
+        {
+            public int ReviewId { get; set; }
+            public int? Stars { get; set; }
+            public string? ReviewText { get; set; }
+            public DateTime? CreatedAt { get; set; }
+            public string? OwnerReply { get; set; }
+            public string? CustomerName { get; set; }
         }
     }
 }
