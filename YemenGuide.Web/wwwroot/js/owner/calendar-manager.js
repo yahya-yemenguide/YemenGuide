@@ -3029,6 +3029,35 @@
             quoteTimer = window.setTimeout(() => previewManualBooking(false), 520);
         }
 
+        async function previewManualPricingForPaymentStep(showErrors) {
+            const request = buildManualRequest();
+            const validation = validateManualRequest(request, showErrors);
+            if (validation) return null;
+
+            const pricingRequest = {
+                ...request,
+                paymentMode: "Collected",
+                paidAmount: 0,
+                paymentMethod: "Cash",
+                ownerWalletId: null,
+                paymentReferenceNumber: null
+            };
+
+            setButtonLoading(elements.preview, true, "نحسب العربون…");
+            try {
+                const result = await postJson(ENDPOINTS.preview, pricingRequest);
+                if (!result.success || !result.data) throw new Error(result.message || "تعذر حساب السعر والعربون.");
+                latestManualQuote = result.data;
+                return result.data;
+            } catch (error) {
+                latestManualQuote = null;
+                if (showErrors) applyManualServerError(error?.message || "تعذر حساب السعر والعربون.");
+                return null;
+            } finally {
+                setButtonLoading(elements.preview, false, "فحص السعر والتوفر");
+            }
+        }
+
         async function previewManualBooking(showErrors) {
             const request = buildManualRequest();
             const validation = validateManualRequest(request, showErrors);
@@ -3510,7 +3539,7 @@
             // بهذه المعاينة المبكرة يصبح latestManualQuote جاهزًا، وعند اختيار
             // "تم استلام مبلغ" يُملأ العربون مباشرة من سياسة المنشأة.
             if (manualStep === 2) {
-                const pricingPreview = await previewManualBooking(true);
+                const pricingPreview = await previewManualPricingForPaymentStep(true);
                 if (!pricingPreview) return;
             }
 
