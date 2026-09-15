@@ -103,6 +103,7 @@ namespace YemenGuide.Core.DTOs.Owner
         public int AdultsCount { get; set; } = 1;
         public int ChildrenCount { get; set; }
         public string BookingState { get; set; } = "Pending";
+        public string BookingSource { get; set; } = "Online";
         public string? BookingType { get; set; }
         public string? SeatingSetup { get; set; }
 
@@ -375,6 +376,24 @@ namespace YemenGuide.Core.DTOs.Owner
             IsAwaitingPayment &&
             TimerExpiredAt.HasValue &&
             TimerExpiredAt.Value <= DateTime.Now;
+
+        public bool IsOwnerManual =>
+            string.Equals(
+                BookingSource?.Trim(),
+                "OwnerManual",
+                StringComparison.OrdinalIgnoreCase);
+
+        public bool CanRecordManualPayment =>
+            IsOwnerManual &&
+            IsConfirmed &&
+            RemainingAmount > 0m &&
+            (
+                string.IsNullOrWhiteSpace(RefundStatus) ||
+                string.Equals(
+                    RefundStatus.Trim(),
+                    "NotApplicable",
+                    StringComparison.OrdinalIgnoreCase)
+            );
 
         public bool IsPending => IsState("Pending");
         public bool IsAwaitingPayment => IsState("AwaitingPayment");
