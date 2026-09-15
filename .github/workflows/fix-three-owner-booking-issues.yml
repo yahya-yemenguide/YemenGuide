@@ -1,0 +1,124 @@
+name: Fix three owner booking issues
+
+on:
+  push:
+    branches:
+      - fix-manual-booking-three-issues
+
+permissions:
+  contents: write
+
+jobs:
+  patch-build-commit:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply fixes
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+
+          def replace_once(path, old, new, label):
+              p = Path(path)
+              text = p.read_text(encoding='utf-8-sig')
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected exactly 1 match, got {count}')
+              text = text.replace(old, new, 1)
+              p.write_text(text, encoding='utf-8-sig')
+
+          # 1) Additional services remain in final total/invoice but do not increase the deposit base.
+          calendar = 'YemenGuide.Web/Areas/Owner/Controllers/ReservationController.Calendar.cs'
+          old = '''            var totalPrice = Math.Round(Math.Max(0m, discountedBeforeTax + taxAmount), 2);\n            var depositAmount = ManualCalculateDepositAmount(place, totalPrice);'''
+          new = '''            var totalPrice = Math.Round(Math.Max(0m, discountedBeforeTax + taxAmount), 2);\n\n            // الخدمات الإضافية جزء من إجمالي الفاتورة النهائية، لكنها لا تدخل في أساس العربون.\n            // نستبعد قيمة الخدمات وضريبتها من الإجمالي المستخدم لحساب العربون فقط.\n            var servicesTaxAmount = Math.Round(servicesTotal * taxPercentage / 100m, 2);\n            var depositCalculationBase = Math.Round(\n                Math.Max(0m, totalPrice - servicesTotal - servicesTaxAmount),\n                2);\n            var depositAmount = ManualCalculateDepositAmount(place, depositCalculationBase);'''
+          replace_once(calendar, old, new, 'calendar deposit base')
+
+          # 2) SweetAlert must always appear above the Bootstrap reservation modal.
+          css = Path('YemenGuide.Web/wwwroot/css/owner/reservation-styles.css')
+          css_text = css.read_text(encoding='utf-8-sig')
+          marker = '/* Owner reservation alerts must stay above Bootstrap modals */'
+          if marker not in css_text:
+              css_text += '''\n\n/* Owner reservation alerts must stay above Bootstrap modals */\nbody > .swal2-container {\n    z-index: 20000 !important;\n}\n'''
+              css.write_text(css_text, encoding='utf-8-sig')
+
+          # 3a) Manual bookings are commission-exempt even when cancelled at the customer's request.
+          cancel = 'YemenGuide.Web/Areas/Owner/Controllers/ReservationController.CustomerCancellation.cs'
+          old = '''            var originalCommission = Math.Round(\n                Math.Max(0m, financial.PlatformCommission),\n                2);'''
+          new = '''            // الحجز اليدوي خارج مسار اكتساب المنصة ولا يخضع للعمولة حتى عند إلغائه بطلب العميل.\n            if (IsState(booking.BookingSource, "OwnerManual"))\n            {\n                financial.PlatformCommission = 0m;\n                financial.CommissionRateSnapshot = 0m;\n                financial.CommissionBaseAmount = 0m;\n                financial.CommissionStatus = "NotApplicable";\n\n                return CustomerRequestCommissionResult.Succeeded(\n                    0m,\n                    0m,\n                    quote.CancellationFee);\n            }\n\n            var originalCommission = Math.Round(\n                Math.Max(0m, financial.PlatformCommission),\n                2);'''
+          replace_once(cancel, old, new, 'manual cancellation commission exemption')
+
+          # 3b) Refund validation must use all actually collected money, not online money only.
+          service = 'YemenGuide.Web/Services/Finance/OwnerFinancialService.cs'
+          old = '''            var verifiedPaidOnline =\n                Math.Round(\n                    Math.Max(\n                        0m,\n                        refund.Booking?\n                            .FinancialRecord?\n                            .AmountPaidOnline ??\n                        0m),\n                    2);\n\n            if (verifiedPaidOnline + 0.01m <\n                refund.RefundAmount)\n            {\n                return FinanceOperationResult.Failed(\n                    "لا يمكن تنفيذ الاسترداد قبل اعتماد المبلغ الإلكتروني المدفوع فعليًا.");\n            }\n\n            if (!refund.RefundWalletId.HasValue ||\n                refund.RefundWalletId.Value <= 0 ||\n                string.IsNullOrWhiteSpace(refund.RefundAccountNumber) ||\n                string.IsNullOrWhiteSpace(refund.RefundBeneficiaryName))\n            {\n                return FinanceOperationResult.Failed(\n                    "العميل لم يحدد حساب استلام الاسترداد بعد.");\n            }'''
+          new = '''            var financialRecord =\n                refund.Booking?.FinancialRecord;\n\n            var verifiedPaidTotal =\n                Math.Round(\n                    Math.Max(0m, financialRecord?.AmountPaidOnline ?? 0m) +\n                    Math.Max(0m, financialRecord?.AmountCollectedAtProperty ?? 0m),\n                    2);\n\n            if (verifiedPaidTotal + 0.01m < refund.RefundAmount)\n            {\n                return FinanceOperationResult.Failed(\n                    "مبلغ الاسترداد لا يمكن أن يتجاوز إجمالي ما تم تحصيله فعليًا من العميل.");\n            }\n\n            var customerId =\n                refund.CustomerId ??\n                refund.Booking?.CustomerId;\n\n            var isManualGuestRefund =\n                string.Equals(\n                    refund.Booking?.BookingSource?.Trim(),\n                    "OwnerManual",\n                    StringComparison.OrdinalIgnoreCase) &&\n                !customerId.HasValue;\n\n            // الضيف في الحجز اليدوي قد لا يملك حسابًا داخل المنصة؛\n            // في هذه الحالة يوثق المالك التحويل بالمرجع والإثبات مباشرة.\n            if (!isManualGuestRefund &&\n                (!refund.RefundWalletId.HasValue ||\n                 refund.RefundWalletId.Value <= 0 ||\n                 string.IsNullOrWhiteSpace(refund.RefundAccountNumber) ||\n                 string.IsNullOrWhiteSpace(refund.RefundBeneficiaryName)))\n            {\n                return FinanceOperationResult.Failed(\n                    "العميل لم يحدد حساب استلام الاسترداد بعد.");\n            }'''
+          replace_once(service, old, new, 'refund paid total and manual guest validation')
+
+          # 3c) Manual guest refund completes after owner documents the external transfer; no impossible customer confirmation.
+          old = '''            refund.ReferenceNumber = reference;\n            refund.ProofImage = proofImagePath.Trim();\n            refund.TransferredAt = now;\n            refund.Status = FinancialRefundStatuses.Processing;\n            refund.ProcessedByUserId = ownerId;'''
+          new = '''            refund.ReferenceNumber = reference;\n            refund.ProofImage = proofImagePath.Trim();\n            refund.TransferredAt = now;\n            refund.Status = isManualGuestRefund\n                ? FinancialRefundStatuses.Completed\n                : FinancialRefundStatuses.Processing;\n            refund.ProcessedAt = isManualGuestRefund\n                ? now\n                : refund.ProcessedAt;\n            refund.ProcessedByUserId = ownerId;'''
+          replace_once(service, old, new, 'manual guest refund state')
+
+          old = '''            if (refund.Booking != null)\n            {\n                refund.Booking.RefundStatus = FinancialRefundStatuses.Processing;\n\n                if (!string.Equals(\n                        refund.Booking.PaymentStatus,\n                        "RefundPending",\n                        StringComparison.OrdinalIgnoreCase))\n                {\n                    refund.Booking.PaymentStatus = "RefundPending";\n                }\n            }\n\n            var customerId =\n                refund.CustomerId ??\n                refund.Booking?.CustomerId;\n\n            if (!customerId.HasValue)\n            {\n                return FinanceOperationResult.Failed(\n                    "تعذر تحديد العميل المرتبط بطلب الاسترداد.");\n            }\n\n            _notificationService.Queue(\n                new CreateNotificationDto\n                {\n                    UserId = customerId.Value,'''
+          new = '''            if (refund.Booking != null)\n            {\n                refund.Booking.RefundStatus = isManualGuestRefund\n                    ? FinancialRefundStatuses.Completed\n                    : FinancialRefundStatuses.Processing;\n\n                refund.Booking.PaymentStatus = isManualGuestRefund\n                    ? "Refunded"\n                    : "RefundPending";\n            }\n\n            if (customerId.HasValue)\n            {\n                _notificationService.Queue(\n                    new CreateNotificationDto\n                    {\n                        UserId = customerId.Value,'''
+          replace_once(service, old, new, 'manual guest notification opening')
+
+          old = '''                    ReferenceType = NotificationReferenceTypes.Booking,\n                    ReferenceId = refund.BookingId\n                });\n\n            try'''
+          new = '''                        ReferenceType = NotificationReferenceTypes.Booking,\n                        ReferenceId = refund.BookingId\n                    });\n            }\n\n            try'''
+          replace_once(service, old, new, 'manual guest notification closing')
+
+          old = '''                return FinanceOperationResult.Succeeded(\n                    "تم تسجيل تحويل الاسترداد. بانتظار تأكيد العميل للاستلام.",\n                    refund.RefundRequestId,\n                    refund.ReferenceNumber);'''
+          new = '''                return FinanceOperationResult.Succeeded(\n                    isManualGuestRefund\n                        ? "تم تسجيل الاسترداد للحجز اليدوي وإكماله بنجاح."\n                        : "تم تسجيل تحويل الاسترداد. بانتظار تأكيد العميل للاستلام.",\n                    refund.RefundRequestId,\n                    refund.ReferenceNumber);'''
+          replace_once(service, old, new, 'manual guest refund success message')
+          '@ | Set-Content -Path patch.py -Encoding utf8
+          python patch.py
+          Remove-Item patch.py
+
+      - name: Verify diff
+        shell: pwsh
+        run: |
+          git diff --check
+          git diff --stat
+          git diff -- YemenGuide.Web/Areas/Owner/Controllers/ReservationController.Calendar.cs YemenGuide.Web/Areas/Owner/Controllers/ReservationController.CustomerCancellation.cs YemenGuide.Web/Services/Finance/OwnerFinancialService.cs YemenGuide.Web/wwwroot/css/owner/reservation-styles.css
+
+      - name: Check JavaScript
+        shell: pwsh
+        run: node --check YemenGuide.Web/wwwroot/js/owner/reservation-actions.js
+
+      - name: Build solution
+        shell: pwsh
+        run: dotnet build YemenGuide.sln --configuration Debug --no-restore
+
+      - name: Prepare artifact
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifact/YemenGuide.Web/Areas/Owner/Controllers | Out-Null
+          New-Item -ItemType Directory -Force -Path artifact/YemenGuide.Web/Services/Finance | Out-Null
+          New-Item -ItemType Directory -Force -Path artifact/YemenGuide.Web/wwwroot/css/owner | Out-Null
+          Copy-Item YemenGuide.Web/Areas/Owner/Controllers/ReservationController.Calendar.cs artifact/YemenGuide.Web/Areas/Owner/Controllers/
+          Copy-Item YemenGuide.Web/Areas/Owner/Controllers/ReservationController.CustomerCancellation.cs artifact/YemenGuide.Web/Areas/Owner/Controllers/
+          Copy-Item YemenGuide.Web/Services/Finance/OwnerFinancialService.cs artifact/YemenGuide.Web/Services/Finance/
+          Copy-Item YemenGuide.Web/wwwroot/css/owner/reservation-styles.css artifact/YemenGuide.Web/wwwroot/css/owner/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: owner-booking-three-issues-fix
+          path: artifact
+
+      - name: Remove temporary workflow
+        shell: pwsh
+        run: Remove-Item .github/workflows/fix-three-owner-booking-issues.yml
+
+      - name: Commit verified fixes
+        shell: pwsh
+        run: |
+          git config user.name "yahya-yemenguide"
+          git config user.email "actions@users.noreply.github.com"
+          git add YemenGuide.Web/Areas/Owner/Controllers/ReservationController.Calendar.cs YemenGuide.Web/Areas/Owner/Controllers/ReservationController.CustomerCancellation.cs YemenGuide.Web/Services/Finance/OwnerFinancialService.cs YemenGuide.Web/wwwroot/css/owner/reservation-styles.css .github/workflows/fix-three-owner-booking-issues.yml
+          git commit -m "إصلاح العربون والتنبيهات والاسترداد اليدوي"
+          git push origin HEAD:fix-manual-booking-three-issues
