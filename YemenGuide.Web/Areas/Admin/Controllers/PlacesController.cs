@@ -965,6 +965,8 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                  string.Equals(previousStatus, "WaitOwner", StringComparison.OrdinalIgnoreCase) ||
                  string.Equals(previousStatus, "UnderReview", StringComparison.OrdinalIgnoreCase));
 
+            bool shouldCreateTrialWelcomeNotification = false;
+
             if (firstOperationalApproval)
             {
                 var trialResult =
@@ -978,6 +980,26 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                     msg = string.Concat(
                         msg,
                         " تم اعتماد المنشأة، وسيعاد التحقق من الفترة التجريبية تلقائيًا عند أول عملية حجز.");
+                }
+                else
+                {
+                    var now = DateTime.Now;
+
+                    // هذه العلامة لا تُنشأ إلا عند أول اعتماد حقيقي لمنشأة
+                    // حجزية بدأت لها تجربة فعالة. المنشآت القديمة وإعادة
+                    // التنشيط لا تحصل على رسالة ترحيب جديدة.
+                    shouldCreateTrialWelcomeNotification =
+                        await _db.Places
+                            .AsNoTracking()
+                            .AnyAsync(place =>
+                                place.PlaceId == p.PlaceId &&
+                                place.Category != null &&
+                                place.Category.BookingSystemId >= 1 &&
+                                place.Category.BookingSystemId <= 4 &&
+                                place.FreeTrialStartedAt.HasValue &&
+                                place.FreeTrialEndsAt.HasValue &&
+                                place.FreeTrialStartedAt.Value <= now &&
+                                place.FreeTrialEndsAt.Value > now);
                 }
             }
 
@@ -1016,12 +1038,22 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                     }
                     else if (string.Equals(status, "Active", StringComparison.OrdinalIgnoreCase))
                     {
-                        notificationTitle =
-                            string.Equals(previousStatus, "Rejected", StringComparison.OrdinalIgnoreCase)
-                                ? "تمت إعادة قبول المنشأة"
-                                : "تم اعتماد المنشأة";
-                        notificationText =
-                            $"أصبحت منشأة «{p.PlaceNameAndDesc}» نشطة ومتاحة وفق إعداداتها الحالية.";
+                        if (shouldCreateTrialWelcomeNotification)
+                        {
+                            notificationTitle = "بدأت الفترة التجريبية لمنشأتك";
+                            notificationText =
+                                $"تم اعتماد منشأة «{p.PlaceNameAndDesc}» وبدأت فترتها التجريبية المجانية.";
+                        }
+                        else
+                        {
+                            notificationTitle =
+                                string.Equals(previousStatus, "Rejected", StringComparison.OrdinalIgnoreCase)
+                                    ? "تمت إعادة قبول المنشأة"
+                                    : "تم اعتماد المنشأة";
+                            notificationText =
+                                $"أصبحت منشأة «{p.PlaceNameAndDesc}» نشطة ومتاحة وفق إعداداتها الحالية.";
+                        }
+
                         notificationType = NotificationTypes.Account;
                     }
                     else
