@@ -437,6 +437,8 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 BookingState = booking.BookingState?.Trim() ?? "Pending",
                 PaymentStatus = booking.PaymentStatus?.Trim() ?? "Unpaid",
                 PaymentMethod = booking.PaymentMethod?.Trim(),
+                OnlinePaymentType =
+                    financialRecord?.OnlinePaymentType?.Trim(),
                 Quantity = Math.Max(1, booking.Quantity),
                 AdultsCount = Math.Max(0, booking.AdultsCount),
                 ChildrenCount = Math.Max(0, booking.ChildrenCount),
