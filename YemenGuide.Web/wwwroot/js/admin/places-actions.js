@@ -952,6 +952,16 @@
                     confirmText: T("اعتماد", "Approve"),
                     confirmColor: COLORS.success
                 });
+            } else if (button.classList.contains("restore-rejected-btn")) {
+                performPlaceAction("/Admin/Places/RestoreRejectedPlace", id, {
+                    title: T("إعادة قبول المنشأة", "Restore place approval"),
+                    text: T(
+                        "سيتم التحقق من حساب المالك وسياسات الحجز، ثم إعادة تفعيل المنشأة وإشعار المالك.",
+                        "The owner account and booking policies will be validated before the place is restored and the owner is notified."
+                    ),
+                    confirmText: T("إعادة القبول", "Restore approval"),
+                    confirmColor: COLORS.success
+                });
             } else if (button.classList.contains("delete-btn") || button.classList.contains("delete-rejected-btn")) {
                 performPlaceAction("/Admin/Places/DeletePlace", id, {
                     title: T("حذف المنشأة نهائيًا", "Delete place permanently"),

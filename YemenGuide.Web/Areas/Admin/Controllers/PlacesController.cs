@@ -981,6 +981,78 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                 }
             }
 
+            /*
+             * إشعار المالك جزء من قرار الحالة نفسه. لا نرسل إشعارًا لمنشآت
+             * حساب الأدمن، ولا ندّعي إرسال السبب دون إنشاء إشعار فعلي.
+             */
+            if (status != "Deleted" && p.OwnerId.HasValue && p.OwnerId.Value > 0)
+            {
+                var recipient = await _db.Users
+                    .AsNoTracking()
+                    .Where(user => user.UserId == p.OwnerId.Value)
+                    .Select(user => new { user.Role })
+                    .FirstOrDefaultAsync(HttpContext.RequestAborted);
+
+                if (recipient != null &&
+                    string.Equals(recipient.Role, SystemRoles.Owner, StringComparison.OrdinalIgnoreCase))
+                {
+                    string notificationTitle;
+                    string notificationText;
+                    string notificationType;
+
+                    if (string.Equals(status, "Rejected", StringComparison.OrdinalIgnoreCase))
+                    {
+                        notificationTitle = "تم رفض المنشأة";
+                        notificationText =
+                            $"تم رفض منشأة «{p.PlaceNameAndDesc}». السبب: {p.RejectionReason ?? "لم يُذكر السبب"}.";
+                        notificationType = NotificationTypes.AdminPlaceActionRequired;
+                    }
+                    else if (string.Equals(status, "Suspended", StringComparison.OrdinalIgnoreCase))
+                    {
+                        notificationTitle = "تم تعليق المنشأة";
+                        notificationText =
+                            $"تم تعليق منشأة «{p.PlaceNameAndDesc}». السبب: {p.RejectionReason ?? "لم يُذكر السبب"}.";
+                        notificationType = NotificationTypes.General;
+                    }
+                    else if (string.Equals(status, "Active", StringComparison.OrdinalIgnoreCase))
+                    {
+                        notificationTitle =
+                            string.Equals(previousStatus, "Rejected", StringComparison.OrdinalIgnoreCase)
+                                ? "تمت إعادة قبول المنشأة"
+                                : "تم اعتماد المنشأة";
+                        notificationText =
+                            $"أصبحت منشأة «{p.PlaceNameAndDesc}» نشطة ومتاحة وفق إعداداتها الحالية.";
+                        notificationType = NotificationTypes.Account;
+                    }
+                    else
+                    {
+                        notificationTitle = string.Empty;
+                        notificationText = string.Empty;
+                        notificationType = NotificationTypes.General;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(notificationTitle))
+                    {
+                        var notificationService = HttpContext.RequestServices
+                            .GetRequiredService<INotificationService>();
+
+                        notificationService.Queue(new CreateNotificationDto
+                        {
+                            UserId = p.OwnerId.Value,
+                            NotificationTitle = notificationTitle,
+                            NotificationText = notificationText,
+                            NotificationType = notificationType,
+                            TargetUrl =
+                                $"/Owner/Place/ManagePlaces?placeTab=place-list-tab&focusPlace={p.PlaceId}",
+                            ReferenceType = NotificationReferenceTypes.Place,
+                            ReferenceId = p.PlaceId
+                        });
+
+                        await _db.SaveChangesAsync(HttpContext.RequestAborted);
+                    }
+                }
+            }
+
             return Json(new { success = true, message = msg });
         }
 
@@ -990,12 +1062,99 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
             UpdateStatus(id, "Active", null, L("تم اعتماد المنشأة بنجاح.", "The place was approved successfully."));
         [HttpPost]
         [RequireAdminPermission(AdminPermissionKeys.Places.Review)]
-        public Task<IActionResult> RejectPlace([FromBody] PlaceActionDto m) =>
-            UpdateStatus(m.Id, "Rejected", m.Reason, L("تم رفض المنشأة وإرسال السبب للمالك.", "The place was rejected and the reason was sent to the owner."));
+        public async Task<IActionResult> RejectPlace([FromBody] PlaceActionDto m)
+        {
+            var reason = m?.Reason?.Trim();
+            if (m == null || m.Id <= 0 || string.IsNullOrWhiteSpace(reason) || reason.Length < 5)
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = L(
+                        "يجب كتابة سبب رفض واضح لا يقل عن 5 أحرف.",
+                        "A clear rejection reason of at least 5 characters is required.")
+                });
+            }
+
+            return await UpdateStatus(
+                m.Id,
+                "Rejected",
+                reason,
+                L(
+                    "تم رفض المنشأة وإرسال السبب للمالك.",
+                    "The place was rejected and the reason was sent to the owner."));
+        }
+
+        [HttpPost]
+        [RequireAdminPermission(AdminPermissionKeys.Places.Review)]
+        public async Task<IActionResult> RestoreRejectedPlace([FromBody] int id)
+        {
+            if (id <= 0)
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = L("رقم المنشأة غير صحيح.", "The place id is invalid.")
+                });
+            }
+
+            var currentStatus = await _db.Places
+                .AsNoTracking()
+                .Where(place => place.PlaceId == id)
+                .Select(place => place.Status)
+                .FirstOrDefaultAsync(HttpContext.RequestAborted);
+
+            if (currentStatus == null)
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = L("لم يتم العثور على المنشأة.", "The place was not found.")
+                });
+            }
+
+            if (!string.Equals(currentStatus, "Rejected", StringComparison.OrdinalIgnoreCase))
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = L(
+                        "إعادة القبول متاحة للمنشآت المرفوضة فقط.",
+                        "Only rejected places can be restored.")
+                });
+            }
+
+            return await UpdateStatus(
+                id,
+                "Active",
+                null,
+                L(
+                    "تمت إعادة قبول المنشأة وتفعيلها وإشعار المالك.",
+                    "The place was restored, activated, and its owner was notified."));
+        }
+
         [HttpPost]
         [RequireAdminPermission(AdminPermissionKeys.Places.ChangeStatus)]
-        public Task<IActionResult> SuspendPlace([FromBody] PlaceActionDto m) =>
-            UpdateStatus(m.Id, "Suspended", m.Reason, L("تم تعليق المنشأة.", "The place was suspended."));
+        public async Task<IActionResult> SuspendPlace([FromBody] PlaceActionDto m)
+        {
+            var reason = m?.Reason?.Trim();
+            if (m == null || m.Id <= 0 || string.IsNullOrWhiteSpace(reason) || reason.Length < 5)
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = L(
+                        "يجب كتابة سبب تعليق واضح لا يقل عن 5 أحرف.",
+                        "A clear suspension reason of at least 5 characters is required.")
+                });
+            }
+
+            return await UpdateStatus(
+                m.Id,
+                "Suspended",
+                reason,
+                L("تم تعليق المنشأة وإشعار المالك.", "The place was suspended and its owner was notified."));
+        }
         [HttpPost]
         [RequireAdminPermission(AdminPermissionKeys.Places.Delete)]
         public Task<IActionResult> DeletePlace([FromBody] int id) =>
