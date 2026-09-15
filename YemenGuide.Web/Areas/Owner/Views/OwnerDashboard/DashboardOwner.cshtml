@@ -1,3 +1,4 @@
+@using System
 @using System.Linq
 @using System.Text.Json
 @model YemenGuide.Core.DTOs.Owner.OwnerDashboardDto
@@ -13,8 +14,12 @@
     string Initial(string? value) => string.IsNullOrWhiteSpace(value) ? "؟" : value.Trim().Substring(0, 1);
 
     var attentionCount = Model.AttentionItems.Sum(item => item.Count);
-    var todayBookings = Model.TodayOperation.Bookings.Take(4).ToList();
-    var latestReviews = Model.Reviews.LatestReviews.Take(2).ToList();
+    var todayBookings = Model.TodayOperation.Bookings.Take(5).ToList();
+    var latestReviews = Model.Reviews.LatestReviews.Take(3).ToList();
+    var recentActivities = Model.RecentActivities.Take(7).ToList();
+    var roundedRating = Model.Reviews.TotalReviews > 0
+        ? Math.Clamp((int)Math.Round(Model.Reviews.AverageRating, MidpointRounding.AwayFromZero), 0, 5)
+        : 0;
 
     var dashboardJson = JsonSerializer.Serialize(
         new
@@ -42,65 +47,69 @@
 
 @section Styles {
     <link rel="stylesheet" href="~/lib/sweetalert2/sweetalert2.min.css" />
+    <!-- الملف القديم محفوظ فقط لأن منبثقة الترحيب بالفترة التجريبية تعتمد على أنماطه -->
     <link rel="stylesheet" href="~/css/owner/dashboard-owner.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/owner/dashboard-owner-live.css" asp-append-version="true" />
 }
 
-<div class="owner-dashboard-page odc-dashboard"
+<div class="odl-page"
      data-owner-dashboard
      data-place-id="@(Model.PlaceId?.ToString() ?? string.Empty)">
 
     @if (!Model.HasPlace)
     {
-        <section class="odc-empty" aria-labelledby="odcEmptyTitle">
-            <span class="odc-empty__icon"><i class="bi bi-buildings"></i></span>
-            <div>
-                <span class="odc-eyebrow">ابدأ من هنا</span>
-                <h1 id="odcEmptyTitle">أضف منشأتك الأولى</h1>
-                <p>بعد إضافة المنشأة ستظهر لك الحجوزات، التشغيل، المالية والتقييمات في لوحة واحدة مختصرة.</p>
-            </div>
-            <a class="odc-btn odc-btn--primary"
+        <section class="odl-no-place">
+            <i class="bi bi-building-add"></i>
+            <h1>لا توجد منشأة مرتبطة بالحساب</h1>
+            <p>لا نعرض أرقامًا افتراضية في لوحة التحكم. أضف منشأة أولًا، وبعدها ستظهر البيانات الفعلية المسجلة لها تلقائيًا.</p>
+            <a class="odl-action odl-action--primary"
                href="@(isAdminPlaceAccount ? "/Admin/Places/PlaceManagement" : "/Owner/Place/ManagePlaces?placeTab=add-place-tab")">
-                <i class="bi bi-building-add"></i>
-                @(isAdminPlaceAccount ? "العودة إلى إدارة المنشآت" : "إضافة منشأة")
+                <i class="bi bi-plus-lg"></i>
+                @(isAdminPlaceAccount ? "إدارة المنشآت" : "إضافة منشأة")
             </a>
         </section>
     }
     else
     {
-        <header class="odc-hero">
-            <div class="odc-hero__copy">
-                <span class="odc-eyebrow"><i class="bi bi-speedometer2"></i> ملخص المنشأة</span>
-                <h1><span data-live-greeting>أهلًا</span> @Model.OwnerName</h1>
-                <p>أهم ما تحتاجه اليوم في <strong>@Model.PlaceName</strong> بدون تفاصيل زائدة.</p>
-
-                <div class="odc-place-meta">
-                    <span><i class="bi bi-building"></i>@Model.PlaceName</span>
-                    @if (!string.IsNullOrWhiteSpace(Model.CategoryName))
-                    {
-                        <span><i class="bi bi-grid"></i>@Model.CategoryName</span>
-                    }
-                    <span class="odc-status @(Model.IsPlaceAvailable ? "is-active" : "is-paused")">
-                        <i></i>@Model.PlaceStatusLabel
-                    </span>
-                    <span><i class="bi bi-clock"></i>تحديث @Model.GeneratedAt.ToString("HH:mm")</span>
-                </div>
+        <header class="odl-header">
+            <div class="odl-header__copy">
+                <span class="odl-kicker"><i class="bi bi-speedometer2"></i> لوحة المنشأة</span>
+                <h1>@Model.PlaceName</h1>
+                <p>ملخص تشغيلي مباشر للمنشأة المختارة، بدون أرقام تجريبية أو بيانات تمثيلية.</p>
             </div>
 
-            <nav class="odc-quick-actions" aria-label="إجراءات سريعة">
-                <a href="/Owner/Reservation/ManageReservations">
-                    <i class="bi bi-calendar-check"></i>
-                    <span>الحجوزات</span>
+            <div class="odl-header__actions">
+                <a class="odl-action" href="/Owner/Reservation/ManageReservations">
+                    <i class="bi bi-calendar-check"></i> الحجوزات
                 </a>
-                <a href="/Owner/Advertisements/AdvertisementManagement">
-                    <i class="bi bi-megaphone"></i>
-                    <span>الإعلانات</span>
+                <a class="odl-action" href="/Owner/Financials?financeTab=overview&placeId=@Model.PlaceId">
+                    <i class="bi bi-wallet2"></i> المالية
                 </a>
-                <a href="/Owner/Financials?financeTab=overview&placeId=@Model.PlaceId">
-                    <i class="bi bi-wallet2"></i>
-                    <span>المالية</span>
+                <a class="odl-action odl-action--primary" href="/Owner/Advertisements/AdvertisementManagement">
+                    <i class="bi bi-megaphone"></i> الإعلانات
                 </a>
-            </nav>
+            </div>
         </header>
+
+        <div class="odl-context">
+            <span class="odl-chip"><i class="bi bi-person"></i><strong>@Model.OwnerName</strong></span>
+            @if (!string.IsNullOrWhiteSpace(Model.CategoryName))
+            {
+                <span class="odl-chip"><i class="bi bi-grid"></i>@Model.CategoryName</span>
+            }
+            <span class="odl-chip odl-chip--status @(Model.IsPlaceAvailable ? "" : "is-paused")">
+                <i></i>@Model.PlaceStatusLabel
+            </span>
+            <span class="odl-chip"><i class="bi bi-clock-history"></i>آخر قراءة @Model.GeneratedAt.ToString("HH:mm")</span>
+        </div>
+
+        <div class="odl-source-note">
+            <i class="bi bi-database-check"></i>
+            <span>
+                الأرقام أدناه تُقرأ من قاعدة البيانات الفعلية. الدفع يُنسب إلى تاريخ اعتماد الدفع، والتحصيل إلى تاريخ التحصيل،
+                والعمولة إلى تاريخ خصمها، والاسترداد إلى تاريخ تنفيذه؛ لذلك لا نستخدم تاريخ إنشاء الحجز كبديل لحركة مالية.
+            </span>
+        </div>
 
         @if (!isAdminPlaceAccount &&
              Model.TrialStatus.HasTrialHistory &&
@@ -119,9 +128,9 @@
                 ? (trial.NeedsTopUp ? "is-danger" : "is-success")
                 : trial.IsEndingSoon
                     ? "is-warning"
-                    : "is-info";
+                    : "";
 
-            <section class="odc-trial @trialTone"
+            <section class="odl-trial @trialTone"
                      data-trial-status
                      data-trial-active="@(trial.IsActive ? "true" : "false")"
                      data-trial-expired="@(trial.IsExpired ? "true" : "false")"
@@ -133,27 +142,27 @@
                      data-trial-missing="@trial.MissingGuaranteeBalance.ToString(System.Globalization.CultureInfo.InvariantCulture)"
                      data-trial-currency="@trial.Currency"
                      data-trial-balance-url="@trialBalanceUrl">
-                <span class="odc-trial__icon"><i class="bi @(trial.IsExpired ? "bi-hourglass-bottom" : "bi-gift")"></i></span>
-                <div class="odc-trial__copy">
+                <span class="odl-trial__icon"><i class="bi @(trial.IsExpired ? "bi-hourglass-bottom" : "bi-gift")"></i></span>
+                <div>
                     @if (trial.IsActive)
                     {
-                        <strong>الفترة التجريبية: متبقي @trial.RemainingTrialDays @(trial.RemainingTrialDays == 1 ? "يوم" : "أيام")</strong>
+                        <strong>الفترة التجريبية مستمرة — متبقي @trial.RemainingTrialDays @(trial.RemainingTrialDays == 1 ? "يوم" : "أيام")</strong>
                         <small>تنتهي في @trial.EndsAt.Value.ToString("dd MMMM yyyy")</small>
                     }
                     else if (trial.NeedsTopUp && !trial.CanAcceptNewBookings)
                     {
-                        <strong>الحجوزات الجديدة متوقفة مؤقتًا</strong>
-                        <small>ينقص رصيد الضمان @trial.MissingGuaranteeBalance.ToString("N0") @trial.Currency</small>
+                        <strong>استقبال الحجوزات الجديدة متوقف ماليًا</strong>
+                        <small>الرصيد الناقص: @trial.MissingGuaranteeBalance.ToString("N0") @trial.Currency</small>
                     }
                     else
                     {
-                        <strong>الحساب التشغيلي جاهز</strong>
-                        <small>رصيد الضمان مستوفٍ ولا يوجد إجراء مطلوب.</small>
+                        <strong>الفترة التجريبية انتهت والحساب جاهز</strong>
+                        <small>رصيد الضمان الحالي يسمح باستمرار التشغيل.</small>
                     }
                 </div>
                 @if (trial.IsActive)
                 {
-                    <div class="odc-trial__countdown" data-trial-countdown>
+                    <div class="odl-trial__countdown" data-trial-countdown>
                         <span>الوقت المتبقي</span>
                         <strong>جارٍ الحساب...</strong>
                     </div>
@@ -162,236 +171,293 @@
             </section>
         }
 
-        <section class="odc-kpis" aria-label="أهم مؤشرات المنشأة">
-            <article class="odc-kpi">
-                <span class="odc-kpi__icon is-cyan"><i class="bi bi-calendar-plus"></i></span>
-                <div><small>حجوزات جديدة اليوم</small><strong data-counter-value="@Model.Kpis.NewBookingsToday">@Model.Kpis.NewBookingsToday.ToString("N0")</strong></div>
-            </article>
-
-            <article class="odc-kpi">
-                <span class="odc-kpi__icon is-blue"><i class="bi bi-broadcast"></i></span>
-                <div><small>نشط الآن</small><strong data-counter-value="@Model.TodayOperation.ActiveNow">@Model.TodayOperation.ActiveNow.ToString("N0")</strong></div>
-            </article>
-
-            <article class="odc-kpi">
-                <span class="odc-kpi__icon is-green"><i class="bi bi-cash-stack"></i></span>
-                <div>
-                    <small>إيراد الشهر</small>
-                    <strong>@Money(Model.Kpis.MonthlyRevenue)</strong>
-                    <em>@Model.Currency · @(Model.Kpis.RevenueChangePercent >= 0 ? "+" : "")@Model.Kpis.RevenueChangePercent.ToString("0.#")%</em>
+        <section class="odl-kpis" aria-label="المؤشرات الرئيسية">
+            <article class="odl-kpi">
+                <div class="odl-kpi__top">
+                    <small>طلبات أُنشئت اليوم</small>
+                    <span class="odl-kpi__icon"><i class="bi bi-calendar-plus"></i></span>
                 </div>
+                <strong data-counter-value="@Model.Kpis.NewBookingsToday">@Model.Kpis.NewBookingsToday.ToString("N0")</strong>
+                <em>حسب CreatedAt المسجل للحجز</em>
             </article>
 
-            <article class="odc-kpi">
-                <span class="odc-kpi__icon is-orange"><i class="bi bi-star-fill"></i></span>
-                <div><small>رضا العملاء</small><strong>@Model.Kpis.AverageRating.ToString("0.0")</strong><em>@Model.Kpis.ReviewsCount تقييم</em></div>
+            <article class="odl-kpi odl-kpi--navy">
+                <div class="odl-kpi__top">
+                    <small>حجوزات نشطة الآن</small>
+                    <span class="odl-kpi__icon"><i class="bi bi-broadcast"></i></span>
+                </div>
+                <strong data-counter-value="@Model.TodayOperation.ActiveNow">@Model.TodayOperation.ActiveNow.ToString("N0")</strong>
+                <em>بدأت ولم ينته وقتها حتى الآن</em>
+            </article>
+
+            <article class="odl-kpi odl-kpi--green">
+                <div class="odl-kpi__top">
+                    <small>صافي التحصيل هذا الشهر</small>
+                    <span class="odl-kpi__icon"><i class="bi bi-cash-stack"></i></span>
+                </div>
+                <strong>@Money(Model.Kpis.MonthlyRevenue)</strong>
+                <em>@Model.Currency · بعد الاسترداد والعمولة المنفذة</em>
+            </article>
+
+            <article class="odl-kpi odl-kpi--orange">
+                <div class="odl-kpi__top">
+                    <small>متوسط التقييم</small>
+                    <span class="odl-kpi__icon"><i class="bi bi-star"></i></span>
+                </div>
+                <strong>@(Model.Reviews.TotalReviews > 0 ? Model.Reviews.AverageRating.ToString("0.0") : "—")</strong>
+                <em>@Model.Reviews.TotalReviews تقييم فعلي</em>
             </article>
         </section>
 
-        <section class="odc-grid odc-grid--top">
-            <article class="odc-card odc-card--chart">
-                <header class="odc-card__head">
+        <section class="odl-grid">
+            <article class="odl-card">
+                <header class="odl-card__head">
                     <div>
-                        <span class="odc-eyebrow">اتجاه الحجوزات</span>
-                        <h2>أداء آخر 30 يومًا</h2>
+                        <span class="odl-kicker">تشغيل اليوم</span>
+                        <h2>@DateTime.Now.ToString("dddd، dd MMMM")</h2>
+                        <p>الحركة المرتبطة بوقت الوصول والمغادرة المسجل للحجوزات.</p>
                     </div>
-                    <div class="odc-range-switch" role="group" aria-label="نطاق الرسم">
-                        <button type="button" data-booking-range="7">7 أيام</button>
-                        <button type="button" data-booking-range="14">14 يوم</button>
-                        <button type="button" class="is-active" data-booking-range="30">30 يوم</button>
-                    </div>
+                    <a class="odl-card__link" href="/Owner/Reservation/ManageReservations">كل الحجوزات <i class="bi bi-arrow-left"></i></a>
                 </header>
+                <div class="odl-card__body">
+                    <div class="odl-operation">
+                        <div><span><i class="bi bi-box-arrow-in-down-left"></i> وصول اليوم</span><b>@Model.TodayOperation.ArrivalsToday</b></div>
+                        <div><span><i class="bi bi-broadcast"></i> نشطة الآن</span><b>@Model.TodayOperation.ActiveNow</b></div>
+                        <div><span><i class="bi bi-box-arrow-up-right"></i> مغادرة اليوم</span><b>@Model.TodayOperation.DeparturesToday</b></div>
+                        <div>
+                            @if (Model.TodayOperation.HasRoomUnits)
+                            {
+                                <span><i class="bi bi-door-open"></i> غرف متاحة الآن</span><b>@Model.TodayOperation.AvailableRoomUnits</b>
+                            }
+                            else
+                            {
+                                <span><i class="bi bi-calendar2"></i> حجوزات تبدأ اليوم</span><b>@Model.Kpis.TodayBookings</b>
+                            }
+                        </div>
+                    </div>
 
-                <div class="odc-chart" id="ownerBookingChart" aria-label="رسم أداء الحجوزات"></div>
-
-                <div class="odc-summary-chips">
-                    <span><small>إجمالي الشهر</small><b>@Model.BookingSummary.TotalThisMonth</b></span>
-                    <span><small>مؤكدة</small><b>@Model.BookingSummary.Confirmed</b></span>
-                    <span><small>مكتملة</small><b>@Model.BookingSummary.Completed</b></span>
-                    <span><small>الإلغاء</small><b>@Model.BookingSummary.CancellationRate.ToString("0.#")%</b></span>
+                    @if (todayBookings.Count == 0)
+                    {
+                        <div class="odl-empty"><i class="bi bi-calendar2-check"></i><span>لا توجد حركة وصول أو مغادرة مسجلة لهذا اليوم.</span></div>
+                    }
+                    else
+                    {
+                        <div class="odl-booking-list">
+                            @foreach (var booking in todayBookings)
+                            {
+                                <a class="odl-booking" href="@booking.Url">
+                                    <span class="odl-avatar">@Initial(booking.CustomerName)</span>
+                                    <div>
+                                        <strong>@booking.CustomerName</strong>
+                                        <small>#@booking.BookingId · @booking.ResourceName · @booking.StartDate.ToString("HH:mm")</small>
+                                    </div>
+                                    <span class="odl-state">@booking.BookingStateLabel</span>
+                                </a>
+                            }
+                        </div>
+                    }
                 </div>
             </article>
 
-            <aside class="odc-card odc-card--attention">
-                <header class="odc-card__head">
+            <aside class="odl-card">
+                <header class="odl-card__head">
                     <div>
-                        <span class="odc-eyebrow">الأولوية الآن</span>
-                        <h2>يحتاج انتباهك</h2>
+                        <span class="odl-kicker">الأولوية الآن</span>
+                        <h2>يحتاج إجراء</h2>
+                        <p>حالات موجودة فعلًا ولم تُغلق بعد.</p>
                     </div>
-                    <span class="odc-count @(attentionCount > 0 ? "has-items" : "")">@attentionCount</span>
+                    <span class="odl-alert-count @(attentionCount > 0 ? "has-items" : "")">@attentionCount</span>
                 </header>
-
-                @if (Model.AttentionItems.Count == 0)
-                {
-                    <div class="odc-all-good">
-                        <span><i class="bi bi-check2-circle"></i></span>
-                        <div><strong>كل شيء تحت السيطرة</strong><small>لا توجد إجراءات عاجلة الآن.</small></div>
-                    </div>
-                }
-                else
-                {
-                    <div class="odc-attention-list">
-                        @foreach (var item in Model.AttentionItems.Take(4))
-                        {
-                            <a class="odc-attention-item is-@item.Tone" href="@item.Url">
-                                <span><i class="bi @item.Icon"></i></span>
-                                <div><strong>@item.Title</strong><small>@item.Description</small></div>
-                                <b>@item.Count</b>
-                                <i class="bi bi-chevron-left"></i>
-                            </a>
-                        }
-                    </div>
-                }
+                <div class="odl-card__body">
+                    @if (Model.AttentionItems.Count == 0)
+                    {
+                        <div class="odl-empty"><i class="bi bi-check2-circle"></i><span>لا توجد إجراءات معلقة الآن.</span></div>
+                    }
+                    else
+                    {
+                        <div class="odl-attention-list">
+                            @foreach (var item in Model.AttentionItems.Take(5))
+                            {
+                                <a class="odl-attention is-@item.Tone" href="@item.Url">
+                                    <span class="odl-attention__icon"><i class="bi @item.Icon"></i></span>
+                                    <div><strong>@item.Title</strong><small>@item.Description</small></div>
+                                    <b>@item.Count</b>
+                                </a>
+                            }
+                        </div>
+                    }
+                </div>
             </aside>
         </section>
 
-        <section class="odc-grid odc-grid--middle">
-            <article class="odc-card">
-                <header class="odc-card__head">
-                    <div>
-                        <span class="odc-eyebrow">تشغيل اليوم</span>
-                        <h2>@DateTime.Now.ToString("dddd، dd MMMM")</h2>
-                    </div>
-                    <a class="odc-link" href="/Owner/Reservation/ManageReservations">كل الحجوزات <i class="bi bi-arrow-left"></i></a>
-                </header>
-
-                <div class="odc-operation-strip">
-                    <span><i class="bi bi-box-arrow-in-down-left"></i><small>وصول</small><b>@Model.TodayOperation.ArrivalsToday</b></span>
-                    <span><i class="bi bi-broadcast"></i><small>نشطة</small><b>@Model.TodayOperation.ActiveNow</b></span>
-                    <span><i class="bi bi-box-arrow-up-right"></i><small>مغادرة</small><b>@Model.TodayOperation.DeparturesToday</b></span>
-                    @if (Model.TodayOperation.HasRoomUnits)
-                    {
-                        <span><i class="bi bi-door-open"></i><small>متاحة</small><b>@Model.TodayOperation.AvailableRoomUnits</b></span>
-                    }
+        <section class="odl-card" style="margin-bottom:14px">
+            <header class="odl-card__head">
+                <div>
+                    <span class="odl-kicker">الحجوزات حسب تاريخ الحدث</span>
+                    <h2>آخر 30 يومًا</h2>
+                    <p>الأزرق = تاريخ إنشاء الطلب، الأخضر = تاريخ الإكمال، الأحمر = تاريخ الإغلاق/الإلغاء.</p>
                 </div>
+                <div class="odl-range" role="group" aria-label="نطاق الرسم">
+                    <button type="button" data-booking-range="7">7 أيام</button>
+                    <button type="button" data-booking-range="14">14 يوم</button>
+                    <button type="button" class="is-active" data-booking-range="30">30 يوم</button>
+                </div>
+            </header>
 
-                <div class="odc-booking-list">
-                    @if (todayBookings.Count == 0)
+            <div class="odl-chart" id="ownerBookingChart" aria-label="رسم حركة الحجوزات"></div>
+
+            <div class="odl-summary">
+                <div><small>طلبات أُنشئت هذا الشهر</small><b>@Model.BookingSummary.TotalThisMonth</b></div>
+                <div><small>قيد المعالجة</small><b>@Model.BookingSummary.Pending</b></div>
+                <div><small>مؤكدة حاليًا</small><b>@Model.BookingSummary.Confirmed</b></div>
+                <div><small>أُغلقت بدون إيراد</small><b>@Model.BookingSummary.Cancelled</b></div>
+            </div>
+        </section>
+
+        <section class="odl-grid odl-grid--equal">
+            <article class="odl-card">
+                <header class="odl-card__head">
+                    <div>
+                        <span class="odl-kicker">المالية الفعلية</span>
+                        <h2>حركات الشهر الحالي</h2>
+                        <p>بحسب تواريخ الدفع والتحصيل والاسترداد وخصم العمولة.</p>
+                    </div>
+                    <a class="odl-card__link" href="/Owner/Financials?financeTab=overview&placeId=@Model.PlaceId">التفاصيل <i class="bi bi-arrow-left"></i></a>
+                </header>
+                <div class="odl-card__body">
+                    <div class="odl-finance-hero">
+                        <div>
+                            <small>صافي الحركة النقدية المسجلة</small>
+                            <strong>@Money(Model.Finance.NetCollectedRevenue)</strong>
+                            <em>@Model.Currency</em>
+                        </div>
+                        <span class="odl-kpi__icon"><i class="bi bi-wallet2"></i></span>
+                    </div>
+
+                    <div class="odl-finance-grid">
+                        <div class="odl-finance-item"><span><i class="bi bi-phone"></i> دفع معتمد إلكترونيًا</span><b>@Money(Model.Finance.PaidOnline) @Model.Currency</b></div>
+                        <div class="odl-finance-item"><span><i class="bi bi-shop"></i> محصل في المنشأة</span><b>@Money(Model.Finance.CollectedAtProperty) @Model.Currency</b></div>
+                        <div class="odl-finance-item is-negative"><span><i class="bi bi-arrow-counterclockwise"></i> استردادات منفذة</span><b>-@Money(Model.Finance.RefundedAmount) @Model.Currency</b></div>
+                        <div class="odl-finance-item is-negative"><span><i class="bi bi-percent"></i> عمولة خُصمت</span><b>-@Money(Model.Finance.PlatformCommission) @Model.Currency</b></div>
+                        <div class="odl-finance-item"><span><i class="bi bi-calendar-range"></i> قيمة الحجوزات المجدولة للشهر</span><b>@Money(Model.Finance.GrossBookingValue) @Model.Currency</b></div>
+                        <div class="odl-finance-item"><span><i class="bi bi-graph-up-arrow"></i> مقارنة بالشهر السابق</span><b>@(Model.Kpis.RevenueChangePercent > 0 ? "+" : "")@Model.Kpis.RevenueChangePercent.ToString("0.#")%</b></div>
+                    </div>
+
+                    <div id="ownerFinanceChart" class="odl-chart" aria-label="حركة التحصيل خلال ستة أشهر"></div>
+
+                    @if (!isAdminPlaceAccount)
                     {
-                        <div class="odc-empty-inline"><i class="bi bi-calendar2-check"></i><span>لا توجد حركة حجز لهذا اليوم.</span></div>
-                    }
-                    else
-                    {
-                        @foreach (var booking in todayBookings)
-                        {
-                            <a class="odc-booking-row" href="@booking.Url">
-                                <span class="odc-avatar">@Initial(booking.CustomerName)</span>
-                                <div><strong>@booking.CustomerName</strong><small>#@booking.BookingId · @booking.ResourceName</small></div>
-                                <span class="odc-mini-state">@booking.BookingStateLabel</span>
-                                <i class="bi bi-chevron-left"></i>
-                            </a>
-                        }
+                        <a class="odl-guarantee" href="/Owner/Financials?financeTab=balance&placeId=@Model.PlaceId">
+                            <span><i class="bi bi-shield-check"></i></span>
+                            <div>
+                                <small>رصيد ضمان العمولات الفعلي</small>
+                                <strong>@Money(Model.Guarantee.AvailableBalance) @Model.Currency</strong>
+                            </div>
+                            <em>@Model.Guarantee.AccountStatusLabel</em>
+                        </a>
                     }
                 </div>
             </article>
 
-            <article class="odc-card">
-                <header class="odc-card__head">
+            <article class="odl-card">
+                <header class="odl-card__head">
                     <div>
-                        <span class="odc-eyebrow">المالية</span>
-                        <h2>ملخص هذا الشهر</h2>
+                        <span class="odl-kicker">تجربة العملاء</span>
+                        <h2>التقييمات المنشورة</h2>
+                        <p>لا نعرض نجومًا ممتلئة إذا لم توجد تقييمات حقيقية.</p>
                     </div>
-                    <a class="odc-link" href="/Owner/Financials?financeTab=overview&placeId=@Model.PlaceId">التفاصيل <i class="bi bi-arrow-left"></i></a>
+                    <a class="odl-card__link" href="/Owner/Chat/ChatInterface?communicationTab=reviews">كل التقييمات <i class="bi bi-arrow-left"></i></a>
                 </header>
-
-                <div class="odc-finance-main">
-                    <div>
-                        <small>صافي المحصل</small>
-                        <strong>@Money(Model.Finance.NetCollectedRevenue)</strong>
-                        <span>@Model.Currency</span>
-                    </div>
-                    <span class="odc-finance-main__icon"><i class="bi bi-wallet2"></i></span>
-                </div>
-
-                <div class="odc-finance-grid">
-                    <span><small>قيمة الحجوزات</small><b>@Money(Model.Finance.GrossBookingValue)</b></span>
-                    <span><small>مدفوع إلكترونيًا</small><b>@Money(Model.Finance.PaidOnline)</b></span>
-                    <span><small>محصل في المنشأة</small><b>@Money(Model.Finance.CollectedAtProperty)</b></span>
-                    <span><small>مستردات</small><b class="is-danger">-@Money(Model.Finance.RefundedAmount)</b></span>
-                </div>
-
-                @if (!isAdminPlaceAccount)
-                {
-                    <a class="odc-guarantee" href="/Owner/Financials?financeTab=balance&placeId=@Model.PlaceId">
-                        <span><i class="bi bi-shield-check"></i></span>
+                <div class="odl-card__body">
+                    <div class="odl-rating">
+                        <div class="odl-rating__number">@(Model.Reviews.TotalReviews > 0 ? Model.Reviews.AverageRating.ToString("0.0") : "—")</div>
                         <div>
-                            <small>رصيد ضمان العمولات</small>
-                            <strong>@Money(Model.Guarantee.AvailableBalance) @Model.Currency</strong>
+                            <div class="odl-stars" aria-label="متوسط التقييم">
+                                @for (var star = 1; star <= 5; star++)
+                                {
+                                    var starClass = star <= roundedRating ? "bi-star-fill" : "bi-star";
+                                    <i class="bi @starClass"></i>
+                                }
+                            </div>
+                            <small>@Model.Reviews.TotalReviews تقييم · @Model.Reviews.AwaitingReply بدون رد</small>
                         </div>
-                        <em>@Model.Guarantee.AccountStatusLabel</em>
-                        <i class="bi bi-chevron-left"></i>
-                    </a>
-                }
-                else
-                {
-                    <div class="odc-guarantee is-admin">
-                        <span><i class="bi bi-shield-check"></i></span>
-                        <div><small>ضمان العمولة</small><strong>غير مطلوب للمنشأة الإدارية</strong></div>
-                        <em>معفاة</em>
                     </div>
-                }
+
+                    @if (latestReviews.Count == 0)
+                    {
+                        <div class="odl-empty"><i class="bi bi-star"></i><span>لا توجد تقييمات منشورة لهذه المنشأة حتى الآن.</span></div>
+                    }
+                    else
+                    {
+                        <div class="odl-review-list">
+                            @foreach (var review in latestReviews)
+                            {
+                                <a class="odl-review" href="@review.Url">
+                                    <span class="odl-avatar">@Initial(review.CustomerName)</span>
+                                    <div>
+                                        <strong>@review.CustomerName</strong>
+                                        <p>@(string.IsNullOrWhiteSpace(review.ReviewText) ? "تقييم بدون تعليق نصي." : review.ReviewText)</p>
+                                    </div>
+                                    <span class="odl-review__score">@review.Stars <i class="bi bi-star-fill"></i></span>
+                                </a>
+                            }
+                        </div>
+                    }
+                </div>
             </article>
         </section>
 
-        <section class="odc-grid odc-grid--bottom">
-            <article class="odc-card">
-                <header class="odc-card__head">
+        <section class="odl-grid odl-grid--equal">
+            <article class="odl-card">
+                <header class="odl-card__head">
                     <div>
-                        <span class="odc-eyebrow">تجربة العميل</span>
-                        <h2>رضا العملاء</h2>
+                        <span class="odl-kicker">التسويق هذا الشهر</span>
+                        <h2>أحداث الإعلانات المسجلة</h2>
+                        <p>الأرقام مأخوذة من AdvertisementEvents للمنشأة الحالية.</p>
                     </div>
-                    <a class="odc-link" href="/Owner/Chat/ChatInterface?communicationTab=reviews">كل التقييمات <i class="bi bi-arrow-left"></i></a>
+                    <a class="odl-card__link" href="/Owner/Advertisements/AdvertisementManagement">الإعلانات <i class="bi bi-arrow-left"></i></a>
                 </header>
-
-                <div class="odc-rating-summary">
-                    <strong>@Model.Reviews.AverageRating.ToString("0.0")</strong>
-                    <div>
-                        <span class="odc-stars" aria-label="التقييم من خمسة"><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i></span>
-                        <small>@Model.Reviews.TotalReviews تقييم · @Model.Reviews.AwaitingReply تنتظر ردك</small>
+                <div class="odl-card__body">
+                    <div class="odl-marketing">
+                        <div><i class="bi bi-megaphone"></i><small>إعلانات نشطة</small><b>@Model.Marketing.ActiveAdvertisements</b></div>
+                        <div><i class="bi bi-eye"></i><small>مشاهدات</small><b>@Number(Model.Marketing.Impressions)</b></div>
+                        <div><i class="bi bi-cursor"></i><small>نقرات</small><b>@Number(Model.Marketing.Clicks)</b></div>
+                        <div><i class="bi bi-check2-circle"></i><small>تحويلات</small><b>@Number(Model.Marketing.Conversions)</b></div>
                     </div>
-                </div>
-
-                <div class="odc-review-list">
-                    @if (latestReviews.Count == 0)
-                    {
-                        <div class="odc-empty-inline"><i class="bi bi-star"></i><span>لا توجد تقييمات حتى الآن.</span></div>
-                    }
-                    else
-                    {
-                        @foreach (var review in latestReviews)
-                        {
-                            <a href="@review.Url" class="odc-review-row">
-                                <span class="odc-avatar">@Initial(review.CustomerName)</span>
-                                <div>
-                                    <span><strong>@review.CustomerName</strong><b>@review.Stars <i class="bi bi-star-fill"></i></b></span>
-                                    <p>@(string.IsNullOrWhiteSpace(review.ReviewText) ? "تقييم بدون تعليق نصي." : review.ReviewText)</p>
-                                </div>
-                                <small class="@(review.HasOwnerReply ? "is-done" : "is-waiting")">@(review.HasOwnerReply ? "تم الرد" : "ينتظر ردك")</small>
-                            </a>
-                        }
-                    }
+                    <div class="odl-marketing-foot">
+                        <span><i class="bi bi-heart"></i> @Model.Marketing.Favorites إضافة للمفضلة</span>
+                        <span><i class="bi bi-graph-up"></i> معدل التحويل @Model.Marketing.ConversionRate.ToString("0.##")%</span>
+                        <span><i class="bi bi-tags"></i> @Model.Marketing.ActivePromotions عروض نشطة</span>
+                    </div>
                 </div>
             </article>
 
-            <article class="odc-card">
-                <header class="odc-card__head">
+            <article class="odl-card">
+                <header class="odl-card__head">
                     <div>
-                        <span class="odc-eyebrow">التسويق</span>
-                        <h2>أداء الوصول</h2>
+                        <span class="odl-kicker">آخر النشاطات</span>
+                        <h2>ما حدث مؤخرًا</h2>
+                        <p>حجوزات وتقييمات ورسائل وحركات مالية فعلية.</p>
                     </div>
-                    <a class="odc-link" href="/Owner/Advertisements/AdvertisementManagement">الإعلانات <i class="bi bi-arrow-left"></i></a>
                 </header>
-
-                <div class="odc-marketing-grid">
-                    <span><i class="bi bi-megaphone"></i><small>إعلانات نشطة</small><b>@Model.Marketing.ActiveAdvertisements</b></span>
-                    <span><i class="bi bi-eye"></i><small>المشاهدات</small><b>@Number(Model.Marketing.Impressions)</b></span>
-                    <span><i class="bi bi-cursor"></i><small>النقرات</small><b>@Number(Model.Marketing.Clicks)</b></span>
-                    <span><i class="bi bi-check2-circle"></i><small>التحويلات</small><b>@Number(Model.Marketing.Conversions)</b></span>
-                </div>
-
-                <div class="odc-marketing-foot">
-                    <span><i class="bi bi-heart-fill"></i> @Model.Marketing.Favorites في المفضلة</span>
-                    <span><i class="bi bi-graph-up-arrow"></i> معدل التحويل @Model.Marketing.ConversionRate.ToString("0.##")%</span>
+                <div class="odl-card__body">
+                    @if (recentActivities.Count == 0)
+                    {
+                        <div class="odl-empty"><i class="bi bi-activity"></i><span>لا توجد نشاطات مسجلة لعرضها بعد.</span></div>
+                    }
+                    else
+                    {
+                        <div class="odl-activity-list">
+                            @foreach (var activity in recentActivities)
+                            {
+                                <a class="odl-activity" href="@activity.Url">
+                                    <span class="odl-activity__icon"><i class="bi @activity.Icon"></i></span>
+                                    <div><strong>@activity.Title</strong><small>@activity.Description</small></div>
+                                    <time datetime="@activity.OccurredAt.ToString("O")">@activity.OccurredAt.ToString("dd/MM HH:mm")</time>
+                                </a>
+                            }
+                        </div>
+                    }
                 </div>
             </article>
         </section>
