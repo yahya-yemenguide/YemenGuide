@@ -265,6 +265,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             public Room? Room { get; set; }
             public PlacePackage? Package { get; set; }
             public User? Customer { get; set; }
+            public OwnerWallet? PaymentWallet { get; set; }
             public List<PlaceAdditionalService> Services { get; set; } = new();
             public Dictionary<int, int> ServiceQuantities { get; set; } = new();
             public HashSet<int> ComplimentaryServiceIds { get; set; } = new();
@@ -310,6 +311,49 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 booking.PaidAmount = ToDisplayCurrency(booking.PaidAmount, currency);
                 booking.RemainingAmount = ToDisplayCurrency(booking.RemainingAmount, currency);
             }
+        }
+
+        private async Task<List<OwnerManualWalletOptionDto>> GetOwnerManualWalletOptionsAsync(int ownerId)
+        {
+            return await _context.OwnerWallets
+                .AsNoTracking()
+                .Where(item =>
+                    item.OwnerId == ownerId &&
+                    item.IsActive == true &&
+                    item.Wallet.IsActive == true)
+                .OrderBy(item => item.Wallet.WalletName)
+                .ThenBy(item => item.OwnerWalletId)
+                .Select(item => new OwnerManualWalletOptionDto
+                {
+                    OwnerWalletId = item.OwnerWalletId,
+                    WalletId = item.WalletId,
+                    WalletName = item.Wallet.WalletName,
+                    AccountNumber = item.AccountNumber,
+                    BeneficiaryName = item.BeneficiaryName
+                })
+                .ToListAsync(HttpContext.RequestAborted);
+        }
+
+        private static string? BuildManualPaymentReference(OwnerWallet? wallet, string? referenceNumber)
+        {
+            var reference = referenceNumber?.Trim();
+            if (wallet == null)
+            {
+                return string.IsNullOrWhiteSpace(reference)
+                    ? null
+                    : reference.Length <= 100 ? reference : reference[..100];
+            }
+
+            var parts = new List<string>();
+            var walletName = wallet.Wallet?.WalletName?.Trim();
+            var accountNumber = wallet.AccountNumber?.Trim();
+            if (!string.IsNullOrWhiteSpace(walletName)) parts.Add(walletName);
+            if (!string.IsNullOrWhiteSpace(accountNumber)) parts.Add(accountNumber);
+            if (!string.IsNullOrWhiteSpace(reference)) parts.Add(reference);
+
+            var combined = string.Join(" | ", parts);
+            if (string.IsNullOrWhiteSpace(combined)) return null;
+            return combined.Length <= 100 ? combined : combined[..100];
         }
 
         // =====================================================================
@@ -371,6 +415,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             var supportsPackages = await _context.PlacePackages.AsNoTracking().AnyAsync(item =>
                 item.PlaceId == place.PlaceId && item.IsActive == true);
             var manualTemplate = ResolveManualBookingTemplate(place, supportsRooms, supportsPackages, totalUnits);
+            var ownerWallets = await GetOwnerManualWalletOptionsAsync(ownerId);
 
             var context = new OwnerCalendarContextDto
             {
@@ -399,7 +444,8 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 MaximumHorizonMonths = Math.Max(0, place.PlacePolicy?.MaximumHorizonMonths ?? 0),
                 ClosedDaysCsv = place.PlacePolicy?.ClosedDaysCsv ?? string.Empty,
                 CheckInTime = place.PlacePolicy?.CheckInTime ?? place.CheckInTime ?? string.Empty,
-                CheckOutTime = place.PlacePolicy?.CheckOutTime ?? place.CheckOutTime ?? string.Empty
+                CheckOutTime = place.PlacePolicy?.CheckOutTime ?? place.CheckOutTime ?? string.Empty,
+                Wallets = ownerWallets
             };
 
             return Json(new
@@ -848,6 +894,8 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             foreach (var service in rawServices)
                 service.Price = ToDisplayCurrency(service.Price, currency);
 
+            var ownerWallets = await GetOwnerManualWalletOptionsAsync(ownerId);
+
             return Json(new
             {
                 success = true,
@@ -862,7 +910,8 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                         : exceptionClosed ? "الفترة تتضمن يومًا مغلقًا من التقويم." : string.Empty,
                     Rooms = roomOptions,
                     Packages = packageOptions,
-                    Services = rawServices
+                    Services = rawServices,
+                    Wallets = ownerWallets
                 },
                 currency = currency.Currency,
                 currencyCode = currency.CurrencyCode,
@@ -920,8 +969,15 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 var now = DateTime.Now;
                 var isFreeBooking = quote.PublicQuote.TotalPrice <= 0m;
                 var isCollectedMode = IsState(request.PaymentMode, "Collected");
-                var paidAmount = isFreeBooking ? 0m
-                    : isCollectedMode ? Math.Round(Math.Max(0m, request.PaidAmount), 2) : 0m;
+                var paidAmount = isFreeBooking
+                    ? 0m
+                    : isCollectedMode
+                        ? Math.Round(
+                            request.PaidAmount > 0m
+                                ? request.PaidAmount
+                                : quote.PublicQuote.DepositAmount,
+                            2)
+                        : 0m;
                 var isCollected = !isFreeBooking && isCollectedMode && paidAmount > 0m;
 
                 if (paidAmount > quote.PublicQuote.TotalPrice)
@@ -1033,11 +1089,13 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     CommissionRateSnapshot = quote.PublicQuote.CommissionPercentage,
                     CommissionBaseAmount = quote.PublicQuote.TotalPrice,
                     CommissionStatus = quote.PublicQuote.PlatformCommission > 0m ? "Calculated" : "NotApplicable",
-                    TransferReferenceNumber = isCollected && !string.IsNullOrWhiteSpace(request.PaymentReferenceNumber)
-                        ? request.PaymentReferenceNumber.Trim() : null,
+                    TransferReferenceNumber = isCollected
+                        ? BuildManualPaymentReference(quote.PaymentWallet, request.PaymentReferenceNumber)
+                        : null,
                     AmountPaidOnline = 0m,
                     AmountToPayAtProperty = remaining,
                     AmountCollectedAtProperty = paidAmount,
+                    CollectedAt = isCollected ? now : null,
                     UpdatedAt = now
                 });
 
@@ -1067,17 +1125,8 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 }
 
                 await _context.SaveChangesAsync();
-                if (bookingState == "Confirmed" && quote.PublicQuote.PlatformCommission > 0m)
-                {
-                    var commissionResult = await _commissionFinanceService.HoldBookingCommissionAsync(
-                        booking.BookingId, ownerId, HttpContext.RequestAborted);
-                    if (!commissionResult.Success)
-                    {
-                        await transaction.RollbackAsync();
-                        return BadRequest(new { success = false, message = commissionResult.Message });
-                    }
-                }
 
+                // OwnerManual معفى من دورة العمولة بالكامل.
                 await transaction.CommitAsync();
                 return Json(new
                 {
@@ -1152,6 +1201,32 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
                 var currency = await GetOwnerCurrencyContextAsync(booking.PlaceId);
                 var inputPaidAmountYer = Math.Round(Math.Max(0m, ToYer(input.PaidAmount, currency)), 2);
+
+                OwnerWallet? paymentWallet = null;
+                if (IsState(input.PaymentMethod, "Wallet"))
+                {
+                    if (!input.OwnerWalletId.HasValue || input.OwnerWalletId.Value <= 0)
+                    {
+                        await transaction.RollbackAsync();
+                        return BadRequest(new { success = false, message = "حدد نوع المحفظة المستخدمة في التحصيل." });
+                    }
+
+                    paymentWallet = await _context.OwnerWallets
+                        .AsNoTracking()
+                        .Include(item => item.Wallet)
+                        .FirstOrDefaultAsync(item =>
+                            item.OwnerWalletId == input.OwnerWalletId.Value &&
+                            item.OwnerId == ownerId &&
+                            item.IsActive == true &&
+                            item.Wallet.IsActive == true);
+
+                    if (paymentWallet == null)
+                    {
+                        await transaction.RollbackAsync();
+                        return BadRequest(new { success = false, message = "المحفظة المختارة غير مفعلة أو لا تتبع حساب المالك." });
+                    }
+                }
+
                 var isInitialPayment = IsState(booking.BookingState, "AwaitingPayment");
                 var canCollectRemaining =
                     IsState(booking.BookingState, "Confirmed") ||
@@ -1258,10 +1333,9 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     Math.Max(0m, financial.AmountCollectedAtProperty) + paidAmount,
                     2);
                 financial.AmountToPayAtProperty = remainingAmount;
-                if (!string.IsNullOrWhiteSpace(input.PaymentReferenceNumber))
-                {
-                    financial.TransferReferenceNumber = input.PaymentReferenceNumber.Trim();
-                }
+                financial.TransferReferenceNumber = BuildManualPaymentReference(
+                    paymentWallet,
+                    input.PaymentReferenceNumber);
                 financial.CollectedAt = now;
                 financial.UpdatedAt = now;
 
@@ -1277,17 +1351,8 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     booking.BookingId);
 
                 await _context.SaveChangesAsync();
-                if (isInitialPayment && financial.PlatformCommission > 0m)
-                {
-                    var commissionResult = await _commissionFinanceService.HoldBookingCommissionAsync(
-                        booking.BookingId, ownerId, HttpContext.RequestAborted);
-                    if (!commissionResult.Success)
-                    {
-                        await transaction.RollbackAsync();
-                        return BadRequest(new { success = false, message = commissionResult.Message });
-                    }
-                }
 
+                // الدفعات اللاحقة للحجز اليدوي لا تنشئ أي حركة عمولة.
                 await transaction.CommitAsync();
                 return Json(new
                 {
@@ -1480,6 +1545,32 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             if (!placeId.HasValue) { failed.PublicQuote.Message = "لا توجد منشأة مختارة من الهيدر."; return failed; }
             var place = await LoadManualBookingPlaceAsync(placeId.Value, ownerId);
             if (place == null) { failed.PublicQuote.Message = "المنشأة المختارة غير متاحة."; return failed; }
+
+            OwnerWallet? paymentWallet = null;
+            if (IsState(request.PaymentMode, "Collected") && IsState(request.PaymentMethod, "Wallet"))
+            {
+                if (!request.OwnerWalletId.HasValue || request.OwnerWalletId.Value <= 0)
+                {
+                    failed.PublicQuote.Message = "حدد نوع المحفظة التي تم استلام العربون عليها.";
+                    return failed;
+                }
+
+                paymentWallet = await _context.OwnerWallets
+                    .AsNoTracking()
+                    .Include(item => item.Wallet)
+                    .FirstOrDefaultAsync(item =>
+                        item.OwnerWalletId == request.OwnerWalletId.Value &&
+                        item.OwnerId == ownerId &&
+                        item.IsActive == true &&
+                        item.Wallet.IsActive == true);
+
+                if (paymentWallet == null)
+                {
+                    failed.PublicQuote.Message = "المحفظة المختارة غير مفعلة أو لا تتبع حساب المالك.";
+                    return failed;
+                }
+            }
+
             var displayCurrency = await GetOwnerCurrencyContextAsync(place.PlaceId);
             var categoryName = place.Category?.CategoryName?.Trim() ?? string.Empty;
             var bookingSystemId = place.Category?.BookingSystemId ?? 0;
@@ -1728,16 +1819,23 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             var totalPrice = Math.Round(Math.Max(0m, discountedBeforeTax + taxAmount), 2);
             var depositAmount = ManualCalculateDepositAmount(place, totalPrice);
 
-            if (IsState(request.PaymentMode, "Collected") && totalPrice > 0m && request.PaidAmount <= 0m)
-            { failed.PublicQuote.Message = "أدخل المبلغ المستلم فعليًا."; return failed; }
+            var wantsCollected = totalPrice > 0m && IsState(request.PaymentMode, "Collected");
+            var normalizedPaidAmount = wantsCollected
+                ? Math.Round(Math.Max(0m, request.PaidAmount), 2)
+                : 0m;
 
-            var collected = totalPrice > 0m && IsState(request.PaymentMode, "Collected") && request.PaidAmount > 0m;
-            var normalizedPaidAmount = collected ? Math.Round(Math.Max(0m, request.PaidAmount), 2) : 0m;
+            // العربون للحجز اليدوي مصدره سياسة المنشأة وليس إدخالًا حرًا.
+            if (wantsCollected && depositAmount > 0m && normalizedPaidAmount <= 0m)
+            {
+                normalizedPaidAmount = depositAmount;
+            }
+
+            var collected = wantsCollected && normalizedPaidAmount > 0m;
             if (normalizedPaidAmount > totalPrice)
             { failed.PublicQuote.Message = "المبلغ المستلم لا يمكن أن يتجاوز إجمالي الحجز."; return failed; }
-            if (collected && depositAmount > 0m && normalizedPaidAmount < depositAmount)
+            if (collected && depositAmount > 0m && Math.Abs(normalizedPaidAmount - depositAmount) > 0.01m)
             {
-                failed.PublicQuote.Message = $"المبلغ المستلم أقل من العربون المطلوب ({DisplayMoney(depositAmount, displayCurrency)}).";
+                failed.PublicQuote.Message = $"العربون المستلم يجب أن يساوي العربون المحدد في سياسة المنشأة ({DisplayMoney(depositAmount, displayCurrency)}). ويمكن تحصيل المتبقي لاحقًا من الحجز النشط.";
                 return failed;
             }
 
@@ -1748,12 +1846,10 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 return failed;
             }
 
-            var defaultCommission = await _context.SystemSettings.AsNoTracking()
-                .OrderByDescending(item => item.Id)
-                .Select(item => (decimal?)item.CommissionPercentage)
-                .FirstOrDefaultAsync() ?? 0m;
-            var commissionPercentage = Math.Clamp(place.Category?.CommissionPercentage ?? defaultCommission, 0m, 100m);
-            var platformCommission = totalPrice <= 0m ? 0m : Math.Round(totalPrice * commissionPercentage / 100m, 2);
+            // الحجز اليدوي أنشأه المالك خارج مسار اكتساب الحجز في المنصة؛
+            // لذلك لا تُحسب عليه عمولة ولا يُحجز من رصيد ضمان العمولات.
+            const decimal commissionPercentage = 0m;
+            const decimal platformCommission = 0m;
             var proposedState = depositAmount > 0m && !collected ? "AwaitingPayment" : "Confirmed";
             var paymentTimeout = Math.Max(1, place.PlacePolicy?.PaymentTimeout ?? 12);
 
@@ -1806,6 +1902,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 Room = room,
                 Package = package,
                 Customer = customer,
+                PaymentWallet = paymentWallet,
                 Services = services,
                 ServiceQuantities = serviceQuantities,
                 ComplimentaryServiceIds = complimentaryServiceIds,
