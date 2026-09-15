@@ -23,7 +23,9 @@
             "/Owner/Reservation/RejectBookingPermanently",
         complete: "/Owner/Reservation/CompleteBooking",
         noShow: "/Owner/Reservation/NoShowBooking",
-        ownerCancel: "/Owner/Reservation/CancelBookingByOwner"
+        ownerCancel: "/Owner/Reservation/CancelBookingByOwner",
+        customerCancelQuote: "/Owner/Reservation/CustomerCancellationQuote",
+        customerCancel: "/Owner/Reservation/CancelByCustomerRequest"
     });
 
     const DEFAULT_TAB =
@@ -3723,6 +3725,20 @@
                         details.canOwnerCancel
                             ? ""
                             : details.actionNote
+                }),
+
+                buildActionButton({
+                    className:
+                        "btn-outline-warning reservation-customer-cancel-btn",
+
+                    icon:
+                        "bi-person-x",
+
+                    text:
+                        "إلغاء بطلب العميل",
+
+                    handler:
+                        `window.executeCustomerRequestedCancellation(${bookingId})`
                 })
             ].join("");
         }
@@ -5382,6 +5398,8 @@
                 Math.max(
                     0,
                     details
+                        .totalCollectedAmountRaw ||
+                    details
                         .onlineAmountRaw ||
                     0
                 );
@@ -5463,6 +5481,177 @@
                 fallbackError:
                     "تعذر إلغاء الحجز من جهة المالك."
             });
+        };
+
+    window.executeCustomerRequestedCancellation =
+        async bookingId => {
+            if (state.actionRunning) {
+                return;
+            }
+
+            const id =
+                parsePositiveId(
+                    bookingId
+                );
+
+            if (!id) {
+                await showMessage({
+                    icon: "error",
+                    title: "رقم الحجز غير صحيح"
+                });
+                return;
+            }
+
+            const details =
+                state.currentBooking ||
+                {};
+
+            showLoading(
+                "جاري حساب سياسة الإلغاء",
+                "يتم حساب الغرامة والاسترداد حسب سياسة المنشأة الحالية."
+            );
+
+            try {
+                const response = await fetch(
+                    `${ENDPOINTS.customerCancelQuote}?id=${encodeURIComponent(id)}`,
+                    {
+                        method: "GET",
+                        credentials: "same-origin",
+                        headers: {
+                            Accept: "application/json",
+                            "X-Requested-With": "XMLHttpRequest"
+                        }
+                    }
+                );
+
+                const result =
+                    await parseJsonResponse(
+                        response
+                    );
+
+                if (!response.ok || result.success !== true || !result.data) {
+                    throw new Error(
+                        result.message ||
+                        "تعذر حساب سياسة الإلغاء لهذا الحجز."
+                    );
+                }
+
+                closeSweetAlert();
+
+                const quote =
+                    result.data;
+
+                const displayMoney = value => {
+                    const rawValue = Math.max(
+                        0,
+                        Number(value || 0)
+                    );
+
+                    const rawTotal = Math.max(
+                        0,
+                        Number(quote.totalPrice || 0)
+                    );
+
+                    const displayedTotal = Math.max(
+                        0,
+                        Number(details.totalAmountRaw || 0)
+                    );
+
+                    const factor =
+                        rawTotal > 0 && displayedTotal > 0
+                            ? displayedTotal / rawTotal
+                            : 1;
+
+                    const converted =
+                        rawValue * factor;
+
+                    const currency =
+                        window.YGOwnerReservationCurrency || {};
+
+                    const code =
+                        currency.code || "YER";
+
+                    const symbol =
+                        currency.symbol || "ر.ي";
+
+                    return `${new Intl.NumberFormat("en-US", {
+                        minimumFractionDigits: code === "YER" ? 0 : 2,
+                        maximumFractionDigits: code === "YER" ? 0 : 2
+                    }).format(converted)} ${symbol}`;
+                };
+
+                return executeReasonAction({
+                    bookingId: id,
+                    endpoint:
+                        ENDPOINTS.customerCancel,
+                    dialog: {
+                        icon: "warning",
+                        title: "إلغاء بطلب العميل",
+                        html: `
+                            <div dir="rtl">
+                                <p>
+                                    استخدم هذا الخيار عندما يتواصل العميل مع المنشأة ويطلب إلغاء الحجز. ستُطبق سياسة الإلغاء الخاصة بالمنشأة كما لو ألغى العميل من حسابه.
+                                </p>
+
+                                <div class="reservation-refund-preview">
+                                    <span>السياسة المطبقة</span>
+                                    <strong>${escapeHtml(quote.policyLabel || "سياسة الإلغاء")}</strong>
+                                </div>
+
+                                <div class="reservation-refund-preview">
+                                    <span>إجمالي ما دفعه العميل</span>
+                                    <strong>${escapeHtml(displayMoney(quote.paidAmount))}</strong>
+                                </div>
+
+                                <div class="reservation-refund-preview">
+                                    <span>غرامة الإلغاء</span>
+                                    <strong>${escapeHtml(displayMoney(quote.cancellationFee))}</strong>
+                                </div>
+
+                                <div class="reservation-refund-preview">
+                                    <span>المبلغ المستحق للاسترداد</span>
+                                    <strong>${escapeHtml(displayMoney(quote.refundAmount))}</strong>
+                                </div>
+
+                                <div class="reservation-danger-dialog-note">
+                                    <i class="bi bi-info-circle"></i>
+                                    <span>
+                                        ${escapeHtml(quote.refundTransferFeeLabel || "")} — مدة المعالجة ${escapeHtml(String(quote.refundProcessingDays || 1))} أيام عمل.
+                                    </span>
+                                </div>
+
+                                <div class="reservation-danger-dialog-note">
+                                    <i class="bi bi-exclamation-triangle"></i>
+                                    <span>
+                                        لا تستخدم «إلغاء الحجز من جهة المالك» لهذه الحالة؛ ذلك الخيار يعني أن المنشأة هي التي ألغت ويلغي غرامة العميل.
+                                    </span>
+                                </div>
+                            </div>
+                        `,
+                        inputLabel: "سبب طلب العميل للإلغاء",
+                        placeholder: "مثال: العميل اتصل وطلب إلغاء الحجز بسبب تغيير موعد السفر.",
+                        ariaLabel: "سبب إلغاء الحجز بطلب العميل",
+                        confirmText: "تأكيد الإلغاء حسب السياسة",
+                        confirmColor: "#F59E0B"
+                    },
+                    loadingTitle: "جاري إلغاء الحجز",
+                    loadingText: "يتم تطبيق سياسة الإلغاء وإنشاء طلب الاسترداد بالقيمة المستحقة.",
+                    successTitle: "تم الإلغاء بطلب العميل",
+                    fallbackError: "تعذر تنفيذ إلغاء العميل."
+                });
+            } catch (error) {
+                closeSweetAlert();
+
+                await showMessage({
+                    icon: "error",
+                    title: "تعذر حساب الإلغاء",
+                    text:
+                        error.message ||
+                        "حدث خطأ أثناء حساب سياسة الإلغاء.",
+                    confirmButtonColor: "#EF4444",
+                    returnFocus: false
+                });
+            }
         };
 
     /* =====================================================================
