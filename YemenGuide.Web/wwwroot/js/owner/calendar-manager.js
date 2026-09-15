@@ -686,8 +686,15 @@
             on(elements.paidAmount, "input", () => { clearFieldError("paidAmount"); clampDecimalInput(elements.paidAmount, 0, 999999999); scheduleQuotePreview(); });
             on(elements.paymentMethod, "change", () => {
                 updateSmartSelectValue(elements.paymentMethod, elements.paymentSelectText);
-                syncOtherFields();
+                // إعادة مزامنة لوحة الدفع كاملة حتى يظهر اختيار نوع المحفظة فورًا
+                // عند اختيار Wallet من الـ smart select، وليس فقط في تحديثات الحقول الأخرى.
+                syncPaymentFields();
                 clearFieldError("paymentMethod");
+                clearFieldError("ownerWallet");
+                scheduleQuotePreview();
+            });
+            on(elements.ownerWalletId, "change", () => {
+                updateSmartSelectValue(elements.ownerWalletId, elements.ownerWalletSelectText);
                 clearFieldError("ownerWallet");
                 scheduleQuotePreview();
             });
@@ -2311,20 +2318,7 @@
             renderPackageCards();
             renderServices(Array.isArray(data.services) ? data.services : []);
 
-            const wallets = Array.isArray(data.wallets)
-                ? data.wallets
-                : (Array.isArray(context?.wallets) ? context.wallets : []);
-            if (elements.ownerWalletId) {
-                const previousWallet = elements.ownerWalletId.value;
-                elements.ownerWalletId.innerHTML = '<option value="">اختر المحفظة</option>' + wallets.map(wallet => {
-                    const label = wallet.displayText || [wallet.walletName, wallet.accountNumber].filter(Boolean).join(" · ");
-                    return `<option value="${wallet.ownerWalletId}">${escapeHtml(label || "محفظة")}</option>`;
-                }).join("");
-                if (wallets.some(wallet => String(wallet.ownerWalletId) === previousWallet)) {
-                    elements.ownerWalletId.value = previousWallet;
-                }
-                refreshDynamicSmartSelect(elements.ownerWalletId);
-            }
+            syncOwnerWalletChoices();
 
             if (data.isClosedByPolicy || data.isClosedByException) {
                 elements.optionsStatus.hidden = false;
@@ -2775,8 +2769,41 @@
                 clearFieldError("ownerWallet");
             } else {
                 syncCollectedDepositFromQuote();
+                syncOwnerWalletChoices();
             }
             syncOtherFields();
+        }
+
+        function syncOwnerWalletChoices() {
+            if (!elements.ownerWalletId) return;
+
+            const wallets = Array.isArray(manualOptions?.wallets)
+                ? manualOptions.wallets
+                : (Array.isArray(context?.wallets) ? context.wallets : []);
+
+            const currentValue = elements.ownerWalletId.value;
+            const currentStillExists = wallets.some(wallet =>
+                String(wallet.ownerWalletId) === String(currentValue));
+
+            elements.ownerWalletId.innerHTML =
+                '<option value="">اختر المحفظة</option>' +
+                wallets.map(wallet => {
+                    const label = wallet.displayText ||
+                        [wallet.walletName, wallet.accountNumber].filter(Boolean).join(" · ");
+                    return `<option value="${wallet.ownerWalletId}">${escapeHtml(label || "محفظة")}</option>`;
+                }).join("");
+
+            if (currentStillExists) {
+                elements.ownerWalletId.value = currentValue;
+            } else if (wallets.length === 1) {
+                // إذا كان لدى المالك حساب استقبال واحد فقط فاختياره تلقائيًا أوضح وأسرع.
+                elements.ownerWalletId.value = String(wallets[0].ownerWalletId);
+            } else {
+                elements.ownerWalletId.value = "";
+            }
+
+            refreshDynamicSmartSelect(elements.ownerWalletId);
+            updateSmartSelectValue(elements.ownerWalletId, elements.ownerWalletSelectText);
         }
 
         function syncCollectedDepositFromQuote(data = latestManualQuote) {
@@ -3484,12 +3511,24 @@
             if (manualStep >= 4) return;
             if (!validateManualStep(manualStep)) return;
 
+            // قبل فتح خطوة الدفع نحتاج السعر والعربون الآن، لا في خطوة المراجعة فقط.
+            // بهذه المعاينة المبكرة يصبح latestManualQuote جاهزًا، وعند اختيار
+            // "تم استلام مبلغ" يُملأ العربون مباشرة من سياسة المنشأة.
+            if (manualStep === 2) {
+                const pricingPreview = await previewManualBooking(true);
+                if (!pricingPreview) return;
+            }
+
             if (manualStep === 3) {
                 const preview = await previewManualBooking(true);
                 if (!preview) return;
             }
 
             setManualStep(manualStep + 1);
+
+            if (manualStep === 3) {
+                syncPaymentFields();
+            }
         }
 
         async function getJson(url) {
