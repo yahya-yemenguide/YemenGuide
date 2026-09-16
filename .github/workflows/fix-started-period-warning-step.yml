@@ -1,0 +1,159 @@
+name: Fix started-period warning timing
+
+on:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Patch warning timing
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new, label):
+              p = Path(path)
+              text = p.read_text(encoding='utf-8-sig')
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected one match, found {count}')
+              p.write_text(text.replace(old, new, 1), encoding='utf-8-sig')
+
+          # 1) الزر "التالي" يجب أن يتحقق من الفترة قبل فتح الخطوة التالية.
+          view_path = 'YemenGuide.Web/Views/Places/Details.cshtml'
+          old_button = '''                <button type="button"
+                        id="btnNextPackage"
+                        onclick="@(isHall
+                            ? "openHallModal()"
+                            : "openAttendanceModal()")"
+                        class="btn btn-info premium-modal-primary disabled"
+                        disabled>
+'''
+          new_button = '''                <button type="button"
+                        id="btnNextPackage"
+                        onclick="goToNextPackageStep(@(isHall ? "true" : "false"))"
+                        class="btn btn-info premium-modal-primary disabled"
+                        disabled>
+'''
+          replace_once(view_path, old_button, new_button, 'package next button')
+
+          # 2) إضافة wrapper يتحقق فور الضغط على التالي ثم يفتح المودال المناسب.
+          js_path = 'YemenGuide.Web/wwwroot/js/customer/Details.js'
+          marker = '''    async function checkPackageDateBeforeCheckout(
+        placeId,
+        packageId,
+        date
+    ) {
+'''
+          replacement = '''    window.goToNextPackageStep =
+        async function goToNextPackageStep(
+            isHall
+        ) {
+            const placeId =
+                getRequiredPlaceId();
+
+            const packageId =
+                Number.parseInt(
+                    String(
+                        state.currentPackage.id ||
+                        "0"
+                    ),
+                    10
+                ) || 0;
+
+            if (
+                placeId <= 0 ||
+                packageId <= 0 ||
+                !state.packageDate
+            ) {
+                await showPackageAvailabilityAlert(
+                    "اختر يوم الحجز أولًا ثم حاول مرة أخرى.",
+                    false
+                );
+                return;
+            }
+
+            const isDateAvailable =
+                await checkPackageDateBeforeCheckout(
+                    placeId,
+                    packageId,
+                    state.packageDate,
+                    true
+                );
+
+            if (!isDateAvailable) {
+                return;
+            }
+
+            if (isHall === true) {
+                window.openHallModal();
+            } else {
+                window.openAttendanceModal();
+            }
+        };
+
+    async function checkPackageDateBeforeCheckout(
+        placeId,
+        packageId,
+        date,
+        showStartedWarning = true
+    ) {
+'''
+          replace_once(js_path, marker, replacement, 'checkout availability function signature')
+
+          old_started = '''            if (data?.started === true) {
+'''
+          new_started = '''            if (
+                showStartedWarning &&
+                data?.started === true
+            ) {
+'''
+          replace_once(js_path, old_started, new_started, 'started warning gate')
+
+          # 3) في التحقق النهائي قبل Checkout نتحقق من التوفر فقط بدون تكرار نفس التنبيه.
+          old_final_1 = '''                await checkPackageDateBeforeCheckout(
+                    placeId,
+                    packageId,
+                    state.packageDate
+                );
+'''
+          new_final_1 = '''                await checkPackageDateBeforeCheckout(
+                    placeId,
+                    packageId,
+                    state.packageDate,
+                    false
+                );
+'''
+          # يوجد استدعاءان: عادي + قاعة. نستبدلهما الاثنين.
+          p = Path(js_path)
+          text = p.read_text(encoding='utf-8-sig')
+          count = text.count(old_final_1)
+          if count != 2:
+              raise SystemExit(f'final availability calls: expected 2 matches, found {count}')
+          p.write_text(text.replace(old_final_1, new_final_1), encoding='utf-8-sig')
+          PY
+
+      - name: Verify
+        run: git diff --check
+
+      - name: Commit
+        shell: bash
+        run: |
+          if git diff --quiet; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add YemenGuide.Web/Views/Places/Details.cshtml YemenGuide.Web/wwwroot/js/customer/Details.js
+          git commit -m "Fix started-period warning before package next step"
+          git push origin HEAD:master
