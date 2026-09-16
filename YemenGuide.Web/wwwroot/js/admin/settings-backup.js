@@ -480,21 +480,55 @@
     };
 
     const renderStatus = item => {
+        let localStatus = "";
+
         if (item.verified === true) {
-            return `
+            localStatus = `
                 <span class="backup-v3__status is-success">
                     <i class="bi bi-check-circle-fill"></i>
                     سليمة
                 </span>
             `;
+        } else {
+            localStatus = `
+                <span class="backup-v3__status is-danger">
+                    <i class="bi bi-exclamation-circle-fill"></i>
+                    غير معتمدة
+                </span>
+            `;
         }
 
-        return `
-            <span class="backup-v3__status is-danger">
-                <i class="bi bi-exclamation-circle-fill"></i>
-                غير معتمدة
-            </span>
-        `;
+        const source = String(item.source || "").toLowerCase();
+        const cloudStatus = String(item.googleDriveStatus || "").toLowerCase();
+
+        let cloud = "";
+        if (source === "prerestore") {
+            cloud = `
+                <span class="backup-cloud-inline" title="نسخة الأمان قبل الاستعادة تبقى محلية">
+                    <i class="bi bi-hdd"></i> محلي
+                </span>
+            `;
+        } else if (cloudStatus === "uploaded") {
+            cloud = `
+                <span class="backup-cloud-inline is-uploaded" title="تم رفع نسخة خارجية إلى Google Drive">
+                    <i class="bi bi-cloud-check"></i> خارجي
+                </span>
+            `;
+        } else if (cloudStatus === "failed") {
+            cloud = `
+                <span class="backup-cloud-inline is-failed" title="${esc(item.googleDriveLastError || "فشلت المزامنة الخارجية")}">
+                    <i class="bi bi-cloud-slash"></i> لم تُرفع
+                </span>
+            `;
+        } else {
+            cloud = `
+                <span class="backup-cloud-inline" title="ستُرفع بعد ربط أو مزامنة Google Drive">
+                    <i class="bi bi-cloud"></i> بانتظار الرفع
+                </span>
+            `;
+        }
+
+        return `<div class="d-flex flex-wrap align-items-center gap-1">${localStatus}${cloud}</div>`;
     };
 
     const renderTable = data => {
@@ -1394,4 +1428,234 @@
     ) {
         void load();
     }
+})();
+
+
+/* ========================================================================== */
+/* Google Drive - النسخة الخارجية */
+/* ========================================================================== */
+(function () {
+    function backupCloudRoot() {
+        return document.getElementById('backupRecoveryCenter');
+    }
+
+    function setCloudBusy(button, busy, text) {
+        if (!button) return;
+        if (!button.dataset.originalHtml) {
+            button.dataset.originalHtml = button.innerHTML;
+        }
+        button.disabled = !!busy;
+        if (busy) {
+            button.innerHTML = `<span class="spinner-border spinner-border-sm"></span> ${text || 'جارٍ التنفيذ...'}`;
+        } else {
+            button.innerHTML = button.dataset.originalHtml;
+        }
+    }
+
+    async function backupCloudFetchJson(url, options = {}) {
+        const requestOptions = { ...options };
+        requestOptions.credentials = 'same-origin';
+        requestOptions.headers = {
+            ...(requestOptions.headers || {}),
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json'
+        };
+
+        if (String(requestOptions.method || 'GET').toUpperCase() === 'POST') {
+            const body = requestOptions.body instanceof FormData
+                ? requestOptions.body
+                : new FormData();
+
+            const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
+            if (token && !body.has('__RequestVerificationToken')) {
+                body.append('__RequestVerificationToken', token);
+            }
+            requestOptions.body = body;
+            if (token) requestOptions.headers['RequestVerificationToken'] = token;
+        }
+
+        const response = await fetch(url, requestOptions);
+        const text = await response.text();
+        let data = null;
+        try { data = text ? JSON.parse(text) : null; } catch { data = null; }
+
+        if (!response.ok) {
+            throw new Error(data?.message || `HTTP ${response.status}`);
+        }
+        return data || {};
+    }
+
+    function renderGoogleDriveStatus(status) {
+        const badge = document.getElementById('backupGoogleDriveBadge');
+        const text = document.getElementById('backupGoogleDriveText');
+        const connect = document.getElementById('backupGoogleDriveConnectBtn');
+        const sync = document.getElementById('backupGoogleDriveSyncBtn');
+        const disconnect = document.getElementById('backupGoogleDriveDisconnectBtn');
+        if (!badge || !text) return;
+
+        badge.classList.remove('is-connected', 'is-error');
+
+        if (status?.configured === false) {
+            badge.textContent = 'الإعداد ناقص';
+            badge.classList.add('is-error');
+            text.textContent = 'تحقق من ClientId و ClientSecret و RedirectUri داخل User Secrets.';
+            connect?.classList.remove('d-none');
+            sync?.classList.add('d-none');
+            disconnect?.classList.add('d-none');
+            return;
+        }
+
+        if (status?.connected === true) {
+            badge.textContent = 'مربوط';
+            badge.classList.add('is-connected');
+
+            const lastSync = status.lastSyncAtUtc
+                ? new Date(status.lastSyncAtUtc).toLocaleString('ar-YE')
+                : '';
+
+            text.textContent = lastSync
+                ? `النسخ الخارجية تُحفظ في مجلد ${status.folderName || 'YemenGuide Backups'}. آخر مزامنة: ${lastSync}`
+                : `تم الربط. النسخ الخارجية ستُحفظ في مجلد ${status.folderName || 'YemenGuide Backups'}.`;
+
+            connect?.classList.add('d-none');
+            sync?.classList.remove('d-none');
+            disconnect?.classList.remove('d-none');
+        } else {
+            badge.textContent = status?.lastError ? 'يحتاج إعادة ربط' : 'غير مربوط';
+            if (status?.lastError) badge.classList.add('is-error');
+            text.textContent = status?.lastError
+                ? `تعذر آخر اتصال: ${status.lastError}`
+                : 'اربط Google Drive ليُرفع تلقائيًا نسخة خارجية من كل نسخة يدوية أو تلقائية.';
+            connect?.classList.remove('d-none');
+            sync?.classList.add('d-none');
+            disconnect?.classList.add('d-none');
+        }
+    }
+
+    function renderCloudMarkers(backups) {
+        const rows = document.querySelectorAll('#backupTableBody tr[data-backup-id]');
+        if (!rows.length || !Array.isArray(backups)) return;
+
+        const map = new Map(backups.map(x => [String(x.id), x]));
+        rows.forEach(row => {
+            const item = map.get(String(row.dataset.backupId || ''));
+            if (!item) return;
+            const statusCell = row.querySelector('[data-backup-status-cell]') || row.children?.[3];
+            if (!statusCell || statusCell.querySelector('.backup-cloud-inline')) return;
+
+            const cloud = document.createElement('span');
+            cloud.className = 'backup-cloud-inline';
+
+            if (String(item.source).toLowerCase() === 'prerestore') {
+                cloud.textContent = 'محلي';
+                cloud.title = 'نسخة الأمان قبل الاستعادة لا تُرفع إلى Google Drive.';
+            } else if (String(item.googleDriveStatus).toLowerCase() === 'uploaded') {
+                cloud.classList.add('is-uploaded');
+                cloud.innerHTML = '<i class="bi bi-cloud-check"></i> خارجي';
+                cloud.title = 'تم رفع نسخة خارجية إلى Google Drive.';
+            } else if (String(item.googleDriveStatus).toLowerCase() === 'failed') {
+                cloud.classList.add('is-failed');
+                cloud.innerHTML = '<i class="bi bi-cloud-slash"></i> لم تُرفع';
+                cloud.title = item.googleDriveLastError || 'فشلت المزامنة الخارجية.';
+            } else {
+                cloud.innerHTML = '<i class="bi bi-cloud"></i> بانتظار الرفع';
+            }
+
+            statusCell.appendChild(cloud);
+        });
+    }
+
+    async function refreshGoogleDriveUi() {
+        const root = backupCloudRoot();
+        if (!root?.dataset.dashboardUrl) return;
+        try {
+            const data = await backupCloudFetchJson(root.dataset.dashboardUrl);
+            renderGoogleDriveStatus(data.googleDrive || {});
+            window.setTimeout(() => renderCloudMarkers(data.backups || []), 60);
+        } catch (error) {
+            renderGoogleDriveStatus({ configured: true, connected: false, lastError: error?.message || 'تعذر قراءة الحالة.' });
+        }
+    }
+
+    async function connectGoogleDrive() {
+        const root = backupCloudRoot();
+        const button = document.getElementById('backupGoogleDriveConnectBtn');
+        if (!root?.dataset.googleConnectUrl || !button) return;
+        setCloudBusy(button, true, 'جارٍ فتح Google...');
+        try {
+            const data = await backupCloudFetchJson(root.dataset.googleConnectUrl);
+            if (!data.authorizationUrl) throw new Error('لم يصل رابط الربط من الخادم.');
+            localStorage.setItem('activeSettingsTab', 'backup-recovery-tab');
+            window.location.href = data.authorizationUrl;
+        } catch (error) {
+            setCloudBusy(button, false);
+            Swal.fire({ icon: 'error', title: 'تعذر بدء الربط', text: error?.message || 'حدث خطأ.', confirmButtonColor: '#00A6DA' });
+        }
+    }
+
+    async function syncGoogleDrive() {
+        const root = backupCloudRoot();
+        const button = document.getElementById('backupGoogleDriveSyncBtn');
+        if (!root?.dataset.googleSyncUrl || !button) return;
+        setCloudBusy(button, true, 'جارٍ الرفع...');
+        try {
+            const data = await backupCloudFetchJson(root.dataset.googleSyncUrl, { method: 'POST' });
+            await Swal.fire({ icon: data.success ? 'success' : 'warning', title: data.success ? 'تمت المزامنة' : 'اكتملت جزئيًا', text: data.message || '', confirmButtonColor: '#00A6DA' });
+            await refreshGoogleDriveUi();
+            document.getElementById('backupRefreshBtn')?.click();
+        } catch (error) {
+            Swal.fire({ icon: 'error', title: 'فشلت المزامنة', text: error?.message || 'حدث خطأ.', confirmButtonColor: '#00A6DA' });
+        } finally {
+            setCloudBusy(button, false);
+        }
+    }
+
+    async function disconnectGoogleDrive() {
+        const root = backupCloudRoot();
+        const button = document.getElementById('backupGoogleDriveDisconnectBtn');
+        if (!root?.dataset.googleDisconnectUrl || !button) return;
+
+        const confirmation = await Swal.fire({
+            icon: 'warning',
+            title: 'فصل Google Drive؟',
+            text: 'سيُوقف رفع النسخ الجديدة. الملفات الموجودة في Google Drive لن تُحذف.',
+            showCancelButton: true,
+            confirmButtonText: 'فصل الربط',
+            cancelButtonText: 'إلغاء',
+            confirmButtonColor: '#FF5A5F'
+        });
+        if (!confirmation.isConfirmed) return;
+
+        setCloudBusy(button, true, 'جارٍ الفصل...');
+        try {
+            const data = await backupCloudFetchJson(root.dataset.googleDisconnectUrl, { method: 'POST' });
+            await Swal.fire({ icon: data.success ? 'success' : 'error', title: data.success ? 'تم الفصل' : 'تعذر الفصل', text: data.message || '', confirmButtonColor: '#00A6DA' });
+            await refreshGoogleDriveUi();
+        } catch (error) {
+            Swal.fire({ icon: 'error', title: 'تعذر الفصل', text: error?.message || 'حدث خطأ.', confirmButtonColor: '#00A6DA' });
+        } finally {
+            setCloudBusy(button, false);
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        document.getElementById('backupGoogleDriveConnectBtn')?.addEventListener('click', connectGoogleDrive);
+        document.getElementById('backupGoogleDriveSyncBtn')?.addEventListener('click', syncGoogleDrive);
+        document.getElementById('backupGoogleDriveDisconnectBtn')?.addEventListener('click', disconnectGoogleDrive);
+
+        const params = new URLSearchParams(window.location.search);
+        const drive = params.get('drive');
+        if (drive === 'connected') {
+            localStorage.setItem('activeSettingsTab', 'backup-recovery-tab');
+            window.setTimeout(() => Swal.fire({ icon: 'success', title: 'تم ربط Google Drive', text: 'سيتم الآن رفع النسخ الخارجية تلقائيًا.', confirmButtonColor: '#00A6DA' }), 350);
+        } else if (drive === 'failed' || drive === 'denied') {
+            localStorage.setItem('activeSettingsTab', 'backup-recovery-tab');
+            window.setTimeout(() => Swal.fire({ icon: 'error', title: 'لم يكتمل الربط', text: drive === 'denied' ? 'تم رفض صلاحية Google Drive.' : 'حدث خطأ أثناء ربط Google Drive.', confirmButtonColor: '#00A6DA' }), 350);
+        }
+
+        window.setTimeout(refreshGoogleDriveUi, 450);
+
+        const refreshBtn = document.getElementById('backupRefreshBtn');
+        refreshBtn?.addEventListener('click', () => window.setTimeout(refreshGoogleDriveUi, 350));
+    });
 })();

@@ -10,7 +10,10 @@
              data-download-base="/Admin/Backup/Download/"
              data-restore-stored-url="@Url.Action("RestoreStored", "Backup", new { area = "Admin" })"
              data-restore-uploaded-url="@Url.Action("RestoreUploaded", "Backup", new { area = "Admin" })"
-             data-delete-url="@Url.Action("Delete", "Backup", new { area = "Admin" })">
+             data-delete-url="@Url.Action("Delete", "Backup", new { area = "Admin" })"
+             data-google-connect-url="@Url.Action("GoogleDriveConnect", "Backup", new { area = "Admin" })"
+             data-google-sync-url="@Url.Action("GoogleDriveSync", "Backup", new { area = "Admin" })"
+             data-google-disconnect-url="@Url.Action("GoogleDriveDisconnect", "Backup", new { area = "Admin" })">
 
         <header class="backup-v3__header">
             <div class="backup-v3__title">
@@ -128,6 +131,49 @@
             </div>
         </section>
 
+
+        <section class="backup-v3__cloud" id="backupGoogleDriveSection">
+            <div class="backup-v3__cloud-copy">
+                <span class="backup-v3__cloud-icon">
+                    <i class="bi bi-cloud-check"></i>
+                </span>
+                <div>
+                    <div class="backup-v3__cloud-title-row">
+                        <h3>النسخة الخارجية</h3>
+                        <span class="backup-v3__cloud-badge" id="backupGoogleDriveBadge">
+                            غير مربوط
+                        </span>
+                    </div>
+                    <p id="backupGoogleDriveText">
+                        اربط Google Drive ليُرفع تلقائيًا نسخة خارجية من كل نسخة يدوية أو تلقائية.
+                    </p>
+                </div>
+            </div>
+
+            <div class="backup-v3__cloud-actions">
+                <button type="button"
+                        class="backup-v3__cloud-btn backup-v3__cloud-btn--primary"
+                        id="backupGoogleDriveConnectBtn">
+                    <i class="bi bi-google"></i>
+                    ربط Google Drive
+                </button>
+
+                <button type="button"
+                        class="backup-v3__cloud-btn d-none"
+                        id="backupGoogleDriveSyncBtn">
+                    <i class="bi bi-cloud-arrow-up"></i>
+                    مزامنة الآن
+                </button>
+
+                <button type="button"
+                        class="backup-v3__cloud-btn backup-v3__cloud-btn--danger d-none"
+                        id="backupGoogleDriveDisconnectBtn">
+                    <i class="bi bi-link-45deg"></i>
+                    فصل
+                </button>
+            </div>
+        </section>
+
         <section class="backup-v3__list">
             <header class="backup-v3__list-head">
                 <div>
@@ -176,7 +222,7 @@
             <i class="bi bi-shield-check"></i>
             <span>
                 قبل أي استعادة فعلية، ينشئ النظام تلقائيًا نسخة أمان للحالة الحالية.
-                النسخ الخارجية مثل Google Drive سنضيفها بعد إكمال المحلي.
+                النسخ اليدوية والتلقائية تُرفع إلى Google Drive تلقائيًا بعد ربطه، بينما نسخة الأمان قبل الاستعادة تبقى محلية.
             </span>
         </div>
 

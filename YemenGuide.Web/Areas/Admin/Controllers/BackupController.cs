@@ -57,6 +57,15 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                     data.Settings.AutomaticRetentionCount,
                     data.Settings.SafetyRetentionCount
                 },
+                googleDrive = new
+                {
+                    data.GoogleDrive.Configured,
+                    data.GoogleDrive.Connected,
+                    data.GoogleDrive.FolderName,
+                    data.GoogleDrive.ConnectedAtUtc,
+                    data.GoogleDrive.LastSyncAtUtc,
+                    data.GoogleDrive.LastError
+                },
                 backups = data.Backups.Select(item => new
                 {
                     item.Id,
@@ -71,6 +80,10 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                     verifiedAtUtc = item.VerifiedAtUtc,
                     liveRestoredAtUtc = item.LiveRestoredAtUtc,
                     item.LastError,
+                    item.GoogleDriveStatus,
+                    item.GoogleDriveFileId,
+                    item.GoogleDriveUploadedAtUtc,
+                    item.GoogleDriveLastError,
                     canDownload =
                         data.Capabilities.CanDownloadBackupFiles
                 })
@@ -90,10 +103,25 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                     cancellationToken);
 
             string? downloadUrl = null;
+            string? googleDriveMessage = null;
 
             if (result.Success &&
                 result.Backup != null)
             {
+                var driveStatus =
+                    await _backupService.GetGoogleDriveStatusAsync(
+                        cancellationToken);
+
+                if (driveStatus.Connected)
+                {
+                    var cloudResult =
+                        await _backupService.SyncBackupToGoogleDriveAsync(
+                            result.Backup.Id,
+                            cancellationToken);
+
+                    googleDriveMessage = cloudResult.Message;
+                }
+
                 downloadUrl =
                     Url.Action(
                         nameof(Download),
@@ -112,7 +140,8 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                 backupId = result.Backup?.Id,
                 fileName = result.Backup?.FileName,
                 displayName = result.Backup?.DisplayName,
-                downloadUrl
+                downloadUrl,
+                googleDriveMessage
             });
         }
 
@@ -276,6 +305,94 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                     stream,
                     backupFile.FileName,
                     confirmation,
+                    cancellationToken);
+
+            return Json(new
+            {
+                success = result.Success,
+                message = result.Message
+            });
+        }
+
+
+        [HttpGet("GoogleDriveConnect")]
+        [RequireAdminPermission(AdminPermissionKeys.Settings.ManageGeneral)]
+        public async Task<IActionResult> GoogleDriveConnect(
+            CancellationToken cancellationToken)
+        {
+            var result =
+                await _backupService.BeginGoogleDriveAuthorizationAsync(
+                    cancellationToken);
+
+            if (!result.Success ||
+                string.IsNullOrWhiteSpace(result.AuthorizationUrl))
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = result.Message
+                });
+            }
+
+            return Json(new
+            {
+                success = true,
+                message = result.Message,
+                authorizationUrl = result.AuthorizationUrl
+            });
+        }
+
+        [HttpGet("GoogleDriveCallback")]
+        [RequireAdminPermission(AdminPermissionKeys.Settings.ManageGeneral)]
+        public async Task<IActionResult> GoogleDriveCallback(
+            [FromQuery] string? code,
+            [FromQuery] string? state,
+            [FromQuery] string? error,
+            CancellationToken cancellationToken)
+        {
+            if (!string.IsNullOrWhiteSpace(error))
+            {
+                return Redirect(
+                    "/Admin/Settings/SystemSettings?drive=denied");
+            }
+
+            var result =
+                await _backupService.CompleteGoogleDriveAuthorizationAsync(
+                    code ?? string.Empty,
+                    state ?? string.Empty,
+                    cancellationToken);
+
+            return Redirect(
+                result.Success
+                    ? "/Admin/Settings/SystemSettings?drive=connected"
+                    : "/Admin/Settings/SystemSettings?drive=failed");
+        }
+
+        [HttpPost("GoogleDriveSync")]
+        [ValidateAntiForgeryToken]
+        [RequireAdminPermission(AdminPermissionKeys.Settings.ManageGeneral)]
+        public async Task<IActionResult> GoogleDriveSync(
+            CancellationToken cancellationToken)
+        {
+            var result =
+                await _backupService.SyncPendingGoogleDriveBackupsAsync(
+                    cancellationToken);
+
+            return Json(new
+            {
+                success = result.Success,
+                message = result.Message
+            });
+        }
+
+        [HttpPost("GoogleDriveDisconnect")]
+        [ValidateAntiForgeryToken]
+        [RequireAdminPermission(AdminPermissionKeys.Settings.ManageGeneral)]
+        public async Task<IActionResult> GoogleDriveDisconnect(
+            CancellationToken cancellationToken)
+        {
+            var result =
+                await _backupService.DisconnectGoogleDriveAsync(
                     cancellationToken);
 
             return Json(new
