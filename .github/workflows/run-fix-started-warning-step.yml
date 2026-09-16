@@ -1,0 +1,30 @@
+name: Run started warning timing patch
+
+on:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+      - run: python3 .github/scripts/fix_started_warning_step.py
+      - run: git diff --check
+      - shell: bash
+        run: |
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add YemenGuide.Web/Views/Places/Details.cshtml YemenGuide.Web/wwwroot/js/customer/Details.js
+          git commit -m "Fix started-period warning on package next"
+          git push origin HEAD:master
