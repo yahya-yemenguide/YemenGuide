@@ -1,0 +1,65 @@
+name: Export started-period replacement files
+
+on:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: master
+
+      - name: Prepare replacement package
+        shell: bash
+        run: |
+          set -e
+          ROOT="YemenGuide_STARTED_PERIOD_REPLACEMENT"
+          mkdir -p "$ROOT/YemenGuide.Web/Controllers"
+          mkdir -p "$ROOT/YemenGuide.Web/wwwroot/js/customer"
+          mkdir -p "$ROOT/YemenGuide.Web/Areas/Owner/Views/Reservation"
+
+          cp YemenGuide.Web/Controllers/PlacesController.cs "$ROOT/YemenGuide.Web/Controllers/PlacesController.cs"
+          cp YemenGuide.Web/wwwroot/js/customer/Details.js "$ROOT/YemenGuide.Web/wwwroot/js/customer/Details.js"
+          cp YemenGuide.Web/Controllers/BookingFlowController.cs "$ROOT/YemenGuide.Web/Controllers/BookingFlowController.cs"
+          cp YemenGuide.Web/Areas/Owner/Views/Reservation/_PendingRequests.cshtml "$ROOT/YemenGuide.Web/Areas/Owner/Views/Reservation/_PendingRequests.cshtml"
+          cp YemenGuide.Web/Areas/Owner/Views/Reservation/_ActiveReservations.cshtml "$ROOT/YemenGuide.Web/Areas/Owner/Views/Reservation/_ActiveReservations.cshtml"
+
+          cat > "$ROOT/اقرأني.txt" <<'TXT'
+          ملفات استبدال ميزة حجز فترة بدأت بالفعل
+          =======================================
+
+          الملفات مأخوذة مباشرة من آخر نسخة master في GitHub.
+
+          استبدل الملفات الخمسة بنفس المسارات داخل المشروع:
+          1) YemenGuide.Web/Controllers/PlacesController.cs
+          2) YemenGuide.Web/wwwroot/js/customer/Details.js
+          3) YemenGuide.Web/Controllers/BookingFlowController.cs
+          4) YemenGuide.Web/Areas/Owner/Views/Reservation/_PendingRequests.cshtml
+          5) YemenGuide.Web/Areas/Owner/Views/Reservation/_ActiveReservations.cshtml
+
+          السلوك الموجود فيها:
+          - إذا بدأت الفترة وما زالت جارية يظهر للعميل تنبيه يوضح كم مضى وكم تبقى.
+          - لا يكمل العميل إلا بعد تأكيد أنه على علم.
+          - إذا انتهت الفترة يمنع الحجز.
+          - يظهر للمالك أن العميل كان على علم، مع الوقت الذي مضى والمتبقي وقت إنشاء الحجز.
+
+          بعد الاستبدال:
+          Build > Rebuild Solution
+          ثم Ctrl + F5
+          TXT
+
+      - name: Upload replacement package
+        uses: actions/upload-artifact@v4
+        with:
+          name: YemenGuide_STARTED_PERIOD_REPLACEMENT
+          path: YemenGuide_STARTED_PERIOD_REPLACEMENT
+          if-no-files-found: error
+          retention-days: 7
