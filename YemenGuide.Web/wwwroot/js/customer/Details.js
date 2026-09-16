@@ -6565,10 +6565,58 @@ font-weight:700;
         return result;
     }
 
+    window.goToNextPackageStep =
+        async function goToNextPackageStep(
+            isHall
+        ) {
+            const placeId =
+                getRequiredPlaceId();
+
+            const packageId =
+                Number.parseInt(
+                    String(
+                        state.currentPackage.id ||
+                        "0"
+                    ),
+                    10
+                ) || 0;
+
+            if (
+                placeId <= 0 ||
+                packageId <= 0 ||
+                !state.packageDate
+            ) {
+                await showPackageAvailabilityAlert(
+                    "اختر يوم الحجز أولًا ثم حاول مرة أخرى.",
+                    false
+                );
+                return;
+            }
+
+            const isDateAvailable =
+                await checkPackageDateBeforeCheckout(
+                    placeId,
+                    packageId,
+                    state.packageDate,
+                    true
+                );
+
+            if (!isDateAvailable) {
+                return;
+            }
+
+            if (isHall === true) {
+                window.openHallModal();
+            } else {
+                window.openAttendanceModal();
+            }
+        };
+
     async function checkPackageDateBeforeCheckout(
         placeId,
         packageId,
-        date
+        date,
+        showStartedWarning = true
     ) {
         if (
             state
@@ -6641,7 +6689,10 @@ font-weight:700;
                 return false;
             }
 
-            if (data?.started === true) {
+            if (
+                showStartedWarning &&
+                data?.started === true
+            ) {
                 const formatDuration =
                     rawMinutes => {
                         const totalMinutes =
@@ -6939,7 +6990,8 @@ font-weight:700;
                 await checkPackageDateBeforeCheckout(
                     placeId,
                     packageId,
-                    state.packageDate
+                    state.packageDate,
+                    false
                 );
 
             if (!isDateAvailable) {
@@ -7086,7 +7138,8 @@ font-weight:700;
                 await checkPackageDateBeforeCheckout(
                     placeId,
                     packageId,
-                    state.packageDate
+                    state.packageDate,
+                    false
                 );
 
             if (!isDateAvailable) {
