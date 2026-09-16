@@ -57,6 +57,13 @@ namespace YemenGuide.Web.Services.Employees
 
             if (state!.IsSystemRole)
             {
+                // المفاتيح القديمة الواسعة أوقفناها من الكتالوج، لكن بعض
+                // الأكشنات القديمة ما زالت تستدعيها كطبقة توافق.
+                if (IsLegacySettingsBridgeKey(normalizedKey))
+                {
+                    return true;
+                }
+
                 return await _context.AdminPermissions
                     .AsNoTracking()
                     .AnyAsync(permission =>
@@ -79,6 +86,46 @@ namespace YemenGuide.Web.Services.Employees
                     StringComparer.OrdinalIgnoreCase))
             {
                 return true;
+            }
+
+            // جسر توافق للكود القديم فقط. الفلتر GranularSettingsPermissionFilter
+            // يفرض الصلاحية الدقيقة لكل أكشن قبل التنفيذ.
+            if (string.Equals(
+                    normalizedKey,
+                    AdminPermissionKeys.Settings.ManageGeneral,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return rolePermissionKeys.Any(key =>
+                    string.Equals(
+                        key,
+                        AdminPermissionKeys.Settings.ManageBranding,
+                        StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(
+                        key,
+                        AdminPermissionKeys.Settings.ManagePolicies,
+                        StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(
+                        key,
+                        AdminPermissionKeys.Settings.ManageContact,
+                        StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(
+                        key,
+                        AdminPermissionKeys.Settings.ManageMaintenance,
+                        StringComparison.OrdinalIgnoreCase) ||
+                    key.StartsWith(
+                        "Settings.Backups.",
+                        StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (string.Equals(
+                    normalizedKey,
+                    AdminPermissionKeys.Settings.ManagePaymentNetworks,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return rolePermissionKeys.Any(key =>
+                    key.StartsWith(
+                        "Settings.PaymentNetworks.",
+                        StringComparison.OrdinalIgnoreCase));
             }
 
             return HasImpliedViewPermission(
@@ -253,6 +300,55 @@ namespace YemenGuide.Web.Services.Employees
                 AdminPermissionKeys.Advertisements.View,
                 "Advertisements.");
 
+            // الصلاحيات التنفيذية الفرعية تُكمل بصلاحية المشاهدة المناسبة فقط.
+            if (expanded.Contains(AdminPermissionKeys.Settings.ManageBranding))
+            {
+                expanded.Add(AdminPermissionKeys.Settings.ViewBranding);
+            }
+
+            if (expanded.Contains(AdminPermissionKeys.Settings.ManagePolicies))
+            {
+                expanded.Add(AdminPermissionKeys.Settings.ViewPolicies);
+            }
+
+            if (expanded.Contains(AdminPermissionKeys.Settings.ManageContact))
+            {
+                expanded.Add(AdminPermissionKeys.Settings.ViewContact);
+            }
+
+            if (expanded.Contains(AdminPermissionKeys.Settings.ManageMaintenance))
+            {
+                expanded.Add(AdminPermissionKeys.Settings.ViewMaintenance);
+            }
+
+            if (expanded.Any(key =>
+                    key.StartsWith(
+                        "Settings.PaymentNetworks.",
+                        StringComparison.OrdinalIgnoreCase)))
+            {
+                expanded.Add(AdminPermissionKeys.Settings.ViewPaymentNetworks);
+            }
+
+            if (expanded.Contains(AdminPermissionKeys.Settings.ManageHeroSlides))
+            {
+                expanded.Add(AdminPermissionKeys.Settings.ViewHeroSlides);
+            }
+
+            if (expanded.Any(key =>
+                    key.StartsWith(
+                        "Settings.Backups.",
+                        StringComparison.OrdinalIgnoreCase)))
+            {
+                expanded.Add(AdminPermissionKeys.Settings.ViewBackups);
+            }
+
+            // الإعدادات المالية موجودة داخل تبويب سياسات التشغيل.
+            if (expanded.Contains(AdminPermissionKeys.Finance.ManageSettings))
+            {
+                expanded.Add(AdminPermissionKeys.Settings.ViewPolicies);
+                expanded.Add(AdminPermissionKeys.Settings.View);
+            }
+
             AddImpliedView(
                 expanded,
                 AdminPermissionKeys.Settings.View,
@@ -269,6 +365,19 @@ namespace YemenGuide.Web.Services.Employees
                 "Roles.");
 
             return expanded.ToArray();
+        }
+
+        private static bool IsLegacySettingsBridgeKey(
+            string permissionKey)
+        {
+            return string.Equals(
+                       permissionKey,
+                       AdminPermissionKeys.Settings.ManageGeneral,
+                       StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(
+                       permissionKey,
+                       AdminPermissionKeys.Settings.ManagePaymentNetworks,
+                       StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool HasImpliedViewPermission(

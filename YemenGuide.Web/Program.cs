@@ -21,6 +21,7 @@ using YemenGuide.Web.Maintenance;
 using YemenGuide.Core.Helpers;
 using YemenGuide.Web.Localization;
 using YemenGuide.Web.Infrastructure.Localization;
+using YemenGuide.Web.Filters;
 
 
 // =============================================================
@@ -59,8 +60,15 @@ builder.Services.AddDbContext<YemenGuide.Data.AppDbContext>(
 
 builder.Services.AddLocalization(options => options.ResourcesPath = "Resources");
 
+// فلتر إضافي يفصل صلاحيات إعدادات النظام إلى عمليات دقيقة
+// بدون تغيير منطق بقية أقسام لوحة الإدارة.
+builder.Services.AddScoped<GranularSettingsPermissionFilter>();
+
 // Add services to the container (تم دمج تفعيل الترجمة للواجهات هنا)
-builder.Services.AddControllersWithViews()
+builder.Services.AddControllersWithViews(options =>
+{
+    options.Filters.AddService<GranularSettingsPermissionFilter>();
+})
     .AddViewLocalization()
     .AddDataAnnotationsLocalization();
 

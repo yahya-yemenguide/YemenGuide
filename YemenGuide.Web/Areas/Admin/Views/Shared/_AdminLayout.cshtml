@@ -1,10 +1,11 @@
-﻿@using System.Globalization
+﻿﻿@using System.Globalization
 @using System.Linq
 @using Microsoft.EntityFrameworkCore
 @using Microsoft.Extensions.Localization
 @inject YemenGuide.Data.AppDbContext _context
 @inject Microsoft.Extensions.Configuration.IConfiguration Configuration
 @inject IStringLocalizer<YemenGuide.Web.SharedResource> L
+@inject YemenGuide.Web.Services.Employees.IAdminPermissionService AdminPermissionService
 
 @{
     var settings = _context.SystemSettings
@@ -52,6 +53,9 @@
     var darkModeEnabled = Context.Request.Cookies["darkMode"] == "enabled";
 
     bool showEmployeePasswordGate = false;
+    System.Collections.Generic.IReadOnlyCollection<string> adminPermissionKeys =
+        Array.Empty<string>();
+
     if (
         User.Identity?.IsAuthenticated == true &&
         User.IsInRole("Admin") &&
@@ -64,6 +68,11 @@
                 user.Role == "Admin")
             .Select(user => user.MustChangePassword)
             .FirstOrDefault();
+
+        adminPermissionKeys =
+            await AdminPermissionService.GetPermissionKeysAsync(
+                currentAdminUserId,
+                Context.RequestAborted);
     }
 }
 
@@ -189,6 +198,15 @@
             });
         })();
     </script>
+
+    <script>
+        window.YG_ADMIN_PERMISSION_KEYS =
+            @Html.Raw(
+                System.Text.Json.JsonSerializer.Serialize(
+                    adminPermissionKeys));
+    </script>
+    <script src="~/js/admin/settings-permissions.js"
+            asp-append-version="true"></script>
 
     @await RenderSectionAsync("Scripts", required: false)
 

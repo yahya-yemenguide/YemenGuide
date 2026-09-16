@@ -1,4 +1,4 @@
-﻿using System;
+﻿﻿using System;
 using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -40,6 +40,13 @@ namespace YemenGuide.Data.Seeding
 
                 // 3) زرع/تحديث قائمة الصلاحيات.
                 SeedPermissions(context);
+
+                // نحفظ أولًا حتى تحصل الصلاحيات الجديدة على IDs فعلية.
+                context.SaveChanges();
+
+                // المفاتيح القديمة كانت واسعة جدًا؛ نعطّلها حتى لا تمنح
+                // الموظف صلاحيات لم يخترها بعد إضافة التفصيل الجديد.
+                DisableLegacyBroadSettingsPermissions(context);
 
                 // كلمة مرور الموظف بعد أول دخول أصبحت مسؤولية الموظف نفسه.
                 // لذلك نعطّل صلاحية إعادة التعيين القديمة ونفك أي ربط سابق لها،
@@ -221,6 +228,45 @@ namespace YemenGuide.Data.Seeding
 
                 context.AdminPermissions.Add(newPermission);
                 existingPermissions[definition.Key] = newPermission;
+            }
+        }
+
+        private static void DisableLegacyBroadSettingsPermissions(
+            AppDbContext context)
+        {
+            var legacyKeys = new[]
+            {
+                AdminPermissionKeys.Settings.ManageGeneral,
+                AdminPermissionKeys.Settings.ManagePaymentNetworks
+            };
+
+            var legacyPermissions = context.AdminPermissions
+                .Where(permission =>
+                    legacyKeys.Contains(permission.PermissionKey))
+                .ToList();
+
+            if (legacyPermissions.Count == 0)
+            {
+                return;
+            }
+
+            var legacyIds = legacyPermissions
+                .Select(permission => permission.AdminPermissionId)
+                .ToList();
+
+            foreach (var permission in legacyPermissions)
+            {
+                permission.IsActive = false;
+            }
+
+            var legacyLinks = context.AdminRolePermissions
+                .Where(link =>
+                    legacyIds.Contains(link.AdminPermissionId))
+                .ToList();
+
+            if (legacyLinks.Count > 0)
+            {
+                context.AdminRolePermissions.RemoveRange(legacyLinks);
             }
         }
 

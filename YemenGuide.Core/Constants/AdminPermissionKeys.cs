@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+﻿﻿using System.Collections.Generic;
 
 namespace YemenGuide.Core.Constants
 {
@@ -68,9 +68,40 @@ namespace YemenGuide.Core.Constants
         public static class Settings
         {
             public const string View = "Settings.View";
+
+            // مفاتيح قديمة للتوافق مع قواعد البيانات السابقة فقط.
             public const string ManageGeneral = "Settings.ManageGeneral";
             public const string ManagePaymentNetworks = "Settings.ManagePaymentNetworks";
+
+            public const string ViewBranding = "Settings.Branding.View";
+            public const string ManageBranding = "Settings.Branding.Manage";
+
+            public const string ViewPolicies = "Settings.Policies.View";
+            public const string ManagePolicies = "Settings.Policies.Manage";
+
+            public const string ViewContact = "Settings.Contact.View";
+            public const string ManageContact = "Settings.Contact.Manage";
+
+            public const string ViewMaintenance = "Settings.Maintenance.View";
+            public const string ManageMaintenance = "Settings.Maintenance.Manage";
+
+            public const string ViewPaymentNetworks = "Settings.PaymentNetworks.View";
+            public const string AddPaymentNetwork = "Settings.PaymentNetworks.Add";
+            public const string EditPaymentNetwork = "Settings.PaymentNetworks.Edit";
+            public const string ChangePaymentNetworkStatus = "Settings.PaymentNetworks.ChangeStatus";
+            public const string DeletePaymentNetwork = "Settings.PaymentNetworks.Delete";
+            public const string ManageDefaultWalletLogo = "Settings.PaymentNetworks.ManageDefaultLogo";
+
+            public const string ViewHeroSlides = "Settings.HeroSlides.View";
             public const string ManageHeroSlides = "Settings.ManageHeroSlides";
+
+            public const string ViewBackups = "Settings.Backups.View";
+            public const string CreateBackup = "Settings.Backups.Create";
+            public const string DownloadBackup = "Settings.Backups.Download";
+            public const string RestoreBackup = "Settings.Backups.Restore";
+            public const string DeleteBackup = "Settings.Backups.Delete";
+            public const string ManageBackupSchedule = "Settings.Backups.ManageSchedule";
+            public const string ManageBackupCloud = "Settings.Backups.ManageCloud";
         }
 
         public static class Employees
@@ -324,26 +355,147 @@ namespace YemenGuide.Core.Constants
 
                 new(
                     AdminPermissionKeys.Settings.View,
-                    "مشاهدة إعدادات النظام",
+                    "دخول قسم إعدادات النظام",
                     "إعدادات النظام",
-                    "عرض إعدادات المنصة العامة والمحتوى والمحافظ المدعومة."),
+                    "صلاحية أساسية لدخول صفحة إعدادات النظام، وتُفهم تلقائيًا عند منح أي صلاحية فرعية."),
+
                 new(
-                    AdminPermissionKeys.Settings.ManageGeneral,
-                    "تعديل إعدادات النظام العامة",
+                    AdminPermissionKeys.Settings.ViewBranding,
+                    "مشاهدة الهوية والماركة",
                     "إعدادات النظام",
-                    "تعديل هوية المنصة والتسجيل والصيانة والتواصل والسياسات العامة.",
+                    "عرض هوية المنصة والشعارات والثيم الموسمي وإعدادات الترحيب."),
+                new(
+                    AdminPermissionKeys.Settings.ManageBranding,
+                    "تعديل الهوية والماركة",
+                    "إعدادات النظام",
+                    "تعديل اسم ووصف المنصة والشعارات والثيم الموسمي والبنر.",
+                    true),
+
+                new(
+                    AdminPermissionKeys.Settings.ViewPolicies,
+                    "مشاهدة سياسات التشغيل",
+                    "إعدادات النظام",
+                    "عرض سياسات التسجيل والموافقة وحدود الصور والإعدادات المالية المسموح بمشاهدتها."),
+                new(
+                    AdminPermissionKeys.Settings.ManagePolicies,
+                    "تعديل سياسات التشغيل",
+                    "إعدادات النظام",
+                    "تعديل التسجيل والموافقة التلقائية وحدود الصور دون منح إدارة الإعدادات المالية.",
+                    true),
+
+                new(
+                    AdminPermissionKeys.Settings.ViewContact,
+                    "مشاهدة التواصل والروابط",
+                    "إعدادات النظام",
+                    "عرض البريد والهاتف وروابط التواصل الخاصة بالمنصة."),
+                new(
+                    AdminPermissionKeys.Settings.ManageContact,
+                    "تعديل التواصل والروابط",
+                    "إعدادات النظام",
+                    "تعديل البريد والهاتف وروابط التواصل والواتساب.",
+                    true),
+
+                new(
+                    AdminPermissionKeys.Settings.ViewMaintenance,
+                    "مشاهدة الصيانة والطوارئ",
+                    "إعدادات النظام",
+                    "عرض حالة الصيانة وإعداداتها الحالية."),
+                new(
+                    AdminPermissionKeys.Settings.ManageMaintenance,
+                    "إدارة الصيانة والطوارئ",
+                    "إعدادات النظام",
+                    "تشغيل أو إيقاف الصيانة وتحديد نوعها ونطاقها ومواعيدها والخدمات المتأثرة.",
+                    true),
+
+                new(
+                    AdminPermissionKeys.Settings.ViewPaymentNetworks,
+                    "مشاهدة شبكات الدفع",
+                    "إعدادات النظام",
+                    "عرض البنوك والمحافظ وشبكات الدفع المدعومة."),
+                new(
+                    AdminPermissionKeys.Settings.AddPaymentNetwork,
+                    "إضافة شبكة دفع",
+                    "إعدادات النظام",
+                    "إضافة بنك أو محفظة أو شبكة دفع جديدة.",
                     true),
                 new(
-                    AdminPermissionKeys.Settings.ManagePaymentNetworks,
-                    "إدارة شبكات ومحافظ الدفع",
+                    AdminPermissionKeys.Settings.EditPaymentNetwork,
+                    "تعديل شبكة دفع",
                     "إعدادات النظام",
-                    "إضافة وتفعيل وإيقاف وحذف شبكات ومحافظ الدفع المدعومة.",
+                    "تعديل أسماء وبيانات شبكة الدفع.",
                     true),
+                new(
+                    AdminPermissionKeys.Settings.ChangePaymentNetworkStatus,
+                    "تفعيل أو إيقاف شبكة دفع",
+                    "إعدادات النظام",
+                    "تغيير الحالة التشغيلية لشبكة الدفع فقط.",
+                    true),
+                new(
+                    AdminPermissionKeys.Settings.DeletePaymentNetwork,
+                    "حذف شبكة دفع",
+                    "إعدادات النظام",
+                    "حذف شبكة دفع من النظام نهائيًا.",
+                    true),
+                new(
+                    AdminPermissionKeys.Settings.ManageDefaultWalletLogo,
+                    "تغيير الشعار الافتراضي لشبكات الدفع",
+                    "إعدادات النظام",
+                    "رفع أو تغيير الشعار الافتراضي لشبكات الدفع.",
+                    true),
+
+                new(
+                    AdminPermissionKeys.Settings.ViewHeroSlides,
+                    "مشاهدة شرائح الواجهة الرئيسية",
+                    "إعدادات النظام",
+                    "عرض شرائح الواجهة الرئيسية وحالتها وترتيبها."),
                 new(
                     AdminPermissionKeys.Settings.ManageHeroSlides,
                     "إدارة شرائح الواجهة الرئيسية",
                     "إعدادات النظام",
-                    "إضافة وتعديل وترتيب وتفعيل وحذف شرائح الواجهة الرئيسية."),
+                    "إضافة وتعديل وترتيب وتفعيل وحذف شرائح الواجهة الرئيسية.",
+                    true),
+
+                new(
+                    AdminPermissionKeys.Settings.ViewBackups,
+                    "مشاهدة النسخ الاحتياطية",
+                    "إعدادات النظام",
+                    "عرض حالة النسخ الاحتياطية والنسخ المحفوظة."),
+                new(
+                    AdminPermissionKeys.Settings.CreateBackup,
+                    "إنشاء نسخة احتياطية",
+                    "إعدادات النظام",
+                    "إنشاء نسخة احتياطية كاملة لقاعدة البيانات.",
+                    true),
+                new(
+                    AdminPermissionKeys.Settings.DownloadBackup,
+                    "تنزيل نسخة احتياطية",
+                    "إعدادات النظام",
+                    "تنزيل ملف نسخة احتياطية محفوظة.",
+                    true),
+                new(
+                    AdminPermissionKeys.Settings.RestoreBackup,
+                    "استعادة نسخة احتياطية",
+                    "إعدادات النظام",
+                    "استعادة قاعدة البيانات من نسخة محفوظة أو ملف مرفوع.",
+                    true),
+                new(
+                    AdminPermissionKeys.Settings.DeleteBackup,
+                    "حذف نسخة احتياطية",
+                    "إعدادات النظام",
+                    "حذف نسخة احتياطية محفوظة من النظام.",
+                    true),
+                new(
+                    AdminPermissionKeys.Settings.ManageBackupSchedule,
+                    "إدارة النسخ التلقائي",
+                    "إعدادات النظام",
+                    "تفعيل أو إيقاف النسخ التلقائي وتحديد وقت النسخ اليومي.",
+                    true),
+                new(
+                    AdminPermissionKeys.Settings.ManageBackupCloud,
+                    "إدارة Google Drive للنسخ",
+                    "إعدادات النظام",
+                    "ربط وفصل ومزامنة النسخ الاحتياطية مع Google Drive.",
+                    true),
 
                 new(
                     AdminPermissionKeys.Employees.View,
@@ -388,4 +540,3 @@ namespace YemenGuide.Core.Constants
             };
     }
 }
-
