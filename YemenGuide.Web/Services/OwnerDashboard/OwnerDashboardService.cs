@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -250,9 +250,8 @@ namespace YemenGuide.Web.Services.OwnerDashboard
                      (record.CollectedAt.HasValue &&
                       record.CollectedAt.Value >= sixMonthsStart &&
                       record.CollectedAt.Value < nextMonthStart) ||
-                     (record.UpdatedAt.HasValue &&
-                      record.UpdatedAt.Value >= sixMonthsStart &&
-                      record.UpdatedAt.Value < nextMonthStart)))
+                     (record.UpdatedAt >= sixMonthsStart &&
+                      record.UpdatedAt < nextMonthStart)))
                 .Select(record => new FinancialEventRow
                 {
                     BookingId = record.BookingId,

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace YemenGuide.Core.Entities
 {
@@ -51,8 +52,17 @@ namespace YemenGuide.Core.Entities
         public string? RewardType { get; set; }
         public int? RequiredQuantity { get; set; }
         public int? RewardQuantity { get; set; }
+
+        // الحقل القديم لا يُحذف. أول خدمة من الاختيار المتعدد تُحفظ فيه للتوافق.
         public int? RewardServiceId { get; set; }
+
+        // المرحلة 5/6: Snapshot متعدد للخدمات (المعرف + الاسم + السعر الأصلي وقت إنشاء العرض).
+        // RewardServiceId القديم يبقى كما هو للتوافق مع العروض القديمة.
+        [Column("RewardServicesJson")]
+        public string? RewardServicesJson { get; set; }
+
         public decimal? SpecialPrice { get; set; }
+
         public bool IsRewardRepeatable { get; set; }
 
         public virtual User Owner { get; set; } = null!;

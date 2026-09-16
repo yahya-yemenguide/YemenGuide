@@ -473,8 +473,9 @@ document.addEventListener("DOMContentLoaded", function () {
                     <div class="details-package-field">
                         <label for="package-price">السعر <span>*</span></label>
                         <div class="details-package-number-field">
-                            <input id="package-price" type="number" min="0.01" step="0.01"
-                                   class="form-control" value="${escapePackageHtml(price)}" placeholder="0">
+                            <input id="package-price" type="text" inputmode="decimal" autocomplete="off"
+                                   class="form-control" value="${escapePackageHtml(price)}" placeholder="0"
+                                   data-package-numeric="price" aria-label="سعر الباقة">
                             <span>ريال</span>
                         </div>
                     </div>
@@ -482,8 +483,9 @@ document.addEventListener("DOMContentLoaded", function () {
                     <div class="details-package-field">
                         <label for="package-capacity">السعة <span>*</span></label>
                         <div class="details-package-number-field">
-                            <input id="package-capacity" type="number" min="1" step="1"
-                                   class="form-control" value="${escapePackageHtml(capacity)}" placeholder="1">
+                            <input id="package-capacity" type="text" inputmode="numeric" autocomplete="off"
+                                   class="form-control" value="${escapePackageHtml(capacity)}" placeholder="1"
+                                   data-package-numeric="capacity" aria-label="سعة الباقة">
                             <span>شخص</span>
                         </div>
                     </div>
@@ -541,10 +543,126 @@ document.addEventListener("DOMContentLoaded", function () {
             </div>`;
     }
 
+    function installPackageNumericGuards(root) {
+        if (!root) return;
+
+        const priceInput = root.querySelector('#package-price');
+        const capacityInput = root.querySelector('#package-capacity');
+
+        const isControlKey = event =>
+            event.key === 'Backspace' ||
+            event.key === 'Delete' ||
+            event.key === 'Tab' ||
+            event.key === 'Escape' ||
+            event.key === 'Enter' ||
+            event.key === 'ArrowLeft' ||
+            event.key === 'ArrowRight' ||
+            event.key === 'ArrowUp' ||
+            event.key === 'ArrowDown' ||
+            event.key === 'Home' ||
+            event.key === 'End';
+
+        const getProspectiveValue = (input, insertedText) => {
+            const start = input.selectionStart ?? input.value.length;
+            const end = input.selectionEnd ?? input.value.length;
+            return input.value.slice(0, start) + insertedText + input.value.slice(end);
+        };
+
+        const normalizePrice = value => {
+            let cleaned = String(value ?? '').replace(/[^0-9.]/g, '');
+            const firstDot = cleaned.indexOf('.');
+
+            if (firstDot >= 0) {
+                cleaned =
+                    cleaned.slice(0, firstDot + 1) +
+                    cleaned.slice(firstDot + 1).replace(/\./g, '');
+
+                const parts = cleaned.split('.');
+                cleaned = parts[0] + '.' + (parts[1] ?? '').slice(0, 2);
+            }
+
+            return cleaned;
+        };
+
+        const normalizeCapacity = value =>
+            String(value ?? '').replace(/[^0-9]/g, '');
+
+        const bindStrictNumericInput = (input, kind) => {
+            if (!input || input.dataset.numericGuardReady === 'true') return;
+            input.dataset.numericGuardReady = 'true';
+
+            const isPrice = kind === 'price';
+            const validPattern = isPrice
+                ? /^(?:[0-9]+(?:\.[0-9]{0,2})?|\.[0-9]{0,2})?$/
+                : /^[0-9]*$/;
+
+            input.addEventListener('keydown', event => {
+                if (event.ctrlKey || event.metaKey || event.altKey || isControlKey(event)) {
+                    return;
+                }
+
+                if (event.key.length !== 1) return;
+
+                if (!/[0-9.]/.test(event.key)) {
+                    event.preventDefault();
+                    return;
+                }
+
+                if (!isPrice && event.key === '.') {
+                    event.preventDefault();
+                    return;
+                }
+
+                const prospective = getProspectiveValue(input, event.key);
+                if (!validPattern.test(prospective)) {
+                    event.preventDefault();
+                }
+            });
+
+            input.addEventListener('beforeinput', event => {
+                if (!event.inputType?.startsWith('insert') || event.data == null) return;
+
+                const prospective = getProspectiveValue(input, event.data);
+                if (!validPattern.test(prospective)) {
+                    event.preventDefault();
+                }
+            });
+
+            input.addEventListener('paste', event => {
+                const pasted = event.clipboardData?.getData('text') ?? '';
+                const prospective = getProspectiveValue(input, pasted);
+
+                if (!validPattern.test(prospective)) {
+                    event.preventDefault();
+                }
+            });
+
+            input.addEventListener('drop', event => {
+                event.preventDefault();
+            });
+
+            input.addEventListener('input', () => {
+                const original = input.value;
+                const cleaned = isPrice
+                    ? normalizePrice(original)
+                    : normalizeCapacity(original);
+
+                if (original !== cleaned) {
+                    input.value = cleaned;
+                }
+            });
+        };
+
+        bindStrictNumericInput(priceInput, 'price');
+        bindStrictNumericInput(capacityInput, 'capacity');
+    }
+
     function initPackageEditor() {
         const root = Swal.getPopup()?.querySelector('[data-package-editor]');
         if (!root || root.dataset.ready === 'true') return;
         root.dataset.ready = 'true';
+
+        installPackageNumericGuards(root);
 
         const startInput = root.querySelector('#package-start');
         const endInput = root.querySelector('#package-end');
@@ -589,8 +707,19 @@ document.addEventListener("DOMContentLoaded", function () {
         if (!root) return { error: 'تعذر قراءة نموذج الباقة.' };
 
         const name = root.querySelector('#package-name').value.trim();
-        const price = Number(root.querySelector('#package-price').value);
-        const capacity = Number(root.querySelector('#package-capacity').value);
+        const rawPrice = root.querySelector('#package-price').value.trim();
+        const rawCapacity = root.querySelector('#package-capacity').value.trim();
+
+        if (!/^[0-9]+(?:\.[0-9]{1,2})?$/.test(rawPrice)) {
+            return { error: 'سعر الباقة يجب أن يحتوي على أرقام موجبة فقط، ويمكن استخدام نقطة عشرية حتى منزلتين.' };
+        }
+
+        if (!/^[0-9]+$/.test(rawCapacity)) {
+            return { error: 'سعة الباقة يجب أن تحتوي على أرقام صحيحة موجبة فقط بدون إشارات أو رموز.' };
+        }
+
+        const price = Number(rawPrice);
+        const capacity = Number(rawCapacity);
         const start = root.querySelector('#package-start').value;
         const end = root.querySelector('#package-end').value;
         const isActive = root.querySelector('#package-active').checked;
@@ -941,21 +1070,7 @@ document.addEventListener("DOMContentLoaded", function () {
                         const price = r.price !== undefined ? r.price.toLocaleString() : '0';
                         const qty = r.quantity || r.Quantity || 0;
                         const units = r.units || r.Units || [];
-
-                        // اعرض رقم/أرقام الطوابق التي يوجد فيها هذا النوع فعليًا،
-                        // بدل عرض عدد الطوابق فقط. مثال: غرفة في الطابق 2 => "الطابق 2" وليس "1 طابق".
-                        const floorNumbers = [...new Set(
-                            units
-                                .map(unit => Number(unit.floorNumber ?? unit.FloorNumber ?? 0))
-                                .filter(number => Number.isInteger(number))
-                        )].sort((a, b) => a - b);
-
-                        const floorsText = floorNumbers.length === 0
-                            ? 'بدون طابق'
-                            : floorNumbers.length === 1
-                                ? (floorNumbers[0] === 0 ? 'الدور الأرضي' : `الطابق ${floorNumbers[0]}`)
-                                : `الطوابق ${floorNumbers.map(number => number === 0 ? 'الأرضي' : number).join('، ')}`;
-
+                        const floorCount = new Set(units.map(unit => unit.floorNumber ?? unit.FloorNumber ?? 0)).size;
                         const area = r.areaSquareMeters ?? r.AreaSquareMeters;
                         const adults = r.maxAdults ?? r.MaxAdults ?? 1;
                         const children = r.maxChildren ?? r.MaxChildren ?? 0;
@@ -976,7 +1091,7 @@ document.addEventListener("DOMContentLoaded", function () {
                             <p class="text-success fw-black fs-6 mb-2">${price} ر.ي</p>
                             <div class="details-room-card-meta">
                                 <small><i class="bi ${isSuite ? 'bi-gem' : 'bi-door-open-fill'}"></i> ${qty} ${isSuite ? 'جناح فعلي' : 'غرفة فعلية'}</small>
-                                <small><i class="bi bi-layers"></i> ${floorsText}</small>
+                                <small><i class="bi bi-layers"></i> ${floorCount} طابق</small>
                                 <small><i class="bi bi-people"></i> ${adults} بالغ / ${children} طفل</small>
                                 ${area ? `<small><i class="bi bi-aspect-ratio"></i> ${area} م²</small>` : ''}
                                 ${isSuite ? `<small><i class="bi bi-grid-3x3-gap"></i> ${internalRooms} غرف داخلية</small>` : (beds !== null && beds !== undefined ? `<small><i class="bi bi-moon-stars"></i> ${beds} سرير</small>` : '')}
@@ -2127,28 +2242,12 @@ document.addEventListener("DOMContentLoaded", function () {
 
         function groupHotelFloorPlanUnits(units) {
             const map = new Map();
-
             (units || []).forEach(unit => {
                 const floorNumber = Number(unit.floorNumber ?? 0);
                 const floorLabel = String(unit.floorLabel ?? '').trim();
-
-                // FIX: الطابق يُعرَّف برقم الطابق نفسه، وليس بالرقم + الاسم.
-                // هذا يمنع تقسيم نفس الطابق إلى أكثر من بطاقة إذا اختلف FloorLabel
-                // بين الوحدات القديمة أو كان بعضه فارغًا.
-                const key = floorNumber;
-
-                if (!map.has(key)) {
-                    map.set(key, { floorNumber, floorLabel, units: [] });
-                }
-
-                const floor = map.get(key);
-
-                // إذا أول وحدة لم يكن لها اسم طابق، نأخذ أول اسم غير فارغ من بقية الوحدات.
-                if (!floor.floorLabel && floorLabel) {
-                    floor.floorLabel = floorLabel;
-                }
-
-                floor.units.push(unit);
+                const key = `${floorNumber}|${floorLabel}`;
+                if (!map.has(key)) map.set(key, { floorNumber, floorLabel, units: [] });
+                map.get(key).units.push(unit);
             });
 
             const floors = Array.from(map.values()).sort((a, b) => a.floorNumber - b.floorNumber);
@@ -2302,7 +2401,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 </div>
 
                 <div class="details-floor-cards" data-plan-floor-cards>
-                    ${floors.map((floor, index) => floorPlanCardHtml(floor, index, rooms, true)).join('')}
+                    ${floors.map((floor, index) => floorPlanCardHtml(floor, index, rooms, index === 0)).join('')}
                 </div>
             </div>`;
         }
@@ -2313,18 +2412,7 @@ document.addEventListener("DOMContentLoaded", function () {
             root.dataset.ready = 'true';
 
             const cards = root.querySelector('[data-plan-floor-cards]');
-
-            // FIX: رقم الطابق الجديد يعتمد على أكبر FloorNumber موجود فعليًا،
-            // وليس على عدد البطاقات. مثال: الطوابق 0 و 2 و 5 => التالي 6.
-            const existingFloorNumbers = Array.from(
-                cards.querySelectorAll('[data-plan-floor-number]')
-            )
-                .map(input => Number(input.value))
-                .filter(value => Number.isInteger(value));
-
-            let sequence = existingFloorNumbers.length
-                ? Math.max(...existingFloorNumbers, 0) + 1
-                : 1;
+            let sequence = cards.querySelectorAll('[data-plan-floor]').length + 1;
 
             const updateFloor = card => {
                 const units = card.querySelector('[data-plan-units]');
@@ -2437,7 +2525,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
             const units = [];
             const numbers = new Set();
-            const floorNumbers = new Set();
 
             for (const floor of root.querySelectorAll('[data-plan-floor]')) {
                 const floorNumber = Number(floor.querySelector('[data-plan-floor-number]')?.value || 0);
@@ -2446,12 +2533,6 @@ document.addEventListener("DOMContentLoaded", function () {
                 if (!Number.isInteger(floorNumber) || floorNumber < -100 || floorNumber > 1000) {
                     return { error: 'رقم أحد الطوابق غير صحيح.' };
                 }
-
-                // FIX: لا نسمح بوجود بطاقتي طابق بنفس FloorNumber.
-                if (floorNumbers.has(floorNumber)) {
-                    return { error: `رقم الطابق (${floorNumber}) مكرر.` };
-                }
-                floorNumbers.add(floorNumber);
 
                 for (const row of floor.querySelectorAll('[data-plan-unit]')) {
                     const roomUnitId = Number(row.querySelector('[data-plan-field="RoomUnitId"]')?.value || 0);

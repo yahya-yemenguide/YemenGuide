@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System;
@@ -6,6 +6,7 @@ using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using System.IO;
 using YemenGuide.Data;
@@ -106,6 +107,31 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             policy.AllowSmoking = false;
             policy.AllowParties = false;
             policy.AllowQatInside = false;
+
+            // قبل اعتماد السياسة الافتراضية نتأكد أن كل الباقات الموجودة متوافقة معها.
+            var packagesForDefaultPolicy = await _context.PlacePackages
+                .AsNoTracking()
+                .Where(item => item.PlaceId == placeId)
+                .ToListAsync();
+
+            foreach (var existingPackage in packagesForDefaultPolicy)
+            {
+                var packagePolicyError =
+                    ValidatePackageAgainstOperationPolicy(policy, existingPackage);
+
+                if (!string.IsNullOrWhiteSpace(packagePolicyError))
+                {
+                    var packageName = string.IsNullOrWhiteSpace(existingPackage.PackageName)
+                        ? "باقة بدون اسم"
+                        : existingPackage.PackageName.Trim();
+
+                    return Json(new
+                    {
+                        success = false,
+                        message = $"لا يمكن تطبيق السياسة لأن الباقة «{packageName}» غير متوافقة معها. {packagePolicyError}"
+                    });
+                }
+            }
 
             // =================================================================
             // منشأة الأدمن الحالية لا تصبح نشطة عند الإنشاء.
@@ -328,7 +354,28 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     return StatusCode(403, new { success = false, message = "غير مصرح لك." });
 
                 var place = await _context.Places.FindAsync(dto.PlaceId);
-                if (place != null && !string.IsNullOrEmpty(place.Description))
+                if (place == null)
+                    return Json(new { success = false, message = "المنشأة غير موجودة." });
+
+                var operationPolicy = await _context.PlacePolicies
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(p => p.PlaceId == dto.PlaceId);
+
+                // أثناء إنشاء المنشأة قد لا تكون السياسة موجودة بعد، وهذا مسموح.
+                // بعد وجود السياسة يجب أن تتوافق أي باقة جديدة معها فورًا.
+                var packagePolicyError =
+                    ValidatePackageAgainstOperationPolicy(operationPolicy, dto);
+
+                if (!string.IsNullOrWhiteSpace(packagePolicyError))
+                {
+                    return Json(new
+                    {
+                        success = false,
+                        message = $"لا يمكن إضافة الباقة. {packagePolicyError}"
+                    });
+                }
+
+                if (!string.IsNullOrEmpty(place.Description))
                 {
                     var match = System.Text.RegularExpressions.Regex.Match(place.Description, @"السعة:\s*(\d+)");
                     if (match.Success && int.TryParse(match.Groups[1].Value, out int maxCap))
@@ -380,6 +427,22 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             if (!await CanManagePlaceAsync(package.PlaceId, AdminPermissionKeys.Places.Edit))
                 return StatusCode(403, new { success = false, message = "غير مصرح لك." });
 
+            var operationPolicy = await _context.PlacePolicies
+                .AsNoTracking()
+                .FirstOrDefaultAsync(p => p.PlaceId == package.PlaceId);
+
+            var packagePolicyError =
+                ValidatePackageAgainstOperationPolicy(operationPolicy, dto);
+
+            if (!string.IsNullOrWhiteSpace(packagePolicyError))
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = $"لا يمكن تعديل الباقة. {packagePolicyError}"
+                });
+            }
+
             package.PackageName = dto.PackageName.Trim();
             package.Price = dto.Price;
             package.Capacity = dto.Capacity;
@@ -406,6 +469,196 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             return Json(new { success = true, message = "تم حذف المرفق بنجاح." });
         }
 
+
+
+        private sealed class PackagePolicyShiftWindow
+        {
+            public TimeSpan Start { get; init; }
+            public TimeSpan End { get; init; }
+        }
+
+        private static string? ValidatePackageAgainstOperationPolicy(
+            PlacePolicy? policy,
+            PlacePackage package)
+        {
+            // لا توجد سياسة بعد = المنشأة ما زالت في مرحلة التجهيز.
+            if (policy == null)
+            {
+                return null;
+            }
+
+            if (!package.StartTime.HasValue ||
+                !package.EndTime.HasValue ||
+                package.StartTime.Value == package.EndTime.Value)
+            {
+                return "وقت بداية ونهاية الباقة غير صالح.";
+            }
+
+            var operationMode = policy.OperationSystemMode?.Trim();
+
+            if (string.Equals(operationMode, "Shifts", StringComparison.OrdinalIgnoreCase))
+            {
+                var shifts = ReadPackagePolicyShifts(policy.ShiftsJson);
+                if (shifts.Count == 0)
+                {
+                    return "أضف فترة تشغيلية صالحة واحدة على الأقل قبل استخدام الباقات.";
+                }
+
+                foreach (var shift in shifts)
+                {
+                    if (PackageFitsOperationWindow(
+                            package.StartTime.Value,
+                            package.EndTime.Value,
+                            shift.Start,
+                            shift.End))
+                    {
+                        return null;
+                    }
+                }
+
+                return "وقت الباقة يجب أن يكون بالكامل داخل فترة تشغيلية واحدة.";
+            }
+
+            if (string.Equals(operationMode, "FullDay", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(operationMode, "Daily", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!TryParsePackagePolicyClock(policy.CheckInTime, out var checkIn) ||
+                    !TryParsePackagePolicyClock(policy.CheckOutTime, out var checkOut) ||
+                    checkIn == checkOut)
+                {
+                    return "حدد وقت دخول وخروج صالح لنظام اليوم الكامل أولًا.";
+                }
+
+                return PackageFitsOperationWindow(
+                    package.StartTime.Value,
+                    package.EndTime.Value,
+                    checkIn,
+                    checkOut)
+                        ? null
+                        : "وقت الباقة يجب أن يكون بالكامل داخل وقت الدخول والخروج المحدد في نظام اليوم الكامل.";
+            }
+
+            return null;
+        }
+
+        private static bool PackageFitsOperationWindow(
+            TimeSpan packageStart,
+            TimeSpan packageEnd,
+            TimeSpan windowStart,
+            TimeSpan windowEnd)
+        {
+            const double minutesPerDay = 24d * 60d;
+            const double toleranceMinutes = 0.0001d;
+
+            var packageStartMinutes = packageStart.TotalMinutes;
+            var packageEndMinutes = packageEnd.TotalMinutes;
+            if (packageEnd <= packageStart)
+            {
+                packageEndMinutes += minutesPerDay;
+            }
+
+            var windowStartMinutes = windowStart.TotalMinutes;
+            var windowEndMinutes = windowEnd.TotalMinutes;
+            if (windowEnd <= windowStart)
+            {
+                windowEndMinutes += minutesPerDay;
+            }
+
+            for (var dayOffset = -1; dayOffset <= 1; dayOffset++)
+            {
+                var offset = dayOffset * minutesPerDay;
+                var candidateStart = windowStartMinutes + offset;
+                var candidateEnd = windowEndMinutes + offset;
+
+                if (packageStartMinutes + toleranceMinutes >= candidateStart &&
+                    packageEndMinutes <= candidateEnd + toleranceMinutes)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool TryParsePackagePolicyClock(
+            string? value,
+            out TimeSpan clock)
+        {
+            clock = default;
+            return !string.IsNullOrWhiteSpace(value) &&
+                   TimeSpan.TryParse(value.Trim(), out clock) &&
+                   clock >= TimeSpan.Zero &&
+                   clock < TimeSpan.FromDays(1);
+        }
+
+        private static List<PackagePolicyShiftWindow> ReadPackagePolicyShifts(
+            string? json)
+        {
+            var result = new List<PackagePolicyShiftWindow>();
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                return result;
+            }
+
+            try
+            {
+                using var document = JsonDocument.Parse(json);
+                if (document.RootElement.ValueKind != JsonValueKind.Array)
+                {
+                    return result;
+                }
+
+                foreach (var item in document.RootElement.EnumerateArray())
+                {
+                    if (item.ValueKind != JsonValueKind.Object)
+                    {
+                        continue;
+                    }
+
+                    string? from = null;
+                    string? to = null;
+
+                    foreach (var property in item.EnumerateObject())
+                    {
+                        if (property.Value.ValueKind != JsonValueKind.String)
+                        {
+                            continue;
+                        }
+
+                        if (property.Name.Equals("from", StringComparison.OrdinalIgnoreCase) ||
+                            property.Name.Equals("start", StringComparison.OrdinalIgnoreCase) ||
+                            property.Name.Equals("startTime", StringComparison.OrdinalIgnoreCase))
+                        {
+                            from = property.Value.GetString();
+                        }
+
+                        if (property.Name.Equals("to", StringComparison.OrdinalIgnoreCase) ||
+                            property.Name.Equals("end", StringComparison.OrdinalIgnoreCase) ||
+                            property.Name.Equals("endTime", StringComparison.OrdinalIgnoreCase))
+                        {
+                            to = property.Value.GetString();
+                        }
+                    }
+
+                    if (TryParsePackagePolicyClock(from, out var start) &&
+                        TryParsePackagePolicyClock(to, out var end) &&
+                        start != end)
+                    {
+                        result.Add(new PackagePolicyShiftWindow
+                        {
+                            Start = start,
+                            End = end
+                        });
+                    }
+                }
+            }
+            catch (JsonException)
+            {
+                // JSON غير صالح = لا توجد فترات قابلة للاستخدام.
+            }
+
+            return result;
+        }
 
         // 🌟 1. دالة جلب بيانات الخدمة للتعديل (أضفنا الوصف والصورة)
         [HttpGet]
@@ -1424,7 +1677,28 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             if (!await CanManagePlaceAsync(package.PlaceId, AdminPermissionKeys.Places.Edit))
                 return StatusCode(403, new { success = false, message = "غير مصرح لك." });
 
-            package.IsActive = !(package.IsActive ?? true);
+            var newActiveState = !(package.IsActive ?? true);
+
+            if (newActiveState)
+            {
+                var operationPolicy = await _context.PlacePolicies
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(p => p.PlaceId == package.PlaceId);
+
+                var packagePolicyError =
+                    ValidatePackageAgainstOperationPolicy(operationPolicy, package);
+
+                if (!string.IsNullOrWhiteSpace(packagePolicyError))
+                {
+                    return Json(new
+                    {
+                        success = false,
+                        message = $"لا يمكن تفعيل الباقة. {packagePolicyError}"
+                    });
+                }
+            }
+
+            package.IsActive = newActiveState;
             await _context.SaveChangesAsync();
 
             return Json(new

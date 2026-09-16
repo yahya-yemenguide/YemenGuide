@@ -2,265 +2,168 @@
      style="display: none;"
      role="tabpanel">
 
-    <section class="backup-recovery-center"
+    <section class="backup-v3"
              id="backupRecoveryCenter"
              data-dashboard-url="@Url.Action("Dashboard", "Backup", new { area = "Admin" })"
              data-create-url="@Url.Action("CreateFull", "Backup", new { area = "Admin" })"
-             data-verify-url="@Url.Action("Verify", "Backup", new { area = "Admin" })"
-             data-test-restore-url="@Url.Action("TestRestore", "Backup", new { area = "Admin" })"
-             data-delete-url="@Url.Action("Delete", "Backup", new { area = "Admin" })"
              data-save-settings-url="@Url.Action("SaveSettings", "Backup", new { area = "Admin" })"
              data-download-base="/Admin/Backup/Download/"
-             data-live-restore-url="@Url.Action("RestoreLive", "Backup", new { area = "Admin" })">
+             data-restore-stored-url="@Url.Action("RestoreStored", "Backup", new { area = "Admin" })"
+             data-restore-uploaded-url="@Url.Action("RestoreUploaded", "Backup", new { area = "Admin" })"
+             data-delete-url="@Url.Action("Delete", "Backup", new { area = "Admin" })">
 
-        <div class="backup-hero">
-            <div class="backup-hero__orb backup-hero__orb--one"></div>
-            <div class="backup-hero__orb backup-hero__orb--two"></div>
-
-            <div class="backup-hero__content">
-                <span class="backup-hero__eyebrow">
-                    <i class="bi bi-shield-check"></i>
-                    حماية بيانات دليلك اليمني
+        <header class="backup-v3__header">
+            <div class="backup-v3__title">
+                <span class="backup-v3__eyebrow">
+                    <i class="bi bi-database-check"></i>
+                    حماية قاعدة البيانات
                 </span>
 
                 <h2>النسخ الاحتياطي والاستعادة</h2>
 
                 <p>
-                    أنشئ نسخة كاملة من قاعدة البيانات، تحقق من سلامتها،
-                    واختبر الاستعادة في قاعدة منفصلة قبل الاعتماد عليها.
+                    أنشئ نسخة كاملة لقاعدة البيانات واحفظها على جهازك،
+                    أو استعد نسخة سابقة عند الحاجة.
                 </p>
-
-                <div class="backup-hero__actions">
-                    <button type="button"
-                            class="backup-primary-action"
-                            id="backupCreateNowBtn">
-                        <span class="backup-primary-action__icon">
-                            <i class="bi bi-database-add"></i>
-                        </span>
-                        <span>
-                            <small>نسخة آمنة الآن</small>
-                            <strong>إنشاء نسخة كاملة</strong>
-                        </span>
-                        <i class="bi bi-arrow-left"></i>
-                    </button>
-
-                    <button type="button"
-                            class="backup-secondary-action"
-                            id="backupRefreshBtn">
-                        <i class="bi bi-arrow-clockwise"></i>
-                        تحديث الحالة
-                    </button>
-                </div>
             </div>
 
-            <div class="backup-hero__health">
-                <div class="backup-health-ring"
-                     id="backupHealthRing">
-                    <div>
-                        <span id="backupHealthIcon">
-                            <i class="bi bi-hourglass-split"></i>
-                        </span>
-                        <strong id="backupHealthTitle">جاري الفحص</strong>
-                        <small id="backupHealthText">SQL Server</small>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="backup-metrics">
-            <article class="backup-metric">
-                <span class="backup-metric__icon is-cyan">
-                    <i class="bi bi-clock-history"></i>
+            <div class="backup-v3__actions">
+                <span class="backup-v3__ready"
+                      id="backupReadyBadge">
+                    <i class="bi bi-hourglass-split"></i>
+                    جاري الفحص
                 </span>
-                <div>
-                    <small>آخر نسخة</small>
-                    <strong id="backupLastBackup">—</strong>
-                    <span id="backupLastBackupSub">لا توجد بيانات بعد</span>
-                </div>
-            </article>
-
-            <article class="backup-metric">
-                <span class="backup-metric__icon is-green">
-                    <i class="bi bi-patch-check"></i>
-                </span>
-                <div>
-                    <small>سلامة النسخة</small>
-                    <strong id="backupVerifyStatus">—</strong>
-                    <span id="backupVerifySub">RESTORE VERIFYONLY</span>
-                </div>
-            </article>
-
-            <article class="backup-metric">
-                <span class="backup-metric__icon is-amber">
-                    <i class="bi bi-calendar2-week"></i>
-                </span>
-                <div>
-                    <small>النسخ التلقائي</small>
-                    <strong id="backupAutoStatus">—</strong>
-                    <span id="backupAutoSub">يوميًا</span>
-                </div>
-            </article>
-
-            <article class="backup-metric">
-                <span class="backup-metric__icon is-navy">
-                    <i class="bi bi-arrow-counterclockwise"></i>
-                </span>
-                <div>
-                    <small>اختبار الاستعادة</small>
-                    <strong id="backupRestoreTestStatus">—</strong>
-                    <span id="backupRestoreTestSub">قاعدة اختبار منفصلة</span>
-                </div>
-            </article>
-        </div>
-
-        <div class="backup-grid">
-            <section class="backup-card backup-card--schedule">
-                <header class="backup-card__head">
-                    <div>
-                        <span class="backup-card__icon">
-                            <i class="bi bi-calendar2-check"></i>
-                        </span>
-                        <div>
-                            <small>الحماية التلقائية</small>
-                            <h3>جدولة النسخ اليومية</h3>
-                        </div>
-                    </div>
-
-                    <label class="backup-switch">
-                        <input type="checkbox"
-                               id="backupAutoEnabled">
-                        <span></span>
-                    </label>
-                </header>
-
-                <div class="backup-schedule-body">
-                    <label class="backup-field">
-                        <span>
-                            <i class="bi bi-clock"></i>
-                            وقت النسخ
-                        </span>
-                        <input type="time"
-                               id="backupDailyTime"
-                               value="02:30">
-                        <small>بتوقيت اليمن</small>
-                    </label>
-
-                    <label class="backup-field">
-                        <span>
-                            <i class="bi bi-layers"></i>
-                            عدد النسخ المحفوظة
-                        </span>
-                        <input type="number"
-                               id="backupRetentionCount"
-                               min="1"
-                               max="30"
-                               value="7">
-                        <small>للنسخ التلقائية فقط</small>
-                    </label>
-
-                    <label class="backup-check-row">
-                        <input type="checkbox"
-                               id="backupVerifyAfter"
-                               checked>
-                        <span>
-                            <b>التحقق بعد كل نسخة</b>
-                            <small>SQL Server يفحص سلامة ملف النسخة مباشرة.</small>
-                        </span>
-                    </label>
-                </div>
 
                 <button type="button"
-                        class="backup-save-schedule"
-                        id="backupSaveSettingsBtn">
-                    <i class="bi bi-check2-circle"></i>
-                    حفظ إعدادات النسخ
+                        class="backup-v3__button backup-v3__button--secondary"
+                        id="backupRestoreFromFileBtn">
+                    <i class="bi bi-folder2-open"></i>
+                    استعادة من ملف
                 </button>
-            </section>
 
-            <section class="backup-card backup-card--server">
-                <header class="backup-card__head">
-                    <div>
-                        <span class="backup-card__icon is-dark">
-                            <i class="bi bi-server"></i>
-                        </span>
-                        <div>
-                            <small>بيئة قاعدة البيانات</small>
-                            <h3>جاهزية SQL Server</h3>
-                        </div>
-                    </div>
-                </header>
+                <button type="button"
+                        class="backup-v3__button backup-v3__button--primary"
+                        id="backupCreateNowBtn">
+                    <i class="bi bi-download"></i>
+                    إنشاء وحفظ نسخة
+                </button>
 
-                <div class="backup-server-list">
-                    <div>
-                        <span>قاعدة البيانات</span>
-                        <strong id="backupDatabaseName">—</strong>
-                    </div>
-                    <div>
-                        <span>نموذج الاسترداد</span>
-                        <strong id="backupRecoveryModel">—</strong>
-                    </div>
-                    <div>
-                        <span>صلاحية النسخ</span>
-                        <strong id="backupPermissionStatus">—</strong>
-                    </div>
-                    <div>
-                        <span>اختبار الاستعادة</span>
-                        <strong id="backupTestPermissionStatus">—</strong>
-                    </div>
-                </div>
+                <input type="file"
+                       id="backupRestoreFileInput"
+                       accept=".bak,application/octet-stream"
+                       class="d-none" />
+            </div>
+        </header>
 
-                <div class="backup-server-note">
-                    <i class="bi bi-info-circle"></i>
-                    <span id="backupServerNote">
-                        سيتم فحص قدرات الخادم تلقائيًا.
-                    </span>
-                </div>
-            </section>
-        </div>
+        <section class="backup-v3__summary">
+            <div class="backup-v3__summary-main">
+                <span class="backup-v3__summary-icon">
+                    <i class="bi bi-clock-history"></i>
+                </span>
 
-        <section class="backup-library">
-            <header class="backup-library__head">
                 <div>
-                    <span class="backup-library__eyebrow">
-                        محفوظات الحماية
+                    <small>آخر نسخة</small>
+                    <strong id="backupLastBackupTitle">
+                        لا توجد نسخة حتى الآن
+                    </strong>
+                    <span id="backupLastBackupTime">
+                        عند إنشاء النسخة ستظهر هنا مباشرة.
                     </span>
-                    <h3>النسخ الاحتياطية</h3>
+                </div>
+            </div>
+
+            <div class="backup-v3__summary-meta">
+                <div>
+                    <small>الحالة</small>
+                    <strong id="backupLastBackupStatus">—</strong>
+                </div>
+
+                <div>
+                    <small>الحجم</small>
+                    <strong id="backupLastBackupSize">—</strong>
+                </div>
+
+                <div>
+                    <small>عدد النسخ</small>
+                    <strong id="backupCount">0</strong>
+                </div>
+            </div>
+        </section>
+
+        <section class="backup-v3__auto">
+            <div class="backup-v3__auto-copy">
+                <span class="backup-v3__auto-icon">
+                    <i class="bi bi-arrow-repeat"></i>
+                </span>
+                <div>
+                    <h3>النسخ التلقائي اليومي</h3>
                     <p>
-                        كل نسخة أنشأها النظام مع نتيجة التحقق واختبار الاستعادة.
+                        يحتفظ النظام بآخر <b>7 نسخ تلقائية</b> فقط.
+                        النسخ اليدوية لا تُحذف تلقائيًا، ونسخ الأمان قبل الاستعادة يحتفظ بآخر <b>3</b>.
+                    </p>
+                </div>
+            </div>
+
+            <div class="backup-v3__auto-controls">
+                <label class="backup-v3__auto-toggle">
+                    <input type="checkbox"
+                           id="backupAutoEnabled" />
+                    <span></span>
+                    <b id="backupAutoLabel">غير مفعّل</b>
+                </label>
+
+                <label class="backup-v3__time">
+                    <span>وقت النسخ</span>
+                    <input type="time"
+                           id="backupDailyTime"
+                           value="02:00" />
+                </label>
+
+                <button type="button"
+                        class="backup-v3__auto-save"
+                        id="backupSaveAutoBtn">
+                    <i class="bi bi-check2-circle"></i>
+                    حفظ
+                </button>
+            </div>
+        </section>
+
+        <section class="backup-v3__list">
+            <header class="backup-v3__list-head">
+                <div>
+                    <h3>النسخ المحفوظة</h3>
+                    <p>
+                        الاسم الذي تختاره عند الحفظ يظهر هنا،
+                        وتستطيع تنزيل النسخة أو استعادتها أو حذفها.
                     </p>
                 </div>
 
-                <div class="backup-library__legend">
-                    <span>
-                        <i class="bi bi-check-circle-fill"></i>
-                        سليم
-                    </span>
-                    <span>
-                        <i class="bi bi-hourglass-split"></i>
-                        لم يُختبر
-                    </span>
-                </div>
+                <button type="button"
+                        class="backup-v3__refresh"
+                        id="backupRefreshBtn">
+                    <i class="bi bi-arrow-clockwise"></i>
+                    تحديث
+                </button>
             </header>
 
-            <div class="backup-table-wrap">
-                <table class="backup-table">
+            <div class="backup-v3__table-wrap">
+                <table class="backup-v3__table">
                     <thead>
                         <tr>
                             <th>النسخة</th>
-                            <th>وقت الإنشاء</th>
+                            <th>التاريخ والوقت</th>
                             <th>الحجم</th>
-                            <th>التحقق</th>
-                            <th>اختبار الاستعادة</th>
-                            <th>المصدر</th>
+                            <th>الحالة</th>
                             <th>الإجراءات</th>
                         </tr>
                     </thead>
+
                     <tbody id="backupTableBody">
                         <tr>
-                            <td colspan="7">
-                                <div class="backup-loading-row">
+                            <td colspan="5">
+                                <div class="backup-v3__empty">
                                     <span class="spinner-border spinner-border-sm"></span>
-                                    جاري قراءة سجل النسخ...
+                                    جاري تحميل النسخ...
                                 </div>
                             </td>
                         </tr>
@@ -269,26 +172,13 @@
             </div>
         </section>
 
-        <section class="backup-safety-zone">
-            <div class="backup-safety-zone__icon">
-                <i class="bi bi-shield-lock-fill"></i>
-            </div>
-
-            <div class="backup-safety-zone__copy">
-                <small>منطقة الاستعادة الفعلية</small>
-                <h3>قاعدة البيانات الحقيقية محمية افتراضيًا</h3>
-                <p>
-                    زر الاستعادة الفعلية لا يعمل إلا إذا فُعّل من إعدادات الخادم
-                    وكان حساب SQL Server يملك صلاحية الاستعادة.
-                    اختبار الاستعادة لا يغيّر قاعدة بيانات المشروع الأصلية.
-                </p>
-            </div>
-
-            <span class="backup-live-restore-badge"
-                  id="backupLiveRestoreBadge">
-                <i class="bi bi-lock-fill"></i>
-                مقفلة
+        <div class="backup-v3__note">
+            <i class="bi bi-shield-check"></i>
+            <span>
+                قبل أي استعادة فعلية، ينشئ النظام تلقائيًا نسخة أمان للحالة الحالية.
+                النسخ الخارجية مثل Google Drive سنضيفها بعد إكمال المحلي.
             </span>
-        </section>
+        </div>
+
     </section>
 </div>

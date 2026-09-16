@@ -449,6 +449,233 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             };
         }
 
+        private static string? ValidatePackageAgainstOperationPolicy(
+            PlacePolicy? policy,
+            PlacePackage package)
+        {
+            if (policy == null)
+            {
+                return null;
+            }
+
+            if (!package.StartTime.HasValue ||
+                !package.EndTime.HasValue ||
+                package.StartTime.Value == package.EndTime.Value)
+            {
+                return "وقت بداية ونهاية الباقة غير صالح.";
+            }
+
+            var operationMode = policy.OperationSystemMode?.Trim();
+
+            if (string.Equals(operationMode, "Shifts", StringComparison.OrdinalIgnoreCase))
+            {
+                var shifts = ReadPackagePolicyShifts(policy.ShiftsJson);
+                if (shifts.Count == 0)
+                {
+                    return "أضف فترة تشغيلية صالحة واحدة على الأقل قبل استخدام الباقات.";
+                }
+
+                foreach (var shift in shifts)
+                {
+                    if (PackageFitsOperationWindow(
+                            package.StartTime.Value,
+                            package.EndTime.Value,
+                            shift))
+                    {
+                        return null;
+                    }
+                }
+
+                return "وقت الباقة يجب أن يكون بالكامل داخل فترة تشغيلية واحدة.";
+            }
+
+            if (string.Equals(operationMode, "FullDay", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(operationMode, "Daily", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!TryParsePackagePolicyClock(policy.CheckInTime, out var checkIn) ||
+                    !TryParsePackagePolicyClock(policy.CheckOutTime, out var checkOut) ||
+                    checkIn == checkOut)
+                {
+                    return "حدد وقت دخول وخروج صالح لنظام اليوم الكامل أولًا.";
+                }
+
+                return PackageFitsOperationWindow(
+                    package.StartTime.Value,
+                    package.EndTime.Value,
+                    checkIn,
+                    checkOut)
+                        ? null
+                        : "وقت الباقة يجب أن يكون بالكامل داخل وقت الدخول والخروج المحدد في نظام اليوم الكامل.";
+            }
+
+            return null;
+        }
+
+        private static bool PackageFitsOperationWindow(
+            TimeSpan packageStart,
+            TimeSpan packageEnd,
+            TimeSpan windowStart,
+            TimeSpan windowEnd)
+        {
+            const double minutesPerDay = 24d * 60d;
+            const double toleranceMinutes = 0.0001d;
+
+            var packageStartMinutes = packageStart.TotalMinutes;
+            var packageEndMinutes = packageEnd.TotalMinutes;
+            if (packageEnd <= packageStart)
+            {
+                packageEndMinutes += minutesPerDay;
+            }
+
+            var windowStartMinutes = windowStart.TotalMinutes;
+            var windowEndMinutes = windowEnd.TotalMinutes;
+            if (windowEnd <= windowStart)
+            {
+                windowEndMinutes += minutesPerDay;
+            }
+
+            for (var dayOffset = -1; dayOffset <= 1; dayOffset++)
+            {
+                var offset = dayOffset * minutesPerDay;
+                var candidateStart = windowStartMinutes + offset;
+                var candidateEnd = windowEndMinutes + offset;
+
+                if (packageStartMinutes + toleranceMinutes >= candidateStart &&
+                    packageEndMinutes <= candidateEnd + toleranceMinutes)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool TryParsePackagePolicyClock(
+            string? value,
+            out TimeSpan clock)
+        {
+            clock = default;
+            return !string.IsNullOrWhiteSpace(value) &&
+                   TimeSpan.TryParse(value.Trim(), out clock) &&
+                   clock >= TimeSpan.Zero &&
+                   clock < TimeSpan.FromDays(1);
+        }
+
+        private static List<OperationalShiftWindow> ReadPackagePolicyShifts(
+            string? json)
+        {
+            var result = new List<OperationalShiftWindow>();
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                return result;
+            }
+
+            try
+            {
+                using var document = JsonDocument.Parse(json);
+                if (document.RootElement.ValueKind != JsonValueKind.Array)
+                {
+                    return result;
+                }
+
+                foreach (var item in document.RootElement.EnumerateArray())
+                {
+                    if (item.ValueKind != JsonValueKind.Object)
+                    {
+                        continue;
+                    }
+
+                    var from = GetJsonText(item, "from", "start", "startTime");
+                    var to = GetJsonText(item, "to", "end", "endTime");
+
+                    if (TryParseClockMinutes(from, out var startMinutes) &&
+                        TryParseClockMinutes(to, out var endMinutes) &&
+                        startMinutes != endMinutes)
+                    {
+                        result.Add(new OperationalShiftWindow
+                        {
+                            Name = GetJsonText(item, "name", "title", "label"),
+                            StartMinutes = startMinutes,
+                            EndMinutes = endMinutes
+                        });
+                    }
+                }
+            }
+            catch (JsonException)
+            {
+                // الفحص الأساسي للفترات سيعرض الرسالة المناسبة قبل الوصول هنا.
+            }
+
+            return result;
+        }
+
+        private static bool PackageFitsOperationWindow(
+            TimeSpan packageStart,
+            TimeSpan packageEnd,
+            OperationalShiftWindow shift)
+        {
+            return PackageFitsOperationWindow(
+                packageStart,
+                packageEnd,
+                TimeSpan.FromMinutes(shift.StartMinutes),
+                TimeSpan.FromMinutes(shift.EndMinutes));
+        }
+
+        private async Task<string?> ValidateExistingPackagesAgainstPolicyAsync(
+            int placeId,
+            PlacePolicy candidatePolicy)
+        {
+            // IMPORTANT: intentionally validate ALL packages (active and paused).
+            // A paused conflicting package must not become a hidden backdoor that can
+            // be activated later under an incompatible operating policy.
+            var packages = await _context.PlacePackages
+                .AsNoTracking()
+                .Where(item => item.PlaceId == placeId)
+                .OrderBy(item => item.PackageId)
+                .ToListAsync();
+
+            foreach (var package in packages)
+            {
+                var validationMessage =
+                    ValidatePackageAgainstOperationPolicy(candidatePolicy, package);
+
+                if (!string.IsNullOrWhiteSpace(validationMessage))
+                {
+                    var packageName = string.IsNullOrWhiteSpace(package.PackageName)
+                        ? "باقة بدون اسم"
+                        : package.PackageName.Trim();
+
+                    var packageTime =
+                        package.StartTime.HasValue && package.EndTime.HasValue
+                            ? $" ({package.StartTime.Value.ToString(@"hh\:mm")} - {package.EndTime.Value.ToString(@"hh\:mm")})"
+                            : string.Empty;
+
+                    return
+                        $"الباقة «{packageName}»{packageTime} غير متوافقة مع سياسة التشغيل. {validationMessage}";
+                }
+            }
+
+            return null;
+        }
+
+        private async Task<string?> ValidateExistingPackagesAgainstProposedSettingsAsync(
+            int placeId,
+            FacilitySettingsDto model)
+        {
+            // Build an in-memory policy from the exact values submitted by the UI.
+            // Nothing is written to the tracked/saved policy until this validation passes.
+            var candidatePolicy = new PlacePolicy
+            {
+                PlaceId = placeId
+            };
+
+            ApplyDtoToPolicy(model, candidatePolicy);
+
+            return await ValidateExistingPackagesAgainstPolicyAsync(
+                placeId,
+                candidatePolicy);
+        }
+
         private JsonResult InvalidModelJson()
         {
             var message = ModelState.Values
@@ -718,6 +945,23 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 });
             }
 
+            // HARD GUARD: validate every existing package against the exact new
+            // operating values BEFORE touching the saved policy.
+            // Example: FullDay 10:00-12:00 rejects a 09:00-13:00 package.
+            var packagesValidationMessage =
+                await ValidateExistingPackagesAgainstProposedSettingsAsync(
+                    model.PlaceId,
+                    model);
+
+            if (!string.IsNullOrWhiteSpace(packagesValidationMessage))
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = $"لا يمكن حفظ سياسة التشغيل. {packagesValidationMessage}"
+                });
+            }
+
             try
             {
                 var policy = await _context.PlacePolicies
@@ -917,6 +1161,20 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 AllowQatInside = false,
                 CreatedAt = DateTime.Now
             };
+
+            var defaultPackagesValidationMessage =
+                await ValidateExistingPackagesAgainstPolicyAsync(
+                    placeId,
+                    defaultPolicy);
+
+            if (!string.IsNullOrWhiteSpace(defaultPackagesValidationMessage))
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = $"لا يمكن تطبيق السياسة الافتراضية. {defaultPackagesValidationMessage}"
+                });
+            }
 
             _context.PlacePolicies.Add(defaultPolicy);
 

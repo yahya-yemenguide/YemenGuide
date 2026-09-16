@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using YemenGuide.Core.DTOs.Owner;
 using YemenGuide.Core.Entities;
@@ -29,6 +30,14 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             "SpecialPrice",
             "ServiceSpecialPrice"
         };
+
+        private sealed class PromotionRewardServiceSnapshot
+        {
+            public int ServiceId { get; set; }
+            public string Name { get; set; } = string.Empty;
+            public decimal OriginalPrice { get; set; }
+        }
+
 
         // =====================================================================
         // تبويب العروض والخصومات
@@ -99,12 +108,26 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 }
             }
 
-            DateTime today = DateTime.Today;
+            DateTime now = DateTime.Now;
 
             foreach (Promotion promotion in promotions)
             {
-                string effectiveStatus = ResolvePromotionEffectiveStatus(promotion, today);
+                string effectiveStatus = ResolvePromotionEffectiveStatus(promotion, now);
                 string targetType = ResolvePromotionTargetType(promotion);
+                var rewardServiceSnapshots = ParsePromotionServiceSnapshots(
+                    promotion.RewardServicesJson,
+                    promotion.RewardServiceId);
+                decimal? bundleOriginalPrice = rewardServiceSnapshots.Count > 0
+                    ? Math.Round(rewardServiceSnapshots.Sum(item => Math.Max(0m, item.OriginalPrice)), 2)
+                    : null;
+                decimal? bundleFinalPrice =
+                    string.Equals(promotion.RewardType, "ServiceSpecialPrice", StringComparison.OrdinalIgnoreCase)
+                        ? promotion.SpecialPrice
+                        : null;
+                decimal? bundleSavingsAmount =
+                    bundleOriginalPrice.HasValue && bundleFinalPrice.HasValue
+                        ? Math.Round(Math.Max(0m, bundleOriginalPrice.Value - bundleFinalPrice.Value), 2)
+                        : null;
 
                 model.Promotions.Add(new PromotionCardDto
                 {
@@ -119,7 +142,11 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     RewardQuantity = promotion.RewardQuantity,
                     IsRewardRepeatable = promotion.IsRewardRepeatable,
                     RewardServiceId = promotion.RewardServiceId,
+                    RewardServiceIds = rewardServiceSnapshots.Select(item => item.ServiceId).ToList(),
                     SpecialPrice = promotion.SpecialPrice,
+                    BundleOriginalPrice = bundleOriginalPrice,
+                    BundleFinalPrice = bundleFinalPrice,
+                    BundleSavingsAmount = bundleSavingsAmount,
                     OfferSummary = BuildPromotionSummary(promotion, targetType),
                     DiscountType = promotion.DiscountType,
                     DiscountValue = promotion.DiscountValue,
@@ -187,7 +214,8 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 {
                     Id = item.RoomId,
                     Name = string.IsNullOrWhiteSpace(item.RoomType) ? "غرفة / جناح" : item.RoomType,
-                    Meta = BuildTargetMeta(item.RoomNumber, item.Price)
+                    Meta = BuildTargetMeta(item.RoomNumber, item.Price),
+                    Price = item.Price
                 }).ToList();
             }
 
@@ -209,7 +237,8 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 {
                     Id = item.PackageId,
                     Name = string.IsNullOrWhiteSpace(item.PackageName) ? "باقة" : item.PackageName,
-                    Meta = item.Price.ToString("N0") + " ريال"
+                    Meta = item.Price.ToString("N0") + " ريال",
+                    Price = item.Price
                 }).ToList();
 
                 var serviceTargets = await _context.PlaceAdditionalServices
@@ -228,7 +257,8 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 {
                     Id = item.ServiceId,
                     Name = string.IsNullOrWhiteSpace(item.ServiceName) ? "خدمة إضافية" : item.ServiceName,
-                    Meta = item.Price.ToString("N0") + " ريال"
+                    Meta = item.Price.ToString("N0") + " ريال",
+                    Price = item.Price
                 }).ToList();
             }
 
@@ -305,6 +335,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     RewardQuantity = dto.RewardQuantity,
                     IsRewardRepeatable = dto.IsRewardRepeatable,
                     RewardServiceId = dto.RewardServiceId,
+                    RewardServicesJson = dto.RewardServicesJson,
                     SpecialPrice = dto.SpecialPrice,
                     DiscountType = dto.DiscountType,
                     DiscountValue = dto.DiscountValue,
@@ -317,8 +348,8 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     IsAutomatic = dto.IsAutomatic,
                     PromoCode = dto.IsAutomatic ? null : NormalizePromoCode(dto.PromoCode),
                     IsStackable = dto.IsStackable,
-                    StartDate = dto.StartDate.Date,
-                    EndDate = dto.EndDate.Date,
+                    StartDate = dto.StartDate,
+                    EndDate = dto.EndDate,
                     StayStartDate = dto.StayStartDate?.Date,
                     StayEndDate = dto.StayEndDate?.Date,
                     ApplicableDaysCsv = NormalizeApplicableDays(dto.ApplicableDaysCsv),
@@ -432,6 +463,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 promotion.RewardQuantity = dto.RewardQuantity;
                 promotion.IsRewardRepeatable = dto.IsRewardRepeatable;
                 promotion.RewardServiceId = dto.RewardServiceId;
+                promotion.RewardServicesJson = dto.RewardServicesJson;
                 promotion.SpecialPrice = dto.SpecialPrice;
                 promotion.DiscountType = dto.DiscountType;
                 promotion.DiscountValue = dto.DiscountValue;
@@ -444,8 +476,8 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 promotion.IsAutomatic = dto.IsAutomatic;
                 promotion.PromoCode = dto.IsAutomatic ? null : NormalizePromoCode(dto.PromoCode);
                 promotion.IsStackable = dto.IsStackable;
-                promotion.StartDate = dto.StartDate.Date;
-                promotion.EndDate = dto.EndDate.Date;
+                promotion.StartDate = dto.StartDate;
+                promotion.EndDate = dto.EndDate;
                 promotion.StayStartDate = dto.StayStartDate?.Date;
                 promotion.StayEndDate = dto.StayEndDate?.Date;
                 promotion.ApplicableDaysCsv = NormalizeApplicableDays(dto.ApplicableDaysCsv);
@@ -516,7 +548,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             if (promotion == null)
                 return Json(new { success = false, message = "العرض غير موجود ضمن المنشأة المختارة." });
 
-            if (request.IsActive && promotion.EndDate.Date < DateTime.Today)
+            if (request.IsActive && promotion.EndDate <= DateTime.Now)
                 return Json(new
                 {
                     success = false,
@@ -631,13 +663,34 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 return "اكتب اسمًا واضحًا للعرض لا يقل عن ثلاثة أحرف.";
 
             if (dto.StartDate == default || dto.EndDate == default)
-                return "حدد تاريخ بداية العرض ونهايته.";
+                return "حدد تاريخ ووقت بداية العرض ونهايته.";
 
-            if (dto.EndDate.Date < dto.StartDate.Date)
-                return "تاريخ انتهاء العرض يجب أن يكون بعد تاريخ البداية أو مساويًا له.";
+            if (dto.EndDate <= dto.StartDate)
+                return "تاريخ ووقت انتهاء العرض يجب أن يكون بعد البداية.";
+
+            DateTime now = DateTime.Now;
+            bool startIsPast = dto.StartDate < now.AddSeconds(-30);
+            if (startIsPast)
+            {
+                bool unchangedLegacyStart = false;
+                if (currentPromotionId.HasValue)
+                {
+                    DateTime? currentStart = await _context.Promotions
+                        .AsNoTracking()
+                        .Where(item => item.PromotionId == currentPromotionId.Value && item.PlaceId == placeId)
+                        .Select(item => (DateTime?)item.StartDate)
+                        .FirstOrDefaultAsync();
+
+                    unchangedLegacyStart = currentStart.HasValue &&
+                        Math.Abs((currentStart.Value - dto.StartDate).TotalSeconds) < 60d;
+                }
+
+                if (!unchangedLegacyStart)
+                    return "بداية العرض لا يمكن أن تكون في وقت مضى.";
+            }
 
             if (string.Equals(dto.SaveMode, "Publish", StringComparison.OrdinalIgnoreCase) &&
-                dto.EndDate.Date < DateTime.Today)
+                dto.EndDate <= now)
                 return "لا يمكن نشر عرض انتهت مدته.";
 
             if (dto.StayStartDate.HasValue != dto.StayEndDate.HasValue)
@@ -699,21 +752,49 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
                 if (rewardType == "FreeService" || rewardType == "ServiceSpecialPrice")
                 {
-                    if (!dto.RewardServiceId.HasValue)
-                        return "اختر الخدمة التي سيحصل عليها العميل ضمن العرض.";
+                    NormalizePromotionRewardServiceIds(dto);
+                    if (dto.RewardServiceIds.Count == 0)
+                        return "اختر خدمة واحدة على الأقل ضمن المكافأة.";
 
-                    bool rewardServiceExists = await _context.PlaceAdditionalServices
+                    var rewardServices = await _context.PlaceAdditionalServices
                         .AsNoTracking()
-                        .AnyAsync(item =>
-                            item.ServiceId == dto.RewardServiceId.Value &&
+                        .Where(item =>
+                            dto.RewardServiceIds.Contains(item.ServiceId) &&
                             item.PlaceId == placeId &&
-                            item.IsActive != false);
+                            item.IsActive != false)
+                        .Select(item => new PromotionRewardServiceSnapshot
+                        {
+                            ServiceId = item.ServiceId,
+                            Name = item.ServiceName ?? "خدمة إضافية",
+                            OriginalPrice = item.Price
+                        })
+                        .ToListAsync();
 
-                    if (!rewardServiceExists)
-                        return "خدمة المكافأة غير موجودة أو لا تتبع المنشأة الحالية.";
+                    if (rewardServices.Count != dto.RewardServiceIds.Count)
+                        return "إحدى خدمات المكافأة غير موجودة أو لا تتبع المنشأة الحالية.";
+
+                    dto.RewardServiceId = dto.RewardServiceIds.First();
+                    dto.RewardServicesJson = SerializePromotionServiceSnapshots(rewardServices);
+
+                    if (rewardType == "ServiceSpecialPrice")
+                    {
+                        if (!dto.SpecialPrice.HasValue || dto.SpecialPrice.Value <= 0)
+                            return "أدخل السعر النهائي لباقة الخدمات بشكل صحيح.";
+
+                        decimal originalBundlePrice = rewardServices.Sum(item => Math.Max(0m, item.OriginalPrice));
+                        if (originalBundlePrice <= 0m)
+                            return "تعذر حساب السعر الأصلي للخدمات المختارة.";
+
+                        if (dto.SpecialPrice.Value >= originalBundlePrice)
+                            return $"السعر النهائي للباقة يجب أن يكون أقل من مجموع أسعار الخدمات ({originalBundlePrice:N0} ريال).";
+
+                        dto.BundleOriginalPrice = Math.Round(originalBundlePrice, 2);
+                        dto.BundleFinalPrice = Math.Round(dto.SpecialPrice.Value, 2);
+                        dto.BundleSavingsAmount = Math.Round(originalBundlePrice - dto.SpecialPrice.Value, 2);
+                    }
                 }
 
-                if (rewardType == "SpecialPrice" || rewardType == "ServiceSpecialPrice")
+                if (rewardType == "SpecialPrice")
                 {
                     if (!dto.SpecialPrice.HasValue || dto.SpecialPrice.Value <= 0)
                         return "أدخل السعر الخاص بشكل صحيح.";
@@ -950,7 +1031,12 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 dto.RewardQuantity = null;
                 dto.IsRewardRepeatable = false;
                 dto.RewardServiceId = null;
+                dto.RewardServiceIds.Clear();
+                dto.RewardServicesJson = null;
                 dto.SpecialPrice = null;
+                dto.BundleOriginalPrice = null;
+                dto.BundleFinalPrice = null;
+                dto.BundleSavingsAmount = null;
                 dto.MinimumBookingAmount = null;
                 dto.MinimumNights = null;
                 dto.MinimumPeople = null;
@@ -970,7 +1056,12 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 dto.RewardQuantity = null;
                 dto.IsRewardRepeatable = false;
                 dto.RewardServiceId = null;
+                dto.RewardServiceIds.Clear();
+                dto.RewardServicesJson = null;
                 dto.SpecialPrice = null;
+                dto.BundleOriginalPrice = null;
+                dto.BundleFinalPrice = null;
+                dto.BundleSavingsAmount = null;
 
                 dto.DiscountType = string.Equals(dto.DiscountType, "FixedAmount", StringComparison.OrdinalIgnoreCase)
                     ? "FixedAmount"
@@ -984,6 +1075,8 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 dto.RewardType = string.IsNullOrWhiteSpace(dto.RewardType)
                     ? null
                     : dto.RewardType.Trim();
+
+                NormalizePromotionRewardServiceIds(dto);
 
                 // نستخدم حقول الخصم القديمة فقط عندما تكون مكافأة العرض خصمًا ماليًا.
                 if (dto.RewardType == "PercentageDiscount")
@@ -1010,11 +1103,22 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
                 if (dto.RewardType != "FreeService" &&
                     dto.RewardType != "ServiceSpecialPrice")
+                {
                     dto.RewardServiceId = null;
+                    dto.RewardServiceIds.Clear();
+                    dto.RewardServicesJson = null;
+                }
 
                 if (dto.RewardType != "SpecialPrice" &&
                     dto.RewardType != "ServiceSpecialPrice")
                     dto.SpecialPrice = null;
+
+                if (dto.RewardType != "ServiceSpecialPrice")
+                {
+                    dto.BundleOriginalPrice = null;
+                    dto.BundleFinalPrice = null;
+                    dto.BundleSavingsAmount = null;
+                }
             }
 
             if (bookingSystemId != 1)
@@ -1031,6 +1135,72 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
             if (dto.IsAutomatic)
                 dto.PromoCode = null;
+        }
+
+        private static void NormalizePromotionRewardServiceIds(PromotionUpsertDto dto)
+        {
+            var ids = (dto.RewardServiceIds ?? new List<int>())
+                .Where(id => id > 0)
+                .Distinct()
+                .ToList();
+
+            if (ids.Count == 0 && dto.RewardServiceId.HasValue && dto.RewardServiceId.Value > 0)
+                ids.Add(dto.RewardServiceId.Value);
+
+            dto.RewardServiceIds = ids;
+            dto.RewardServiceId = ids.Count > 0 ? ids[0] : null;
+        }
+
+        private static string? SerializePromotionServiceSnapshots(
+            IEnumerable<PromotionRewardServiceSnapshot>? services)
+        {
+            var values = (services ?? Enumerable.Empty<PromotionRewardServiceSnapshot>())
+                .Where(item => item.ServiceId > 0)
+                .GroupBy(item => item.ServiceId)
+                .Select(group => group.First())
+                .ToList();
+
+            return values.Count == 0
+                ? null
+                : JsonSerializer.Serialize(values);
+        }
+
+        private static List<PromotionRewardServiceSnapshot> ParsePromotionServiceSnapshots(
+            string? json,
+            int? legacyServiceId)
+        {
+            var result = new List<PromotionRewardServiceSnapshot>();
+
+            if (!string.IsNullOrWhiteSpace(json))
+            {
+                try
+                {
+                    result = JsonSerializer.Deserialize<List<PromotionRewardServiceSnapshot>>(json) ??
+                             new List<PromotionRewardServiceSnapshot>();
+                }
+                catch (JsonException)
+                {
+                    result = new List<PromotionRewardServiceSnapshot>();
+                }
+            }
+
+            result = result
+                .Where(item => item.ServiceId > 0)
+                .GroupBy(item => item.ServiceId)
+                .Select(group => group.First())
+                .ToList();
+
+            if (result.Count == 0 && legacyServiceId.HasValue && legacyServiceId.Value > 0)
+            {
+                result.Add(new PromotionRewardServiceSnapshot
+                {
+                    ServiceId = legacyServiceId.Value,
+                    Name = string.Empty,
+                    OriginalPrice = 0m
+                });
+            }
+
+            return result;
         }
 
         private static void ApplyPromotionTarget(Promotion promotion, PromotionUpsertDto dto)
@@ -1119,17 +1289,45 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                         ? $"{promotion.RewardQuantity.Value} مجانًا (يتكرر العرض)"
                         : $"{promotion.RewardQuantity.Value} مجانًا",
                 "FreeService"
-                    => $"خدمة {promotion.PlaceAdditionalService?.ServiceName ?? "إضافية"} مجانًا",
+                    => ParsePromotionServiceSnapshots(promotion.RewardServicesJson, promotion.RewardServiceId).Count > 1
+                        ? $"{ParsePromotionServiceSnapshots(promotion.RewardServicesJson, promotion.RewardServiceId).Count} خدمات مجانًا"
+                        : $"خدمة {promotion.PlaceAdditionalService?.ServiceName ?? "إضافية"} مجانًا",
                 "SpecialPrice" when promotion.SpecialPrice.HasValue
                     => $"سعر خاص {promotion.SpecialPrice.Value:N0} ريال",
                 "ServiceSpecialPrice" when promotion.SpecialPrice.HasValue
-                    => $"{promotion.PlaceAdditionalService?.ServiceName ?? "الخدمة"} بسعر {promotion.SpecialPrice.Value:N0} ريال",
+                    => BuildServiceBundleSummary(promotion),
                 _ => "مكافأة خاصة"
             };
 
             return string.IsNullOrWhiteSpace(condition)
                 ? $"{reward} على {targetLabel}"
                 : $"{condition} واحصل على {reward}";
+        }
+
+        private static string BuildServiceBundleSummary(Promotion promotion)
+        {
+            var services = ParsePromotionServiceSnapshots(
+                promotion.RewardServicesJson,
+                promotion.RewardServiceId);
+
+            decimal original = Math.Round(
+                services.Sum(item => Math.Max(0m, item.OriginalPrice)),
+                2);
+
+            if (services.Count > 1 && original > 0m && promotion.SpecialPrice.HasValue)
+            {
+                decimal saving = Math.Round(
+                    Math.Max(0m, original - promotion.SpecialPrice.Value),
+                    2);
+
+                return $"باقة {services.Count} خدمات بسعر {promotion.SpecialPrice.Value:N0} ريال بدل {original:N0} (توفير {saving:N0} ريال)";
+            }
+
+            string serviceName = services.FirstOrDefault()?.Name ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(serviceName))
+                serviceName = promotion.PlaceAdditionalService?.ServiceName ?? "الخدمة";
+
+            return $"{serviceName} بسعر {promotion.SpecialPrice!.Value:N0} ريال";
         }
 
         private static string BuildPromotionConditionSummary(Promotion promotion)
@@ -1158,22 +1356,23 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             return string.IsNullOrEmpty(number) ? type : type + " • " + number;
         }
 
-        private static string ResolvePromotionEffectiveStatus(Promotion promotion, DateTime today)
+        private static string ResolvePromotionEffectiveStatus(Promotion promotion, DateTime now)
         {
             string status = (promotion.Status ?? string.Empty).Trim();
 
             if (status.Equals("Cancelled", StringComparison.OrdinalIgnoreCase)) return "Cancelled";
             if (status.Equals("Draft", StringComparison.OrdinalIgnoreCase)) return "Draft";
-            if (promotion.EndDate.Date < today.Date) return "Expired";
+            if (promotion.EndDate <= now) return "Expired";
             if (status.Equals("Paused", StringComparison.OrdinalIgnoreCase) || promotion.IsActive != true) return "Paused";
-            if (promotion.StartDate.Date > today.Date) return "Scheduled";
+            if (promotion.StartDate > now) return "Scheduled";
             return "Active";
         }
 
         private static string ResolvePublishedStatus(DateTime startDate, DateTime endDate)
         {
-            if (endDate.Date < DateTime.Today) return "Expired";
-            return startDate.Date > DateTime.Today ? "Scheduled" : "Active";
+            DateTime now = DateTime.Now;
+            if (endDate <= now) return "Expired";
+            return startDate > now ? "Scheduled" : "Active";
         }
 
         private static string GetPromotionStatusLabel(string status)

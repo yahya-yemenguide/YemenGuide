@@ -1,5 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using System;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -14,17 +17,18 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
     [Route("Admin/Backup")]
     public sealed class BackupController : Controller
     {
+        private const long MaxRestoreUploadBytes =
+            2L * 1024L * 1024L * 1024L; // 2 GB
+
         private readonly IBackupService _backupService;
 
-        public BackupController(
-            IBackupService backupService)
+        public BackupController(IBackupService backupService)
         {
             _backupService = backupService;
         }
 
         [HttpGet("Dashboard")]
-        [RequireAdminPermission(
-            AdminPermissionKeys.Settings.View)]
+        [RequireAdminPermission(AdminPermissionKeys.Settings.View)]
         public async Task<IActionResult> Dashboard(
             CancellationToken cancellationToken)
         {
@@ -40,29 +44,24 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                     data.Capabilities.DatabaseReachable,
                     data.Capabilities.DatabaseName,
                     data.Capabilities.ServerName,
-                    data.Capabilities.ProductVersion,
-                    data.Capabilities.Edition,
                     data.Capabilities.RecoveryModel,
                     data.Capabilities.CanBackup,
-                    data.Capabilities.CanCreateTestDatabase,
+                    data.Capabilities.CanRestore,
                     data.Capabilities.CanDownloadBackupFiles,
-                    data.Capabilities.AllowLiveRestore,
-                    data.Capabilities.CanLiveRestore,
-                    backupDirectory =
-                        data.Capabilities.BackupDirectoryLabel,
                     data.Capabilities.Error
                 },
                 settings = new
                 {
                     data.Settings.AutoBackupEnabled,
                     data.Settings.DailyTime,
-                    data.Settings.RetentionCount,
-                    data.Settings.VerifyAfterBackup
+                    data.Settings.AutomaticRetentionCount,
+                    data.Settings.SafetyRetentionCount
                 },
                 backups = data.Backups.Select(item => new
                 {
                     item.Id,
                     item.FileName,
+                    item.DisplayName,
                     item.Type,
                     item.Source,
                     item.Status,
@@ -70,142 +69,96 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                     item.SizeBytes,
                     item.Verified,
                     verifiedAtUtc = item.VerifiedAtUtc,
-                    item.TestRestorePassed,
-                    testRestoreAtUtc =
-                        item.TestRestoreAtUtc,
-                    liveRestoredAtUtc =
-                        item.LiveRestoredAtUtc,
+                    liveRestoredAtUtc = item.LiveRestoredAtUtc,
                     item.LastError,
                     canDownload =
-                        data.Capabilities
-                            .CanDownloadBackupFiles
+                        data.Capabilities.CanDownloadBackupFiles
                 })
             });
         }
 
         [HttpPost("CreateFull")]
         [ValidateAntiForgeryToken]
-        [RequireAdminPermission(
-            AdminPermissionKeys.Settings.ManageGeneral)]
+        [RequireAdminPermission(AdminPermissionKeys.Settings.ManageGeneral)]
         public async Task<IActionResult> CreateFull(
+            [FromForm] string? displayName,
             CancellationToken cancellationToken)
         {
             var result =
                 await _backupService.CreateFullBackupAsync(
-                    "Manual",
+                    displayName,
                     cancellationToken);
+
+            string? downloadUrl = null;
+
+            if (result.Success &&
+                result.Backup != null)
+            {
+                downloadUrl =
+                    Url.Action(
+                        nameof(Download),
+                        "Backup",
+                        new
+                        {
+                            area = "Admin",
+                            backupId = result.Backup.Id
+                        });
+            }
 
             return Json(new
             {
                 success = result.Success,
-                message = result.Message
-            });
-        }
-
-        [HttpPost("Verify")]
-        [ValidateAntiForgeryToken]
-        [RequireAdminPermission(
-            AdminPermissionKeys.Settings.ManageGeneral)]
-        public async Task<IActionResult> Verify(
-            [FromForm] string backupId,
-            CancellationToken cancellationToken)
-        {
-            var result =
-                await _backupService.VerifyBackupAsync(
-                    backupId,
-                    cancellationToken);
-
-            return Json(new
-            {
-                success = result.Success,
-                message = result.Message
-            });
-        }
-
-        [HttpPost("TestRestore")]
-        [ValidateAntiForgeryToken]
-        [RequireAdminPermission(
-            AdminPermissionKeys.Settings.ManageGeneral)]
-        public async Task<IActionResult> TestRestore(
-            [FromForm] string backupId,
-            CancellationToken cancellationToken)
-        {
-            var result =
-                await _backupService.TestRestoreAsync(
-                    backupId,
-                    cancellationToken);
-
-            return Json(new
-            {
-                success = result.Success,
-                message = result.Message
-            });
-        }
-
-        [HttpPost("Delete")]
-        [ValidateAntiForgeryToken]
-        [RequireAdminPermission(
-            AdminPermissionKeys.Settings.ManageGeneral)]
-        public async Task<IActionResult> Delete(
-            [FromForm] string backupId,
-            CancellationToken cancellationToken)
-        {
-            var result =
-                await _backupService.DeleteBackupAsync(
-                    backupId,
-                    cancellationToken);
-
-            return Json(new
-            {
-                success = result.Success,
-                message = result.Message
+                message = result.Message,
+                backupId = result.Backup?.Id,
+                fileName = result.Backup?.FileName,
+                displayName = result.Backup?.DisplayName,
+                downloadUrl
             });
         }
 
         [HttpPost("SaveSettings")]
         [ValidateAntiForgeryToken]
-        [RequireAdminPermission(
-            AdminPermissionKeys.Settings.ManageGeneral)]
+        [RequireAdminPermission(AdminPermissionKeys.Settings.ManageGeneral)]
         public async Task<IActionResult> SaveSettings(
             [FromForm] bool autoBackupEnabled,
             [FromForm] string dailyTime,
-            [FromForm] int retentionCount,
-            [FromForm] bool verifyAfterBackup,
             CancellationToken cancellationToken)
         {
-            var settings =
-                await _backupService.SaveRuntimeSettingsAsync(
-                    new BackupRuntimeSettings
-                    {
-                        AutoBackupEnabled =
-                            autoBackupEnabled,
-                        DailyTime =
-                            dailyTime ?? "02:30",
-                        RetentionCount =
-                            retentionCount,
-                        VerifyAfterBackup =
-                            verifyAfterBackup
-                    },
-                    cancellationToken);
-
-            return Json(new
+            try
             {
-                success = true,
-                message =
-                    "تم حفظ إعدادات النسخ التلقائي.",
-                settings = new
+                var settings =
+                    await _backupService.SaveRuntimeSettingsAsync(
+                        autoBackupEnabled,
+                        dailyTime,
+                        cancellationToken);
+
+                return Json(new
                 {
-                    settings.AutoBackupEnabled,
-                    settings.DailyTime,
-                    settings.RetentionCount,
-                    settings.VerifyAfterBackup
-                }
-            });
+                    success = true,
+                    message = settings.AutoBackupEnabled
+                        ? $"تم تفعيل النسخ التلقائي يوميًا الساعة {settings.DailyTime}."
+                        : "تم إيقاف النسخ التلقائي.",
+                    settings = new
+                    {
+                        settings.AutoBackupEnabled,
+                        settings.DailyTime,
+                        settings.AutomaticRetentionCount,
+                        settings.SafetyRetentionCount
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = ex.GetBaseException().Message
+                });
+            }
         }
 
         [HttpGet("Download/{backupId}")]
-        [RequireAdminPermission(
-            AdminPermissionKeys.Settings.View)]
+        [RequireAdminPermission(AdminPermissionKeys.Settings.View)]
         public async Task<IActionResult> Download(
             string backupId,
             CancellationToken cancellationToken)
@@ -220,26 +173,128 @@ namespace YemenGuide.Web.Areas.Admin.Controllers
                 return NotFound();
             }
 
-            return PhysicalFile(
-                file.FullPath,
-                "application/octet-stream",
-                file.DownloadName,
-                enableRangeProcessing: true);
+            Response.ContentType =
+                "application/octet-stream";
+
+            Response.Headers["Content-Disposition"] =
+                "attachment; filename*=UTF-8''" +
+                Uri.EscapeDataString(
+                    file.DownloadName);
+
+            try
+            {
+                bool copied =
+                    await _backupService.CopyBackupToAsync(
+                        backupId,
+                        Response.Body,
+                        cancellationToken);
+
+                if (!copied)
+                {
+                    return NotFound();
+                }
+
+                await Response.Body.FlushAsync(
+                    cancellationToken);
+
+                return new EmptyResult();
+            }
+            catch (OperationCanceledException)
+                when (cancellationToken.IsCancellationRequested)
+            {
+                return new EmptyResult();
+            }
         }
 
-        [HttpPost("RestoreLive")]
+        [HttpPost("RestoreStored")]
         [ValidateAntiForgeryToken]
-        [RequireAdminPermission(
-            AdminPermissionKeys.Settings.ManageGeneral)]
-        public async Task<IActionResult> RestoreLive(
+        [RequireAdminPermission(AdminPermissionKeys.Settings.ManageGeneral)]
+        public async Task<IActionResult> RestoreStored(
             [FromForm] string backupId,
             [FromForm] string confirmation,
             CancellationToken cancellationToken)
         {
             var result =
-                await _backupService.RestoreLiveAsync(
+                await _backupService.RestoreStoredBackupAsync(
                     backupId,
                     confirmation,
+                    cancellationToken);
+
+            return Json(new
+            {
+                success = result.Success,
+                message = result.Message
+            });
+        }
+
+        [HttpPost("RestoreUploaded")]
+        [ValidateAntiForgeryToken]
+        [RequestSizeLimit(MaxRestoreUploadBytes)]
+        [RequestFormLimits(MultipartBodyLengthLimit = MaxRestoreUploadBytes)]
+        [RequireAdminPermission(AdminPermissionKeys.Settings.ManageGeneral)]
+        public async Task<IActionResult> RestoreUploaded(
+            IFormFile? backupFile,
+            [FromForm] string confirmation,
+            CancellationToken cancellationToken)
+        {
+            if (backupFile == null ||
+                backupFile.Length <= 0)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = "اختر ملف نسخة احتياطية بصيغة .bak أولاً."
+                });
+            }
+
+            if (backupFile.Length > MaxRestoreUploadBytes)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = "حجم ملف النسخة أكبر من الحد المسموح حالياً."
+                });
+            }
+
+            if (!string.Equals(
+                    Path.GetExtension(backupFile.FileName),
+                    ".bak",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = "الملف المختار يجب أن يكون نسخة SQL Server بصيغة .bak."
+                });
+            }
+
+            await using var stream =
+                backupFile.OpenReadStream();
+
+            var result =
+                await _backupService.RestoreUploadedBackupAsync(
+                    stream,
+                    backupFile.FileName,
+                    confirmation,
+                    cancellationToken);
+
+            return Json(new
+            {
+                success = result.Success,
+                message = result.Message
+            });
+        }
+
+        [HttpPost("Delete")]
+        [ValidateAntiForgeryToken]
+        [RequireAdminPermission(AdminPermissionKeys.Settings.ManageGeneral)]
+        public async Task<IActionResult> Delete(
+            [FromForm] string backupId,
+            CancellationToken cancellationToken)
+        {
+            var result =
+                await _backupService.DeleteBackupAsync(
+                    backupId,
                     cancellationToken);
 
             return Json(new
