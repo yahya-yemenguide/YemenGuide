@@ -5561,9 +5561,10 @@ font-weight:700;
                         },
 
                     onChange:
-                        (
+                        async (
                             selectedDates,
-                            dateString
+                            dateString,
+                            instance
                         ) => {
                             const selected =
                                 selectedDates.length >
@@ -5575,7 +5576,51 @@ font-weight:700;
                                     : "";
 
                             setPackageNextEnabled(
-                                selected
+                                false
+                            );
+
+                            if (!selected) {
+                                return;
+                            }
+
+                            const selectedKey =
+                                `${placeId}:${packageId}:${dateString}`;
+
+                            if (
+                                state.startedPeriodAcknowledgedKey &&
+                                state.startedPeriodAcknowledgedKey !== selectedKey
+                            ) {
+                                state.startedPeriodAcknowledgedKey =
+                                    "";
+                            }
+
+                            const isDateAvailable =
+                                await checkPackageDateBeforeCheckout(
+                                    placeId,
+                                    packageId,
+                                    dateString,
+                                    true
+                                );
+
+                            if (!isDateAvailable) {
+                                state.packageDate =
+                                    "";
+
+                                try {
+                                    instance.clear(false);
+                                } catch {
+                                    // تجاهل
+                                }
+
+                                setPackageNextEnabled(
+                                    false
+                                );
+
+                                return;
+                            }
+
+                            setPackageNextEnabled(
+                                true
                             );
                         }
                 }
@@ -6689,9 +6734,13 @@ font-weight:700;
                 return false;
             }
 
+            const startedPeriodKey =
+                `${placeId}:${packageId}:${date}`;
+
             if (
                 showStartedWarning &&
-                data?.started === true
+                data?.started === true &&
+                state.startedPeriodAcknowledgedKey !== startedPeriodKey
             ) {
                 const formatDuration =
                     rawMinutes => {
@@ -6776,9 +6825,15 @@ font-weight:700;
                     !result ||
                     result.isConfirmed !== true
                 ) {
+                    state.startedPeriodAcknowledgedKey =
+                        "";
+
                     reopenPackageDatePicker();
                     return false;
                 }
+
+                state.startedPeriodAcknowledgedKey =
+                    startedPeriodKey;
             }
 
             return true;
