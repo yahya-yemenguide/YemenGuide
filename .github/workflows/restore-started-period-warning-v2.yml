@@ -1,0 +1,42 @@
+name: Restore started-period booking behavior v2
+
+on:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: write
+
+jobs:
+  patch-started-period:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Apply patch
+        run: python3 .github/scripts/restore_started_period.py
+
+      - name: Verify patch
+        run: git diff --check
+
+      - name: Commit patch
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No changes needed."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add YemenGuide.Web/Controllers/PlacesController.cs
+          git add YemenGuide.Web/wwwroot/js/customer/Details.js
+          git add YemenGuide.Web/Controllers/BookingFlowController.cs
+          git add YemenGuide.Web/Areas/Owner/Views/Reservation/_PendingRequests.cshtml
+          git add YemenGuide.Web/Areas/Owner/Views/Reservation/_ActiveReservations.cshtml
+          git commit -m "[started-period-patch] Restore started-period booking warning"
+          git push origin HEAD:master
