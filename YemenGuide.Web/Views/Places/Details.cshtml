@@ -430,6 +430,18 @@
 }
 
 @functions {
+    string FormatPackageClock(TimeSpan value)
+    {
+        var dateTime = DateTime.Today.Add(value);
+        var suffix = value.Hours < 12 ? "ص" : "م";
+
+        return dateTime.ToString(
+                   "h:mm",
+                   System.Globalization.CultureInfo.InvariantCulture) +
+               " " +
+               suffix;
+    }
+
     void RenderCustomerReviewNode(
         YemenGuide.Core.DTOs.Customer.ReviewDto review,
         int depth,
@@ -2472,6 +2484,22 @@
                                                 package.PackageId,
                                                 package.Price);
 
+                                        string packagePeriodLabel =
+                                            string.IsNullOrWhiteSpace(package.TimeFrame)
+                                                ? "الفترة"
+                                                : package.TimeFrame.Trim();
+
+                                        string packageClockRange =
+                                            package.StartTime.HasValue &&
+                                            package.EndTime.HasValue
+                                                ? $"{FormatPackageClock(package.StartTime.Value)} - {FormatPackageClock(package.EndTime.Value)}"
+                                                : string.Empty;
+
+                                        string packageDisplayTime =
+                                            string.IsNullOrWhiteSpace(packageClockRange)
+                                                ? packagePeriodLabel
+                                                : $"{packagePeriodLabel} · {packageClockRange}";
+
                                         <article class="package-card @(packagePromotion != null ? "has-promotion" : "")"
                                      id="packageCard-@package.PackageId"
                                      data-promotion-id="@(packagePromotion?.PromotionId.ToString() ?? "0")">
@@ -2510,7 +2538,7 @@
 
                                                 <p>
                                                     <i class="bi bi-clock-history"></i>
-                                                    @package.TimeFrame
+                                                    @packageDisplayTime
                                                 </p>
 
                                                 @if (
@@ -2579,7 +2607,7 @@
                                         data-package-name="@package.PackageName"
                                         data-package-price="@packageModalPriceText"
                                         data-package-capacity="سعة @package.Capacity شخص"
-                                        data-package-time="@package.TimeFrame"
+                                        data-package-time="@packageDisplayTime"
                                         data-package-max="@package.Capacity"
                                         data-promotion-id="@(packagePromotion?.PromotionId.ToString() ?? "0")"
                                         data-promotion-target-anchor="@(packagePromotion?.TargetAnchor ?? string.Empty)"

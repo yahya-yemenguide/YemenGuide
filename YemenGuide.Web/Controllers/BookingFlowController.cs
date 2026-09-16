@@ -647,6 +647,93 @@ namespace YemenGuide.Web.Controllers
             return false;
         }
 
+
+        private static bool PackageFitsConnectedShiftWindows(
+            TimeSpan packageStart,
+            TimeSpan packageEnd,
+            IReadOnlyCollection<PolicyShiftWindow> shifts)
+        {
+            const double minutesPerDay = 24d * 60d;
+            const double toleranceMinutes = 0.0001d;
+
+            if (shifts == null || shifts.Count == 0)
+            {
+                return false;
+            }
+
+            /*
+             * الفترات المتلامسة تعتبر نافذة تشغيل واحدة.
+             *
+             * مثال:
+             * 07:00-11:00 + 11:00-14:00 => 07:00-14:00
+             * وبالتالي باقة 07:00-12:00 أو 09:00-13:00 مقبولة.
+             *
+             * أما:
+             * 07:00-11:00 + 12:00-14:00
+             * ففيها فجوة حقيقية 11:00-12:00، ولا يسمح للباقة بعبورها.
+             *
+             * نكرر النوافذ حول منتصف الليل حتى تعمل الفترات الليلية أيضًا.
+             */
+            var segments = new List<(double Start, double End)>();
+
+            foreach (var shift in shifts)
+            {
+                var start = shift.Start.TotalMinutes;
+                var end = shift.End.TotalMinutes;
+
+                if (shift.End <= shift.Start)
+                {
+                    end += minutesPerDay;
+                }
+
+                for (var dayOffset = -1; dayOffset <= 1; dayOffset++)
+                {
+                    var offset = dayOffset * minutesPerDay;
+                    segments.Add((start + offset, end + offset));
+                }
+            }
+
+            var ordered = segments
+                .OrderBy(segment => segment.Start)
+                .ThenBy(segment => segment.End)
+                .ToList();
+
+            var merged = new List<(double Start, double End)>();
+
+            foreach (var segment in ordered)
+            {
+                if (merged.Count == 0)
+                {
+                    merged.Add(segment);
+                    continue;
+                }
+
+                var last = merged[^1];
+
+                if (segment.Start <= last.End + toleranceMinutes)
+                {
+                    merged[^1] =
+                        (last.Start, Math.Max(last.End, segment.End));
+                }
+                else
+                {
+                    merged.Add(segment);
+                }
+            }
+
+            var packageStartMinutes = packageStart.TotalMinutes;
+            var packageEndMinutes = packageEnd.TotalMinutes;
+
+            if (packageEnd <= packageStart)
+            {
+                packageEndMinutes += minutesPerDay;
+            }
+
+            return merged.Any(window =>
+                packageStartMinutes + toleranceMinutes >= window.Start &&
+                packageEndMinutes <= window.End + toleranceMinutes);
+        }
+
         private static bool PackageFitsConfiguredShift(
             Place place,
             PlacePackage package)
@@ -660,30 +747,16 @@ namespace YemenGuide.Web.Controllers
 
             var operationMode = place.PlacePolicy?.OperationSystemMode;
 
-            // نظام الفترات: الباقة يجب أن تكون بالكامل داخل فترة واحدة فقط.
+            // نظام الفترات: ندمج الفترات المتصلة فقط، ونبقي أي فجوة كوقت إغلاق.
             if (IsState(operationMode, "Shifts"))
             {
                 var configuredShifts = ReadPolicyShiftWindows(
                     place.PlacePolicy?.ShiftsJson);
 
-                if (configuredShifts.Count == 0)
-                {
-                    return false;
-                }
-
-                foreach (var shift in configuredShifts)
-                {
-                    if (PackageFitsRecurringWindow(
-                            package.StartTime.Value,
-                            package.EndTime.Value,
-                            shift.Start,
-                            shift.End))
-                    {
-                        return true;
-                    }
-                }
-
-                return false;
+                return PackageFitsConnectedShiftWindows(
+                    package.StartTime.Value,
+                    package.EndTime.Value,
+                    configuredShifts);
             }
 
             // نظام اليوم الكامل: وقت الدخول والخروج هو نافذة التشغيل الرسمية.

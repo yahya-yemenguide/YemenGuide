@@ -243,7 +243,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
 
                 var serviceTargets = await _context.PlaceAdditionalServices
                     .AsNoTracking()
-                    .Where(item => item.PlaceId == activePlace.PlaceId && item.IsActive != false)
+                    .Where(item => item.PlaceId == activePlace.PlaceId)
                     .OrderBy(item => item.ServiceName)
                     .Select(item => new
                     {
@@ -760,8 +760,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                         .AsNoTracking()
                         .Where(item =>
                             dto.RewardServiceIds.Contains(item.ServiceId) &&
-                            item.PlaceId == placeId &&
-                            item.IsActive != false)
+                            item.PlaceId == placeId)
                         .Select(item => new PromotionRewardServiceSnapshot
                         {
                             ServiceId = item.ServiceId,
@@ -871,9 +870,8 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                 if (!dto.ServiceId.HasValue ||
                     !await _context.PlaceAdditionalServices.AsNoTracking().AnyAsync(item =>
                         item.ServiceId == dto.ServiceId.Value &&
-                        item.PlaceId == placeId &&
-                        item.IsActive != false))
-                    return "اختر خدمة نشطة تابعة للمنشأة الحالية.";
+                        item.PlaceId == placeId))
+                    return "اختر خدمة تابعة للمنشأة الحالية.";
             }
             else if (targetType != "Place")
             {
@@ -961,8 +959,7 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     .AsNoTracking()
                     .Where(item =>
                         item.ServiceId == dto.ServiceId.Value &&
-                        item.PlaceId == placeId &&
-                        item.IsActive != false)
+                        item.PlaceId == placeId)
                     .Select(item => (decimal?)item.Price)
                     .FirstOrDefaultAsync();
             }

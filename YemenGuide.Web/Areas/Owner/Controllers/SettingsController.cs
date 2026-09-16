@@ -475,18 +475,15 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
                     return "أضف فترة تشغيلية صالحة واحدة على الأقل قبل استخدام الباقات.";
                 }
 
-                foreach (var shift in shifts)
+                if (PackageFitsConnectedShiftWindows(
+                        package.StartTime.Value,
+                        package.EndTime.Value,
+                        shifts))
                 {
-                    if (PackageFitsOperationWindow(
-                            package.StartTime.Value,
-                            package.EndTime.Value,
-                            shift))
-                    {
-                        return null;
-                    }
+                    return null;
                 }
 
-                return "وقت الباقة يجب أن يكون بالكامل داخل فترة تشغيلية واحدة.";
+                return "وقت الباقة يجب أن يكون بالكامل داخل وقت تشغيل متصل؛ يمكنها عبور فترتين أو أكثر إذا كانت نهاية الفترة السابقة هي نفسها بداية الفترة التالية، ولا يمكنها عبور فجوة بين الفترات.";
             }
 
             if (string.Equals(operationMode, "FullDay", StringComparison.OrdinalIgnoreCase) ||
@@ -509,6 +506,82 @@ namespace YemenGuide.Web.Areas.Owner.Controllers
             }
 
             return null;
+        }
+
+        private static bool PackageFitsConnectedShiftWindows(
+            TimeSpan packageStart,
+            TimeSpan packageEnd,
+            IReadOnlyCollection<OperationalShiftWindow> shifts)
+        {
+            const double minutesPerDay = 24d * 60d;
+            const double toleranceMinutes = 0.0001d;
+
+            if (shifts == null || shifts.Count == 0)
+            {
+                return false;
+            }
+
+            // نحول كل فترة إلى خط زمني ممتد ليومين، ثم ندمج الفترات
+            // المتلامسة فقط. مثال: 06:00-12:00 + 12:00-18:00 تصبح
+            // نافذة واحدة 06:00-18:00، بينما 06:00-12:00 + 13:00-18:00
+            // تبقى نافذتين لأن بينهما فجوة حقيقية.
+            var segments = new List<(double Start, double End)>();
+
+            foreach (var shift in shifts)
+            {
+                double start = shift.StartMinutes;
+                double end = shift.EndMinutes;
+
+                if (end <= start)
+                {
+                    end += minutesPerDay;
+                }
+
+                for (int dayOffset = -1; dayOffset <= 1; dayOffset++)
+                {
+                    double offset = dayOffset * minutesPerDay;
+                    segments.Add((start + offset, end + offset));
+                }
+            }
+
+            var ordered = segments
+                .OrderBy(segment => segment.Start)
+                .ThenBy(segment => segment.End)
+                .ToList();
+
+            var merged = new List<(double Start, double End)>();
+
+            foreach (var segment in ordered)
+            {
+                if (merged.Count == 0)
+                {
+                    merged.Add(segment);
+                    continue;
+                }
+
+                var last = merged[^1];
+
+                if (segment.Start <= last.End + toleranceMinutes)
+                {
+                    merged[^1] = (last.Start, Math.Max(last.End, segment.End));
+                }
+                else
+                {
+                    merged.Add(segment);
+                }
+            }
+
+            double packageStartMinutes = packageStart.TotalMinutes;
+            double packageEndMinutes = packageEnd.TotalMinutes;
+
+            if (packageEnd <= packageStart)
+            {
+                packageEndMinutes += minutesPerDay;
+            }
+
+            return merged.Any(window =>
+                packageStartMinutes + toleranceMinutes >= window.Start &&
+                packageEndMinutes <= window.End + toleranceMinutes);
         }
 
         private static bool PackageFitsOperationWindow(
