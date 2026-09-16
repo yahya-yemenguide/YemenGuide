@@ -6641,6 +6641,95 @@ font-weight:700;
                 return false;
             }
 
+            if (data?.started === true) {
+                const formatDuration =
+                    rawMinutes => {
+                        const totalMinutes =
+                            Math.max(
+                                0,
+                                Number.parseInt(
+                                    String(
+                                        rawMinutes ||
+                                        "0"
+                                    ),
+                                    10
+                                ) || 0
+                            );
+
+                        const hours =
+                            Math.floor(
+                                totalMinutes / 60
+                            );
+
+                        const minutes =
+                            totalMinutes % 60;
+
+                        if (
+                            hours > 0 &&
+                            minutes > 0
+                        ) {
+                            return `${hours} ساعة و${minutes} دقيقة`;
+                        }
+
+                        if (hours > 0) {
+                            return `${hours} ساعة`;
+                        }
+
+                        return `${Math.max(1, minutes)} دقيقة`;
+                    };
+
+                const elapsedText =
+                    formatDuration(
+                        data.elapsedMinutes
+                    );
+
+                const remainingText =
+                    formatDuration(
+                        data.remainingMinutes
+                    );
+
+                const result =
+                    await notify({
+                        icon:
+                            "warning",
+
+                        title:
+                            "هذه الفترة بدأت بالفعل",
+
+                        text:
+                            `مضى من الفترة ${elapsedText}، والمتبقي ${remainingText}. إذا تابعت فسيظهر لمالك المنشأة أنك أكملت الحجز بعد علمك بأن الفترة قد بدأت.`,
+
+                        showCancelButton:
+                            true,
+
+                        confirmButtonText:
+                            "أنا على علم وأريد المتابعة",
+
+                        cancelButtonText:
+                            "الرجوع",
+
+                        confirmButtonColor:
+                            "#12b8d4",
+
+                        cancelButtonColor:
+                            "#748493",
+
+                        reverseButtons:
+                            true,
+
+                        allowOutsideClick:
+                            false
+                    });
+
+                if (
+                    !result ||
+                    result.isConfirmed !== true
+                ) {
+                    reopenPackageDatePicker();
+                    return false;
+                }
+            }
+
             return true;
         } catch (error) {
             console.error(

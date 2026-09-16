@@ -1062,6 +1062,32 @@ namespace YemenGuide.Web.Controllers
                 PlacePackage? package,
                 DateTime now)
         {
+            /*
+             * الاستثناء خاص بالباقات ذات الفترة الزمنية:
+             * إذا بدأت الفترة ولم تنتهِ نسمح بإكمال الحجز بعد تنبيه العميل.
+             * الغرف تبقى خاضعة لشرط الحجز المسبق كما كانت.
+             */
+            if (package != null)
+            {
+                var operationalPeriod =
+                    GetPackageOperationalInterval(
+                        startDate,
+                        package);
+
+                if (now >=
+                    operationalPeriod.End)
+                {
+                    return
+                        "انتهت هذه الفترة بالفعل. اختر فترة أخرى متاحة.";
+                }
+
+                if (now >=
+                    operationalPeriod.Start)
+                {
+                    return null;
+                }
+            }
+
             var minimumNoticeHours =
                 Math.Max(
                     0,

@@ -774,24 +774,39 @@ namespace YemenGuide.Web.Controllers
                     $"لا يمكن الحجز لأكثر من {maximumHorizonMonths} أشهر مقدمًا.");
             }
 
+            var requestedPeriod =
+                GetPackageOperationalInterval(
+                    requestedDay,
+                    selectedPackage);
+
             /*
-             * وقت الباقة نفسه (StartTime / EndTime) هو نافذة التشغيل
-             * الخاصة بهذه الباقة. لا نمنعها بسبب ShiftsJson هنا،
-             * لأن ذلك كان يجعل الباقة ظاهرة ثم يمنع تحميل التقويم.
+             * الفترة التي انتهت لا يمكن حجزها.
+             * إذا بدأت وما زالت جارية نسمح للعميل بالمتابعة بعد تنبيه صريح،
+             * وشرط الحجز المسبق يبقى مطبقًا فقط قبل بدء الفترة.
              */
+            if (referenceTime >=
+                requestedPeriod.End)
+            {
+                return (
+                    false,
+                    "انتهت هذه الفترة بالفعل. اختر فترة أخرى متاحة.");
+            }
+
+            var periodAlreadyStarted =
+                referenceTime >=
+                requestedPeriod.Start;
+
             var minimumNoticeHours =
                 Math.Max(
                     0,
                     place.PlacePolicy?
                         .MinimumNoticeHours ?? 0);
 
-            if (minimumNoticeHours > 0)
+            if (!periodAlreadyStarted &&
+                minimumNoticeHours > 0)
             {
                 var requestedStartAt =
-                    requestedDay.Add(
-                        selectedPackage.StartTime ??
-                        GetPolicyCheckInTime(
-                            place));
+                    requestedPeriod.Start;
 
                 if (requestedStartAt <
                     referenceTime.AddHours(
@@ -2053,12 +2068,43 @@ namespace YemenGuide.Web.Controllers
                 });
             }
 
+            var now =
+                DateTime.Now;
+
             var availability =
                 await CheckPackageDateAvailabilityCoreAsync(
                     place,
                     selectedPackage,
                     date,
-                    DateTime.Now);
+                    now);
+
+            var operationalPeriod =
+                GetPackageOperationalInterval(
+                    date,
+                    selectedPackage);
+
+            var started =
+                availability.Available &&
+                now >= operationalPeriod.Start &&
+                now < operationalPeriod.End;
+
+            var elapsedMinutes =
+                started
+                    ? Math.Max(
+                        0,
+                        (int)Math.Floor(
+                            (now - operationalPeriod.Start)
+                                .TotalMinutes))
+                    : 0;
+
+            var remainingMinutes =
+                started
+                    ? Math.Max(
+                        0,
+                        (int)Math.Ceiling(
+                            (operationalPeriod.End - now)
+                                .TotalMinutes))
+                    : 0;
 
             return Json(new
             {
@@ -2070,7 +2116,17 @@ namespace YemenGuide.Web.Controllers
 
                 date =
                     date.Date.ToString(
-                        "yyyy-MM-dd")
+                        "yyyy-MM-dd"),
+
+                started,
+                elapsedMinutes,
+                remainingMinutes,
+
+                operationalStartAt =
+                    operationalPeriod.Start.ToString("O"),
+
+                operationalEndAt =
+                    operationalPeriod.End.ToString("O")
             });
         }
 

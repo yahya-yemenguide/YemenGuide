@@ -1,4 +1,4 @@
-@using System
+﻿@using System
 @using System.Globalization
 @using System.Linq
 @using YemenGuide.Core.DTOs.Owner
@@ -64,6 +64,17 @@
     }
 
     private static string GetShortDate(DateTime date) => date.ToString("yyyy-MM-dd");
+
+    private static string GetDurationText(TimeSpan duration)
+    {
+        var totalMinutes = Math.Max(0, (int)Math.Floor(duration.TotalMinutes));
+        var hours = totalMinutes / 60;
+        var minutes = totalMinutes % 60;
+
+        if (hours > 0 && minutes > 0) return $"{hours} ساعة و{minutes} دقيقة";
+        if (hours > 0) return $"{hours} ساعة";
+        return $"{Math.Max(1, minutes)} دقيقة";
+    }
 }
 
 @{
@@ -153,6 +164,17 @@
                         var seatingSetupText = string.IsNullOrWhiteSpace(booking.SeatingSetup) ? "غير محدد" : booking.SeatingSetup.Trim();
                         var canTakePositiveAction = booking.CanAccept || booking.CanApprovePayment;
                         var promotionLabel = CurrencyLabel(booking.PromotionDiscountLabel);
+                        var startedPeriodBooking =
+                            booking.HasPackage &&
+                            booking.CreatedAt.HasValue &&
+                            booking.CreatedAt.Value >= booking.OperationalStartAt &&
+                            booking.CreatedAt.Value < booking.OperationalEndAt;
+                        var elapsedAtBookingText = startedPeriodBooking
+                            ? GetDurationText(booking.CreatedAt!.Value - booking.OperationalStartAt)
+                            : string.Empty;
+                        var remainingAtBookingText = startedPeriodBooking
+                            ? GetDurationText(booking.OperationalEndAt - booking.CreatedAt!.Value)
+                            : string.Empty;
 
                         <tr class="compact-reservation-row @stateClass @(booking.HasPromotion ? "reservation-has-promotion" : string.Empty)"
                             data-reservation-state="@state">
@@ -196,6 +218,14 @@
                                     <div class="compact-date-item"><span class="compact-date-label">الخروج</span><strong>@endDateText</strong></div>
                                 </div>
                                 <div class="compact-period-note"><i class="bi bi-clock"></i> البداية التشغيلية: @booking.OperationalStartAt.ToString("yyyy-MM-dd HH:mm")</div>
+                                @if (startedPeriodBooking)
+                                {
+                                    <div class="compact-period-note started-period-awareness-note">
+                                        <i class="bi bi-exclamation-triangle-fill text-warning"></i>
+                                        <strong>العميل على علم أن الفترة بدأت</strong>
+                                        <span>— مضى @elapsedAtBookingText، وكان متبقيًا @remainingAtBookingText وقت إنشاء الحجز.</span>
+                                    </div>
+                                }
                             </td>
 
                             <td class="compact-total-column">
