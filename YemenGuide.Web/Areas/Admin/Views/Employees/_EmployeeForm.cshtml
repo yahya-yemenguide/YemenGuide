@@ -213,11 +213,12 @@
                         <span>@L("رقم الهاتف", "Phone number") <b>*</b></span>
                         <div class="employee-phone-control phone-wrapper-ltr" dir="ltr">
                             <input type="tel" name="PhoneNumber" value="@Model.Employee.PhoneNumber"
-                                   maxlength="20" autocomplete="tel" inputmode="tel"
+                                   maxlength="15" autocomplete="tel" inputmode="numeric"
+                                   oninput="var w=this.closest('.iti'); var d=w ? w.querySelector('.iti__selected-dial-code') : null; var code=d ? d.textContent.trim() : '+967'; var n=this.value.replace(/\D/g,''); this.value=(code==='+967' ? n.slice(0,9) : n.slice(0,15));"
                                    required disabled="@Model.IsProtectedSystemAdmin" />
                             <span class="employee-control__state" data-field-state="PhoneNumber"></span>
                         </div>
-                        <small data-field-error="PhoneNumber">@L("اختر الدولة ثم أدخل الرقم المحلي؛ رمز الدولة يضاف تلقائيًا.", "Select the country and enter the local number; the country code is added automatically.")</small>
+                        <small data-field-error="PhoneNumber">@L("لليمن: أدخل 9 أرقام فقط؛ رمز +967 يضاف تلقائيًا. لبقية الدول يطبّق النظام التحقق المناسب للدولة.", "For Yemen, enter exactly 9 digits; +967 is added automatically. Other countries use their normal validation.")</small>
                     </label>
                 </div>
             </section>

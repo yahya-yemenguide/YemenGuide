@@ -11,6 +11,57 @@
             .startsWith("en");
     }
 
+    function patchPortaledManagementReload() {
+        const Finance = window.AdminFinance;
+        if (!Finance || Finance.__phase4ManagementReloadPatched) {
+            return;
+        }
+
+        Finance.reloadManagement = async function () {
+            const root = document.getElementById("adminFinancialsRoot");
+            // The management drawer is portaled to <body> while it is open,
+            // so the host must be resolved from document, not only from root.
+            const host = document.querySelector("[data-finance-management-host]");
+            const url = root?.dataset.managementUrl;
+
+            if (!host || !url) {
+                return false;
+            }
+
+            try {
+                const response = await fetch(url, {
+                    method: "GET",
+                    credentials: "same-origin",
+                    cache: "no-store",
+                    headers: {
+                        "X-Requested-With": "XMLHttpRequest",
+                        "Accept": "text/html"
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`تعذر تحديث إدارة المالية (${response.status}).`);
+                }
+
+                host.innerHTML = await response.text();
+
+                document.dispatchEvent(new CustomEvent("adminfinance:managementloaded", {
+                    detail: { host }
+                }));
+
+                return true;
+            } catch (error) {
+                Finance.showToast?.(
+                    error && error.message ? error.message : "تعذر تحديث إدارة المالية.",
+                    "danger"
+                );
+                return false;
+            }
+        };
+
+        Finance.__phase4ManagementReloadPatched = true;
+    }
+
     function prepareSettingsForm(scope) {
         const container = scope || document;
         const forms = [];
@@ -87,6 +138,7 @@
     });
 
     function start() {
+        patchPortaledManagementReload();
         init(document);
         observer.observe(document.body, { childList: true, subtree: true });
     }

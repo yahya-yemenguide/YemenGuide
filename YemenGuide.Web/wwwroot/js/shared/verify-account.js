@@ -1,4 +1,4 @@
-﻿/**
+﻿﻿/**
  * =============================================================
  * YemenGuide Owner Verification - المرحلة الثالثة: السياسات + العقد + الإثبات
  * =============================================================
@@ -805,32 +805,78 @@ document.addEventListener("DOMContentLoaded", function () {
             validMsg.classList.add("d-none");
         };
 
+        const selectedPhoneCountry = () =>
+            String(iti.getSelectedCountryData?.()?.iso2 || '').toLowerCase();
+
+        const normalizePhoneInput = () => {
+            let digits = String(phoneInputField.value || '').replace(/\D/g, '');
+            const isYemen = selectedPhoneCountry() === 'ye';
+
+            // اليمن: الرقم المحلي 9 أرقام فقط. لا يمكن كتابة أو لصق أكثر من ذلك.
+            if (isYemen) {
+                digits = digits.slice(0, 9);
+                phoneInputField.maxLength = 9;
+                phoneInputField.setAttribute('inputmode', 'numeric');
+            } else {
+                // بقية الدول تبقى حسب تحقق intl-tel-input.
+                phoneInputField.maxLength = 15;
+                phoneInputField.setAttribute('inputmode', 'tel');
+            }
+
+            if (phoneInputField.value !== digits) {
+                phoneInputField.value = digits;
+            }
+
+            return { digits, isYemen };
+        };
+
         const validatePhoneInput = () => {
             resetPhoneUI();
-            if (phoneInputField.value.trim()) {
-                if (iti.isValidNumber()) {
-                    phoneInputField.classList.add('glow-success');
-                    validMsg.classList.remove("d-none");
-                    phoneHiddenField.value = iti.getNumber(); // حفظ الرقم بصيغته الدولية المخفية
-                } else {
-                    phoneInputField.classList.add('glow-error');
-                    errorMsg.innerHTML = '<i class="bi bi-exclamation-triangle-fill"></i> يرجى إدخال رقم هاتف صحيح يطابق الدولة.';
-                    errorMsg.classList.remove("d-none");
-                    phoneHiddenField.value = ""; // إفراغ الحقل لمنع الإرسال
-                }
+            const { digits, isYemen } = normalizePhoneInput();
+
+            if (!digits) {
+                phoneHiddenField.value = "";
+                return;
+            }
+
+            if (isYemen && digits.length !== 9) {
+                phoneInputField.classList.add('glow-error');
+                errorMsg.innerHTML = '<i class="bi bi-exclamation-triangle-fill"></i> رقم الهاتف اليمني يجب أن يتكون من 9 أرقام.';
+                errorMsg.classList.remove("d-none");
+                phoneHiddenField.value = "";
+                return;
+            }
+
+            if (iti.isValidNumber()) {
+                phoneInputField.classList.add('glow-success');
+                validMsg.classList.remove("d-none");
+                phoneHiddenField.value = iti.getNumber();
+            } else {
+                phoneInputField.classList.add('glow-error');
+                errorMsg.innerHTML = '<i class="bi bi-exclamation-triangle-fill"></i> يرجى إدخال رقم هاتف صحيح يطابق الدولة.';
+                errorMsg.classList.remove("d-none");
+                phoneHiddenField.value = "";
             }
         };
 
-        // التحقق عند الكتابة وتغيير الدولة
+        // التحقق عند الكتابة واللصق وتغيير الدولة
         phoneInputField.addEventListener('input', validatePhoneInput);
-        phoneInputField.addEventListener('countrychange', validatePhoneInput);
+        phoneInputField.addEventListener('paste', function () {
+            window.setTimeout(validatePhoneInput, 0);
+        });
+        phoneInputField.addEventListener('countrychange', function () {
+            window.setTimeout(validatePhoneInput, 0);
+        });
 
-        // منع إدخال الحروف
+        // منع الحروف والرموز من البداية.
         phoneInputField.addEventListener('keypress', function (e) {
             if (!/[0-9]/.test(e.key)) {
                 e.preventDefault();
             }
         });
+
+        // طبق حد اليمن فور فتح الصفحة لأن اليمن هي الدولة الافتراضية.
+        normalizePhoneInput();
     }
 
     // =============================================================
@@ -1039,6 +1085,20 @@ document.addEventListener("DOMContentLoaded", function () {
 
         // التأكد من صحة رقم الهاتف قبل السماح بالانتقال
         if (currentTrack === 'fast' && iti) {
+            const selectedCountry = String(iti.getSelectedCountryData?.()?.iso2 || '').toLowerCase();
+            const localDigits = String(phoneInputField?.value || '').replace(/\D/g, '');
+
+            if (selectedCountry === 'ye' && localDigits.length !== 9) {
+                phoneInputField.classList.add('glow-error');
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'رقم الهاتف اليمني غير مكتمل',
+                    text: 'رقم الهاتف اليمني يجب أن يكون 9 أرقام فقط.',
+                    confirmButtonColor: '#05203C'
+                });
+                return;
+            }
+
             if (!iti.isValidNumber()) {
                 phoneInputField.classList.add('glow-error');
                 Swal.fire({
@@ -1047,7 +1107,7 @@ document.addEventListener("DOMContentLoaded", function () {
                     text: 'عذراً، يرجى التأكد من إدخال رقم هاتف صحيح يطابق الدولة المختارة قبل المتابعة.',
                     confirmButtonColor: '#05203C'
                 });
-                return; // 🛑 إيقاف الانتقال للخطوة التالية
+                return;
             }
             // سحب الرقم الدولي ووضعه في الحقل المخفي للنموذج
             phoneHiddenField.value = iti.getNumber();
@@ -1241,7 +1301,8 @@ document.addEventListener("DOMContentLoaded", function () {
                 inputAttributes: {
                     dir: 'ltr',
                     autocomplete: 'tel',
-                    inputmode: 'tel'
+                    inputmode: 'numeric',
+                    maxlength: '13'
                 },
                 showCancelButton: true,
                 confirmButtonText: 'حفظ ومتابعة',
@@ -1252,12 +1313,20 @@ document.addEventListener("DOMContentLoaded", function () {
                         .trim()
                         .replace(/[\s\-()]/g, '');
 
-                    if (!/^\+?[0-9]{7,15}$/.test(normalized)) {
-                        Swal.showValidationMessage('أدخل رقم هاتف صحيحًا من 7 إلى 15 رقمًا.');
+                    const isYemenInternational = /^\+?967/.test(normalized);
+                    const yemenLocal = normalized.replace(/^\+?967/, '');
+
+                    if (isYemenInternational && !/^[0-9]{9}$/.test(yemenLocal)) {
+                        Swal.showValidationMessage('رقم الهاتف اليمني بعد +967 يجب أن يكون 9 أرقام فقط.');
                         return false;
                     }
 
-                    return normalized;
+                    if (!isYemenInternational && !/^[0-9]{9}$/.test(normalized)) {
+                        Swal.showValidationMessage('أدخل رقم الهاتف اليمني من 9 أرقام فقط.');
+                        return false;
+                    }
+
+                    return isYemenInternational ? `+967${yemenLocal}` : normalized;
                 }
             });
 
