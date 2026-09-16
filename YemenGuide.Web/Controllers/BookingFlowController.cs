@@ -1944,6 +1944,76 @@ namespace YemenGuide.Web.Controllers
             return ids;
         }
 
+        private async Task<List<int>> GetPromotionBundledServiceIdsAsync(
+            int placeId,
+            int? roomId,
+            int? packageId,
+            int? promotionId)
+        {
+            if (!promotionId.HasValue || promotionId.Value <= 0)
+            {
+                return new List<int>();
+            }
+
+            var now = DateTime.Now;
+
+            var promotion =
+                await _context.Promotions
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(item =>
+                        item.PromotionId == promotionId.Value &&
+                        item.PlaceId == placeId &&
+                        item.IsActive == true &&
+                        (
+                            item.Status == "Active" ||
+                            item.Status == "Scheduled"
+                        ) &&
+                        item.StartDate <= now &&
+                        item.EndDate > now);
+
+            if (promotion == null ||
+                !string.Equals(
+                    promotion.OfferMode,
+                    "ConditionalReward",
+                    StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(
+                    promotion.RewardType,
+                    "ServiceSpecialPrice",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return new List<int>();
+            }
+
+            if (promotion.RoomId.HasValue &&
+                (!roomId.HasValue ||
+                 roomId.Value != promotion.RoomId.Value))
+            {
+                return new List<int>();
+            }
+
+            if (promotion.PackageId.HasValue &&
+                (!packageId.HasValue ||
+                 packageId.Value != promotion.PackageId.Value))
+            {
+                return new List<int>();
+            }
+
+            // العرض المستهدف لخدمة منفردة لا نحوله تلقائيًا إلى باقة خدمات
+            // داخل حجز غرفة/باقة؛ هذا المسار خاص بعرض باقة الخدمات المرتبط
+            // بالغرفة أو الباقة أو المنشأة كاملة.
+            if (promotion.ServiceId.HasValue &&
+                !promotion.RoomId.HasValue &&
+                !promotion.PackageId.HasValue)
+            {
+                return new List<int>();
+            }
+
+            return ReadPromotionRewardServiceIds(promotion)
+                .Where(id => id > 0)
+                .Distinct()
+                .ToList();
+        }
+
         private async Task<CheckoutPromotionResolution>
             ResolveCheckoutPromotionAsync(
                 int placeId,
@@ -3949,6 +4019,21 @@ namespace YemenGuide.Web.Controllers
                الخدمات الإضافية
                ================================================================ */
 
+            var bundledPromotionServiceIds =
+                await GetPromotionBundledServiceIdsAsync(
+                    request.PlaceId,
+                    request.RoomId,
+                    request.PackageId,
+                    request.PromotionId);
+
+            foreach (var bundledServiceId in bundledPromotionServiceIds)
+            {
+                if (!request.ServiceIds.Contains(bundledServiceId))
+                {
+                    request.ServiceIds.Add(bundledServiceId);
+                }
+            }
+
             var requestedServiceIds =
                 request.ServiceIds
                     .Where(serviceId =>
@@ -5480,6 +5565,28 @@ namespace YemenGuide.Web.Controllers
                ============================================================ */
 
             decimal servicesTotal = 0;
+
+            var bundledPromotionServiceIds =
+                await GetPromotionBundledServiceIdsAsync(
+                    request.PlaceId,
+                    request.RoomId,
+                    request.PackageId,
+                    request.PromotionId);
+
+            foreach (var bundledServiceId in bundledPromotionServiceIds)
+            {
+                if (!request.AdditionalServices.Any(service =>
+                        service.ServiceId == bundledServiceId &&
+                        service.Quantity > 0))
+                {
+                    request.AdditionalServices.Add(
+                        new BookingAdditionalServiceRequestDto
+                        {
+                            ServiceId = bundledServiceId,
+                            Quantity = 1
+                        });
+                }
+            }
 
             var requestedServices =
                 request.AdditionalServices

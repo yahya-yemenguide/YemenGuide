@@ -406,15 +406,6 @@ namespace YemenGuide.Web.Controllers
             Place place,
             PlacePackage package)
         {
-            if (!string.Equals(
-                    place.PlacePolicy?
-                        .OperationSystemMode,
-                    "Shifts",
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-
             if (
                 !package.StartTime.HasValue ||
                 !package.EndTime.HasValue ||
@@ -425,133 +416,129 @@ namespace YemenGuide.Web.Controllers
             }
 
             var packageStartMinutes =
-                package.StartTime.Value
-                    .TotalMinutes;
+                package.StartTime.Value.TotalMinutes;
 
             var packageEndMinutes =
-                package.EndTime.Value
-                    .TotalMinutes;
+                package.EndTime.Value.TotalMinutes;
 
-            const double minutesPerDay =
-                24d * 60d;
-
-            if (package.EndTime.Value <=
-                package.StartTime.Value)
+            if (packageEndMinutes <=
+                packageStartMinutes)
             {
                 packageEndMinutes +=
-                    minutesPerDay;
+                    TimeSpan.FromDays(1)
+                        .TotalMinutes;
             }
 
-            var configuredShifts =
-                ReadPolicyShiftWindows(
-                    place.PlacePolicy?
-                        .ShiftsJson);
+            var operationMode =
+                place.PlacePolicy?
+                    .OperationSystemMode;
 
             /*
-             * إذا كان وضع التشغيل "Shifts" لكن لم تُحفظ أي فترة تشغيلية،
-             * نحافظ على السلوك الحالي ولا نخفي/نمنع كل الباقات.
+             * نظام الفترات:
+             * يجب أن تقع الباقة بالكامل داخل فترة تشغيل واحدة.
              */
-            if (configuredShifts.Count == 0)
+            if (string.Equals(operationMode, "Shifts", StringComparison.OrdinalIgnoreCase))
             {
-                return true;
-            }
-
-            /*
-             * الفترات المتلامسة أو المتداخلة تعتبر تغطية تشغيلية واحدة.
-             * مثال: 08-14 ثم 14-20 ثم 20-08 تسمح بباقة 14-22.
-             * أما إذا وُجدت فجوة، مثل 14-15، فالباقة التي تمر خلالها
-             * تبقى غير مسموحة.
-             *
-             * نضيف نسخة لليوم السابق والحالي والتالي حتى تعمل الفترات
-             * التي تعبر منتصف الليل كذلك من دون إغلاق أو رفض غير صحيح.
-             */
-            var operationalWindows =
-                new List<(double Start, double End)>();
-
-            foreach (var shift in configuredShifts)
-            {
-                var shiftStart =
-                    shift.Start.TotalMinutes;
-
-                var shiftEnd =
-                    shift.End.TotalMinutes;
-
-                if (shift.End <= shift.Start)
+                foreach (
+                    var shift in
+                    ReadPolicyShiftWindows(
+                        place.PlacePolicy?
+                            .ShiftsJson))
                 {
-                    shiftEnd +=
-                        minutesPerDay;
-                }
+                    var shiftStartMinutes =
+                        shift.Start.TotalMinutes;
 
-                for (
-                    var dayOffset = -1;
-                    dayOffset <= 1;
-                    dayOffset++)
-                {
-                    var offset =
-                        dayOffset *
-                        minutesPerDay;
+                    var shiftEndMinutes =
+                        shift.End.TotalMinutes;
 
-                    operationalWindows.Add((
-                        shiftStart + offset,
-                        shiftEnd + offset));
-                }
-            }
-
-            var orderedWindows =
-                operationalWindows
-                    .OrderBy(window =>
-                        window.Start)
-                    .ThenBy(window =>
-                        window.End)
-                    .ToList();
-
-            var coveredUntil =
-                packageStartMinutes;
-
-            var coverageStarted =
-                false;
-
-            const double toleranceMinutes =
-                0.0001d;
-
-            foreach (var window in orderedWindows)
-            {
-                if (window.End <=
-                    coveredUntil +
-                    toleranceMinutes)
-                {
-                    continue;
-                }
-
-                if (window.Start >
-                    coveredUntil +
-                    toleranceMinutes)
-                {
-                    if (coverageStarted)
+                    if (shift.End <= shift.Start)
                     {
-                        break;
+                        shiftEndMinutes +=
+                            TimeSpan.FromDays(1)
+                                .TotalMinutes;
                     }
 
-                    continue;
+                    if (
+                        packageStartMinutes >=
+                            shiftStartMinutes &&
+                        packageEndMinutes <=
+                            shiftEndMinutes)
+                    {
+                        return true;
+                    }
                 }
 
-                coverageStarted =
-                    true;
-
-                coveredUntil =
-                    Math.Max(
-                        coveredUntil,
-                        window.End);
-
-                if (coveredUntil >=
-                    packageEndMinutes -
-                    toleranceMinutes)
-                {
-                    return true;
-                }
+                return false;
             }
 
-            return false;
+            /*
+             * نظام اليوم الكامل:
+             * وقت الدخول والخروج يمثلان نافذة التشغيل الرسمية.
+             * لذلك يجب أن تقع الباقة بالكامل داخل هذه النافذة.
+             */
+            if (
+                string.Equals(operationMode, "FullDay", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(operationMode, "Daily", StringComparison.OrdinalIgnoreCase))
+            {
+                if (
+                    !TryParsePolicyClock(
+                        place.PlacePolicy?
+                            .CheckInTime,
+                        out var checkIn) ||
+                    !TryParsePolicyClock(
+                        place.PlacePolicy?
+                            .CheckOutTime,
+                        out var checkOut))
+                {
+                    return false;
+                }
+
+                var checkInMinutes =
+                    checkIn.TotalMinutes;
+
+                var checkOutMinutes =
+                    checkOut.TotalMinutes;
+
+                /*
+                 * مثال:
+                 * دخول 14:00 وخروج 12:00 يعني أن الخروج في اليوم التالي.
+                 */
+                if (checkOutMinutes <=
+                    checkInMinutes)
+                {
+                    checkOutMinutes +=
+                        TimeSpan.FromDays(1)
+                            .TotalMinutes;
+
+                    /*
+                     * الباقات التي تبدأ بعد منتصف الليل تنتمي لليوم
+                     * التشغيلي نفسه، لذلك ننقلها لليوم التالي حسابيًا.
+                     */
+                    if (packageStartMinutes <
+                        checkInMinutes)
+                    {
+                        packageStartMinutes +=
+                            TimeSpan.FromDays(1)
+                                .TotalMinutes;
+
+                        packageEndMinutes +=
+                            TimeSpan.FromDays(1)
+                                .TotalMinutes;
+                    }
+                }
+
+                return
+                    packageStartMinutes >=
+                        checkInMinutes &&
+                    packageEndMinutes <=
+                        checkOutMinutes;
+            }
+
+            /*
+             * أي وضع تشغيل قديم/غير معروف:
+             * نحافظ على السلوك السابق ولا نمنع الحجز بسببه.
+             */
+            return true;
         }
 
         private static (
@@ -589,22 +576,9 @@ namespace YemenGuide.Web.Controllers
             Booking existingBooking,
             int bufferHours)
         {
-            /*
-             * لا يجوز لحجز باقة صباحية أن يغلق اليوم كله أمام باقة
-             * مسائية مختلفة، سواء كان وضع التشغيل Shifts أو FullDay.
-             * الأساس هو مقارنة الوقت الفعلي لكل باقة مع احتساب وقت التجهيز.
-             *
-             * للسجلات القديمة التي لا تحتوي أوقاتًا كاملة لا نفترض أن كل
-             * باقات اليوم متعارضة؛ نمنع فقط نفس الباقة في نفس اليوم. بهذا
-             * نحافظ على الحجوزات القديمة من التكرار بدون إغلاق بقية الفترات.
-             */
             if (existingBooking.Package == null)
             {
-                return
-                    existingBooking.PackageId ==
-                        requestedPackage.PackageId &&
-                    existingBooking.StartDate.Date ==
-                        requestedDate.Date;
+                return true;
             }
 
             if (
@@ -613,11 +587,7 @@ namespace YemenGuide.Web.Controllers
                 !existingBooking.Package.StartTime.HasValue ||
                 !existingBooking.Package.EndTime.HasValue)
             {
-                return
-                    existingBooking.PackageId ==
-                        requestedPackage.PackageId &&
-                    existingBooking.StartDate.Date ==
-                        requestedDate.Date;
+                return true;
             }
 
             var requested =
@@ -684,23 +654,6 @@ namespace YemenGuide.Web.Controllers
              * الخاصة بهذه الباقة. لا نمنعها بسبب ShiftsJson هنا،
              * لأن ذلك كان يجعل الباقة ظاهرة ثم يمنع تحميل التقويم.
              */
-            if (
-                selectedPackage.StartTime.HasValue &&
-                selectedPackage.EndTime.HasValue)
-            {
-                var requestedInterval =
-                    GetPackageOperationalInterval(
-                        requestedDay,
-                        selectedPackage);
-
-                if (referenceTime >= requestedInterval.End)
-                {
-                    return (
-                        false,
-                        "انتهى وقت هذه الباقة لهذا اليوم. اختر يومًا أو باقة أخرى.");
-                }
-            }
-
             var minimumNoticeHours =
                 Math.Max(
                     0,
@@ -768,15 +721,22 @@ namespace YemenGuide.Web.Controllers
                     "Confirmed"
                 };
 
-            /*
-             * حتى في FullDay قد تكون المنشأة تستخدم باقات زمنية صباحية
-             * ومسائية؛ لذلك نبحث حول اليوم ونقرر بالتداخل الفعلي دائمًا.
-             */
+            var shiftMode =
+                string.Equals(
+                    place.PlacePolicy?
+                        .OperationSystemMode,
+                    "Shifts",
+                    StringComparison.OrdinalIgnoreCase);
+
             var searchFrom =
-                requestedDay.AddDays(-1);
+                shiftMode
+                    ? requestedDay.AddDays(-1)
+                    : requestedDay;
 
             var searchTo =
-                requestedDay.AddDays(1);
+                shiftMode
+                    ? requestedDay.AddDays(1)
+                    : requestedDay;
 
             var existingBookings =
                 await _context.Bookings
@@ -812,6 +772,23 @@ namespace YemenGuide.Web.Controllers
                             searchTo)
                     .ToListAsync();
 
+            if (!shiftMode)
+            {
+                var sameDayBooked =
+                    existingBookings.Any(
+                        booking =>
+                            booking.StartDate.Date ==
+                            requestedDay);
+
+                return sameDayBooked
+                    ? (
+                        false,
+                        "هذا اليوم محجوز بالفعل. اختر يومًا آخر متاحًا.")
+                    : (
+                        true,
+                        string.Empty);
+            }
+
             var bufferHours =
                 Math.Clamp(
                     place.PlacePolicy?
@@ -825,19 +802,12 @@ namespace YemenGuide.Web.Controllers
             {
                 if (booking.Package == null)
                 {
-                    /*
-                     * سجل قديم بلا Navigation للباقة: لا نغلق اليوم كله.
-                     * نعتبره حاجزًا فقط لنفس الباقة وفي نفس اليوم.
-                     */
-                    if (
-                        booking.PackageId ==
-                            selectedPackage.PackageId &&
-                        booking.StartDate.Date ==
-                            requestedDay)
+                    if (booking.StartDate.Date ==
+                        requestedDay)
                     {
                         return (
                             false,
-                            "هذه الباقة محجوزة في هذا اليوم. اختر فترة أو باقة أخرى.");
+                            "هذا الموعد محجوز بالفعل.");
                     }
 
                     continue;
@@ -2079,9 +2049,9 @@ namespace YemenGuide.Web.Controllers
 
             /*
              * القاعات والشاليهات والباقات:
-             * نعتمد دائمًا على وقت الباقة الفعلي، سواء كان وضع التشغيل
-             * FullDay أو Shifts، ونحجب فقط التداخل الحقيقي بعد احتساب
-             * وقت التجهيز بين الحجوزات.
+             * في اليوم الكامل يبقى سلوك الحجز اليومي كما هو.
+             * في نظام الفترات نحجب فقط الأيام التي تتعارض فيها أوقات
+             * الباقة المختارة مع حجز قائم بعد احتساب وقت التجهيز.
              */
             if (packageId.HasValue)
             {
@@ -2135,15 +2105,22 @@ namespace YemenGuide.Web.Controllers
                             ) &&
 
                             booking.StartDate >=
-                                today.AddDays(-1) &&
+                                today &&
 
                             booking.StartDate <=
-                                horizonEnd.AddDays(1))
+                                horizonEnd)
                         .ToListAsync();
 
                 var bookedPackageDates =
                     new HashSet<DateTime>(
                         closedDates);
+
+                var shiftMode =
+                    string.Equals(
+                        place.PlacePolicy?
+                            .OperationSystemMode,
+                        "Shifts",
+                        StringComparison.OrdinalIgnoreCase);
 
                 var bufferHours =
                     Math.Clamp(
@@ -2152,14 +2129,18 @@ namespace YemenGuide.Web.Controllers
                         0,
                         24);
 
-                /*
-                 * لا يوجد حجب يوم كامل هنا: كل باقة تختبر مقابل الوقت
-                 * الفعلي للحجز القائم مع BufferTimeHours، في جميع أوضاع التشغيل.
-                 */
                 foreach (
                     var booking in
                     existingPackageBookings)
                 {
+                    if (!shiftMode)
+                    {
+                        bookedPackageDates.Add(
+                            booking.StartDate.Date);
+
+                        continue;
+                    }
+
                     foreach (
                         var candidateDate in
                         new[]
@@ -2185,21 +2166,6 @@ namespace YemenGuide.Web.Controllers
                             bookedPackageDates.Add(
                                 candidateDate);
                         }
-                    }
-                }
-
-                if (
-                    selectedPackage.StartTime.HasValue &&
-                    selectedPackage.EndTime.HasValue)
-                {
-                    var todayInterval =
-                        GetPackageOperationalInterval(
-                            today,
-                            selectedPackage);
-
-                    if (now >= todayInterval.End)
-                    {
-                        bookedPackageDates.Add(today);
                     }
                 }
 
@@ -2857,6 +2823,7 @@ namespace YemenGuide.Web.Controllers
                             promotion.RewardQuantity,
                             promotion.IsRewardRepeatable,
                             promotion.RewardServiceId,
+                            promotion.RewardServicesJson,
                             promotion.SpecialPrice,
                             promotion.DiscountType,
                             promotion.DiscountValue,
@@ -2881,18 +2848,52 @@ namespace YemenGuide.Web.Controllers
                     : null;
 
             string selectedRewardServiceName = string.Empty;
-            if (selectedPromotion?.RewardServiceId is int rewardServiceId &&
-                rewardServiceId > 0)
+            if (selectedPromotion != null)
             {
-                selectedRewardServiceName =
-                    await _context.PlaceAdditionalServices
-                        .AsNoTracking()
-                        .Where(service =>
-                            service.ServiceId == rewardServiceId &&
-                            service.PlaceId == placeId &&
-                            service.IsActive == true)
-                        .Select(service => service.ServiceName)
-                        .FirstOrDefaultAsync() ?? string.Empty;
+                var selectedRewardSnapshots =
+                    ReadPromotionRewardServices(
+                        selectedPromotion.RewardServicesJson);
+
+                var selectedRewardServiceIds =
+                    selectedRewardSnapshots
+                        .Where(item => item.ServiceId > 0)
+                        .Select(item => item.ServiceId)
+                        .ToList();
+
+                // توافق كامل مع العروض القديمة التي كانت تحفظ خدمة واحدة فقط.
+                if (selectedPromotion.RewardServiceId is int legacyRewardServiceId &&
+                    legacyRewardServiceId > 0 &&
+                    !selectedRewardServiceIds.Contains(legacyRewardServiceId))
+                {
+                    selectedRewardServiceIds.Add(legacyRewardServiceId);
+                }
+
+                if (selectedRewardServiceIds.Count > 0)
+                {
+                    var selectedRewardServiceRows =
+                        await _context.PlaceAdditionalServices
+                            .AsNoTracking()
+                            .Where(service =>
+                                selectedRewardServiceIds.Contains(service.ServiceId) &&
+                                service.PlaceId == placeId &&
+                                service.IsActive == true)
+                            .Select(service => new
+                            {
+                                service.ServiceId,
+                                service.ServiceName
+                            })
+                            .ToListAsync();
+
+                    selectedRewardServiceName =
+                        string.Join(
+                            " + ",
+                            selectedRewardServiceIds
+                                .Select(serviceId =>
+                                    selectedRewardServiceRows.FirstOrDefault(row =>
+                                        row.ServiceId == serviceId)?.ServiceName)
+                                .Where(name => !string.IsNullOrWhiteSpace(name))
+                                .Select(name => name!.Trim()));
+                }
             }
 
             var currentCustomerId = 0;
@@ -4870,6 +4871,7 @@ namespace YemenGuide.Web.Controllers
                         promotion.RewardQuantity,
                         promotion.IsRewardRepeatable,
                         promotion.RewardServiceId,
+                        promotion.RewardServicesJson,
                         promotion.SpecialPrice,
                         promotion.DiscountType,
                         promotion.DiscountValue,
@@ -5203,10 +5205,133 @@ namespace YemenGuide.Web.Controllers
                     ? "Discount"
                     : promotion.OfferMode;
                 string rewardType = promotion.RewardType?.Trim() ?? string.Empty;
-                string rewardServiceName = promotion.RewardServiceId.HasValue &&
-                                           rewardServiceNames.TryGetValue(promotion.RewardServiceId.Value, out var storedRewardServiceName)
-                    ? storedRewardServiceName
-                    : string.Empty;
+                var rewardServiceSnapshots =
+                    ReadPromotionRewardServices(
+                        promotion.RewardServicesJson);
+
+                var rewardServiceIdsForOffer =
+                    rewardServiceSnapshots
+                        .Where(item => item.ServiceId > 0)
+                        .Select(item => item.ServiceId)
+                        .Distinct()
+                        .ToList();
+
+                // السجلات القديمة: RewardServiceId يظل مصدرًا احتياطيًا ولا نحذفه.
+                if (promotion.RewardServiceId.HasValue &&
+                    promotion.RewardServiceId.Value > 0 &&
+                    !rewardServiceIdsForOffer.Contains(promotion.RewardServiceId.Value))
+                {
+                    rewardServiceIdsForOffer.Add(
+                        promotion.RewardServiceId.Value);
+                }
+
+                var rewardServicesForOffer =
+                    rewardServiceIdsForOffer
+                        .Select(serviceId =>
+                        {
+                            var liveService =
+                                activeServices.FirstOrDefault(service =>
+                                    service.ServiceId == serviceId);
+
+                            var snapshot =
+                                rewardServiceSnapshots.FirstOrDefault(item =>
+                                    item.ServiceId == serviceId);
+
+                            if (liveService == null && snapshot == null)
+                            {
+                                return null;
+                            }
+
+                            var name =
+                                liveService?.ServiceName?.Trim();
+
+                            if (string.IsNullOrWhiteSpace(name))
+                            {
+                                name =
+                                    snapshot?.Name?.Trim();
+                            }
+
+                            decimal originalServicePrice =
+                                snapshot != null &&
+                                snapshot.OriginalPrice > 0m
+                                    ? snapshot.OriginalPrice
+                                    : Math.Max(
+                                        0m,
+                                        liveService?.Price ?? 0m);
+
+                            return new CustomerPromotionRewardServiceSnapshot
+                            {
+                                ServiceId = serviceId,
+                                Name = string.IsNullOrWhiteSpace(name)
+                                    ? "خدمة إضافية"
+                                    : name!,
+                                OriginalPrice = originalServicePrice
+                            };
+                        })
+                        .Where(item => item != null)
+                        .Select(item => item!)
+                        .ToList();
+
+                string rewardServiceName =
+                    rewardServicesForOffer.Count > 0
+                        ? string.Join(
+                            " + ",
+                            rewardServicesForOffer.Select(item => item.Name))
+                        : promotion.RewardServiceId.HasValue &&
+                          rewardServiceNames.TryGetValue(
+                              promotion.RewardServiceId.Value,
+                              out var storedRewardServiceName)
+                            ? storedRewardServiceName
+                            : string.Empty;
+
+                decimal rewardServicesOriginalTotal =
+                    Math.Round(
+                        rewardServicesForOffer.Sum(item =>
+                            Math.Max(0m, item.OriginalPrice)),
+                        2);
+
+                bool isServiceReward =
+                    string.Equals(
+                        rewardType,
+                        "FreeService",
+                        StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(
+                        rewardType,
+                        "ServiceSpecialPrice",
+                        StringComparison.OrdinalIgnoreCase);
+
+                // الهدف يبقى الباقة/الغرفة كما هو، ونضيف الخدمات كأهداف مرئية
+                // كي يبرزها JavaScript كلها عند الضغط على العرض.
+                if (isServiceReward &&
+                    rewardServicesForOffer.Count > 0)
+                {
+                    var relatedAnchors =
+                        rewardServicesForOffer
+                            .Select(item =>
+                                $"serviceCard-{item.ServiceId}");
+
+                    targetAnchor =
+                        string.Join(
+                            "|",
+                            new[] { targetAnchor }
+                                .Concat(relatedAnchors)
+                                .Where(anchor =>
+                                    !string.IsNullOrWhiteSpace(anchor))
+                                .Distinct(
+                                    StringComparer.OrdinalIgnoreCase));
+                }
+
+                // ServiceSpecialPrice هو سعر مجموعة الخدمات، وليس سعر الباقة
+                // المستهدفة. لذلك معاينة 823 -> 800 يجب أن تعتمد على الخدمات.
+                if (string.Equals(
+                        rewardType,
+                        "ServiceSpecialPrice",
+                        StringComparison.OrdinalIgnoreCase) &&
+                    rewardServicesOriginalTotal > 0m)
+                {
+                    originalPrice =
+                        rewardServicesOriginalTotal;
+                }
 
                 decimal? estimatedDiscount = null;
                 decimal? estimatedPrice = null;
@@ -5264,13 +5389,51 @@ namespace YemenGuide.Web.Controllers
                 string specialPriceText = promotion.SpecialPrice.HasValue
                     ? currencyContext.Format(promotion.SpecialPrice.Value, exchangeRateRegion)
                     : string.Empty;
-                string offerSummary = BuildCustomerPromotionSummary(
-                    offerMode, rewardType, promotion.DiscountType, promotion.DiscountValue,
-                    displayDiscountText, promotion.RequiredQuantity, promotion.RewardQuantity,
-                    rewardServiceName, specialPriceText, promotion.MinimumNights, promotion.IsRewardRepeatable);
+                string offerSummary;
+
+                if (string.Equals(
+                        rewardType,
+                        "ServiceSpecialPrice",
+                        StringComparison.OrdinalIgnoreCase) &&
+                    rewardServicesForOffer.Count > 0 &&
+                    promotion.SpecialPrice.HasValue)
+                {
+                    offerSummary =
+                        $"الخدمات: {string.Join(" + ", rewardServicesForOffer.Select(item => item.Name))} " +
+                        $"بسعر {currencyContext.Format(promotion.SpecialPrice.Value, exchangeRateRegion)}" +
+                        (rewardServicesOriginalTotal > promotion.SpecialPrice.Value
+                            ? $" بدل {currencyContext.Format(rewardServicesOriginalTotal, exchangeRateRegion)}"
+                            : string.Empty);
+                }
+                else if (string.Equals(
+                             rewardType,
+                             "FreeService",
+                             StringComparison.OrdinalIgnoreCase) &&
+                         rewardServicesForOffer.Count > 0)
+                {
+                    offerSummary =
+                        $"الخدمات: {string.Join(" + ", rewardServicesForOffer.Select(item => item.Name))} مجانًا";
+                }
+                else
+                {
+                    offerSummary = BuildCustomerPromotionSummary(
+                        offerMode, rewardType, promotion.DiscountType, promotion.DiscountValue,
+                        displayDiscountText, promotion.RequiredQuantity, promotion.RewardQuantity,
+                        rewardServiceName, specialPriceText, promotion.MinimumNights, promotion.IsRewardRepeatable);
+                }
 
                 var conditions =
                     new List<string>();
+
+                if (isServiceReward &&
+                    rewardServicesForOffer.Count > 0)
+                {
+                    conditions.Add(
+                        $"يشمل العرض: {targetLabel} + " +
+                        string.Join(
+                            " + ",
+                            rewardServicesForOffer.Select(item => item.Name)));
+                }
 
                 if (
                     promotion.MinimumBookingAmount.HasValue &&
@@ -7914,6 +8077,48 @@ namespace YemenGuide.Web.Controllers
         {
             return value * Math.PI / 180d;
         }
+        private sealed class CustomerPromotionRewardServiceSnapshot
+        {
+            public int ServiceId { get; set; }
+            public string Name { get; set; } = string.Empty;
+            public decimal OriginalPrice { get; set; }
+        }
+
+        private static List<CustomerPromotionRewardServiceSnapshot>
+            ReadPromotionRewardServices(
+                string? json)
+        {
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                return new List<CustomerPromotionRewardServiceSnapshot>();
+            }
+
+            try
+            {
+                return JsonSerializer.Deserialize<
+                           List<CustomerPromotionRewardServiceSnapshot>>(
+                           json,
+                           new JsonSerializerOptions
+                           {
+                               PropertyNameCaseInsensitive = true
+                           })?
+                       .Where(item =>
+                           item != null &&
+                           item.ServiceId > 0)
+                       .GroupBy(item =>
+                           item.ServiceId)
+                       .Select(group =>
+                           group.First())
+                       .ToList() ??
+                       new List<CustomerPromotionRewardServiceSnapshot>();
+            }
+            catch (JsonException)
+            {
+                // عرض قديم أو JSON غير صالح: RewardServiceId القديم يظل fallback.
+                return new List<CustomerPromotionRewardServiceSnapshot>();
+            }
+        }
+
         private static string BuildCustomerPromotionSummary(
             string offerMode,
             string rewardType,

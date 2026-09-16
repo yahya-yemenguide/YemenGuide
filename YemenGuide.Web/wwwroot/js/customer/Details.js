@@ -1,4 +1,4 @@
-/**
+﻿/**
 * ============================================================================
 * YEMENGUIDE — PLACE DETAILS
 * جميع وظائف صفحة تفاصيل المنشأة مع الحفاظ على الواجهة الفخمة
@@ -29,6 +29,7 @@
         packageDate: "",
         packageAvailabilityCheckInFlight: false,
         selectedServiceIds: new Set(),
+        promotionAutoServiceIds: new Set(),
 
         currentPackage: {
             id: 0,
@@ -36,7 +37,9 @@
             price: "",
             capacityText: "",
             time: "",
-            maxCapacity: 0
+            maxCapacity: 0,
+            promotionId: 0,
+            promotionTargetAnchor: ""
         },
 
         selectedSeatingSetup: "مجلس عربي",
@@ -818,162 +821,24 @@
         return data;
     }
 
-    function ensureBookingDialogStyles() {
-        if (document.getElementById("ygBookingDialogStyles")) return;
-
-        const style = document.createElement("style");
-        style.id = "ygBookingDialogStyles";
-        style.textContent = `
-            .yg-booking-dialog-backdrop{position:fixed;inset:0;z-index:2147483000;background:rgba(8,28,45,.46);backdrop-filter:blur(7px);display:grid;place-items:center;padding:18px}
-            .yg-booking-dialog{width:min(460px,100%);background:#fff;border:1px solid rgba(0,166,218,.13);border-radius:24px;box-shadow:0 28px 80px rgba(9,42,67,.22);padding:24px;direction:rtl;text-align:right}
-            .yg-booking-dialog h3{margin:0 0 8px;color:#16384d;font-size:1.12rem;font-weight:900}
-            .yg-booking-dialog p{margin:0;color:#647b8d;line-height:1.85;font-size:.9rem;white-space:pre-line}
-            .yg-booking-dialog__actions{display:flex;gap:9px;justify-content:flex-start;margin-top:20px}
-            .yg-booking-dialog__actions button{border:0;border-radius:13px;min-height:43px;padding:0 16px;font:inherit;font-weight:850;cursor:pointer}
-            .yg-booking-dialog__confirm{background:#00a6da;color:#fff}
-            .yg-booking-dialog__cancel{background:#f0f5f8;color:#496274}
-        `;
-        document.head.appendChild(style);
-    }
-
-    function fallbackDialog(options = {}) {
-        ensureBookingDialogStyles();
-
-        return new Promise(resolve => {
-            const overlay = document.createElement("div");
-            overlay.className = "yg-booking-dialog-backdrop";
-            overlay.innerHTML = `
-                <div class="yg-booking-dialog" role="dialog" aria-modal="true">
-                    <h3></h3>
-                    <p></p>
-                    <div class="yg-booking-dialog__actions">
-                        <button type="button" class="yg-booking-dialog__confirm"></button>
-                        ${options.showCancelButton ? '<button type="button" class="yg-booking-dialog__cancel"></button>' : ''}
-                    </div>
-                </div>`;
-
-            overlay.querySelector("h3").textContent = options.title || "تنبيه";
-            overlay.querySelector("p").textContent = options.text || "";
-
-            const confirm = overlay.querySelector(".yg-booking-dialog__confirm");
-            const cancel = overlay.querySelector(".yg-booking-dialog__cancel");
-
-            confirm.textContent = options.confirmButtonText || "حسنًا";
-            if (cancel) cancel.textContent = options.cancelButtonText || "إلغاء";
-
-            const close = value => {
-                overlay.remove();
-                resolve(value);
-            };
-
-            confirm.addEventListener("click", () => close({ isConfirmed: true }));
-            cancel?.addEventListener("click", () => close({ isConfirmed: false, isDismissed: true }));
-
-            document.body.appendChild(overlay);
-            confirm.focus();
-        });
-    }
-
     function notify(options) {
         if (
             typeof window.Swal !==
-            "undefined" &&
-            typeof window.Swal.fire ===
-            "function"
+            "undefined"
         ) {
-            return window.Swal.fire(options);
+            return window.Swal
+                .fire(options);
         }
 
-        return fallbackDialog(options);
-    }
+        window.alert(
+            options.text ||
+            options.title ||
+            "حدث تنبيه."
+        );
 
-    async function ensureBookingProfileReady() {
-        const authenticated =
-            getValue("customerAuthenticatedInput", "false").toLowerCase() === "true";
-
-        if (!authenticated) {
-            const result = await notify({
-                icon: "info",
-                title: "سجل الدخول لإكمال الحجز",
-                text: "يجب تسجيل الدخول بحساب عميل قبل بدء الحجز.",
-                showCancelButton: true,
-                confirmButtonText: "تسجيل الدخول",
-                cancelButtonText: "لاحقًا"
-            });
-
-            if (result?.isConfirmed) {
-                const returnUrl =
-                    window.location.pathname +
-                    window.location.search +
-                    window.location.hash;
-
-                window.location.assign(
-                    `/Account/Login?returnUrl=${encodeURIComponent(returnUrl)}`
-                );
-            }
-
-            return false;
-        }
-
-        try {
-            const returnUrl =
-                window.location.pathname +
-                window.location.search +
-                window.location.hash;
-
-            const response = await fetch(
-                `/BookingFlow/BookingReadiness?returnUrl=${encodeURIComponent(returnUrl)}`,
-                {
-                    method: "GET",
-                    headers: { "X-Requested-With": "XMLHttpRequest" },
-                    credentials: "same-origin"
-                }
-            );
-
-            const data = await parseResponse(response);
-
-            if (data?.ready === true) {
-                return true;
-            }
-
-            const missing =
-                Array.isArray(data?.missingFields)
-                    ? data.missingFields.filter(Boolean)
-                    : [];
-
-            const details =
-                missing.length > 0
-                    ? `البيانات المطلوبة: ${missing.join("، ")}.`
-                    : "أكمل بيانات حسابك المهمة ثم عد لإتمام الحجز.";
-
-            const result = await notify({
-                icon: "warning",
-                title: "أكمل بيانات حسابك أولًا",
-                text: `${data?.message || "لا يمكن بدء الحجز بملف شخصي ناقص."}\n${details}`,
-                showCancelButton: true,
-                confirmButtonText: "الذهاب إلى الملف الشخصي",
-                cancelButtonText: "إلغاء"
-            });
-
-            if (result?.isConfirmed) {
-                window.location.assign(
-                    data?.redirectUrl || "/Profile?completeBookingProfile=true"
-                );
-            }
-
-            return false;
-        } catch (error) {
-            console.error("تعذر التحقق من جاهزية حساب الحجز:", error);
-
-            await notify({
-                icon: "error",
-                title: "تعذر التحقق من الحساب",
-                text: "لم نتمكن من التحقق من بيانات حسابك الآن. أعد المحاولة بعد قليل.",
-                confirmButtonText: "حسنًا"
-            });
-
-            return false;
-        }
+        return Promise.resolve({
+            isConfirmed: true
+        });
     }
 
     function showToast(
@@ -1290,11 +1155,6 @@
             safeRun(
                 "نوع الحجز المخصص",
                 initializeCustomBookingType
-            );
-
-            safeRun(
-                "خيارات أخرى للقاعات",
-                initializeCustomHallFields
             );
 
             safeRun(
@@ -4231,6 +4091,233 @@
         );
     }
 
+    function getPromotionIncludedServiceIds(
+        promotionId,
+        rawAnchors = ""
+    ) {
+        const ids = new Set();
+
+        const parsedPromotionId =
+            Number.parseInt(
+                String(
+                    promotionId ||
+                    "0"
+                ),
+                10
+            ) || 0;
+
+        const card =
+            parsedPromotionId > 0
+                ? qs(
+                    `[data-promotion-card][data-promotion-id="${parsedPromotionId}"]`
+                )
+                : null;
+
+        String(
+            card?.dataset
+                .includedServiceIds ||
+            ""
+        )
+            .split(",")
+            .map(value =>
+                Number.parseInt(
+                    value,
+                    10
+                ) || 0
+            )
+            .filter(value =>
+                value > 0
+            )
+            .forEach(value =>
+                ids.add(value)
+            );
+
+        String(
+            rawAnchors ||
+            card?.dataset
+                .targetAnchor ||
+            ""
+        )
+            .split("|")
+            .forEach(anchor => {
+                const match =
+                    String(anchor || "")
+                        .trim()
+                        .match(
+                            /^#?serviceCard-(\d+)$/i
+                        );
+
+                if (!match) {
+                    return;
+                }
+
+                const serviceId =
+                    Number.parseInt(
+                        match[1],
+                        10
+                    ) || 0;
+
+                if (serviceId > 0) {
+                    ids.add(serviceId);
+                }
+            });
+
+        return Array.from(ids);
+    }
+
+    function clearPromotionAutoIncludedServices() {
+        const autoServiceIds =
+            Array.from(
+                state.promotionAutoServiceIds
+            );
+
+        state.promotionAutoServiceIds
+            .clear();
+
+        autoServiceIds.forEach(serviceId => {
+            const checkbox =
+                qs(
+                    `.addon-checkbox[data-service-id="${serviceId}"]`
+                );
+
+            if (!checkbox?.checked) {
+                return;
+            }
+
+            // نستخدم click حقيقي حتى تتحدث state وحسابات الخدمات بنفس
+            // الطريقة التي تحدث عند إلغاء العميل للخدمة بيده.
+            checkbox.click();
+
+            if (checkbox.checked) {
+                checkbox.checked = false;
+                checkbox.dispatchEvent(
+                    new Event(
+                        "input",
+                        { bubbles: true }
+                    )
+                );
+                checkbox.dispatchEvent(
+                    new Event(
+                        "change",
+                        { bubbles: true }
+                    )
+                );
+            }
+        });
+    }
+
+    function applyPromotionIncludedServices(
+        promotionId,
+        rawAnchors = "",
+        options = {}
+    ) {
+        const parsedPromotionId =
+            Number.parseInt(
+                String(
+                    promotionId ||
+                    "0"
+                ),
+                10
+            ) || 0;
+
+        if (parsedPromotionId <= 0) {
+            return [];
+        }
+
+        if (options.replacePrevious === true) {
+            clearPromotionAutoIncludedServices();
+        }
+
+        const serviceIds =
+            getPromotionIncludedServiceIds(
+                parsedPromotionId,
+                rawAnchors
+            );
+
+        if (!serviceIds.length) {
+            return [];
+        }
+
+        const selectedNames = [];
+        let changed = false;
+
+        serviceIds.forEach(serviceId => {
+            const checkbox =
+                qs(
+                    `.addon-checkbox[data-service-id="${serviceId}"]`
+                );
+
+            if (!checkbox) {
+                return;
+            }
+
+            const serviceName =
+                String(
+                    checkbox.dataset
+                        .name ||
+                    "خدمة إضافية"
+                ).trim();
+
+            if (serviceName) {
+                selectedNames.push(
+                    serviceName
+                );
+            }
+
+            if (!checkbox.checked) {
+                /*
+                 * مهم: لا نكتفي بتغيير checked برمجيًا.
+                 * ننفذ click حقيقي على الـ input حتى تعمل نفس رحلة
+                 * العميل اليدوية بالكامل: click + input + change، وبالتالي
+                 * تدخل الخدمة في state وفي رابط Checkout وفي أي حسابات مرتبطة.
+                 */
+                checkbox.click();
+
+                // حماية احتياطية فقط إذا منع كود آخر الـ click الافتراضي.
+                if (!checkbox.checked) {
+                    checkbox.checked = true;
+                    checkbox.dispatchEvent(
+                        new Event(
+                            "input",
+                            { bubbles: true }
+                        )
+                    );
+                    checkbox.dispatchEvent(
+                        new Event(
+                            "change",
+                            { bubbles: true }
+                        )
+                    );
+                }
+
+                if (checkbox.checked) {
+                    state.promotionAutoServiceIds
+                        .add(serviceId);
+                }
+
+                changed = true;
+            }
+        });
+
+        // بعض الخدمات قد يكون لها عرض مستقل؛ حدث change الخاص بها قد يغيّر
+        // promotionId. نعيد تثبيت عرض الباقة المركب بعد اختيار كل الخدمات.
+        setSelectedPromotionId(
+            parsedPromotionId
+        );
+
+        if (
+            changed &&
+            options.notify !== false &&
+            selectedNames.length
+        ) {
+            showToast(
+                `تم اختيار خدمات العرض تلقائيًا: ${selectedNames.join("، ")}`
+            );
+        }
+
+        return serviceIds;
+    }
+
     function selectPromotion(
         promotionId,
         targetAnchor,
@@ -4268,6 +4355,29 @@
             inline: "center"
         });
 
+        const rawAnchors =
+            String(
+                targetAnchor ||
+                card?.dataset
+                    .targetAnchor ||
+                ""
+            )
+                .trim();
+
+        // في عروض الباقات لا نضيف الخدمات بمجرد الضغط على بطاقة العرض.
+        // الخدمات تدخل للحجز فقط عند اختيار الباقة نفسها.
+        if (options.applyServices !== false) {
+            applyPromotionIncludedServices(
+                parsedId,
+                rawAnchors,
+                {
+                    notify:
+                        options.notifyServices !==
+                        false
+                }
+            );
+        }
+
         if (
             options.scrollTarget ===
             false
@@ -4275,42 +4385,50 @@
             return;
         }
 
-        const anchor =
-            String(
-                targetAnchor ||
-                card?.dataset
-                    .targetAnchor ||
-                ""
-            )
-                .replace(
-                    /^#/,
-                    ""
+        const anchors =
+            rawAnchors
+                .split("|")
+                .map(anchor =>
+                    anchor
+                        .replace(
+                            /^#/,
+                            ""
+                        )
+                        .trim()
                 )
-                .trim();
+                .filter(Boolean);
 
-        if (!anchor) {
+        if (!anchors.length) {
             return;
         }
 
-        const target =
-            getElement(
-                anchor
-            );
+        const targets =
+            anchors
+                .map(anchor =>
+                    getElement(
+                        anchor
+                    )
+                )
+                .filter(Boolean);
 
-        if (!target) {
+        if (!targets.length) {
             return;
         }
 
         window.setTimeout(
             () => {
-                target.scrollIntoView({
+                // ننتقل للهدف الرئيسي (الباقة/الغرفة) ونبرز أيضًا كل
+                // الخدمات المشمولة بالعرض المركب، بعد اختيارها تلقائيًا للحجز.
+                targets[0].scrollIntoView({
                     behavior: "smooth",
                     block: "center"
                 });
 
-                flashPromotionTarget(
-                    target
-                );
+                targets.forEach(target => {
+                    flashPromotionTarget(
+                        target
+                    );
+                });
             },
             90
         );
@@ -4395,20 +4513,43 @@
             return;
         }
 
+        // لا نفعّل أول عرض في الصفحة تلقائيًا.
+        // العرض يصبح مختارًا فقط إذا جاء promotionId فعليًا أو اختار العميل
+        // باقة/غرفة/عرضًا مرتبطًا به.
         const initialId =
             getSelectedPromotionId() ||
-            Number.parseInt(
-                cards[0].dataset
-                    .promotionId ||
-                "0",
-                10
-            ) ||
             0;
 
         if (initialId > 0) {
             setSelectedPromotionId(
                 initialId
             );
+
+            const initialCard =
+                qs(
+                    `[data-promotion-card][data-promotion-id="${initialId}"]`
+                );
+
+            const initialTargetType =
+                String(
+                    initialCard?.dataset
+                        .targetType ||
+                    ""
+                )
+                    .trim()
+                    .toLowerCase();
+
+            if (initialTargetType !== "package") {
+                applyPromotionIncludedServices(
+                    initialId,
+                    initialCard?.dataset
+                        .targetAnchor ||
+                    "",
+                    {
+                        notify: false
+                    }
+                );
+            }
         }
 
         qsa(
@@ -4477,7 +4618,10 @@
                         "",
                         {
                             scrollTarget:
-                                true
+                                true,
+                            applyServices:
+                                targetType !==
+                                "package"
                         }
                     );
                 }
@@ -4526,11 +4670,9 @@
                             10
                         ) || 0;
 
-                    if (id > 0) {
-                        setSelectedPromotionId(
-                            id
-                        );
-                    }
+                    setSelectedPromotionId(
+                        id
+                    );
                 },
                 {
                     passive: true
@@ -5448,6 +5590,50 @@ font-weight:700;
                 return;
             }
 
+            const promotionId =
+                Number.parseInt(
+                    button.dataset
+                        .promotionId ||
+                    "0",
+                    10
+                ) || 0;
+
+            const promotionCard =
+                promotionId > 0
+                    ? qs(
+                        `[data-promotion-card][data-promotion-id="${promotionId}"]`
+                    )
+                    : null;
+
+            const promotionTargetAnchor =
+                String(
+                    button.dataset
+                        .promotionTargetAnchor ||
+                    promotionCard?.dataset
+                        .targetAnchor ||
+                    ""
+                ).trim();
+
+            // اختيار الباقة نفسها هو مصدر الحقيقة.
+            // أولًا نلغي فقط الخدمات التي أضافها عرض الباقة السابقة تلقائيًا.
+            // الخدمات التي اختارها العميل يدويًا لا توجد في هذه المجموعة ولن تُمسح.
+            clearPromotionAutoIncludedServices();
+
+            setSelectedPromotionId(
+                promotionId
+            );
+
+            if (promotionId > 0) {
+                applyPromotionIncludedServices(
+                    promotionId,
+                    promotionTargetAnchor,
+                    {
+                        notify: true,
+                        replacePrevious: false
+                    }
+                );
+            }
+
             window.openPackageModal(
                 button.dataset.packageId || "0",
                 button.dataset
@@ -5467,21 +5653,23 @@ font-weight:700;
                         .packageMax ||
                     "0",
                     10
-                ) || 0
+                ) || 0,
+                promotionId,
+                promotionTargetAnchor
             );
         };
 
     window.openPackageModal =
-        async function openPackageModal(
+        function openPackageModal(
             packageId,
             name,
             price,
             capacity,
             time,
-            maxCapacity
+            maxCapacity,
+            promotionId = 0,
+            promotionTargetAnchor = ""
         ) {
-            if (!(await ensureBookingProfileReady())) return;
-
             state.currentPackage = {
                 id:
                     Number.parseInt(
@@ -5513,7 +5701,22 @@ font-weight:700;
                     Number.parseInt(
                         maxCapacity,
                         10
-                    ) || 0
+                    ) || 0,
+
+                promotionId:
+                    Number.parseInt(
+                        String(
+                            promotionId ||
+                            "0"
+                        ),
+                        10
+                    ) || 0,
+
+                promotionTargetAnchor:
+                    String(
+                        promotionTargetAnchor ||
+                        ""
+                    ).trim()
             };
 
             window
@@ -5659,9 +5862,7 @@ font-weight:700;
         };
 
     window.openAttendanceModal =
-        async function openAttendanceModal() {
-            if (!(await ensureBookingProfileReady())) return;
-
+        function openAttendanceModal() {
             if (!state.packageDate) {
                 notify({
                     icon:
@@ -5684,9 +5885,7 @@ font-weight:700;
         };
 
     window.openHallModal =
-        async function openHallModal() {
-            if (!(await ensureBookingProfileReady())) return;
-
+        function openHallModal() {
             if (!state.packageDate) {
                 notify({
                     icon:
@@ -5711,183 +5910,6 @@ font-weight:700;
     /* ======================================================================
        14. عدادات الأشخاص والسعة
        ====================================================================== */
-
-    function getPackageChildAllowance(
-        baseCapacity
-    ) {
-        const capacity =
-            Math.max(
-                0,
-                Number.parseInt(
-                    String(
-                        baseCapacity ||
-                        "0"
-                    ),
-                    10
-                ) || 0
-            );
-
-        if (capacity <= 0) {
-            return 0;
-        }
-
-        if (capacity < 10) {
-            return 2;
-        }
-
-        if (capacity === 10) {
-            return 3;
-        }
-
-        if (capacity <= 50) {
-            return 5;
-        }
-
-        return Math.min(
-            10,
-            Math.floor(
-                capacity * 0.10
-            )
-        );
-    }
-
-    function getCurrentPackageBaseCapacity() {
-        let baseCapacity =
-            window
-                .currentPackageMaxCapacity ||
-            state
-                .currentPackage
-                .maxCapacity ||
-            0;
-
-        baseCapacity =
-            Math.max(
-                0,
-                Number.parseInt(
-                    String(
-                        baseCapacity ||
-                        "0"
-                    ),
-                    10
-                ) || 0
-            );
-
-        if (baseCapacity > 0) {
-            return baseCapacity;
-        }
-
-        const capacityText =
-            getElement(
-                "modalPkgCap"
-            )?.textContent ||
-            "";
-
-        const match =
-            capacityText.match(
-                /\d+/
-            );
-
-        return match
-            ? Math.max(
-                0,
-                Number.parseInt(
-                    match[0],
-                    10
-                ) || 0
-            )
-            : 0;
-    }
-
-    function validatePackageGuestSelection(
-        adults,
-        children,
-        baseCapacity
-    ) {
-        const safeAdults =
-            Math.max(
-                0,
-                Number.parseInt(
-                    String(
-                        adults ||
-                        "0"
-                    ),
-                    10
-                ) || 0
-            );
-
-        const safeChildren =
-            Math.max(
-                0,
-                Number.parseInt(
-                    String(
-                        children ||
-                        "0"
-                    ),
-                    10
-                ) || 0
-            );
-
-        const capacity =
-            Math.max(
-                0,
-                Number.parseInt(
-                    String(
-                        baseCapacity ||
-                        "0"
-                    ),
-                    10
-                ) || 0
-            );
-
-        const childAllowance =
-            getPackageChildAllowance(
-                capacity
-            );
-
-        const absoluteMaximum =
-            capacity > 0
-                ? capacity +
-                  childAllowance
-                : 0;
-
-        if (
-            capacity > 0 &&
-            safeAdults > capacity
-        ) {
-            return {
-                valid: false,
-                childAllowance,
-                absoluteMaximum,
-                message:
-                    `عدد البالغين لا يمكن أن يتجاوز ` +
-                    `السعة الأساسية (${capacity}).`
-            };
-        }
-
-        if (
-            absoluteMaximum > 0 &&
-            safeAdults +
-            safeChildren >
-            absoluteMaximum
-        ) {
-            return {
-                valid: false,
-                childAllowance,
-                absoluteMaximum,
-                message:
-                    `السعة الأساسية ${capacity} أشخاص، ` +
-                    `ويسمح بتجاوزها بـ ${childAllowance} ` +
-                    `أطفال فقط كحد أقصى.`
-            };
-        }
-
-        return {
-            valid: true,
-            childAllowance,
-            absoluteMaximum,
-            message: ""
-        };
-    }
 
     window.smartUpdateCount =
         function smartUpdateCount(
@@ -5981,23 +6003,52 @@ font-weight:700;
                     ) || 0
                 );
 
-            const baseCapacity =
-                getCurrentPackageBaseCapacity();
+            let baseCapacity =
+                window
+                    .currentPackageMaxCapacity ||
+                state
+                    .currentPackage
+                    .maxCapacity ||
+                0;
 
-            const validation =
-                validatePackageGuestSelection(
-                    adults,
-                    children,
-                    baseCapacity
-                );
+            if (!baseCapacity) {
+                const capacityText =
+                    getElement(
+                        "modalPkgCap"
+                    )?.textContent ||
+                    "";
 
-            if (!validation.valid) {
+                const match =
+                    capacityText.match(
+                        /\d+/
+                    );
+
+                baseCapacity =
+                    match
+                        ? Number.parseInt(
+                            match[0],
+                            10
+                        )
+                        : 0;
+            }
+
+            const absoluteMaximum =
+                baseCapacity > 0
+                    ? baseCapacity + 2
+                    : 0;
+
+            if (
+                absoluteMaximum > 0 &&
+                adults + children >
+                absoluteMaximum
+            ) {
                 notify({
                     icon: "error",
                     title:
                         "تجاوز الحد الأقصى",
                     text:
-                        validation.message
+                        `لا يمكن أن يتجاوز العدد ` +
+                        `${absoluteMaximum} أشخاص.`
                 });
 
                 if (
@@ -6007,18 +6058,7 @@ font-weight:700;
                     adults =
                         window
                             .lastValidAdults;
-                } else if (
-                    changedField ===
-                    "children"
-                ) {
-                    children =
-                        window
-                            .lastValidChildren;
                 } else {
-                    adults =
-                        window
-                            .lastValidAdults;
-
                     children =
                         window
                             .lastValidChildren;
@@ -6057,18 +6097,14 @@ font-weight:700;
                 window
                     .lastValidChildren,
                 baseCapacity,
-                validation
-                    .absoluteMaximum,
-                validation
-                    .childAllowance
+                absoluteMaximum
             );
         };
 
     function updateCapacityWarning(
         total,
         baseCapacity,
-        absoluteMaximum,
-        childAllowance
+        absoluteMaximum
     ) {
         const alert =
             getElement(
@@ -6116,12 +6152,14 @@ font-weight:700;
         if (
             total ===
             baseCapacity &&
-            childAllowance > 0
+            baseCapacity <
+            absoluteMaximum
         ) {
             text.innerHTML =
-                "اكتملت السعة الأساسية للباقة، " +
-                "ويسمح بعد ذلك بـ " +
-                `<strong>${childAllowance} أطفال إضافيين فقط</strong>.`;
+                "اكتمل العدد الأساسي للباقة، " +
+                "ويمكن إضافة " +
+                "<strong>شخصين إضافيين</strong> " +
+                "كحد أقصى.";
 
             alert.classList.add(
                 "alert-info",
@@ -6129,19 +6167,13 @@ font-weight:700;
                 "border-info",
                 "is-info"
             );
-
-            return;
-        }
-
-        if (
-            absoluteMaximum > 0 &&
+        } else if (
             total >=
             absoluteMaximum
         ) {
             text.innerHTML =
                 `وصلت إلى الحد الأقصى ` +
-                `<strong>(${absoluteMaximum} أشخاص)</strong>، ` +
-                `بما فيه سماحية ${childAllowance} أطفال فوق السعة.`;
+                `<strong>(${absoluteMaximum} أشخاص)</strong>.`;
 
             alert.classList.add(
                 "alert-danger",
@@ -6149,28 +6181,19 @@ font-weight:700;
                 "border-danger",
                 "is-danger"
             );
+        } else {
+            text.innerHTML =
+                "تمت إضافة شخص إضافي، " +
+                "ويتبقى <strong>شخص واحد</strong> " +
+                "للوصول إلى الحد الأقصى.";
 
-            return;
-        }
-
-        const remaining =
-            Math.max(
-                0,
-                absoluteMaximum -
-                total
+            alert.classList.add(
+                "alert-info",
+                "text-info",
+                "border-info",
+                "is-info"
             );
-
-        text.innerHTML =
-            "أنت الآن ضمن سماحية الأطفال فوق السعة، " +
-            `ويتبقى <strong>${remaining}</strong> ` +
-            "من الزيادة المسموحة.";
-
-        alert.classList.add(
-            "alert-info",
-            "text-info",
-            "border-info",
-            "is-info"
-        );
+        }
     }
 
     /* ======================================================================
@@ -6192,12 +6215,6 @@ font-weight:700;
                     type || ""
                 ).trim() ||
                 "غير محدد";
-
-            document.dispatchEvent(
-                new CustomEvent("yg:seating-changed", {
-                    detail: { value: state.selectedSeatingSetup }
-                })
-            );
 
             qsa(
                 ".seating-option"
@@ -6260,6 +6277,38 @@ font-weight:700;
        16. الحجز والانتقال للصفحات التالية
        ====================================================================== */
 
+    function restoreCurrentPackagePromotionSelection() {
+        const promotionId =
+            Number.parseInt(
+                String(
+                    state.currentPackage
+                        .promotionId ||
+                    "0"
+                ),
+                10
+            ) || 0;
+
+        // الباقة التي اختارها العميل هي التي تحدد العرض.
+        setSelectedPromotionId(
+            promotionId
+        );
+
+        if (promotionId > 0) {
+            applyPromotionIncludedServices(
+                promotionId,
+                state.currentPackage
+                    .promotionTargetAnchor ||
+                "",
+                {
+                    notify: false,
+                    replacePrevious: false
+                }
+            );
+        } else {
+            clearPromotionAutoIncludedServices();
+        }
+    }
+
     function appendSelectedServiceIds(
         parameters
     ) {
@@ -6317,9 +6366,7 @@ font-weight:700;
     }
 
     window.goToAvailableRooms =
-        async function goToAvailableRooms() {
-            if (!(await ensureBookingProfileReady())) return;
-
+        function goToAvailableRooms() {
             const start =
                 getValue(
                     "startDate"
@@ -6657,8 +6704,6 @@ font-weight:700;
 
     window.goToFinalCheckout =
         async function goToFinalCheckout() {
-            if (!(await ensureBookingProfileReady())) return;
-
             const placeId =
                 getRequiredPlaceId();
 
@@ -6716,39 +6761,24 @@ font-weight:700;
                 return;
             }
 
-            if (adults < 1) {
+            if (
+                adults +
+                children < 1
+            ) {
                 notify({
                     icon: "warning",
                     title:
-                        "يجب إضافة شخص بالغ",
+                        "حدد عدد الأشخاص",
                     text:
-                        "لا يمكن إكمال الحجز بأطفال فقط. يجب وجود شخص بالغ واحد على الأقل."
+                        "يجب اختيار شخص واحد على الأقل للمتابعة."
                 });
 
                 return;
             }
 
-            const baseCapacity =
-                getCurrentPackageBaseCapacity();
-
-            const guestValidation =
-                validatePackageGuestSelection(
-                    adults,
-                    children,
-                    baseCapacity
-                );
-
-            if (!guestValidation.valid) {
-                notify({
-                    icon: "warning",
-                    title:
-                        "تجاوز سعة الباقة",
-                    text:
-                        guestValidation.message
-                });
-
-                return;
-            }
+            // قبل بناء رابط Checkout نعيد تثبيت عرض الباقة وخدماته.
+            // أي حدث سابق لا يستطيع إسقاط promotionId الخاص بالباقة المختارة.
+            restoreCurrentPackagePromotionSelection();
 
             const parameters =
                 new URLSearchParams();
@@ -6848,8 +6878,6 @@ font-weight:700;
 
     window.goToFinalCheckoutForHall =
         async function goToFinalCheckoutForHall() {
-            if (!(await ensureBookingProfileReady())) return;
-
             const placeId =
                 getRequiredPlaceId();
 
@@ -6889,29 +6917,22 @@ font-weight:700;
                 return;
             }
 
-            const eventType = resolveHallEventTypeValue();
-            if (!eventType.valid) {
-                await notify({
-                    icon: "warning",
-                    title: "أكمل نوع المناسبة",
-                    text: eventType.message,
-                    confirmButtonText: "حسنًا"
-                });
-                return;
-            }
+            const activeSeat =
+                qs(
+                    ".seating-option.active-seating " +
+                    ".seating-text-value"
+                );
 
-            const seatingResult = resolveSeatingSetupValue();
-            if (!seatingResult.valid) {
-                await notify({
-                    icon: "warning",
-                    title: "أكمل ترتيب القاعة",
-                    text: seatingResult.message,
-                    confirmButtonText: "حسنًا"
-                });
-                return;
-            }
+            const seating =
+                activeSeat
+                    ?.textContent
+                    .trim() ||
+                state.selectedSeatingSetup ||
+                "غير محدد";
 
-            const seating = seatingResult.value;
+            // قبل بناء رابط Checkout نعيد تثبيت عرض الباقة وخدماته.
+            // أي حدث سابق لا يستطيع إسقاط promotionId الخاص بالباقة المختارة.
+            restoreCurrentPackagePromotionSelection();
 
             const parameters =
                 new URLSearchParams();
@@ -6953,7 +6974,10 @@ font-weight:700;
 
             parameters.set(
                 "bookingType",
-                eventType.value
+                getValue(
+                    "hallEventTypeSelect",
+                    "غير محدد"
+                )
             );
 
             parameters.set(
@@ -9210,144 +9234,6 @@ font-weight:700;
             );
         });
     }
-
-    function initializeCustomHallFields() {
-        const eventSelect = getElement("hallEventTypeSelect");
-        const eventWrap = getElement("hallEventOtherWrap");
-        const eventInput = getElement("hallEventOtherInput");
-        const eventCounter = getElement("hallEventOtherCounter");
-        const seatingWrap = getElement("seatingOtherWrap");
-        const seatingInput = getElement("seatingOtherInput");
-        const seatingCounter = getElement("seatingOtherCounter");
-
-        const syncEvent = focus => {
-            if (!eventSelect || !eventWrap || !eventInput) return;
-
-            const show = eventSelect.value === "other";
-
-            eventWrap.hidden = !show;
-            eventWrap.setAttribute("aria-hidden", show ? "false" : "true");
-            eventWrap.classList.toggle("is-visible", show);
-            eventInput.required = show;
-
-            if (show) {
-                window.requestAnimationFrame(() => {
-                    eventWrap.classList.add("is-ready");
-                });
-
-                if (focus) {
-                    window.setTimeout(() => {
-                        eventInput.focus({ preventScroll: true });
-                    }, 100);
-                }
-            } else {
-                eventWrap.classList.remove("is-ready");
-                eventInput.classList.remove("is-invalid");
-            }
-
-            if (eventCounter) {
-                eventCounter.textContent = `${eventInput.value.length} / 50`;
-            }
-        };
-
-        const syncSeat = focus => {
-            if (!seatingWrap || !seatingInput) return;
-
-            const selected = String(state.selectedSeatingSetup || "")
-                .trim()
-                .toLowerCase();
-
-            const show = selected === "other";
-
-            seatingWrap.hidden = !show;
-            seatingWrap.setAttribute("aria-hidden", show ? "false" : "true");
-            seatingWrap.classList.toggle("is-visible", show);
-            seatingInput.required = show;
-
-            if (show) {
-                window.requestAnimationFrame(() => {
-                    seatingWrap.classList.add("is-ready");
-                });
-
-                if (focus) {
-                    window.setTimeout(() => {
-                        seatingInput.focus({ preventScroll: true });
-                    }, 100);
-                }
-            } else {
-                seatingWrap.classList.remove("is-ready");
-                seatingInput.classList.remove("is-invalid");
-            }
-
-            if (seatingCounter) {
-                seatingCounter.textContent = `${seatingInput.value.length} / 80`;
-            }
-        };
-
-        eventSelect?.addEventListener("change", () => syncEvent(true));
-
-        eventInput?.addEventListener("input", () => {
-            eventInput.classList.remove("is-invalid");
-            syncEvent(false);
-        });
-
-        seatingInput?.addEventListener("input", () => {
-            seatingInput.classList.remove("is-invalid");
-            syncSeat(false);
-        });
-
-        document.addEventListener("yg:seating-changed", () => syncSeat(true));
-
-        syncEvent(false);
-        syncSeat(false);
-    }
-
-    function resolveHallEventTypeValue() {
-        const selected = getValue("hallEventTypeSelect", "");
-
-        if (selected !== "other") {
-            return {
-                valid: selected.length > 0 && selected !== "غير محدد",
-                value: selected,
-                message: "اختر نوع المناسبة قبل المتابعة."
-            };
-        }
-
-        const input = getElement("hallEventOtherInput");
-        const value = String(input?.value || "").replace(/\s+/g, " ").trim();
-
-        if (value.length < 2) {
-            input?.classList.add("is-invalid");
-            input?.focus({ preventScroll: true });
-            return { valid: false, value: "", message: "اكتب نوع المناسبة عند اختيار «أخرى»." };
-        }
-
-        return { valid: true, value };
-    }
-
-    function resolveSeatingSetupValue() {
-        const selected = String(state.selectedSeatingSetup || "").trim();
-
-        if (selected.toLowerCase() !== "other") {
-            return {
-                valid: selected.length > 0 && selected !== "غير محدد",
-                value: selected,
-                message: "اختر ترتيب القاعة قبل المتابعة."
-            };
-        }
-
-        const input = getElement("seatingOtherInput");
-        const value = String(input?.value || "").replace(/\s+/g, " ").trim();
-
-        if (value.length < 2) {
-            input?.classList.add("is-invalid");
-            input?.focus({ preventScroll: true });
-            return { valid: false, value: "", message: "اكتب ترتيب القاعة المطلوب عند اختيار «أخرى»." };
-        }
-
-        return { valid: true, value };
-    }
-
 
     /* ======================================================================
        22.1 نوع الحجز — خيار أخرى

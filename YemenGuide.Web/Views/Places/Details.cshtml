@@ -37,52 +37,6 @@
                 : $"{fallback:N0} ر.ي";
     }
 
-
-    string FormatPackageClock(TimeSpan? value)
-    {
-        if (!value.HasValue)
-        {
-            return string.Empty;
-        }
-
-        var time = value.Value;
-        var hour24 = time.Hours;
-        var hour12 = hour24 % 12;
-
-        if (hour12 == 0)
-        {
-            hour12 = 12;
-        }
-
-        var period = hour24 < 12 ? "ص" : "م";
-
-        return $"{hour12:00}:{time.Minutes:00} {period}";
-    }
-
-    string GetPackageTimeText(
-        YemenGuide.Core.Entities.PlacePackage package)
-    {
-        if (
-            package.StartTime.HasValue &&
-            package.EndTime.HasValue)
-        {
-            return
-                $"من {FormatPackageClock(package.StartTime)} " +
-                $"إلى {FormatPackageClock(package.EndTime)}";
-        }
-
-        return !string.IsNullOrWhiteSpace(package.TimeFrame)
-            ? package.TimeFrame.Trim()
-            : "الوقت غير محدد";
-    }
-
-    string GetPackageMachineClock(TimeSpan? value)
-    {
-        return value.HasValue
-            ? value.Value.ToString(@"hh\:mm")
-            : string.Empty;
-    }
-
     // نستخدم التعريف المركزي الموجود في PlaceDetailsViewModel
     // حتى لا تُستبعد BookingSystemId = 4 من رحلة القاعات/الباقات مرة أخرى.
     bool isHotel = Model.IsHotelSystem;
@@ -444,182 +398,6 @@
             null or "" => "غير محدد",
             var value => value
         };
-
-    // الفترات التشغيلية الفعلية محفوظة داخل PlacePolicy.ShiftsJson،
-    // وليست داخل AvailableTimeSlots. لذلك نقرأها مباشرة لعرضها للعميل.
-    var configuredShiftLabels = new List<string>();
-
-    if (
-        string.Equals(
-            Model.PlacePolicy?.OperationSystemMode,
-            "Shifts",
-            StringComparison.OrdinalIgnoreCase
-        ) &&
-        !string.IsNullOrWhiteSpace(Model.PlacePolicy?.ShiftsJson)
-    )
-    {
-        try
-        {
-            using var shiftsDocument =
-                System.Text.Json.JsonDocument.Parse(
-                    Model.PlacePolicy.ShiftsJson
-                );
-
-            if (
-                shiftsDocument.RootElement.ValueKind ==
-                System.Text.Json.JsonValueKind.Array
-            )
-            {
-                foreach (
-                    var shiftElement in
-                    shiftsDocument.RootElement.EnumerateArray()
-                )
-                {
-                    if (
-                        shiftElement.ValueKind !=
-                        System.Text.Json.JsonValueKind.Object
-                    )
-                    {
-                        continue;
-                    }
-
-                    string shiftName = string.Empty;
-                    string shiftFrom = string.Empty;
-                    string shiftTo = string.Empty;
-
-                    foreach (var property in shiftElement.EnumerateObject())
-                    {
-                        if (
-                            string.Equals(
-                                property.Name,
-                                "name",
-                                StringComparison.OrdinalIgnoreCase
-                            ) &&
-                            property.Value.ValueKind ==
-                            System.Text.Json.JsonValueKind.String
-                        )
-                        {
-                            shiftName =
-                                property.Value.GetString()?.Trim() ??
-                                string.Empty;
-                        }
-                        else if (
-                            (
-                                string.Equals(
-                                    property.Name,
-                                    "from",
-                                    StringComparison.OrdinalIgnoreCase
-                                ) ||
-                                string.Equals(
-                                    property.Name,
-                                    "start",
-                                    StringComparison.OrdinalIgnoreCase
-                                ) ||
-                                string.Equals(
-                                    property.Name,
-                                    "startTime",
-                                    StringComparison.OrdinalIgnoreCase
-                                )
-                            ) &&
-                            property.Value.ValueKind ==
-                            System.Text.Json.JsonValueKind.String
-                        )
-                        {
-                            shiftFrom =
-                                property.Value.GetString()?.Trim() ??
-                                string.Empty;
-                        }
-                        else if (
-                            (
-                                string.Equals(
-                                    property.Name,
-                                    "to",
-                                    StringComparison.OrdinalIgnoreCase
-                                ) ||
-                                string.Equals(
-                                    property.Name,
-                                    "end",
-                                    StringComparison.OrdinalIgnoreCase
-                                ) ||
-                                string.Equals(
-                                    property.Name,
-                                    "endTime",
-                                    StringComparison.OrdinalIgnoreCase
-                                )
-                            ) &&
-                            property.Value.ValueKind ==
-                            System.Text.Json.JsonValueKind.String
-                        )
-                        {
-                            shiftTo =
-                                property.Value.GetString()?.Trim() ??
-                                string.Empty;
-                        }
-                    }
-
-                    if (
-                        shiftFrom.Length > 5 &&
-                        shiftFrom.Contains(':')
-                    )
-                    {
-                        shiftFrom = shiftFrom.Substring(0, 5);
-                    }
-
-                    if (
-                        shiftTo.Length > 5 &&
-                        shiftTo.Contains(':')
-                    )
-                    {
-                        shiftTo = shiftTo.Substring(0, 5);
-                    }
-
-                    if (
-                        string.IsNullOrWhiteSpace(shiftName) &&
-                        string.IsNullOrWhiteSpace(shiftFrom) &&
-                        string.IsNullOrWhiteSpace(shiftTo)
-                    )
-                    {
-                        continue;
-                    }
-
-                    string shiftLabel;
-
-                    if (
-                        !string.IsNullOrWhiteSpace(shiftFrom) &&
-                        !string.IsNullOrWhiteSpace(shiftTo)
-                    )
-                    {
-                        shiftLabel =
-                            string.IsNullOrWhiteSpace(shiftName)
-                                ? $"من {shiftFrom} إلى {shiftTo}"
-                                : $"{shiftName}: من {shiftFrom} إلى {shiftTo}";
-                    }
-                    else
-                    {
-                        shiftLabel =
-                            !string.IsNullOrWhiteSpace(shiftName)
-                                ? shiftName
-                                : $"{shiftFrom} {shiftTo}".Trim();
-                    }
-
-                    if (
-                        !string.IsNullOrWhiteSpace(shiftLabel) &&
-                        !configuredShiftLabels.Contains(
-                            shiftLabel,
-                            StringComparer.OrdinalIgnoreCase
-                        )
-                    )
-                    {
-                        configuredShiftLabels.Add(shiftLabel);
-                    }
-                }
-            }
-        }
-        catch (System.Text.Json.JsonException)
-        {
-            // إذا كانت القيمة القديمة غير صالحة، لا نكسر صفحة التفاصيل.
-        }
-    }
 
     bool hasValidCoordinates =
         Model.HasValidCoordinates;
@@ -1327,11 +1105,104 @@
 
                     @foreach (var promotion in activePromotions)
                     {
+                        var promotionIncludedServiceIds =
+                            (promotion.TargetAnchor ?? string.Empty)
+                                .Split(
+                                    '|',
+                                    StringSplitOptions.RemoveEmptyEntries |
+                                    StringSplitOptions.TrimEntries)
+                                .Select(anchor =>
+                                    anchor
+                                        .Trim()
+                                        .TrimStart('#'))
+                                .Where(anchor =>
+                                    anchor.StartsWith(
+                                        "serviceCard-",
+                                        StringComparison.OrdinalIgnoreCase))
+                                .Select(anchor =>
+                                {
+                                    return int.TryParse(
+                                        anchor.Substring("serviceCard-".Length),
+                                        out int serviceId)
+                                            ? serviceId
+                                            : 0;
+                                })
+                                .Where(serviceId => serviceId > 0)
+                                .Distinct()
+                                .ToList();
+
+                        if (
+                            promotion.RewardServiceId.HasValue &&
+                            promotion.RewardServiceId.Value > 0 &&
+                            !promotionIncludedServiceIds.Contains(
+                                promotion.RewardServiceId.Value))
+                        {
+                            promotionIncludedServiceIds.Add(
+                                promotion.RewardServiceId.Value);
+                        }
+
+                        var promotionIncludedServiceNames =
+                            Model.AdditionalServices
+                                .Where(service =>
+                                    promotionIncludedServiceIds.Contains(
+                                        service.ServiceId))
+                                .Select(service =>
+                                    service.ServiceName?.Trim())
+                                .Where(name =>
+                                    !string.IsNullOrWhiteSpace(name))
+                                .Select(name => name!)
+                                .Distinct(
+                                    StringComparer.OrdinalIgnoreCase)
+                                .ToList();
+
+                        if (
+                            promotionIncludedServiceNames.Count == 0 &&
+                            !string.IsNullOrWhiteSpace(
+                                promotion.RewardServiceName))
+                        {
+                            promotionIncludedServiceNames =
+                                promotion.RewardServiceName
+                                    .Split(
+                                        '+',
+                                        StringSplitOptions.RemoveEmptyEntries |
+                                        StringSplitOptions.TrimEntries)
+                                    .Where(name =>
+                                        !string.IsNullOrWhiteSpace(name))
+                                    .Distinct(
+                                        StringComparer.OrdinalIgnoreCase)
+                                    .ToList();
+                        }
+
+                        bool promotionIsServiceBundle =
+                            (
+                                string.Equals(
+                                    promotion.RewardType,
+                                    "FreeService",
+                                    StringComparison.OrdinalIgnoreCase) ||
+                                string.Equals(
+                                    promotion.RewardType,
+                                    "ServiceSpecialPrice",
+                                    StringComparison.OrdinalIgnoreCase)
+                            ) &&
+                            (
+                                promotionIncludedServiceIds.Count > 0 ||
+                                promotionIncludedServiceNames.Count > 0
+                            );
+
+                        string promotionIncludedServicesText =
+                            promotionIncludedServiceNames.Count > 0
+                                ? string.Join(
+                                    "، ",
+                                    promotionIncludedServiceNames)
+                                : promotion.RewardServiceName
+                                    .Replace(" + ", "، ");
+
                         <article class="promotion-spotlight-card @(promotion.IsSelected ? "is-selected" : "")"
                          data-promotion-card
                          data-promotion-id="@promotion.PromotionId"
                          data-target-anchor="@promotion.TargetAnchor"
                          data-target-type="@promotion.TargetType"
+                         data-included-service-ids="@string.Join(",", promotionIncludedServiceIds)"
                          aria-selected="@(promotion.IsSelected ? "true" : "false")">
 
                             <div class="promotion-card-media @(promotion.HasImage ? "has-image" : "")">
@@ -1383,6 +1254,22 @@
                                     }
                                 }
 
+                                @if (promotionIsServiceBundle)
+                                {
+                                    <div class="promotion-bundle-scope">
+                                        <span class="promotion-bundle-scope__target">
+                                            <i class="bi bi-ticket-perforated"></i>
+                                            <b>الباقة/الخيار المشمول:</b>
+                                            @promotion.TargetLabel
+                                        </span>
+                                        <span class="promotion-bundle-scope__services">
+                                            <i class="bi bi-check2-square"></i>
+                                            <b>الخدمات التي ستُحدد تلقائيًا:</b>
+                                            @promotionIncludedServicesText
+                                        </span>
+                                    </div>
+                                }
+
                                 @if (!string.IsNullOrWhiteSpace(
                                promotion.ShortDescription))
                                 {
@@ -1403,7 +1290,14 @@
                                     <div class="promotion-price-preview">
 
                                         <div>
-                                            <small>السعر المرجعي</small>
+                                            <small>
+                                                @(string.Equals(
+                                                    promotion.RewardType,
+                                                    "ServiceSpecialPrice",
+                                                    StringComparison.OrdinalIgnoreCase)
+                                                    ? "سعر الخدمات قبل العرض"
+                                                    : "السعر المرجعي")
+                                            </small>
                                             <del>
                                                 @promotion.DisplayOriginalPriceText
                                             </del>
@@ -1414,7 +1308,14 @@
                                         </span>
 
                                         <div class="is-discounted">
-                                            <small>بعد العرض تقديريًا</small>
+                                            <small>
+                                                @(string.Equals(
+                                                    promotion.RewardType,
+                                                    "ServiceSpecialPrice",
+                                                    StringComparison.OrdinalIgnoreCase)
+                                                    ? "سعر الخدمات في العرض"
+                                                    : "بعد العرض تقديريًا")
+                                            </small>
                                             <strong>
                                                 @promotion.DisplayEstimatedPriceAfterDiscountText
                                             </strong>
@@ -1476,6 +1377,9 @@
                                         <span>
                                             @(promotion.TargetType == "Room"
                                                 ? "اختر تاريخ الإقامة"
+                                                : promotion.TargetType == "Package" &&
+                                                  promotionIsServiceBundle
+                                                ? "اختر الباقة والخدمات"
                                                 : promotion.TargetType == "Package"
                                                 ? "شاهد الباقة"
                                                 : promotion.TargetType == "Service"
@@ -1983,7 +1887,15 @@
 
                                             @if (
                                            servicePromotion != null &&
-                                           servicePromotion.HasEstimatedPrice
+                                           servicePromotion.HasEstimatedPrice &&
+                                           !string.Equals(
+                                               servicePromotion.RewardType,
+                                               "ServiceSpecialPrice",
+                                               StringComparison.OrdinalIgnoreCase) &&
+                                           !string.Equals(
+                                               servicePromotion.RewardType,
+                                               "FreeService",
+                                               StringComparison.OrdinalIgnoreCase)
                                            )
                                             {
                                                 <del class="target-old-price">
@@ -2101,9 +2013,12 @@
                                                 )
                                             )
                                             {
-                                                @if (configuredShiftLabels.Any())
+                                                @if (
+                                                    Model.AvailableTimeSlots != null &&
+                                                    Model.AvailableTimeSlots.Any()
+                                                )
                                                 {
-                                                    @foreach (var shift in configuredShiftLabels)
+                                                    @foreach (var shift in Model.AvailableTimeSlots)
                                                     {
                                                         <li>
                                                             <i class="bi bi-clock-history"></i>
@@ -2541,9 +2456,21 @@
                                         activePromotions.FirstOrDefault(promotion =>
                                         promotion.PackageId == package.PackageId);
 
-
-                                        var packageTimeText =
-                                        GetPackageTimeText(package);
+                                        string packageModalPriceText =
+                                        packagePromotion != null &&
+                                        packagePromotion.HasEstimatedPrice &&
+                                        !string.Equals(
+                                            packagePromotion.RewardType,
+                                            "ServiceSpecialPrice",
+                                            StringComparison.OrdinalIgnoreCase) &&
+                                        !string.Equals(
+                                            packagePromotion.RewardType,
+                                            "FreeService",
+                                            StringComparison.OrdinalIgnoreCase)
+                                            ? packagePromotion.DisplayEstimatedPriceAfterDiscountText
+                                            : GetPackageDisplayPriceText(
+                                                package.PackageId,
+                                                package.Price);
 
                                         <article class="package-card @(packagePromotion != null ? "has-promotion" : "")"
                                      id="packageCard-@package.PackageId"
@@ -2583,8 +2510,32 @@
 
                                                 <p>
                                                     <i class="bi bi-clock-history"></i>
-                                                    @packageTimeText
+                                                    @package.TimeFrame
                                                 </p>
+
+                                                @if (
+                                                    packagePromotion != null &&
+                                                    (
+                                                        string.Equals(
+                                                            packagePromotion.RewardType,
+                                                            "FreeService",
+                                                            StringComparison.OrdinalIgnoreCase) ||
+                                                        string.Equals(
+                                                            packagePromotion.RewardType,
+                                                            "ServiceSpecialPrice",
+                                                            StringComparison.OrdinalIgnoreCase)
+                                                    ) &&
+                                                    !string.IsNullOrWhiteSpace(
+                                                        packagePromotion.RewardServiceName))
+                                                {
+                                                    <div class="package-promotion-bundle-note">
+                                                        <i class="bi bi-check2-square"></i>
+                                                        <span>
+                                                            يشمل العرض تلقائيًا:
+                                                            @packagePromotion.RewardServiceName.Replace(" + ", "، ")
+                                                        </span>
+                                                    </div>
+                                                }
                                             </div>
 
                                             <div class="package-price-row">
@@ -2593,7 +2544,15 @@
 
                                                 @if (
                                                packagePromotion != null &&
-                                               packagePromotion.HasEstimatedPrice
+                                               packagePromotion.HasEstimatedPrice &&
+                                               !string.Equals(
+                                                   packagePromotion.RewardType,
+                                                   "ServiceSpecialPrice",
+                                                   StringComparison.OrdinalIgnoreCase) &&
+                                               !string.Equals(
+                                                   packagePromotion.RewardType,
+                                                   "FreeService",
+                                                   StringComparison.OrdinalIgnoreCase)
                                                )
                                                 {
                                                     <del class="target-old-price">
@@ -2618,13 +2577,12 @@
                                         class="package-select-button"
                                         data-package-id="@package.PackageId"
                                         data-package-name="@package.PackageName"
-                                        data-package-price="@GetPackageDisplayPriceText(package.PackageId, package.Price)"
+                                        data-package-price="@packageModalPriceText"
                                         data-package-capacity="سعة @package.Capacity شخص"
-                                        data-package-time="@packageTimeText"
-                                        data-package-start="@GetPackageMachineClock(package.StartTime)"
-                                        data-package-end="@GetPackageMachineClock(package.EndTime)"
+                                        data-package-time="@package.TimeFrame"
                                         data-package-max="@package.Capacity"
                                         data-promotion-id="@(packagePromotion?.PromotionId.ToString() ?? "0")"
+                                        data-promotion-target-anchor="@(packagePromotion?.TargetAnchor ?? string.Empty)"
                                         onclick="openPackageModalFromButton(this)"
                                         disabled="@(!Model.CanBook)"
                                         aria-disabled="@(!Model.CanBook)">
@@ -4456,6 +4414,66 @@
     </div>
 </div>
 
+
+
+<style>
+    /* العرض المركب: نوضح للعميل الباقة والخدمات قبل الضغط على العرض. */
+    .promotion-bundle-scope {
+        display: grid;
+        gap: .45rem;
+        margin: .65rem 0 .8rem;
+        padding: .7rem .8rem;
+        border: 1px solid rgba(0, 166, 218, .18);
+        border-radius: 14px;
+        background: linear-gradient(135deg, rgba(0, 166, 218, .06), rgba(255, 255, 255, .92));
+    }
+
+    .promotion-bundle-scope > span {
+        display: flex;
+        align-items: center;
+        gap: .45rem;
+        color: #536779;
+        font-size: .72rem;
+        line-height: 1.65;
+    }
+
+    .promotion-bundle-scope > span i {
+        color: #00A6DA;
+        font-size: .8rem;
+    }
+
+    .promotion-bundle-scope > span b {
+        color: #30495C;
+        font-weight: 900;
+    }
+
+    .package-promotion-bundle-note {
+        display: flex;
+        align-items: center;
+        gap: .4rem;
+        margin-top: .5rem;
+        padding: .45rem .6rem;
+        border: 1px solid rgba(33, 168, 117, .18);
+        border-radius: 12px;
+        background: rgba(33, 168, 117, .07);
+        color: #137a55;
+        font-size: .72rem;
+        font-weight: 700;
+        line-height: 1.5;
+    }
+
+    .package-promotion-bundle-note i {
+        flex: 0 0 auto;
+        font-size: .88rem;
+    }
+
+    .promotion-target-flash {
+        outline: 3px solid rgba(0, 166, 218, .32) !important;
+        outline-offset: 4px;
+        box-shadow: 0 0 0 7px rgba(0, 166, 218, .08) !important;
+    }
+</style>
+
 @section Scripts {
     <script src="~/lib/sweetalert2/sweetalert2.js"></script>
 
@@ -4467,242 +4485,6 @@
 
     <script src="~/js/customer/Details.js"
         asp-append-version="true">
-    </script>
-
-    <script>
-        (() => {
-            "use strict";
-
-            const selectedPackageTiming = {
-                start: "",
-                end: ""
-            };
-
-            const originalOpenPackageModalFromButton =
-                window.openPackageModalFromButton;
-
-            if (typeof originalOpenPackageModalFromButton === "function") {
-                window.openPackageModalFromButton = function (button) {
-                    selectedPackageTiming.start =
-                        button?.dataset?.packageStart || "";
-                    selectedPackageTiming.end =
-                        button?.dataset?.packageEnd || "";
-
-                    return originalOpenPackageModalFromButton.apply(
-                        this,
-                        arguments
-                    );
-                };
-            }
-
-            function formatLocalDate(date) {
-                const year = date.getFullYear();
-                const month = String(date.getMonth() + 1).padStart(2, "0");
-                const day = String(date.getDate()).padStart(2, "0");
-                return `${year}-${month}-${day}`;
-            }
-
-            function getSelectedPackageDate() {
-                const calendar =
-                    document.getElementById("packageInlineCalendar");
-
-                const selectedFromInstance =
-                    calendar?._flatpickr?.selectedDates?.[0];
-
-                if (selectedFromInstance instanceof Date) {
-                    return formatLocalDate(selectedFromInstance);
-                }
-
-                const selectedDay =
-                    document.querySelector(
-                        "#packageDatePickerModal .flatpickr-day.selected"
-                    );
-
-                if (selectedDay?.dateObj instanceof Date) {
-                    return formatLocalDate(selectedDay.dateObj);
-                }
-
-                return "";
-            }
-
-            function parseClock(clock) {
-                const match =
-                    /^(\d{1,2}):(\d{2})$/.exec(
-                        String(clock || "").trim()
-                    );
-
-                if (!match) {
-                    return null;
-                }
-
-                const hours = Number.parseInt(match[1], 10);
-                const minutes = Number.parseInt(match[2], 10);
-
-                if (
-                    !Number.isInteger(hours) ||
-                    !Number.isInteger(minutes) ||
-                    hours < 0 || hours > 23 ||
-                    minutes < 0 || minutes > 59
-                ) {
-                    return null;
-                }
-
-                return { hours, minutes };
-            }
-
-            function buildPackageInterval(dateText, startClock, endClock) {
-                const dateMatch =
-                    /^(\d{4})-(\d{2})-(\d{2})$/.exec(
-                        String(dateText || "").trim()
-                    );
-
-                const startValue = parseClock(startClock);
-                const endValue = parseClock(endClock);
-
-                if (!dateMatch || !startValue || !endValue) {
-                    return null;
-                }
-
-                const year = Number.parseInt(dateMatch[1], 10);
-                const month = Number.parseInt(dateMatch[2], 10) - 1;
-                const day = Number.parseInt(dateMatch[3], 10);
-
-                const start = new Date(
-                    year,
-                    month,
-                    day,
-                    startValue.hours,
-                    startValue.minutes,
-                    0,
-                    0
-                );
-
-                const end = new Date(
-                    year,
-                    month,
-                    day,
-                    endValue.hours,
-                    endValue.minutes,
-                    0,
-                    0
-                );
-
-                if (end <= start) {
-                    end.setDate(end.getDate() + 1);
-                }
-
-                return { start, end };
-            }
-
-            function formatDuration(milliseconds) {
-                const totalMinutes = Math.max(
-                    0,
-                    Math.floor(milliseconds / 60000)
-                );
-
-                if (totalMinutes <= 0) {
-                    return "أقل من دقيقة";
-                }
-
-                const hours = Math.floor(totalMinutes / 60);
-                const minutes = totalMinutes % 60;
-
-                if (hours > 0 && minutes > 0) {
-                    return `${hours} ساعة و${minutes} دقيقة`;
-                }
-
-                if (hours > 0) {
-                    return `${hours} ساعة`;
-                }
-
-                return `${minutes} دقيقة`;
-            }
-
-            async function confirmStartedPackageBeforeCheckout() {
-                const dateText = getSelectedPackageDate();
-
-                if (
-                    !dateText ||
-                    !selectedPackageTiming.start ||
-                    !selectedPackageTiming.end
-                ) {
-                    return true;
-                }
-
-                const interval = buildPackageInterval(
-                    dateText,
-                    selectedPackageTiming.start,
-                    selectedPackageTiming.end
-                );
-
-                if (!interval) {
-                    return true;
-                }
-
-                const now = new Date();
-
-                if (now < interval.start) {
-                    return true;
-                }
-
-                if (now >= interval.end) {
-                    await window.Swal.fire({
-                        icon: "warning",
-                        title: "انتهى وقت الباقة",
-                        text: "انتهى وقت هذه الباقة لهذا اليوم. اختر يومًا أو باقة أخرى.",
-                        confirmButtonText: "اختيار موعد آخر",
-                        allowOutsideClick: false
-                    });
-
-                    return false;
-                }
-
-                const elapsedText =
-                    formatDuration(now - interval.start);
-
-                const remainingText =
-                    formatDuration(interval.end - now);
-
-                const result = await window.Swal.fire({
-                    icon: "warning",
-                    title: "الباقة بدأت بالفعل",
-                    html:
-                        `<div style="text-align:right;line-height:1.9">` +
-                        `بدأ وقت هذه الباقة بالفعل.<br>` +
-                        `<strong>الوقت الذي مضى:</strong> ${elapsedText}<br>` +
-                        `<strong>الوقت المتبقي:</strong> ${remainingText}<br><br>` +
-                        `إذا تابعت فسيكون الحجز للوقت المتبقي من الباقة فقط. هل تريد المتابعة؟` +
-                        `</div>`,
-                    showCancelButton: true,
-                    confirmButtonText: "نعم، متابعة الحجز",
-                    cancelButtonText: "اختيار باقة أو يوم آخر",
-                    reverseButtons: true,
-                    allowOutsideClick: false,
-                    allowEscapeKey: false
-                });
-
-                return result.isConfirmed === true;
-            }
-
-            function wrapCheckoutFunction(functionName) {
-                const original = window[functionName];
-
-                if (typeof original !== "function") {
-                    return;
-                }
-
-                window[functionName] = async function () {
-                    if (!(await confirmStartedPackageBeforeCheckout())) {
-                        return;
-                    }
-
-                    return original.apply(this, arguments);
-                };
-            }
-
-            wrapCheckoutFunction("goToFinalCheckout");
-            wrapCheckoutFunction("goToFinalCheckoutForHall");
-        })();
     </script>
 
     @if (Model.AttributionAdvertisementId.HasValue)
