@@ -28,6 +28,7 @@
         packageCalendar: null,
         packageDate: "",
         packageAvailabilityCheckInFlight: false,
+        startedPeriodAcknowledgedKey: "",
         selectedServiceIds: new Set(),
         promotionAutoServiceIds: new Set(),
 
@@ -5594,6 +5595,30 @@ font-weight:700;
                                     "";
                             }
 
+                            const startedPeriodConfirmed =
+                                await confirmStartedPackageImmediately(
+                                    placeId,
+                                    packageId,
+                                    dateString
+                                );
+
+                            if (!startedPeriodConfirmed) {
+                                state.packageDate =
+                                    "";
+
+                                try {
+                                    instance.clear(false);
+                                } catch {
+                                    // تجاهل
+                                }
+
+                                setPackageNextEnabled(
+                                    false
+                                );
+
+                                return;
+                            }
+
                             const isDateAvailable =
                                 await checkPackageDateBeforeCheckout(
                                     placeId,
@@ -5805,6 +5830,9 @@ font-weight:700;
             );
 
             state.packageDate =
+                "";
+
+            state.startedPeriodAcknowledgedKey =
                 "";
 
             setPackageNextEnabled(
@@ -6610,6 +6638,245 @@ font-weight:700;
         return result;
     }
 
+    function normalizePackageClockDigits(value) {
+        return String(value ?? "")
+            .replace(/[٠-٩]/g, digit =>
+                String("٠١٢٣٤٥٦٧٨٩".indexOf(digit)))
+            .replace(/[۰-۹]/g, digit =>
+                String("۰۱۲۳۴۵۶۷۸۹".indexOf(digit)));
+    }
+
+    function parsePackageClockMinutes(rawValue) {
+        const text =
+            normalizePackageClockDigits(rawValue)
+                .trim();
+
+        const timeMatch =
+            text.match(/(\d{1,2})(?::(\d{1,2}))?/);
+
+        if (!timeMatch) {
+            return null;
+        }
+
+        let hours =
+            Number.parseInt(timeMatch[1], 10);
+
+        const minutes =
+            Number.parseInt(timeMatch[2] || "0", 10);
+
+        if (
+            !Number.isFinite(hours) ||
+            !Number.isFinite(minutes) ||
+            minutes < 0 ||
+            minutes > 59
+        ) {
+            return null;
+        }
+
+        const periodMatch =
+            text.match(/(?:^|\s)(ص|م|am|pm)(?:\s|$)/i);
+
+        const period =
+            String(periodMatch?.[1] || "")
+                .toLowerCase();
+
+        if (period === "م" || period === "pm") {
+            if (hours < 12) {
+                hours += 12;
+            }
+        } else if (period === "ص" || period === "am") {
+            if (hours === 12) {
+                hours = 0;
+            }
+        }
+
+        if (hours < 0 || hours > 23) {
+            return null;
+        }
+
+        return (
+            hours * 60 +
+            minutes
+        );
+    }
+
+    function getStartedPackagePeriodFromVisibleTime(dateString) {
+        if (!dateString) {
+            return null;
+        }
+
+        const selectedDate =
+            new Date(`${dateString}T00:00:00`);
+
+        const now =
+            new Date();
+
+        if (
+            !Number.isFinite(selectedDate.getTime()) ||
+            selectedDate.getFullYear() !== now.getFullYear() ||
+            selectedDate.getMonth() !== now.getMonth() ||
+            selectedDate.getDate() !== now.getDate()
+        ) {
+            return null;
+        }
+
+        const fullTimeText =
+            normalizePackageClockDigits(
+                state.currentPackage.time || ""
+            );
+
+        // النص القادم من الواجهة يكون مثل:
+        // صباحية · 9:00 ص - 12:00 م
+        // لذلك نأخذ الجزء بعد النقطة الوسطية حتى لا تتداخل أرقام اسم الباقة.
+        const clockRangeText =
+            fullTimeText.includes("·")
+                ? fullTimeText
+                    .split("·")
+                    .pop()
+                    .trim()
+                : fullTimeText.trim();
+
+        const parts =
+            clockRangeText.split(/\s*[-–—]\s*/);
+
+        if (parts.length < 2) {
+            return null;
+        }
+
+        const startMinutes =
+            parsePackageClockMinutes(parts[0]);
+
+        let endMinutes =
+            parsePackageClockMinutes(parts[1]);
+
+        if (
+            startMinutes === null ||
+            endMinutes === null ||
+            startMinutes === endMinutes
+        ) {
+            return null;
+        }
+
+        // الباقة الليلية التي تنتهي بعد منتصف الليل.
+        if (endMinutes <= startMinutes) {
+            endMinutes += 24 * 60;
+        }
+
+        const nowMinutes =
+            now.getHours() * 60 +
+            now.getMinutes() +
+            now.getSeconds() / 60;
+
+        // المقصود فقط: بدأت الباقة وما زالت جارية.
+        if (
+            nowMinutes <= startMinutes ||
+            nowMinutes >= endMinutes
+        ) {
+            return null;
+        }
+
+        return {
+            elapsedMinutes:
+                Math.max(
+                    1,
+                    Math.floor(
+                        nowMinutes - startMinutes
+                    )
+                ),
+
+            remainingMinutes:
+                Math.max(
+                    1,
+                    Math.ceil(
+                        endMinutes - nowMinutes
+                    )
+                )
+        };
+    }
+
+    function formatStartedPackageDuration(rawMinutes) {
+        const totalMinutes =
+            Math.max(
+                0,
+                Number.parseInt(
+                    String(rawMinutes || "0"),
+                    10
+                ) || 0
+            );
+
+        const hours =
+            Math.floor(totalMinutes / 60);
+
+        const minutes =
+            totalMinutes % 60;
+
+        if (hours > 0 && minutes > 0) {
+            return `${hours} ساعة و${minutes} دقيقة`;
+        }
+
+        if (hours > 0) {
+            return `${hours} ساعة`;
+        }
+
+        return `${Math.max(1, minutes)} دقيقة`;
+    }
+
+    async function confirmStartedPackageImmediately(
+        placeId,
+        packageId,
+        dateString
+    ) {
+        const startedPeriod =
+            getStartedPackagePeriodFromVisibleTime(
+                dateString
+            );
+
+        if (!startedPeriod) {
+            return true;
+        }
+
+        const startedPeriodKey =
+            `${placeId}:${packageId}:${dateString}`;
+
+        if (
+            state.startedPeriodAcknowledgedKey ===
+            startedPeriodKey
+        ) {
+            return true;
+        }
+
+        const result =
+            await notify({
+                icon: "warning",
+                title: "تنبيه: هذه الباقة بدأت بالفعل",
+                text:
+                    `مضى من الباقة ${formatStartedPackageDuration(startedPeriod.elapsedMinutes)}، ` +
+                    `وباقي فيها ${formatStartedPackageDuration(startedPeriod.remainingMinutes)}. ` +
+                    "هل أنت متأكد أنك تريد حجزها؟",
+                showCancelButton: true,
+                confirmButtonText: "نعم، أريد حجزها",
+                cancelButtonText: "لا، رجوع",
+                confirmButtonColor: "#12b8d4",
+                cancelButtonColor: "#748493",
+                reverseButtons: true,
+                allowOutsideClick: false,
+                allowEscapeKey: false
+            });
+
+        if (
+            !result ||
+            result.isConfirmed !== true
+        ) {
+            state.startedPeriodAcknowledgedKey = "";
+            return false;
+        }
+
+        state.startedPeriodAcknowledgedKey =
+            startedPeriodKey;
+
+        return true;
+    }
+
     window.goToNextPackageStep =
         async function goToNextPackageStep(
             isHall
@@ -6643,7 +6910,7 @@ font-weight:700;
                     placeId,
                     packageId,
                     state.packageDate,
-                    true
+                    false
                 );
 
             if (!isDateAvailable) {
@@ -6794,19 +7061,19 @@ font-weight:700;
                             "warning",
 
                         title:
-                            "هذه الفترة بدأت بالفعل",
+                            "تنبيه: هذه الباقة بدأت بالفعل",
 
                         text:
-                            `مضى من الفترة ${elapsedText}، والمتبقي ${remainingText}. إذا تابعت فسيظهر لمالك المنشأة أنك أكملت الحجز بعد علمك بأن الفترة قد بدأت.`,
+                            `مضى من الباقة ${elapsedText}، وباقي فيها ${remainingText}. هل أنت متأكد أنك تريد حجزها؟`,
 
                         showCancelButton:
                             true,
 
                         confirmButtonText:
-                            "أنا على علم وأريد المتابعة",
+                            "نعم، أريد حجزها",
 
                         cancelButtonText:
-                            "الرجوع",
+                            "لا، رجوع",
 
                         confirmButtonColor:
                             "#12b8d4",
