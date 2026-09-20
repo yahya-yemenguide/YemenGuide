@@ -45,9 +45,9 @@
             trialStatus = Model.TrialStatus
         },
         new JsonSerializerOptions
-                {
-                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-                });
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        });
 }
 
 @section Styles {
@@ -56,7 +56,7 @@
     <link rel="stylesheet" href="~/css/owner/dashboard-owner-live.css" asp-append-version="true" />
 }
 
-    <div class="odl-page"
+<div class="odl-page"
      data-owner-dashboard
      data-place-id="@(Model.PlaceId?.ToString() ?? string.Empty)">
 
@@ -70,7 +70,7 @@
                 <p>بمجرد إضافة المنشأة ستظهر الحجوزات والمالية والتقييمات والأنشطة الفعلية تلقائيًا.</p>
             </div>
             <a class="odl-action odl-action--primary"
-           href="@(isAdminPlaceAccount ? "/Admin/Places/PlaceManagement" : "/Owner/Place/ManagePlaces?placeTab=add-place-tab")">
+               href="@(isAdminPlaceAccount ? "/Admin/Places/PlaceManagement" : "/Owner/Place/ManagePlaces?placeTab=add-place-tab")">
                 <i class="bi bi-plus-lg"></i>
                 @(isAdminPlaceAccount ? "إدارة المنشآت" : "إضافة منشأة")
             </a>
@@ -120,36 +120,36 @@
         </section>
 
         @if (!isAdminPlaceAccount &&
-       Model.TrialStatus.HasTrialHistory &&
-       Model.TrialStatus.StartedAt.HasValue &&
-       Model.TrialStatus.EndsAt.HasValue &&
-       (Model.TrialStatus.IsActive || Model.TrialStatus.IsExpired))
+             Model.TrialStatus.HasTrialHistory &&
+             Model.TrialStatus.StartedAt.HasValue &&
+             Model.TrialStatus.EndsAt.HasValue &&
+             (Model.TrialStatus.IsActive || Model.TrialStatus.IsExpired))
         {
             var trial = Model.TrialStatus;
             var trialBalanceUrl = Url.Action(
-            "ManageOwnerFinancials",
-            "OwnerFinancials",
-            new { area = "Owner", financeTab = "balance", placeId = Model.PlaceId })
-            ?? $"/Owner/Financials?financeTab=balance&placeId={Model.PlaceId}";
+                "ManageOwnerFinancials",
+                "OwnerFinancials",
+                new { area = "Owner", financeTab = "balance", placeId = Model.PlaceId })
+                ?? $"/Owner/Financials?financeTab=balance&placeId={Model.PlaceId}";
 
             var trialTone = trial.IsExpired
-            ? (trial.NeedsTopUp ? "is-danger" : "is-success")
-            : trial.IsEndingSoon
-            ? "is-warning"
-            : "";
+                ? (trial.NeedsTopUp ? "is-danger" : "is-success")
+                : trial.IsEndingSoon
+                    ? "is-warning"
+                    : "";
 
             <section class="odl-trial @trialTone"
-             data-trial-status
-             data-trial-active="@(trial.IsActive ? "true" : "false")"
-             data-trial-expired="@(trial.IsExpired ? "true" : "false")"
-             data-trial-ending-soon="@(trial.IsEndingSoon ? "true" : "false")"
-             data-trial-remaining-days="@trial.RemainingTrialDays"
-             data-trial-ends-at="@trial.EndsAt.Value.ToString("yyyy-MM-ddTHH:mm:ss")"
-             data-trial-reminder-key="@trial.ReminderKey"
-             data-trial-needs-topup="@(trial.NeedsTopUp ? "true" : "false")"
-             data-trial-missing="@trial.MissingGuaranteeBalance.ToString(System.Globalization.CultureInfo.InvariantCulture)"
-             data-trial-currency="@trial.Currency"
-             data-trial-balance-url="@trialBalanceUrl">
+                     data-trial-status
+                     data-trial-active="@(trial.IsActive ? "true" : "false")"
+                     data-trial-expired="@(trial.IsExpired ? "true" : "false")"
+                     data-trial-ending-soon="@(trial.IsEndingSoon ? "true" : "false")"
+                     data-trial-remaining-days="@trial.RemainingTrialDays"
+                     data-trial-ends-at="@trial.EndsAt.Value.ToString("yyyy-MM-ddTHH:mm:ss")"
+                     data-trial-reminder-key="@trial.ReminderKey"
+                     data-trial-needs-topup="@(trial.NeedsTopUp ? "true" : "false")"
+                     data-trial-missing="@trial.MissingGuaranteeBalance.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                     data-trial-currency="@trial.Currency"
+                     data-trial-balance-url="@trialBalanceUrl">
                 <span class="odl-trial__icon"><i class="bi @(trial.IsExpired ? "bi-hourglass-bottom" : "bi-gift")"></i></span>
                 <div class="odl-trial__copy">
                     @if (trial.IsActive)
@@ -231,15 +231,11 @@
                     <div>
                         @if (Model.TodayOperation.HasRoomUnits)
                         {
-                            <span><i class="bi bi-door-open"></i> متاحة</span>
-
-                            <b>@Model.TodayOperation.AvailableRoomUnits</b>
+                            <span><i class="bi bi-door-open"></i> متاحة</span><b>@Model.TodayOperation.AvailableRoomUnits</b>
                         }
                         else
                         {
-                            <span><i class="bi bi-calendar2"></i> تبدأ اليوم</span>
-
-                            <b>@Model.Kpis.TodayBookings</b>
+                            <span><i class="bi bi-calendar2"></i> تبدأ اليوم</span><b>@Model.Kpis.TodayBookings</b>
                         }
                     </div>
                 </div>
@@ -457,18 +453,18 @@
         ?? "/Owner/Financials?financeTab=balance";
 
     <div class="owner-trial-welcome"
-     id="ownerTrialWelcome"
-     hidden
-     aria-hidden="true"
-     data-owner-trial-welcome
-     data-show-trial-welcome="true"
-     data-storage-key="@trial.StorageKey">
+         id="ownerTrialWelcome"
+         hidden
+         aria-hidden="true"
+         data-owner-trial-welcome
+         data-show-trial-welcome="true"
+         data-storage-key="@trial.StorageKey">
         <div class="owner-trial-welcome__backdrop" aria-hidden="true"></div>
         <section class="owner-trial-welcome__dialog"
-             role="dialog"
-             aria-modal="true"
-             aria-labelledby="ownerTrialWelcomeTitle"
-             tabindex="-1">
+                 role="dialog"
+                 aria-modal="true"
+                 aria-labelledby="ownerTrialWelcomeTitle"
+                 tabindex="-1">
             <button type="button" class="owner-trial-welcome__close" data-owner-trial-dismiss aria-label="إغلاق">
                 <i class="bi bi-x-lg"></i>
             </button>
